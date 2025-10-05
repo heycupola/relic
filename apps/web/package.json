@@ -14,7 +14,10 @@
     "@repo/ui": "*",
     "next": "^15.5.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "@convex-dev/better-auth": "catalog:",
+    "better-auth": "catalog:",
+    "convex": "catalog:"
   },
   "devDependencies": {
     "@repo/eslint-config": "*",
