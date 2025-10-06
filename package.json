@@ -25,7 +25,8 @@
     "catalog": {
       "@convex-dev/better-auth": "^0.8.9",
       "better-auth": "1.3.8",
-      "convex": "^1.27.3"
+      "convex": "^1.27.3",
+      "convex-helpers": "^0.1.104"
     }
   }
 }
