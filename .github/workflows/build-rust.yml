@@ -71,6 +71,7 @@ jobs:
       - name: Prepare artifacts (Windows)
         if: runner.os == 'Windows'
         working-directory: apps/cli/rust
+        shell: bash
         run: |
           mkdir -p prebuilt/${{ matrix.platform }}
           cp target/${{ matrix.target }}/release/rust.dll prebuilt/${{ matrix.platform }}/
