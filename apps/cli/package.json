@@ -1,12 +1,36 @@
 {
-  "name": "cli",
+  "name": "relic",
+  "version": "0.1.0",
+  "description": "Manage project secrets the way you want with Relic – securely store and share them with your team.",
+  "keywords": ["cli", "tui"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cupolalabs/relic.git",
+    "directory": "apps/cli"
+  },
+  "author": "Can Vardar",
+  "license": "MIT",
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "build:rust": "cd rust && cargo build --release"
+  },
+  "files": [
+    "index.ts",
+    "src/**",
+    "rust/prebuilt/**",
+    "rust/src/**",
+    "rust/Cargo.toml",
+    "README.md"
+  ],
   "devDependencies": {
     "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

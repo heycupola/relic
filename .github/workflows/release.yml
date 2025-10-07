@@ -1,0 +1,176 @@
+name: Release to npm
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/cli/**'
+
+jobs:
+  check-version:
+    name: Check Version Change
+    runs-on: ubuntu-latest
+    outputs:
+      version-changed: ${{ steps.check.outputs.changed }}
+      new-version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check if version changed
+        id: check
+        run: |
+          # Get current version
+          CURRENT_VERSION=$(node -p "require('./apps/cli/package.json').version")
+
+          # Get previous version (from parent commit)
+          git checkout HEAD~1 -- apps/cli/package.json 2>/dev/null || echo "First commit"
+          PREVIOUS_VERSION=$(node -p "require('./apps/cli/package.json').version" 2>/dev/null || echo "0.0.0")
+
+          # Restore current version
+          git checkout HEAD -- apps/cli/package.json
+
+          echo "Previous version: $PREVIOUS_VERSION"
+          echo "Current version: $CURRENT_VERSION"
+
+          if [ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" ]; then
+            echo "Version changed!"
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "Version unchanged"
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: check-version
+    if: needs.check-version.outputs.version-changed == 'true'
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin-arm64
+            target: aarch64-apple-darwin
+          - os: macos-13
+            platform: darwin-x64
+            target: x86_64-apple-darwin
+          - os: ubuntu-latest
+            platform: linux-x64
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            platform: win32-x64
+            target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: apps/cli/rust/target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build Rust library
+        working-directory: apps/cli/rust
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Prepare artifacts (Unix)
+        if: runner.os != 'Windows'
+        working-directory: apps/cli/rust
+        run: |
+          mkdir -p prebuilt/${{ matrix.platform }}
+          cp target/${{ matrix.target }}/release/librust.* prebuilt/${{ matrix.platform }}/ || true
+
+      - name: Prepare artifacts (Windows)
+        if: runner.os == 'Windows'
+        working-directory: apps/cli/rust
+        shell: bash
+        run: |
+          mkdir -p prebuilt/${{ matrix.platform }}
+          cp target/${{ matrix.target }}/release/rust.dll prebuilt/${{ matrix.platform }}/ || true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-${{ matrix.platform }}
+          path: apps/cli/rust/prebuilt/${{ matrix.platform }}
+          if-no-files-found: error
+
+  publish:
+    name: Publish to npm
+    needs: [check-version, build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Create prebuilt directories
+        working-directory: apps/cli
+        run: mkdir -p rust/prebuilt/{darwin-arm64,darwin-x64,linux-x64,win32-x64}
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Copy artifacts to prebuilt directories
+        run: |
+          cp -r artifacts/rust-darwin-arm64/* apps/cli/rust/prebuilt/darwin-arm64/ || true
+          cp -r artifacts/rust-darwin-x64/* apps/cli/rust/prebuilt/darwin-x64/ || true
+          cp -r artifacts/rust-linux-x64/* apps/cli/rust/prebuilt/linux-x64/ || true
+          cp -r artifacts/rust-win32-x64/* apps/cli/rust/prebuilt/win32-x64/ || true
+
+      - name: Verify prebuilt files
+        run: |
+          echo "Checking prebuilt files:"
+          find apps/cli/rust/prebuilt -type f
+
+      - name: Update package name for npm
+        working-directory: apps/cli
+        run: |
+          # Remove "private": true to allow publishing
+          bun run --bun "const pkg = require('./package.json'); delete pkg.private; require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));"
+
+      - name: Publish to npm
+        working-directory: apps/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
+          npm publish --access public
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.check-version.outputs.new-version }}
+          name: Release v${{ needs.check-version.outputs.new-version }}
+          draft: false
+          prerelease: false
+          files: |
+            apps/cli/rust/prebuilt/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

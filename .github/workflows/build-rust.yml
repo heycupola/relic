@@ -1,0 +1,83 @@
+name: Build Rust Libraries
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/cli/rust/**'
+  pull_request:
+    paths:
+      - 'apps/cli/rust/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin-arm64
+            target: aarch64-apple-darwin
+          - os: macos-13
+            platform: darwin-x64
+            target: x86_64-apple-darwin
+          - os: ubuntu-latest
+            platform: linux-x64
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            platform: win32-x64
+            target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: apps/cli/rust/target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build Rust library
+        working-directory: apps/cli/rust
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Prepare artifacts (Unix)
+        if: runner.os != 'Windows'
+        working-directory: apps/cli/rust
+        run: |
+          mkdir -p prebuilt/${{ matrix.platform }}
+          cp target/${{ matrix.target }}/release/librust.* prebuilt/${{ matrix.platform }}/
+
+      - name: Prepare artifacts (Windows)
+        if: runner.os == 'Windows'
+        working-directory: apps/cli/rust
+        run: |
+          mkdir -p prebuilt/${{ matrix.platform }}
+          cp target/${{ matrix.target }}/release/rust.dll prebuilt/${{ matrix.platform }}/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-${{ matrix.platform }}
+          path: apps/cli/rust/prebuilt/${{ matrix.platform }}
+          if-no-files-found: error
