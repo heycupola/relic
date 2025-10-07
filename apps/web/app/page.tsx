@@ -1,6 +1,10 @@
+"use client"
 import Image, { type ImageProps } from "next/image";
 import { Button } from "@repo/ui/button";
 import styles from "./page.module.css";
+
+import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
+import { authClient } from "@/lib/auth";
 
 type Props = Omit<ImageProps, "src"> & {
   srcLight: string;
@@ -38,6 +42,15 @@ export default function Home() {
           <li>Save and see your changes instantly.</li>
         </ol>
 
+        <AuthLoading>
+          Auth Loading...
+        </AuthLoading>
+        <Authenticated>
+          <button onClick={() => authClient.signOut()}>Logout</button>
+        </Authenticated>
+        <Unauthenticated>
+          <button onClick={() => authClient.signIn.social({ provider: "google", callbackURL: "/" })}>Login</button>
+        </Unauthenticated>
         <div className={styles.ctas}>
           <a
             className={styles.primary}
