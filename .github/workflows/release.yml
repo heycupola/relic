@@ -88,33 +88,33 @@ jobs:
       - name: Cache cargo build
         uses: actions/cache@v4
         with:
-          path: apps/cli/rust/target
+          path: apps/cli/bindings/target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build Rust library
-        working-directory: apps/cli/rust
+        working-directory: apps/cli/bindings
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Prepare artifacts (Unix)
         if: runner.os != 'Windows'
-        working-directory: apps/cli/rust
+        working-directory: apps/cli
         run: |
-          mkdir -p prebuilt/${{ matrix.platform }}
-          cp target/${{ matrix.target }}/release/librust.* prebuilt/${{ matrix.platform }}/ || true
+          mkdir -p prebuilds/${{ matrix.platform }}
+          cp bindings/target/${{ matrix.target }}/release/librust.* prebuilds/${{ matrix.platform }}/ || true
 
       - name: Prepare artifacts (Windows)
         if: runner.os == 'Windows'
-        working-directory: apps/cli/rust
+        working-directory: apps/cli
         shell: bash
         run: |
-          mkdir -p prebuilt/${{ matrix.platform }}
-          cp target/${{ matrix.target }}/release/rust.dll prebuilt/${{ matrix.platform }}/ || true
+          mkdir -p prebuilds/${{ matrix.platform }}
+          cp bindings/target/${{ matrix.target }}/release/rust.dll prebuilds/${{ matrix.platform }}/ || true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: rust-${{ matrix.platform }}
-          path: apps/cli/rust/prebuilt/${{ matrix.platform }}
+          path: apps/cli/prebuilds/${{ matrix.platform }}
           if-no-files-found: error
 
   publish:
@@ -130,7 +130,7 @@ jobs:
 
       - name: Create prebuilt directories
         working-directory: apps/cli
-        run: mkdir -p rust/prebuilt/{darwin-arm64,darwin-x64,linux-x64,win32-x64}
+        run: mkdir -p prebuilds/{darwin-arm64,darwin-x64,linux-x64,win32-x64}
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -139,15 +139,15 @@ jobs:
 
       - name: Copy artifacts to prebuilt directories
         run: |
-          cp -r artifacts/rust-darwin-arm64/* apps/cli/rust/prebuilt/darwin-arm64/ || true
-          cp -r artifacts/rust-darwin-x64/* apps/cli/rust/prebuilt/darwin-x64/ || true
-          cp -r artifacts/rust-linux-x64/* apps/cli/rust/prebuilt/linux-x64/ || true
-          cp -r artifacts/rust-win32-x64/* apps/cli/rust/prebuilt/win32-x64/ || true
+          cp -r artifacts/rust-darwin-arm64/* apps/cli/prebuilds/darwin-arm64/ || true
+          cp -r artifacts/rust-darwin-x64/* apps/cli/prebuilds/darwin-x64/ || true
+          cp -r artifacts/rust-linux-x64/* apps/cli/prebuilds/linux-x64/ || true
+          cp -r artifacts/rust-win32-x64/* apps/cli/prebuilds/win32-x64/ || true
 
       - name: Verify prebuilt files
         run: |
           echo "Checking prebuilt files:"
-          find apps/cli/rust/prebuilt -type f
+          find apps/cli/prebuilds -type f
 
       - name: Update package name for npm
         working-directory: apps/cli
@@ -171,6 +171,9 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            apps/cli/rust/prebuilt/**/*
+            apps/cli/prebuilds/darwin-arm64/*
+            apps/cli/prebuilds/darwin-x64/*
+            apps/cli/prebuilds/linux-x64/*
+            apps/cli/prebuilds/win32-x64/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
