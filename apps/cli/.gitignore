@@ -34,8 +34,8 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .DS_Store
 
 # For Rust based projects
-rust/target/
-rust/Cargo.lock
+bindings/target/
+bindings/Cargo.lock
 
 # Keep prebuilt binaries (these should be committed)
-!rust/prebuilt/
+!bindings/prebuilt/
