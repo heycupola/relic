@@ -55,3 +55,5 @@ jobs:
 
       - name: Build all packages
         run: bun run build
+        env:
+          NEXT_PUBLIC_CONVEX_URL: https://placeholder.convex.cloud
