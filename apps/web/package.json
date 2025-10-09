@@ -17,7 +17,10 @@
     "react-dom": "^19.1.0",
     "@convex-dev/better-auth": "catalog:",
     "better-auth": "catalog:",
-    "convex": "catalog:"
+    "convex": "catalog:",
+    "@tailwindcss/postcss": "catalog:",
+    "postcss": "catalog:",
+    "tailwindcss": "catalog:"
   },
   "devDependencies": {
     "@repo/eslint-config": "*",
@@ -25,6 +28,7 @@
     "@types/node": "^22.15.3",
     "@types/react": "19.1.0",
     "@types/react-dom": "19.1.1",
+    "tw-animate-css": "catalog:",
     "eslint": "^9.34.0",
     "typescript": "5.9.2"
   }
