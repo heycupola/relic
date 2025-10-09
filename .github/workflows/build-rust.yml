@@ -80,5 +80,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rust-${{ matrix.platform }}
-          path: apps/cli/bindings/prebuilds/${{ matrix.platform }}
+          path: apps/cli/prebuilds/${{ matrix.platform }}
           if-no-files-found: error
