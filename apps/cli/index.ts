@@ -1,6 +1,6 @@
 import { dlopen, FFIType, suffix } from "bun:ffi";
-import { platform, arch } from "os";
 import { existsSync } from "fs";
+import { arch, platform } from "os";
 import { join } from "path";
 
 function getPlatformLibrary(): string {
@@ -16,7 +16,7 @@ function getPlatformLibrary(): string {
 
   if (!targetPlatform) {
     throw new Error(
-      `Unsupported platform: ${platformKey}. Supported platforms: ${Object.keys(PLATFORM_MAP).join(", ")}`
+      `Unsupported platform: ${platformKey}. Supported platforms: ${Object.keys(PLATFORM_MAP).join(", ")}`,
     );
   }
 
@@ -40,11 +40,11 @@ function getPlatformLibrary(): string {
   } else {
     throw new Error(
       `Could not find Rust library for ${platformKey}.\n` +
-      `Tried:\n` +
-      `  - ${prebuiltPath}\n` +
-      `  - ${releasePath}\n` +
-      `  - ${debugPath}\n\n` +
-      `Please run: cd rust && cargo build --release`
+        `Tried:\n` +
+        `  - ${prebuiltPath}\n` +
+        `  - ${releasePath}\n` +
+        `  - ${debugPath}\n\n` +
+        `Please run: cd rust && cargo build --release`,
     );
   }
 
@@ -86,8 +86,8 @@ const lib = dlopen(getPlatformLibrary(), {
   },
   cleanup_terminal: {
     args: [],
-    returns: FFIType.void
-  }
+    returns: FFIType.void,
+  },
 });
 
 export class App {

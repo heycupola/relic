@@ -7,7 +7,8 @@
     "dev": "next dev --turbopack --port 3000",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint --max-warnings 0",
+    "lint": "biome check --write .",
+    "format": "biome format --write .",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
@@ -23,13 +24,11 @@
     "tailwindcss": "catalog:"
   },
   "devDependencies": {
-    "@repo/eslint-config": "*",
     "@repo/typescript-config": "*",
     "@types/node": "^22.15.3",
     "@types/react": "19.1.0",
     "@types/react-dom": "19.1.1",
     "tw-animate-css": "catalog:",
-    "eslint": "^9.34.0",
     "typescript": "5.9.2"
   }
 }

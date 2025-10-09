@@ -1,11 +1,10 @@
-"use client"
+"use client";
 // import Image, { type ImageProps } from "next/image";
 
 // import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 // import { authClient } from "@/lib/auth";
 
 import { Input } from "@repo/ui/components/input";
-
 
 export default function Home() {
   return (
