@@ -4,10 +4,10 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - 'apps/cli/rust/**'
+      - 'apps/cli/bindings/**'
   pull_request:
     paths:
-      - 'apps/cli/rust/**'
+      - 'apps/cli/bindings/**'
   workflow_dispatch:
 
 jobs:
@@ -54,31 +54,31 @@ jobs:
       - name: Cache cargo build
         uses: actions/cache@v4
         with:
-          path: apps/cli/rust/target
+          path: apps/cli/bindings/target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build Rust library
-        working-directory: apps/cli/rust
+        working-directory: apps/cli/bindings
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Prepare artifacts (Unix)
         if: runner.os != 'Windows'
-        working-directory: apps/cli/rust
+        working-directory: apps/cli
         run: |
-          mkdir -p prebuilt/${{ matrix.platform }}
-          cp target/${{ matrix.target }}/release/librust.* prebuilt/${{ matrix.platform }}/
+          mkdir -p prebuilds/${{ matrix.platform }}
+          cp bindings/target/${{ matrix.target }}/release/librust.* prebuilds/${{ matrix.platform }}/
 
       - name: Prepare artifacts (Windows)
         if: runner.os == 'Windows'
-        working-directory: apps/cli/rust
+        working-directory: apps/cli
         shell: bash
         run: |
-          mkdir -p prebuilt/${{ matrix.platform }}
-          cp target/${{ matrix.target }}/release/rust.dll prebuilt/${{ matrix.platform }}/
+          mkdir -p prebuilds/${{ matrix.platform }}
+          cp bindings/target/${{ matrix.target }}/release/rust.dll prebuilds/${{ matrix.platform }}/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: rust-${{ matrix.platform }}
-          path: apps/cli/rust/prebuilt/${{ matrix.platform }}
+          path: apps/cli/prebuilds/${{ matrix.platform }}
           if-no-files-found: error

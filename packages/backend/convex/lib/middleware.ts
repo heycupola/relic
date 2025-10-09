@@ -1,6 +1,6 @@
-import { customQuery, customMutation } from "convex-helpers/server/customFunctions";
-import { query, mutation } from "../_generated/server";
-import { authComponent } from "../auth"
+import { customMutation, customQuery } from "convex-helpers/server/customFunctions";
+import { mutation, query } from "../_generated/server";
+import { authComponent } from "../auth";
 
 export const protectedQuery = customQuery(query, {
   args: {},
@@ -14,8 +14,8 @@ export const protectedQuery = customQuery(query, {
     return {
       ctx: { user, userId: user.userId },
       args: {},
-    }
-  }
+    };
+  },
 });
 
 export const protectedMutation = customMutation(mutation, {
@@ -30,8 +30,8 @@ export const protectedMutation = customMutation(mutation, {
     return {
       ctx: { user, userId: user.userId },
       args: {},
-    }
-  }
+    };
+  },
 });
 
 export const publicQuery = query;
@@ -45,8 +45,8 @@ export const optionalQuery = customQuery(query, {
     return {
       ctx: { user, userId: user.userId },
       args: {},
-    }
-  }
+    };
+  },
 });
 
 export const optionalMutation = customMutation(mutation, {
@@ -57,6 +57,6 @@ export const optionalMutation = customMutation(mutation, {
     return {
       ctx: { user, userId: user.userId },
       args: {},
-    }
-  }
+    };
+  },
 });
