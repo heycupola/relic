@@ -1,16 +1,19 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
+import { Inter, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
 import { ConvexClientProvider } from "./providers";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
 });
-const geistMono = localFont({
-  src: "./fonts/GeistMonoVF.woff",
-  variable: "--font-geist-mono",
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-space-grotesk",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -26,7 +29,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+      <body className={`${inter.variable} ${spaceGrotesk.variable} font-sans`}>
         <ConvexClientProvider>{children}</ConvexClientProvider>
       </body>
     </html>

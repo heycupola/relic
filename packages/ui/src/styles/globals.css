@@ -6,39 +6,53 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  /* Primary Colors */
+  --carbon-black: #0E0E0E;
+  --bone-white: #FAFAF9;
+  --graphite-grey: #2C2C2C;
+
+  /* Secondary Accent Colors */
+  --platinum: #EAEAEA;
+  --soft-silver: #B0B0B0;
+  --smoke-white: #F5F5F5;
+
+  /* Pop Color */
+  --electric-ink: #6e56cf;
+
+  /* Semantic Color Mappings */
+  --background: var(--carbon-black);
+  --foreground: var(--bone-white);
+  --card: var(--graphite-grey);
+  --card-foreground: var(--bone-white);
+  --popover: var(--graphite-grey);
+  --popover-foreground: var(--bone-white);
+  --primary: var(--bone-white);
+  --primary-foreground: var(--carbon-black);
+  --secondary: var(--graphite-grey);
+  --secondary-foreground: var(--bone-white);
+  --muted: var(--graphite-grey);
+  --muted-foreground: var(--soft-silver);
+  --accent: var(--electric-ink);
+  --accent-foreground: var(--bone-white);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: var(--graphite-grey);
+  --input: var(--graphite-grey);
+  --ring: var(--electric-ink);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --radius: 0.375rem;
+  --sidebar: var(--graphite-grey);
+  --sidebar-foreground: var(--bone-white);
+  --sidebar-primary: var(--electric-ink);
+  --sidebar-primary-foreground: var(--bone-white);
+  --sidebar-accent: var(--graphite-grey);
+  --sidebar-accent-foreground: var(--bone-white);
+  --sidebar-border: var(--graphite-grey);
+  --sidebar-ring: var(--electric-ink);
 }
 
 .dark {
@@ -77,6 +91,16 @@
 }
 
 @theme inline {
+  /* Custom Colors */
+  --color-carbon-black: var(--carbon-black);
+  --color-bone-white: var(--bone-white);
+  --color-graphite-grey: var(--graphite-grey);
+  --color-platinum: var(--platinum);
+  --color-soft-silver: var(--soft-silver);
+  --color-smoke-white: var(--smoke-white);
+  --color-electric-ink: var(--electric-ink);
+
+  /* Semantic Color Mappings */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -121,5 +145,6 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-inter, sans-serif);
   }
 }
