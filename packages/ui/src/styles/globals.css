@@ -7,14 +7,14 @@
 
 :root {
   /* Primary Colors */
-  --carbon-black: #0E0E0E;
-  --bone-white: #FAFAF9;
-  --graphite-grey: #2C2C2C;
+  --carbon-black: #0e0e0e;
+  --bone-white: #fafaf9;
+  --graphite-grey: #2c2c2c;
 
   /* Secondary Accent Colors */
-  --platinum: #EAEAEA;
-  --soft-silver: #B0B0B0;
-  --smoke-white: #F5F5F5;
+  --platinum: #eaeaea;
+  --soft-silver: #b0b0b0;
+  --smoke-white: #f5f5f5;
 
   /* Pop Color */
   --electric-ink: #6e56cf;
