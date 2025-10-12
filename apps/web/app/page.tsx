@@ -1,17 +1,51 @@
-"use client";
-// import Image, { type ImageProps } from "next/image";
-
-// import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-// import { authClient } from "@/lib/auth";
-
-import { Input } from "@repo/ui/components/input";
+import { Features } from "@/components/features";
+import { Footer } from "@/components/footer";
+import { GridContainer, Section } from "@/components/grid-container";
+import { Hero } from "@/components/hero";
+import { Navbar } from "@/components/navbar";
+import { Supporters } from "@/components/supporters";
+import { TerminalShowcase } from "@/components/terminal-showcase";
 
 export default function Home() {
   return (
-    <div className="w-screen h-screen flex flex-col justify-center items-center">
-      <Input type="email" placeholder="Email" />
-      <h1>This is heading.</h1>
-      <p className="font-black text-blue-600">hellot</p>
-    </div>
+    <GridContainer>
+      <Section className="border-t-0">
+        <Navbar />
+      </Section>
+
+      <Section>
+        <div className="relative">
+          <div className="absolute left-0 top-0 -translate-x-1/2 -translate-y-1/2 text-electric-ink text-xs font-bold pointer-events-none select-none z-10">
+            +
+          </div>
+          <div className="absolute right-0 top-0 translate-x-1/2 -translate-y-1/2 text-electric-ink text-xs font-bold pointer-events-none select-none z-10">
+            +
+          </div>
+          <div className="absolute left-0 bottom-0 -translate-x-1/2 translate-y-1/2 text-electric-ink text-xs font-bold pointer-events-none select-none z-10">
+            +
+          </div>
+          <div className="absolute right-0 bottom-0 translate-x-1/2 translate-y-1/2 text-electric-ink text-xs font-bold pointer-events-none select-none z-10">
+            +
+          </div>
+          <Hero />
+        </div>
+      </Section>
+
+      <Section>
+        <TerminalShowcase />
+      </Section>
+
+      <Section>
+        <Features />
+      </Section>
+
+      <Section>
+        <Supporters />
+      </Section>
+
+      <Section className="mt-auto">
+        <Footer />
+      </Section>
+    </GridContainer>
   );
 }

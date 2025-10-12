@@ -1,3 +1,7 @@
+pub mod util {
+    pub mod crypto;
+}
+
 use std::{
     io,
     sync::{Arc, Mutex},

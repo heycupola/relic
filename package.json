@@ -30,6 +30,7 @@
       "packages/*"
     ],
     "catalog": {
+      "autumn-js": "^0.1.40",
       "@convex-dev/better-auth": "^0.8.9",
       "better-auth": "1.3.8",
       "convex": "^1.27.3",
