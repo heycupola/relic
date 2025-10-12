@@ -1,18 +1,19 @@
 import { customMutation, customQuery } from "convex-helpers/server/customFunctions";
 import { mutation, query } from "../_generated/server";
-import { authComponent } from "../auth";
 
 export const protectedQuery = customQuery(query, {
   args: {},
   input: async (ctx, _args) => {
-    const user = await authComponent.getAuthUser(ctx);
+    const identity = await ctx.auth.getUserIdentity();
 
-    if (!user) {
+    if (!identity) {
       throw new Error("Unauthorized - Please sign in");
     }
 
+    const userId = identity.subject;
+
     return {
-      ctx: { user, userId: user.userId },
+      ctx: { userId },
       args: {},
     };
   },
@@ -21,14 +22,16 @@ export const protectedQuery = customQuery(query, {
 export const protectedMutation = customMutation(mutation, {
   args: {},
   input: async (ctx, _args) => {
-    const user = await authComponent.getAuthUser(ctx);
+    const identity = await ctx.auth.getUserIdentity();
 
-    if (!user) {
+    if (!identity) {
       throw new Error("Unauthorized - Please sign in");
     }
 
+    const userId = identity.subject;
+
     return {
-      ctx: { user, userId: user.userId },
+      ctx: { userId },
       args: {},
     };
   },
@@ -40,10 +43,11 @@ export const publicMutation = mutation;
 export const optionalQuery = customQuery(query, {
   args: {},
   input: async (ctx, _args) => {
-    const user = await authComponent.getAuthUser(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    const userId = identity ? identity.subject : null;
 
     return {
-      ctx: { user, userId: user.userId },
+      ctx: { userId },
       args: {},
     };
   },
@@ -52,10 +56,11 @@ export const optionalQuery = customQuery(query, {
 export const optionalMutation = customMutation(mutation, {
   args: {},
   input: async (ctx, _args) => {
-    const user = await authComponent.getAuthUser(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    const userId = identity ? identity.subject : null;
 
     return {
-      ctx: { user, userId: user.userId },
+      ctx: { userId },
       args: {},
     };
   },
