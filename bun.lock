@@ -71,6 +71,7 @@
       "name": "@repo/backend",
       "dependencies": {
         "@convex-dev/better-auth": "catalog:",
+        "@useautumn/convex": "^0.0.12",
         "autumn-js": "catalog:",
         "better-auth": "catalog:",
         "convex": "catalog:",
@@ -405,6 +406,8 @@
     "@types/react": ["@types/react@19.1.0", "", { "dependencies": { "csstype": "^3.0.2" } }, "sha512-UaicktuQI+9UKyA4njtDOGBD/67t8YEBt2xdfqu8+gP9hqPUPsiXlNPcpS2gVdjmis5GKPG3fCxbQLVgxsQZ8w=="],
 
     "@types/react-dom": ["@types/react-dom@19.1.1", "", { "peerDependencies": { "@types/react": "^19.0.0" } }, "sha512-jFf/woGTVTjUJsl2O7hcopJ1r0upqoq/vIOoCj0yLh3RIXxWcljlpuZ+vEBRXsymD1jhfeJrlyTy/S1UW+4y1w=="],
+
+    "@useautumn/convex": ["@useautumn/convex@0.0.12", "", { "dependencies": { "convex-helpers": "^0.1.104" }, "peerDependencies": { "autumn-js": "^0.1.24", "convex": "^1.25.0", "react": "^18.3.1 || ^19.0.0" } }, "sha512-zNaGI/ibaiTVB57oquD2oXDftxmJZCMUuhboB+aG1ctO5as0ROh8LeCqndmRYf7oqVXhLwJ0fVlYxdzoTmALUQ=="],
 
     "ansi-escapes": ["ansi-escapes@7.1.1", "", { "dependencies": { "environment": "^1.0.0" } }, "sha512-Zhl0ErHcSRUaVfGUeUdDuLgpkEo8KIFjB4Y9uAc46ScOpdDiU1Dbyplh7qWJeJ/ZHpbyMSM26+X3BySgnIz40Q=="],
 

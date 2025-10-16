@@ -3,7 +3,7 @@ import { v } from "convex/values";
 
 export default defineSchema({
   userKey: defineTable({
-    userId: v.id("user"),
+    userId: v.string(),
     publicKey: v.string(),
     encryptedPrivateKey: v.string(), // NOTE: this is encrypted with user's master key
     salt: v.string(),
@@ -11,8 +11,8 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
   organizationSetting: defineTable({
-    organizationId: v.id("organization"),
-    billingUserId: v.id("user"),
+    organizationId: v.string(),
+    billingUserId: v.string(),
     isFreeWithProPlan: v.boolean(),
     autumnCustomerId: v.string(),
     currentKeyVersion: v.number(),
@@ -22,15 +22,15 @@ export default defineSchema({
     .index("by_organization", ["organizationId"])
     .index("by_billing_user", ["billingUserId"]),
   organizationMember: defineTable({
-    organizationId: v.id("organization"),
-    userId: v.id("user"),
+    organizationId: v.string(),
+    userId: v.string(),
     role: v.union(v.literal("owner"), v.literal("admin"), v.literal("member"), v.literal("viewer")),
     wrappedOrgKey: v.string(),
     keyVersion: v.number(),
-    grantedBy: v.id("user"),
+    grantedBy: v.string(),
     grantedAt: v.number(),
     revokedAt: v.optional(v.number()),
-    revokedBy: v.optional(v.id("user")),
+    revokedBy: v.optional(v.string()),
     revocationReason: v.optional(v.union(v.literal("left"), v.literal("removed"))),
   })
     .index("by_organization", ["organizationId"])
@@ -44,7 +44,7 @@ export default defineSchema({
     ownerType: v.union(v.literal("user"), v.literal("organization")),
     ownerId: v.string(),
     isArchived: v.boolean(),
-    createdBy: v.id("user"),
+    createdBy: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -57,7 +57,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     color: v.optional(v.string()),
     sortOrder: v.number(),
-    createdBy: v.id("user"),
+    createdBy: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -71,7 +71,7 @@ export default defineSchema({
     path: v.string(),
     description: v.optional(v.string()),
     parentFolderId: v.optional(v.id("folder")),
-    createdBy: v.id("user"),
+    createdBy: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -89,9 +89,9 @@ export default defineSchema({
     encryptionKeyVersion: v.number(),
     tags: v.optional(v.array(v.string())),
     isDeleted: v.boolean(),
-    createdBy: v.id("user"),
+    createdBy: v.string(),
     createdAt: v.number(),
-    updatedBy: v.id("user"),
+    updatedBy: v.string(),
     updatedAt: v.number(),
   })
     .index("by_project", ["projectId"])
@@ -112,14 +112,14 @@ export default defineSchema({
       v.literal("deleted"),
       v.literal("restored"),
     ),
-    changedBy: v.id("user"),
+    changedBy: v.string(),
     changedAt: v.number(),
   })
     .index("by_secret", ["secretId"])
     .index("by_project", ["projectId"])
     .index("by_timestamp", ["changedAt"]),
   accessLog: defineTable({
-    userId: v.id("user"),
+    userId: v.string(),
     resourceType: v.union(
       v.literal("secret"),
       v.literal("project"),
@@ -142,13 +142,13 @@ export default defineSchema({
     .index("by_resource", ["resourceType", "resourceId"])
     .index("by_timestamp", ["timestamp"]),
   keyRotation: defineTable({
-    organizationId: v.id("organization"),
+    organizationId: v.string(),
     oldKeyVersion: v.number(),
     newKeyVersion: v.number(),
     secretsReEncrypted: v.number(),
     membersRewrapped: v.number(),
     reason: v.optional(v.string()), // NOTE: it can be "member_removed", "scheduled", "manual"
-    rotatedBy: v.id("user"),
+    rotatedBy: v.string(),
     rotatedAt: v.number(),
   })
     .index("by_organization", ["organizationId"])
