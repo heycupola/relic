@@ -1,8 +1,7 @@
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery } from "./_generated/server";
-import { protectedMutation, protectedQuery } from "./lib/middleware";
-import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
+import { internalMutation } from "./_generated/server";
+import { protectedQuery } from "./lib/middleware";
+import type { ProtectedQueryCtx } from "./lib/types";
 
 export const syncUserFromAuth = internalMutation({
   args: {
@@ -54,20 +53,6 @@ export const syncUserFromAuth = internalMutation({
   },
 });
 
-export const getUserByAuthId = internalQuery({
-  args: {
-    authId: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("user")
-      .withIndex("by_auth_id", (q) => q.eq("authId", args.authId))
-      .first();
-
-    return user;
-  },
-});
-
 export const getCurrentUser = protectedQuery({
   args: {},
   handler: async (ctx: ProtectedQueryCtx) => {
@@ -86,96 +71,5 @@ export const getCurrentUser = protectedQuery({
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
-  },
-});
-
-export const getUser = protectedQuery({
-  args: {
-    userId: v.id("user"),
-  },
-  handler: async (ctx: ProtectedQueryCtx, args: { userId: Id<"user"> }) => {
-    const user = await ctx.db.get(args.userId);
-
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-    return {
-      id: user._id,
-      email: user.email,
-      name: user.name,
-      avatarUrl: user.avatarUrl,
-      createdAt: user.createdAt,
-    };
-  },
-});
-
-export const getUsersByIds = protectedQuery({
-  args: {
-    userIds: v.array(v.id("user")),
-  },
-  handler: async (ctx: ProtectedQueryCtx, args: { userIds: Id<"user">[] }) => {
-    const users = await Promise.all(args.userIds.map((id) => ctx.db.get(id)));
-
-    return users
-      .filter((user): user is NonNullable<typeof user> => user !== null)
-      .map((user) => ({
-        id: user._id,
-        email: user.email,
-        name: user.name,
-        avatarUrl: user.avatarUrl,
-      }));
-  },
-});
-
-export const updateUserProfile = protectedMutation({
-  args: {
-    name: v.optional(v.string()),
-    avatarUrl: v.optional(v.string()),
-  },
-  handler: async (ctx: ProtectedMutationCtx, args: { name?: string; avatarUrl?: string }) => {
-    const user = await ctx.db.get(ctx.userId);
-
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-    const updates: {
-      name?: string;
-      avatarUrl?: string;
-      updatedAt: number;
-    } = {
-      updatedAt: Date.now(),
-    };
-
-    if (args.name !== undefined) updates.name = args.name;
-    if (args.avatarUrl !== undefined) updates.avatarUrl = args.avatarUrl;
-
-    await ctx.db.patch(ctx.userId, updates);
-
-    return { success: true };
-  },
-});
-
-export const searchUsersByEmail = protectedQuery({
-  args: {
-    email: v.string(),
-    limit: v.optional(v.number()),
-  },
-  handler: async (ctx: ProtectedQueryCtx, args: { email: string; limit?: number }) => {
-    const limit = args.limit || 10;
-
-    const users = await ctx.db
-      .query("user")
-      .withIndex("by_email")
-      .filter((q) => q.eq(q.field("email"), args.email))
-      .take(limit);
-
-    return users.map((user) => ({
-      id: user._id,
-      email: user.email,
-      name: user.name,
-      avatarUrl: user.avatarUrl,
-    }));
   },
 });
