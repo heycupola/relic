@@ -1,10 +1,10 @@
-import type { Doc } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
 type Context = QueryCtx | MutationCtx;
 
 export async function hasProjectAccess(
-  ctx: Context & { userId: string },
+  ctx: Context & { userId: Id<"user"> },
   project: Doc<"project">,
 ): Promise<boolean> {
   if (project.ownerType === "user") {
@@ -23,7 +23,7 @@ export async function hasProjectAccess(
 }
 
 export async function canWriteProject(
-  ctx: Context & { userId: string },
+  ctx: Context & { userId: Id<"user"> },
   project: Doc<"project">,
 ): Promise<boolean> {
   if (project.ownerType === "user") {
@@ -42,7 +42,7 @@ export async function canWriteProject(
 }
 
 export async function canAdminProject(
-  ctx: Context & { userId: string },
+  ctx: Context & { userId: Id<"user"> },
   project: Doc<"project">,
 ): Promise<boolean> {
   if (project.ownerType === "user") {
@@ -61,7 +61,7 @@ export async function canAdminProject(
 }
 
 export async function isProjectOwner(
-  ctx: Context & { userId: string },
+  ctx: Context & { userId: Id<"user"> },
   project: Doc<"project">,
 ): Promise<boolean> {
   if (project.ownerType === "user") {

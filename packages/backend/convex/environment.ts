@@ -1,6 +1,8 @@
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { canAdminProject, canWriteProject, hasProjectAccess, isProjectOwner } from "./lib/access";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
+import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
 
 export const createEnvironment = protectedMutation({
   args: {
@@ -10,7 +12,16 @@ export const createEnvironment = protectedMutation({
     description: v.optional(v.string()),
     color: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx: ProtectedMutationCtx,
+    args: {
+      projectId: Id<"project">;
+      name: string;
+      slug: string;
+      description?: string;
+      color?: string;
+    },
+  ) => {
     const project = await ctx.db.get(args.projectId);
 
     if (!project) {
@@ -60,7 +71,7 @@ export const listEnvironments = protectedQuery({
   args: {
     projectId: v.id("project"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx: ProtectedQueryCtx, args: { projectId: Id<"project"> }) => {
     const project = await ctx.db.get(args.projectId);
 
     if (!project) {
@@ -95,7 +106,7 @@ export const getEnvironment = protectedQuery({
   args: {
     environmentId: v.id("environment"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx: ProtectedQueryCtx, args: { environmentId: Id<"environment"> }) => {
     const environment = await ctx.db.get(args.environmentId);
 
     if (!environment) {
@@ -135,7 +146,16 @@ export const updateEnvironment = protectedMutation({
     color: v.optional(v.string()),
     sortOrder: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx: ProtectedMutationCtx,
+    args: {
+      environmentId: Id<"environment">;
+      name?: string;
+      description?: string;
+      color?: string;
+      sortOrder?: number;
+    },
+  ) => {
     const environment = await ctx.db.get(args.environmentId);
 
     if (!environment) {
@@ -174,7 +194,7 @@ export const deleteEnvironment = protectedMutation({
   args: {
     environmentId: v.id("environment"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx: ProtectedMutationCtx, args: { environmentId: Id<"environment"> }) => {
     const environment = await ctx.db.get(args.environmentId);
 
     if (!environment) {
@@ -223,7 +243,10 @@ export const reorderEnvironments = protectedMutation({
     projectId: v.id("project"),
     environmentIds: v.array(v.id("environment")),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx: ProtectedMutationCtx,
+    args: { projectId: Id<"project">; environmentIds: Id<"environment">[] },
+  ) => {
     const project = await ctx.db.get(args.projectId);
 
     if (!project) {

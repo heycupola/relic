@@ -1,13 +1,18 @@
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { autumn } from "./autumn";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
+import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
 
 export const initializeOrganization = protectedMutation({
   args: {
     organizationId: v.string(),
     wrapperOrgKey: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx: ProtectedMutationCtx,
+    args: { organizationId: string; wrapperOrgKey: string },
+  ) => {
     const { data, error } = await autumn.check(ctx, {
       featureId: "can_create_org",
     });
@@ -51,10 +56,7 @@ export const initializeOrganization = protectedMutation({
       grantedAt: now,
     });
 
-    await autumn.entities.create(ctx, {
-      id: args.organizationId,
-    });
-
+    // Track initial member - entity will be auto-created
     await autumn.track(ctx, {
       entityId: args.organizationId,
       featureId: "members",
@@ -68,11 +70,19 @@ export const initializeOrganization = protectedMutation({
 export const addMember = protectedMutation({
   args: {
     organizationId: v.string(),
-    userId: v.string(),
+    userEmail: v.string(),
     role: v.union(v.literal("owner"), v.literal("admin"), v.literal("member"), v.literal("viewer")),
     wrappedOrgKey: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx: ProtectedMutationCtx,
+    args: {
+      organizationId: string;
+      userEmail: string;
+      role: "owner" | "admin" | "member" | "viewer";
+      wrappedOrgKey: string;
+    },
+  ) => {
     const requesterMembership = await ctx.db
       .query("organizationMember")
       .withIndex("by_org_and_user", (q) =>
@@ -108,9 +118,18 @@ export const addMember = protectedMutation({
       );
     }
 
+    const targetUser = await ctx.db
+      .query("user")
+      .withIndex("by_email", (q) => q.eq("email", args.userEmail))
+      .first();
+
+    if (!targetUser) {
+      throw new Error("User not found. They must sign up first.");
+    }
+
     const targetUserKey = await ctx.db
       .query("userKey")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", targetUser._id))
       .first();
 
     if (!targetUserKey) {
@@ -120,7 +139,7 @@ export const addMember = protectedMutation({
     const existingMembership = await ctx.db
       .query("organizationMember")
       .withIndex("by_org_and_user", (q) =>
-        q.eq("organizationId", args.organizationId).eq("userId", args.userId),
+        q.eq("organizationId", args.organizationId).eq("userId", targetUser._id),
       )
       .filter((q) => q.eq(q.field("revokedAt"), undefined))
       .first();
@@ -141,7 +160,7 @@ export const addMember = protectedMutation({
     const now = Date.now();
     const memberId = await ctx.db.insert("organizationMember", {
       organizationId: args.organizationId,
-      userId: args.userId,
+      userId: targetUser._id,
       role: args.role,
       wrappedOrgKey: args.wrappedOrgKey,
       keyVersion: settings.currentKeyVersion,
@@ -155,17 +174,20 @@ export const addMember = protectedMutation({
       value: 1,
     });
 
-    return { success: true, memberId };
+    return { success: true, memberId, userId: targetUser._id };
   },
 });
 
 export const removeMember = protectedMutation({
   args: {
     organizationId: v.string(),
-    userId: v.string(),
+    userId: v.id("user"),
     reason: v.union(v.literal("left"), v.literal("removed")),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx: ProtectedMutationCtx,
+    args: { organizationId: string; userId: Id<"user">; reason: "left" | "removed" },
+  ) => {
     const requesterMembership = await ctx.db
       .query("organizationMember")
       .withIndex("by_org_and_user", (q) =>
@@ -228,7 +250,7 @@ export const listMembers = protectedQuery({
   args: {
     organizationId: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx: ProtectedQueryCtx, args: { organizationId: string }) => {
     const membership = await ctx.db
       .query("organizationMember")
       .withIndex("by_org_and_user", (q) =>
@@ -260,7 +282,7 @@ export const listMembers = protectedQuery({
 
 export const getUserOrganizations = protectedQuery({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx: ProtectedQueryCtx) => {
     const membership = await ctx.db
       .query("organizationMember")
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
@@ -281,7 +303,7 @@ export const getOrganizationSettings = protectedQuery({
   args: {
     organizationId: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx: ProtectedQueryCtx, args: { organizationId: string }) => {
     const membership = await ctx.db
       .query("organizationMember")
       .withIndex("by_org_and_user", (q) =>
@@ -311,6 +333,128 @@ export const getOrganizationSettings = protectedQuery({
       userWrappedOrgKey: membership.wrappedOrgKey,
       userKeyVersion: membership.keyVersion,
       needsKeyRotation: membership.keyVersion < settings.currentKeyVersion,
+    };
+  },
+});
+
+export const rotateOrganizationKeys = protectedMutation({
+  args: {
+    organizationId: v.string(),
+    newKeyVersion: v.number(),
+    secrets: v.array(
+      v.object({
+        secretId: v.id("secret"),
+        encryptedValue: v.string(),
+        encryptionKeyVersion: v.number(),
+      }),
+    ),
+    members: v.array(
+      v.object({
+        userEmail: v.string(),
+        wrappedOrgKey: v.string(),
+      }),
+    ),
+    reason: v.optional(
+      v.union(v.literal("member_removed"), v.literal("scheduled"), v.literal("manual")),
+    ),
+  },
+  handler: async (
+    ctx: ProtectedMutationCtx,
+    args: {
+      organizationId: string;
+      newKeyVersion: number;
+      secrets: Array<{
+        secretId: Id<"secret">;
+        encryptedValue: string;
+        encryptionKeyVersion: number;
+      }>;
+      members: Array<{ userEmail: string; wrappedOrgKey: string }>;
+      reason?: "member_removed" | "scheduled" | "manual";
+    },
+  ) => {
+    const requesterMembership = await ctx.db
+      .query("organizationMember")
+      .withIndex("by_org_and_user", (q) =>
+        q.eq("organizationId", args.organizationId).eq("userId", ctx.userId),
+      )
+      .filter((q) => q.eq(q.field("revokedAt"), undefined))
+      .first();
+
+    if (!requesterMembership || requesterMembership.role !== "owner") {
+      throw new Error("Only organization owners can rotate keys");
+    }
+
+    const settings = await ctx.db
+      .query("organizationSetting")
+      .withIndex("by_organization", (q) => q.eq("organizationId", args.organizationId))
+      .first();
+
+    if (!settings) {
+      throw new Error("Organization settings not found");
+    }
+
+    if (args.newKeyVersion !== settings.currentKeyVersion + 1) {
+      throw new Error(
+        `Invalid key version. Expected ${settings.currentKeyVersion + 1}, got ${args.newKeyVersion}`,
+      );
+    }
+
+    const now = Date.now();
+
+    for (const secretUpdate of args.secrets) {
+      await ctx.db.patch(secretUpdate.secretId, {
+        encryptedValue: secretUpdate.encryptedValue,
+        encryptionKeyVersion: secretUpdate.encryptionKeyVersion,
+        updatedBy: ctx.userId,
+        updatedAt: now,
+      });
+    }
+
+    for (const memberUpdate of args.members) {
+      const targetUser = await ctx.db
+        .query("user")
+        .withIndex("by_email", (q) => q.eq("email", memberUpdate.userEmail))
+        .first();
+
+      if (!targetUser) continue;
+
+      const membership = await ctx.db
+        .query("organizationMember")
+        .withIndex("by_org_and_user", (q) =>
+          q.eq("organizationId", args.organizationId).eq("userId", targetUser._id),
+        )
+        .filter((q) => q.eq(q.field("revokedAt"), undefined))
+        .first();
+
+      if (membership) {
+        await ctx.db.patch(membership._id, {
+          wrappedOrgKey: memberUpdate.wrappedOrgKey,
+          keyVersion: args.newKeyVersion,
+        });
+      }
+    }
+
+    await ctx.db.patch(settings._id, {
+      currentKeyVersion: args.newKeyVersion,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert("keyRotation", {
+      organizationId: args.organizationId,
+      oldKeyVersion: settings.currentKeyVersion,
+      newKeyVersion: args.newKeyVersion,
+      secretsReEncrypted: args.secrets.length,
+      membersRewrapped: args.members.length,
+      reason: args.reason,
+      rotatedBy: ctx.userId,
+      rotatedAt: now,
+    });
+
+    return {
+      success: true,
+      newKeyVersion: args.newKeyVersion,
+      secretsReEncrypted: args.secrets.length,
+      membersRewrapped: args.members.length,
     };
   },
 });

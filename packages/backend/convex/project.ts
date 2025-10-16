@@ -1,7 +1,9 @@
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { autumn } from "./autumn";
 import { canAdminProject, hasProjectAccess, isProjectOwner } from "./lib/access";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
+import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
 
 export const createPersonalProject = protectedMutation({
   args: {
@@ -9,7 +11,10 @@ export const createPersonalProject = protectedMutation({
     slug: v.string(),
     description: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx: ProtectedMutationCtx,
+    args: { name: string; slug: string; description?: string },
+  ) => {
     const { data, error } = await autumn.check(ctx, {
       featureId: "personal_projects",
     });
@@ -67,7 +72,10 @@ export const createOrganizationProject = protectedMutation({
     slug: v.string(),
     description: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx: ProtectedMutationCtx,
+    args: { organizationId: string; name: string; slug: string; description?: string },
+  ) => {
     const membership = await ctx.db
       .query("organizationMember")
       .withIndex("by_org_and_user", (q) =>
@@ -138,7 +146,7 @@ export const createOrganizationProject = protectedMutation({
 
 export const listUserProjects = protectedQuery({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx: ProtectedQueryCtx) => {
     const projects = await ctx.db
       .query("project")
       .withIndex("by_owner", (q) => q.eq("ownerType", "user").eq("ownerId", ctx.userId))
@@ -160,7 +168,7 @@ export const listOrganizationProjects = protectedQuery({
   args: {
     organizationId: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx: ProtectedQueryCtx, args: { organizationId: string }) => {
     const membership = await ctx.db
       .query("organizationMember")
       .withIndex("by_org_and_user", (q) =>
@@ -196,7 +204,7 @@ export const getProject = protectedQuery({
   args: {
     projectId: v.id("project"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx: ProtectedQueryCtx, args: { projectId: Id<"project"> }) => {
     const project = await ctx.db.get(args.projectId);
 
     if (!project) {
@@ -228,7 +236,10 @@ export const updateProject = protectedMutation({
     name: v.optional(v.string()),
     description: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx: ProtectedMutationCtx,
+    args: { projectId: Id<"project">; name?: string; description?: string },
+  ) => {
     const project = await ctx.db.get(args.projectId);
 
     if (!project) {
@@ -257,7 +268,7 @@ export const archiveProject = protectedMutation({
   args: {
     projectId: v.id("project"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx: ProtectedMutationCtx, args: { projectId: Id<"project"> }) => {
     const project = await ctx.db.get(args.projectId);
 
     if (!project) {

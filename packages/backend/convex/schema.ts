@@ -2,17 +2,27 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  user: defineTable({
+    authId: v.string(),
+    email: v.string(),
+    name: v.optional(v.string()),
+    avatarUrl: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_auth_id", ["authId"])
+    .index("by_email", ["email"]),
   userKey: defineTable({
-    userId: v.string(),
+    userId: v.id("user"),
     publicKey: v.string(),
-    encryptedPrivateKey: v.string(), // NOTE: this is encrypted with user's master key
+    encryptedPrivateKey: v.string(),
     salt: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
   organizationSetting: defineTable({
     organizationId: v.string(),
-    billingUserId: v.string(),
+    billingUserId: v.id("user"),
     isFreeWithProPlan: v.boolean(),
     autumnCustomerId: v.string(),
     currentKeyVersion: v.number(),
@@ -23,14 +33,14 @@ export default defineSchema({
     .index("by_billing_user", ["billingUserId"]),
   organizationMember: defineTable({
     organizationId: v.string(),
-    userId: v.string(),
+    userId: v.id("user"),
     role: v.union(v.literal("owner"), v.literal("admin"), v.literal("member"), v.literal("viewer")),
     wrappedOrgKey: v.string(),
     keyVersion: v.number(),
-    grantedBy: v.string(),
+    grantedBy: v.id("user"),
     grantedAt: v.number(),
     revokedAt: v.optional(v.number()),
-    revokedBy: v.optional(v.string()),
+    revokedBy: v.optional(v.id("user")),
     revocationReason: v.optional(v.union(v.literal("left"), v.literal("removed"))),
   })
     .index("by_organization", ["organizationId"])
@@ -44,7 +54,7 @@ export default defineSchema({
     ownerType: v.union(v.literal("user"), v.literal("organization")),
     ownerId: v.string(),
     isArchived: v.boolean(),
-    createdBy: v.string(),
+    createdBy: v.id("user"),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -57,7 +67,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     color: v.optional(v.string()),
     sortOrder: v.number(),
-    createdBy: v.string(),
+    createdBy: v.id("user"),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -71,7 +81,7 @@ export default defineSchema({
     path: v.string(),
     description: v.optional(v.string()),
     parentFolderId: v.optional(v.id("folder")),
-    createdBy: v.string(),
+    createdBy: v.id("user"),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -89,15 +99,17 @@ export default defineSchema({
     encryptionKeyVersion: v.number(),
     tags: v.optional(v.array(v.string())),
     isDeleted: v.boolean(),
-    createdBy: v.string(),
+    createdBy: v.id("user"),
     createdAt: v.number(),
-    updatedBy: v.string(),
+    updatedBy: v.id("user"),
     updatedAt: v.number(),
   })
     .index("by_project", ["projectId"])
     .index("by_environment", ["environmentId"])
     .index("by_folder", ["folderId"])
-    .index("by_env_and_key", ["environmentId", "key"]),
+    .index("by_env_and_key", ["environmentId", "key"])
+    .index("by_created_by", ["createdBy"])
+    .index("by_updated_by", ["updatedBy"]),
   secretHistory: defineTable({
     secretId: v.id("secret"),
     projectId: v.id("project"),
@@ -112,14 +124,15 @@ export default defineSchema({
       v.literal("deleted"),
       v.literal("restored"),
     ),
-    changedBy: v.string(),
+    changedBy: v.id("user"),
     changedAt: v.number(),
   })
     .index("by_secret", ["secretId"])
     .index("by_project", ["projectId"])
-    .index("by_timestamp", ["changedAt"]),
+    .index("by_timestamp", ["changedAt"])
+    .index("by_changed_by", ["changedBy"]),
   accessLog: defineTable({
-    userId: v.string(),
+    userId: v.id("user"),
     resourceType: v.union(
       v.literal("secret"),
       v.literal("project"),
@@ -147,10 +160,11 @@ export default defineSchema({
     newKeyVersion: v.number(),
     secretsReEncrypted: v.number(),
     membersRewrapped: v.number(),
-    reason: v.optional(v.string()), // NOTE: it can be "member_removed", "scheduled", "manual"
-    rotatedBy: v.string(),
+    reason: v.optional(v.string()),
+    rotatedBy: v.id("user"),
     rotatedAt: v.number(),
   })
     .index("by_organization", ["organizationId"])
-    .index("by_timestamp", ["rotatedAt"]),
+    .index("by_timestamp", ["rotatedAt"])
+    .index("by_rotated_by", ["rotatedBy"]),
 });
