@@ -4,6 +4,10 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { hasProjectAccess } from "./lib/access";
 import { protectedQuery } from "./lib/middleware";
+import {
+  checkOrganizationSuspended,
+  checkProjectOrganizationSuspended,
+} from "./lib/organizationAccess";
 import type { ProtectedQueryCtx } from "./lib/types";
 
 async function checkResourceAccess(
@@ -21,6 +25,7 @@ async function checkResourceAccess(
       if (!project) {
         throw new Error("Project not found");
       }
+      await checkProjectOrganizationSuspended(ctx, project);
       if (!(await hasProjectAccess(ctx, project))) {
         throw new Error("You do not have access to view logs for this secret");
       }
@@ -35,6 +40,7 @@ async function checkResourceAccess(
       if (!project) {
         throw new Error("Project not found");
       }
+      await checkProjectOrganizationSuspended(ctx, project);
       if (!(await hasProjectAccess(ctx, project))) {
         throw new Error("You do not have access to view logs for this environment");
       }
@@ -45,12 +51,14 @@ async function checkResourceAccess(
       if (!project) {
         throw new Error("Project not found");
       }
+      await checkProjectOrganizationSuspended(ctx, project);
       if (!(await hasProjectAccess(ctx, project))) {
         throw new Error("You do not have access to view logs for this project");
       }
       break;
     }
     case "organization": {
+      await checkOrganizationSuspended(ctx, resourceId);
       const membership = await ctx.db
         .query("organizationMember")
         .withIndex("by_org_and_user", (q) =>
