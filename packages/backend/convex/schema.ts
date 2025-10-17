@@ -7,6 +7,7 @@ export default defineSchema({
     email: v.string(),
     name: v.optional(v.string()),
     avatarUrl: v.optional(v.string()),
+    freeOrganizationUsed: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -26,11 +27,19 @@ export default defineSchema({
     isFreeWithProPlan: v.boolean(),
     autumnCustomerId: v.string(),
     currentKeyVersion: v.number(),
+    subscriptionStatus: v.union(
+      v.literal("active"),
+      v.literal("payment_lapsed"),
+      v.literal("suspended"),
+    ),
+    paymentLapsedAt: v.optional(v.number()),
+    suspendedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_organization", ["organizationId"])
-    .index("by_billing_user", ["billingUserId"]),
+    .index("by_billing_user", ["billingUserId"])
+    .index("by_status", ["subscriptionStatus"]),
   organizationMember: defineTable({
     organizationId: v.string(),
     userId: v.id("user"),
