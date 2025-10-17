@@ -1,66 +1,71 @@
+import { type PaginationOptions, paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
+
+import type { Id } from "./_generated/dataModel";
+import { hasProjectAccess } from "./lib/access";
 import { protectedQuery } from "./lib/middleware";
 import type { ProtectedQueryCtx } from "./lib/types";
 
-export const getAccessLogs = protectedQuery({
-  args: {
-    resourceType: v.optional(
-      v.union(
-        v.literal("secret"),
-        v.literal("project"),
-        v.literal("environment"),
-        v.literal("organization"),
-      ),
-    ),
-    resourceId: v.optional(v.string()),
-    limit: v.optional(v.number()),
-  },
-  handler: async (
-    ctx: ProtectedQueryCtx,
-    args: {
-      resourceType?: "secret" | "project" | "environment" | "organization";
-      resourceId?: string;
-      limit?: number;
-    },
-  ) => {
-    const limit = args.limit || 100;
-
-    const logs = await (async () => {
-      if (args.resourceType && args.resourceId) {
-        return ctx.db
-          .query("accessLog")
-          .withIndex("by_resource", (q) =>
-            q.eq("resourceType", args.resourceType).eq("resourceId", args.resourceId),
-          )
-          .order("desc")
-          .take(limit);
+async function checkResourceAccess(
+  ctx: ProtectedQueryCtx,
+  resourceType: "secret" | "project" | "environment" | "organization",
+  resourceId: string,
+): Promise<void> {
+  switch (resourceType) {
+    case "secret": {
+      const secret = await ctx.db.get(resourceId as Id<"secret">);
+      if (!secret) {
+        throw new Error("Secret not found");
       }
-      if (args.resourceType) {
-        return ctx.db
-          .query("accessLog")
-          .withIndex("by_resource", (q) => q.eq("resourceType", args.resourceType))
-          .order("desc")
-          .take(limit);
+      const project = await ctx.db.get(secret.projectId);
+      if (!project) {
+        throw new Error("Project not found");
       }
-      return ctx.db
-        .query("accessLog")
-        .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
-        .order("desc")
-        .take(limit);
-    })();
+      if (!(await hasProjectAccess(ctx, project))) {
+        throw new Error("You do not have access to view logs for this secret");
+      }
+      break;
+    }
+    case "environment": {
+      const environment = await ctx.db.get(resourceId as Id<"environment">);
+      if (!environment) {
+        throw new Error("Environment not found");
+      }
+      const project = await ctx.db.get(environment.projectId);
+      if (!project) {
+        throw new Error("Project not found");
+      }
+      if (!(await hasProjectAccess(ctx, project))) {
+        throw new Error("You do not have access to view logs for this environment");
+      }
+      break;
+    }
+    case "project": {
+      const project = await ctx.db.get(resourceId as Id<"project">);
+      if (!project) {
+        throw new Error("Project not found");
+      }
+      if (!(await hasProjectAccess(ctx, project))) {
+        throw new Error("You do not have access to view logs for this project");
+      }
+      break;
+    }
+    case "organization": {
+      const membership = await ctx.db
+        .query("organizationMember")
+        .withIndex("by_org_and_user", (q) =>
+          q.eq("organizationId", resourceId).eq("userId", ctx.userId),
+        )
+        .filter((q) => q.eq(q.field("revokedAt"), undefined))
+        .first();
 
-    return logs.map((log) => ({
-      id: log._id,
-      userId: log.userId,
-      resourceType: log.resourceType,
-      resourceId: log.resourceId,
-      action: log.action,
-      ipAddress: log.ipAddress,
-      userAgent: log.userAgent,
-      timestamp: log.timestamp,
-    }));
-  },
-});
+      if (!membership) {
+        throw new Error("You do not have access to view logs for this organization");
+      }
+      break;
+    }
+  }
+}
 
 export const getResourceAccessLogs = protectedQuery({
   args: {
@@ -71,58 +76,66 @@ export const getResourceAccessLogs = protectedQuery({
       v.literal("organization"),
     ),
     resourceId: v.string(),
-    limit: v.optional(v.number()),
+    paginationOpts: paginationOptsValidator,
   },
   handler: async (
     ctx: ProtectedQueryCtx,
     args: {
+      paginationOpts: PaginationOptions;
       resourceType: "secret" | "project" | "environment" | "organization";
       resourceId: string;
-      limit?: number;
     },
   ) => {
-    const limit = args.limit || 50;
+    // NOTE: check if user has access to view logs for this resource
+    await checkResourceAccess(ctx, args.resourceType, args.resourceId);
 
-    const logs = await ctx.db
+    const result = await ctx.db
       .query("accessLog")
       .withIndex("by_resource", (q) =>
         q.eq("resourceType", args.resourceType).eq("resourceId", args.resourceId),
       )
       .order("desc")
-      .take(limit);
+      .paginate(args.paginationOpts);
 
-    return logs.map((log) => ({
-      id: log._id,
-      userId: log.userId,
-      action: log.action,
-      ipAddress: log.ipAddress,
-      userAgent: log.userAgent,
-      timestamp: log.timestamp,
-    }));
+    return {
+      page: result.page.map((log) => ({
+        id: log._id,
+        userId: log.userId,
+        action: log.action,
+        ipAddress: log.ipAddress,
+        userAgent: log.userAgent,
+        timestamp: log.timestamp,
+      })),
+      continueCursor: result.continueCursor,
+      isDone: result.isDone,
+    };
   },
 });
 
 export const getUserAccessLogs = protectedQuery({
   args: {
-    limit: v.optional(v.number()),
+    paginationOpts: paginationOptsValidator,
   },
-  handler: async (ctx: ProtectedQueryCtx, args: { limit?: number }) => {
-    const limit = args.limit || 100;
-
-    const logs = await ctx.db
+  handler: async (ctx: ProtectedQueryCtx, args: { paginationOpts: PaginationOptions }) => {
+    // NOTE: user can always view their own access logs, so no need to checkResourceAccess
+    const result = await ctx.db
       .query("accessLog")
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
       .order("desc")
-      .take(limit);
+      .paginate(args.paginationOpts);
 
-    return logs.map((log) => ({
-      id: log._id,
-      resourceType: log.resourceType,
-      resourceId: log.resourceId,
-      action: log.action,
-      ipAddress: log.ipAddress,
-      userAgent: log.userAgent,
-      timestamp: log.timestamp,
-    }));
+    return {
+      page: result.page.map((log) => ({
+        id: log._id,
+        resourceType: log.resourceType,
+        resourceId: log.resourceId,
+        action: log.action,
+        ipAddress: log.ipAddress,
+        userAgent: log.userAgent,
+        timestamp: log.timestamp,
+      })),
+      continueCursor: result.continueCursor,
+      isDone: result.isDone,
+    };
   },
 });
