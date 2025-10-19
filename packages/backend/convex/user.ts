@@ -45,6 +45,7 @@ export const syncUserFromAuth = internalMutation({
       email: args.email,
       name: args.name,
       avatarUrl: args.avatarUrl,
+      freeOrganizationUsed: false,
       createdAt: now,
       updatedAt: now,
     });

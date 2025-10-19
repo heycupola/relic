@@ -89,6 +89,7 @@ export const protectedMutation = customMutation(mutation, {
         email,
         name,
         avatarUrl,
+        freeOrganizationUsed: false,
         createdAt: now,
         updatedAt: now,
       });
@@ -181,6 +182,7 @@ export const optionalMutation = customMutation(mutation, {
           email,
           name,
           avatarUrl,
+          freeOrganizationUsed: false,
           createdAt: now,
           updatedAt: now,
         });
