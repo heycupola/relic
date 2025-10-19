@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
+import { autumn } from "./autumn";
 import { protectedQuery } from "./lib/middleware";
 import type { ProtectedQueryCtx } from "./lib/types";
 
@@ -71,6 +72,63 @@ export const getCurrentUser = protectedQuery({
       avatarUrl: user.avatarUrl,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+    };
+  },
+});
+
+export const checkAllUserPlanStatus = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const allUsers = await ctx.db.query("user").collect();
+    const now = Date.now();
+    let usersChecked = 0;
+    let downgrades = 0;
+    let upgrades = 0;
+
+    for (const user of allUsers) {
+      // NOTE: check current plan limit
+      const { data } = await autumn.check(ctx, {
+        userId: user._id,
+        featureId: "personal_projects",
+      });
+
+      const currentLimit = data?.included_usage || 2;
+
+      // NOTE: get user's non-archived projects
+      const projects = await ctx.db
+        .query("project")
+        .withIndex("by_owner", (q) => q.eq("ownerType", "user").eq("ownerId", user._id))
+        .filter((q) => q.eq(q.field("isArchived"), false))
+        .collect();
+
+      const projectCount = projects.length;
+
+      // NOTE: upgrade detection - user upgraded, clear downgrade flag
+      if (user.planDowngradedAt && projectCount <= currentLimit) {
+        await ctx.db.patch(user._id, {
+          planDowngradedAt: undefined,
+          updatedAt: now,
+        });
+        upgrades++;
+      }
+
+      // NOTE: downgrade detection - user downgraded, set downgrade flag
+      if (!user.planDowngradedAt && projectCount > currentLimit) {
+        await ctx.db.patch(user._id, {
+          planDowngradedAt: now,
+          updatedAt: now,
+        });
+        downgrades++;
+      }
+
+      usersChecked++;
+    }
+
+    return {
+      success: true,
+      usersChecked,
+      downgrades,
+      upgrades,
     };
   },
 });

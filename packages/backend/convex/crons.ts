@@ -9,4 +9,10 @@ crons.daily(
   internal.organization.checkAllSubscriptionStatus,
 );
 
+crons.daily(
+  "check-user-plan-status",
+  { hourUTC: 3, minuteUTC: 0 },
+  internal.user.checkAllUserPlanStatus,
+);
+
 export default crons;
