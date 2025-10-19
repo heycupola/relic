@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { canAdminProject, canWriteProject, hasProjectAccess, isProjectOwner } from "./lib/access";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
+import { checkProjectOrganizationSuspended } from "./lib/organizationAccess";
 import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
 
 export const createEnvironment = protectedMutation({
@@ -27,6 +28,8 @@ export const createEnvironment = protectedMutation({
     if (!project) {
       throw new Error("Project not found");
     }
+
+    await checkProjectOrganizationSuspended(ctx, project);
 
     if (!(await canWriteProject(ctx, project))) {
       throw new Error("You do not have permission to create environments");
@@ -78,6 +81,8 @@ export const listEnvironments = protectedQuery({
       throw new Error("Project not found");
     }
 
+    await checkProjectOrganizationSuspended(ctx, project);
+
     if (!(await hasProjectAccess(ctx, project))) {
       throw new Error("You do not have access to this project");
     }
@@ -118,6 +123,8 @@ export const getEnvironment = protectedQuery({
     if (!project) {
       throw new Error("Project not found");
     }
+
+    await checkProjectOrganizationSuspended(ctx, project);
 
     if (!(await hasProjectAccess(ctx, project))) {
       throw new Error("You do not have access to this environment");
@@ -168,6 +175,8 @@ export const updateEnvironment = protectedMutation({
       throw new Error("Project not found");
     }
 
+    await checkProjectOrganizationSuspended(ctx, project);
+
     if (!(await canAdminProject(ctx, project))) {
       throw new Error("You do not have permission to update this environment");
     }
@@ -206,6 +215,8 @@ export const deleteEnvironment = protectedMutation({
     if (!project) {
       throw new Error("Project not found");
     }
+
+    await checkProjectOrganizationSuspended(ctx, project);
 
     if (!(await isProjectOwner(ctx, project))) {
       throw new Error("Only project owners can delete environments");
@@ -253,6 +264,8 @@ export const reorderEnvironments = protectedMutation({
       throw new Error("Project not found");
     }
 
+    await checkProjectOrganizationSuspended(ctx, project);
+
     if (!(await canAdminProject(ctx, project))) {
       throw new Error("You do not have permission to reorder environments");
     }
@@ -276,5 +289,145 @@ export const reorderEnvironments = protectedMutation({
     }
 
     return { success: true };
+  },
+});
+
+export const getEnvironmentData = protectedQuery({
+  args: {
+    environmentId: v.id("environment"),
+    includeDeleted: v.optional(v.boolean()),
+    includeRecentActivity: v.optional(v.boolean()),
+  },
+  handler: async (
+    ctx: ProtectedQueryCtx,
+    args: {
+      environmentId: Id<"environment">;
+      includeDeleted?: boolean;
+      includeRecentActivity?: boolean;
+    },
+  ) => {
+    const environment = await ctx.db.get(args.environmentId);
+
+    if (!environment) {
+      throw new Error("Environment not found");
+    }
+
+    const project = await ctx.db.get(environment.projectId);
+
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    await checkProjectOrganizationSuspended(ctx, project);
+
+    if (!(await hasProjectAccess(ctx, project))) {
+      throw new Error("You do not have access to this environment");
+    }
+
+    const includeDeleted = args.includeDeleted || false;
+    const includeRecentActivity = args.includeRecentActivity || false;
+
+    const [allSecrets, folders, recentActivity] = await Promise.all([
+      ctx.db
+        .query("secret")
+        .withIndex("by_environment", (q) => q.eq("environmentId", args.environmentId))
+        .collect(),
+      ctx.db
+        .query("folder")
+        .withIndex("by_environment", (q) => q.eq("environmentId", args.environmentId))
+        .collect(),
+      includeRecentActivity
+        ? ctx.db
+            .query("secretHistory")
+            .withIndex("by_project", (q) => q.eq("projectId", environment.projectId))
+            .filter((q) => q.eq(q.field("environmentId"), args.environmentId))
+            .order("desc")
+            .take(20)
+        : Promise.resolve([]),
+    ]);
+
+    const secrets = includeDeleted ? allSecrets : allSecrets.filter((s) => !s.isDeleted);
+
+    type SecretSummary = {
+      id: Id<"secret">;
+      key: string;
+      description?: string;
+      tags?: string[];
+      isDeleted: boolean;
+      createdBy: Id<"user">;
+      createdAt: number;
+      updatedBy: Id<"user">;
+      updatedAt: number;
+    };
+
+    const secretsByLocation = secrets.reduce<{
+      root: SecretSummary[];
+      byFolder: Record<string, SecretSummary[]>;
+    }>(
+      (acc, secret) => {
+        const summary: SecretSummary = {
+          id: secret._id,
+          key: secret.key,
+          description: secret.description,
+          tags: secret.tags,
+          isDeleted: secret.isDeleted,
+          createdBy: secret.createdBy,
+          createdAt: secret.createdAt,
+          updatedBy: secret.updatedBy,
+          updatedAt: secret.updatedAt,
+        };
+
+        if (secret.folderId) {
+          if (!acc.byFolder[secret.folderId]) {
+            acc.byFolder[secret.folderId] = [];
+          }
+          acc.byFolder[secret.folderId]?.push(summary);
+        } else {
+          acc.root.push(summary);
+        }
+        return acc;
+      },
+      { root: [], byFolder: {} },
+    );
+
+    return {
+      environment: {
+        id: environment._id,
+        name: environment.name,
+        slug: environment.slug,
+        description: environment.description,
+        color: environment.color,
+        sortOrder: environment.sortOrder,
+        createdBy: environment.createdBy,
+        createdAt: environment.createdAt,
+        updatedAt: environment.updatedAt,
+      },
+      folders: folders.map((folder) => ({
+        id: folder._id,
+        name: folder.name,
+        slug: folder.slug,
+        path: folder.path,
+        description: folder.description,
+        createdAt: folder.createdAt,
+        updatedAt: folder.updatedAt,
+        secrets: secretsByLocation.byFolder[folder._id] || [],
+      })),
+      rootSecrets: secretsByLocation.root,
+      recentActivity: includeRecentActivity
+        ? recentActivity.map((h) => ({
+            id: h._id,
+            secretId: h.secretId,
+            key: h.key,
+            action: h.action,
+            changedBy: h.changedBy,
+            changedAt: h.changedAt,
+          }))
+        : undefined,
+      stats: {
+        totalSecrets: secrets.length,
+        totalFolders: folders.length,
+        deletedSecrets: allSecrets.filter((s) => s.isDeleted).length,
+      },
+    };
   },
 });
