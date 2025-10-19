@@ -2,6 +2,8 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { canAdminProject, canWriteProject, hasProjectAccess } from "./lib/access";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
+import { checkProjectIdOrganizationSuspended } from "./lib/organizationAccess";
+import { isProjectAccessible } from "./lib/projectAccess";
 import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
 
 export const createFolder = protectedMutation({
@@ -25,6 +27,21 @@ export const createFolder = protectedMutation({
 
     if (!project) {
       throw new Error("Project not found");
+    }
+
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
+    }
+
+    await checkProjectIdOrganizationSuspended(ctx, environment.projectId);
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, environment.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
     }
 
     if (!(await canWriteProject(ctx, project))) {
@@ -78,6 +95,21 @@ export const listFolders = protectedQuery({
       throw new Error("Project not found");
     }
 
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
+    }
+
+    await checkProjectIdOrganizationSuspended(ctx, environment.projectId);
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, environment.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
+    }
+
     if (!(await hasProjectAccess(ctx, project))) {
       throw new Error("You do not have access to this environment");
     }
@@ -114,6 +146,21 @@ export const getFolder = protectedQuery({
 
     if (!project) {
       throw new Error("Project not found");
+    }
+
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
+    }
+
+    await checkProjectIdOrganizationSuspended(ctx, folder.projectId);
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, folder.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
     }
 
     if (!(await hasProjectAccess(ctx, project))) {
@@ -158,6 +205,21 @@ export const updateFolder = protectedMutation({
       throw new Error("Project not found");
     }
 
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
+    }
+
+    await checkProjectIdOrganizationSuspended(ctx, folder.projectId);
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, folder.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
+    }
+
     if (!(await canWriteProject(ctx, project))) {
       throw new Error("You do not have permission to update this folder");
     }
@@ -192,6 +254,12 @@ export const deleteFolder = protectedMutation({
     if (!project) {
       throw new Error("Project not found");
     }
+
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
+    }
+
+    await checkProjectIdOrganizationSuspended(ctx, folder.projectId);
 
     if (!(await canAdminProject(ctx, project))) {
       throw new Error("You do not have permission to delete this folder");

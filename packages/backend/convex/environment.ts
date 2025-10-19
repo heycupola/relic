@@ -3,6 +3,7 @@ import type { Id } from "./_generated/dataModel";
 import { canAdminProject, canWriteProject, hasProjectAccess, isProjectOwner } from "./lib/access";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkProjectOrganizationSuspended } from "./lib/organizationAccess";
+import { isProjectAccessible } from "./lib/projectAccess";
 import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
 
 export const createEnvironment = protectedMutation({
@@ -29,7 +30,20 @@ export const createEnvironment = protectedMutation({
       throw new Error("Project not found");
     }
 
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
+    }
+
     await checkProjectOrganizationSuspended(ctx, project);
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, args.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
+    }
 
     if (!(await canWriteProject(ctx, project))) {
       throw new Error("You do not have permission to create environments");
@@ -81,7 +95,20 @@ export const listEnvironments = protectedQuery({
       throw new Error("Project not found");
     }
 
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
+    }
+
     await checkProjectOrganizationSuspended(ctx, project);
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, args.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
+    }
 
     if (!(await hasProjectAccess(ctx, project))) {
       throw new Error("You do not have access to this project");
@@ -124,7 +151,20 @@ export const getEnvironment = protectedQuery({
       throw new Error("Project not found");
     }
 
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
+    }
+
     await checkProjectOrganizationSuspended(ctx, project);
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, environment.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
+    }
 
     if (!(await hasProjectAccess(ctx, project))) {
       throw new Error("You do not have access to this environment");
@@ -175,7 +215,20 @@ export const updateEnvironment = protectedMutation({
       throw new Error("Project not found");
     }
 
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
+    }
+
     await checkProjectOrganizationSuspended(ctx, project);
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, environment.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
+    }
 
     if (!(await canAdminProject(ctx, project))) {
       throw new Error("You do not have permission to update this environment");
@@ -214,6 +267,10 @@ export const deleteEnvironment = protectedMutation({
 
     if (!project) {
       throw new Error("Project not found");
+    }
+
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
     }
 
     await checkProjectOrganizationSuspended(ctx, project);
@@ -264,7 +321,20 @@ export const reorderEnvironments = protectedMutation({
       throw new Error("Project not found");
     }
 
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
+    }
+
     await checkProjectOrganizationSuspended(ctx, project);
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, args.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
+    }
 
     if (!(await canAdminProject(ctx, project))) {
       throw new Error("You do not have permission to reorder environments");
@@ -318,7 +388,20 @@ export const getEnvironmentData = protectedQuery({
       throw new Error("Project not found");
     }
 
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
+    }
+
     await checkProjectOrganizationSuspended(ctx, project);
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, environment.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
+    }
 
     if (!(await hasProjectAccess(ctx, project))) {
       throw new Error("You do not have access to this environment");

@@ -2,6 +2,8 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { canWriteProject, hasProjectAccess } from "./lib/access";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
+import { checkProjectIdOrganizationSuspended } from "./lib/organizationAccess";
+import { isProjectAccessible } from "./lib/projectAccess";
 import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
 
 export const createSecret = protectedMutation({
@@ -38,6 +40,21 @@ export const createSecret = protectedMutation({
       throw new Error("Project not found");
     }
 
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
+    }
+
+    await checkProjectIdOrganizationSuspended(ctx, environment.projectId);
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, environment.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
+    }
+
     if (!(await canWriteProject(ctx, project))) {
       throw new Error("You do not have permission to create secrets");
     }
@@ -57,11 +74,14 @@ export const createSecret = protectedMutation({
       .withIndex("by_env_and_key", (q) =>
         q.eq("environmentId", args.environmentId).eq("key", args.key),
       )
-      .filter((q) => q.eq(q.field("isDeleted"), false))
+      .filter((q) =>
+        q.and(q.eq(q.field("isDeleted"), false), q.eq(q.field("folderId"), args.folderId)),
+      )
       .first();
 
     if (existingSecret) {
-      throw new Error("A secret with this key already exists in this environment");
+      const location = args.folderId ? "this folder" : "this environment's root";
+      throw new Error(`Cannot restore: a secret with this key already exists in ${location}`);
     }
 
     const now = Date.now();
@@ -120,6 +140,21 @@ export const listSecrets = protectedQuery({
       throw new Error("Project not found");
     }
 
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
+    }
+
+    await checkProjectIdOrganizationSuspended(ctx, environment.projectId);
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, environment.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
+    }
+
     if (!(await hasProjectAccess(ctx, project))) {
       throw new Error("You do not have access to this environment");
     }
@@ -171,6 +206,21 @@ export const getSecret = protectedQuery({
 
     if (!project) {
       throw new Error("Project not found");
+    }
+
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
+    }
+
+    await checkProjectIdOrganizationSuspended(ctx, secret.projectId);
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, secret.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
     }
 
     if (!(await hasProjectAccess(ctx, project))) {
@@ -228,6 +278,21 @@ export const updateSecret = protectedMutation({
 
     if (!project) {
       throw new Error("Project not found");
+    }
+
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
+    }
+
+    await checkProjectIdOrganizationSuspended(ctx, secret.projectId);
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, secret.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
     }
 
     if (!(await canWriteProject(ctx, project))) {
@@ -293,6 +358,21 @@ export const deleteSecret = protectedMutation({
       throw new Error("Project not found");
     }
 
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
+    }
+
+    await checkProjectIdOrganizationSuspended(ctx, secret.projectId);
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, secret.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
+    }
+
     if (!(await canWriteProject(ctx, project))) {
       throw new Error("You do not have permission to delete this secret");
     }
@@ -342,6 +422,21 @@ export const restoreSecret = protectedMutation({
       throw new Error("Project not found");
     }
 
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
+    }
+
+    await checkProjectIdOrganizationSuspended(ctx, secret.projectId);
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, secret.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
+    }
+
     if (!(await canWriteProject(ctx, project))) {
       throw new Error("You do not have permission to restore this secret");
     }
@@ -351,11 +446,14 @@ export const restoreSecret = protectedMutation({
       .withIndex("by_env_and_key", (q) =>
         q.eq("environmentId", secret.environmentId).eq("key", secret.key),
       )
-      .filter((q) => q.eq(q.field("isDeleted"), false))
+      .filter((q) =>
+        q.and(q.eq(q.field("isDeleted"), false), q.eq(q.field("folderId"), secret.folderId)),
+      )
       .first();
 
     if (existingSecret) {
-      throw new Error("Cannot restore: a secret with this key already exists in this environment");
+      const location = secret.folderId ? "this folder" : "this environment's root";
+      throw new Error(`Cannot restore: a secret with this key already exists in ${location}`);
     }
 
     const now = Date.now();
@@ -397,6 +495,21 @@ export const listSecretHistory = protectedQuery({
 
     if (!project) {
       throw new Error("Project not found");
+    }
+
+    if (project.isArchived) {
+      throw new Error("This project is archived. Unarchive it to access its data.");
+    }
+
+    await checkProjectIdOrganizationSuspended(ctx, secret.projectId);
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, secret.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
     }
 
     if (!(await hasProjectAccess(ctx, project))) {

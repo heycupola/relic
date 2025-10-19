@@ -8,11 +8,23 @@
  * @module
  */
 
+import type * as accessLog from "../accessLog.js";
 import type * as auth from "../auth.js";
 import type * as autumn from "../autumn.js";
+import type * as crons from "../crons.js";
+import type * as environment from "../environment.js";
+import type * as folder from "../folder.js";
 import type * as http from "../http.js";
+import type * as lib_access from "../lib/access.js";
+import type * as lib_accessLog from "../lib/accessLog.js";
 import type * as lib_middleware from "../lib/middleware.js";
+import type * as lib_organizationAccess from "../lib/organizationAccess.js";
+import type * as lib_types from "../lib/types.js";
+import type * as organization from "../organization.js";
 import type * as project from "../project.js";
+import type * as secret from "../secret.js";
+import type * as user from "../user.js";
+import type * as userKey from "../userKey.js";
 
 import type {
   ApiFromModules,
@@ -29,11 +41,23 @@ import type {
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  accessLog: typeof accessLog;
   auth: typeof auth;
   autumn: typeof autumn;
+  crons: typeof crons;
+  environment: typeof environment;
+  folder: typeof folder;
   http: typeof http;
+  "lib/access": typeof lib_access;
+  "lib/accessLog": typeof lib_accessLog;
   "lib/middleware": typeof lib_middleware;
+  "lib/organizationAccess": typeof lib_organizationAccess;
+  "lib/types": typeof lib_types;
+  organization: typeof organization;
   project: typeof project;
+  secret: typeof secret;
+  user: typeof user;
+  userKey: typeof userKey;
 }>;
 declare const fullApiWithMounts: typeof fullApi;
 

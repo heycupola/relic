@@ -3,6 +3,11 @@ import type { Id } from "./_generated/dataModel";
 import { autumn } from "./autumn";
 import { canAdminProject, hasProjectAccess, isProjectOwner } from "./lib/access";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
+import {
+  checkOrganizationSuspended,
+  checkProjectOrganizationSuspended,
+} from "./lib/organizationAccess";
+import { getUserProjectsWithRestrictions, isProjectAccessible } from "./lib/projectAccess";
 import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
 
 export const createPersonalProject = protectedMutation({
@@ -23,12 +28,10 @@ export const createPersonalProject = protectedMutation({
       throw new Error(`Failed to check subscription: ${error?.message || "Unknown error"}`);
     }
 
-    const limit = data.included_usage || 2;
-    const currentUsage = data.usage || 0;
-
     if (!data.allowed) {
+      const currentUsage = data.usage || 0;
       throw new Error(
-        `Project limit reached (${currentUsage}/${limit}). ${limit === 2 ? "Upgrade to Pro for more projects." : "Please upgrade to add more projects."}`,
+        `Project limit reached. You currently have ${currentUsage} project${currentUsage !== 1 ? "s" : ""}. Purchase additional projects or upgrade your plan.`,
       );
     }
 
@@ -76,6 +79,8 @@ export const createOrganizationProject = protectedMutation({
     ctx: ProtectedMutationCtx,
     args: { organizationId: string; name: string; slug: string; description?: string },
   ) => {
+    await checkOrganizationSuspended(ctx, args.organizationId);
+
     const membership = await ctx.db
       .query("organizationMember")
       .withIndex("by_org_and_user", (q) =>
@@ -99,12 +104,10 @@ export const createOrganizationProject = protectedMutation({
       );
     }
 
-    const limit = data.included_usage || 10;
-    const currentUsage = data.usage || 0;
-
     if (!data.allowed) {
+      const currentUsage = data.usage || 0;
       throw new Error(
-        `Organization project limit reached (${currentUsage}/${limit}). Please upgrade to add more projects.`,
+        `Organization project limit reached. You currently have ${currentUsage} project${currentUsage !== 1 ? "s" : ""}. Purchase additional projects to increase your limit.`,
       );
     }
 
@@ -147,20 +150,37 @@ export const createOrganizationProject = protectedMutation({
 export const listUserProjects = protectedQuery({
   args: {},
   handler: async (ctx: ProtectedQueryCtx) => {
-    const projects = await ctx.db
-      .query("project")
-      .withIndex("by_owner", (q) => q.eq("ownerType", "user").eq("ownerId", ctx.userId))
-      .filter((q) => q.eq(q.field("isArchived"), false))
-      .collect();
+    // NOTE: get projects with restriction info
+    const { accessibleProjects, restrictedProjects, isInGracePeriod, gracePeriodDaysRemaining } =
+      await getUserProjectsWithRestrictions(ctx);
 
-    return projects.map((p) => ({
-      id: p._id,
-      name: p.name,
-      slug: p.slug,
-      description: p.description,
-      createdAt: p.createdAt,
-      updatedAt: p.updatedAt,
-    }));
+    // NOTE: combine accessible and restricted projects
+    const allProjects = [
+      ...accessibleProjects.map((p) => ({
+        id: p._id,
+        name: p.name,
+        slug: p.slug,
+        description: p.description,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+        isRestricted: false,
+      })),
+      ...restrictedProjects.map((p) => ({
+        id: p._id,
+        name: p.name,
+        slug: p.slug,
+        description: p.description,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+        isRestricted: true,
+      })),
+    ];
+
+    return {
+      projects: allProjects,
+      isInGracePeriod,
+      gracePeriodDaysRemaining: isInGracePeriod ? gracePeriodDaysRemaining : undefined,
+    };
   },
 });
 
@@ -169,6 +189,8 @@ export const listOrganizationProjects = protectedQuery({
     organizationId: v.string(),
   },
   handler: async (ctx: ProtectedQueryCtx, args: { organizationId: string }) => {
+    await checkOrganizationSuspended(ctx, args.organizationId);
+
     const membership = await ctx.db
       .query("organizationMember")
       .withIndex("by_org_and_user", (q) =>
@@ -211,8 +233,19 @@ export const getProject = protectedQuery({
       throw new Error("Project not found");
     }
 
+    await checkProjectOrganizationSuspended(ctx, project);
+
     if (!(await hasProjectAccess(ctx, project))) {
       throw new Error("You do not have access to this project");
+    }
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, args.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
     }
 
     return {
@@ -246,8 +279,23 @@ export const updateProject = protectedMutation({
       throw new Error("Project not found");
     }
 
+    await checkProjectOrganizationSuspended(ctx, project);
+
+    if (project.isArchived) {
+      throw new Error("Cannot update archived project. Unarchive it first.");
+    }
+
     if (!(await canAdminProject(ctx, project))) {
       throw new Error("You do not have permission to update this project");
+    }
+
+    // NOTE: check if project is restricted for personal projects
+    const accessCheck = await isProjectAccessible(ctx, args.projectId);
+
+    if (!accessCheck.accessible) {
+      throw new Error(
+        "This project is restricted. Upgrade your plan or archive other projects to access it.",
+      );
     }
 
     const updates: {
@@ -275,6 +323,12 @@ export const archiveProject = protectedMutation({
       throw new Error("Project not found");
     }
 
+    await checkProjectOrganizationSuspended(ctx, project);
+
+    if (project.isArchived) {
+      throw new Error("Project is already archived");
+    }
+
     if (!(await isProjectOwner(ctx, project))) {
       throw new Error("Only project owners can archive projects");
     }
@@ -291,6 +345,81 @@ export const archiveProject = protectedMutation({
         entityId: project.ownerId,
         featureId: "organization_projects",
         value: -1,
+      });
+    }
+
+    return { success: true };
+  },
+});
+
+export const unarchiveProject = protectedMutation({
+  args: {
+    projectId: v.id("project"),
+  },
+  handler: async (ctx: ProtectedMutationCtx, args: { projectId: Id<"project"> }) => {
+    const project = await ctx.db.get(args.projectId);
+
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    await checkProjectOrganizationSuspended(ctx, project);
+
+    if (!project.isArchived) {
+      throw new Error("Project is already unarchived");
+    }
+
+    if (!(await isProjectOwner(ctx, project))) {
+      throw new Error("Only project owners can unarchive projects");
+    }
+
+    if (project.ownerType === "user") {
+      const { data, error } = await autumn.check(ctx, {
+        featureId: "personal_projects",
+      });
+
+      if (error || !data) {
+        throw new Error(`Failed to check personal projects: ${error?.message}`);
+      }
+
+      const currentUsage = data.usage || 0;
+      if (!data.allowed) {
+        throw new Error(
+          `Project limit reached. You currently have ${currentUsage} project${currentUsage !== 1 ? "s" : ""}. Purchase additional projects or upgrade your plan.`,
+        );
+      }
+
+      await ctx.db.patch(args.projectId, { isArchived: false, updatedAt: Date.now() });
+
+      await autumn.track(ctx, {
+        featureId: "personal_projects",
+        value: 1,
+      });
+    } else {
+      const { data, error } = await autumn.check(ctx, {
+        entityId: project.ownerId,
+        featureId: "organization_projects",
+      });
+
+      if (error || !data) {
+        throw new Error(
+          `Failed to check organization projects: ${error?.message || "Unknown error"}`,
+        );
+      }
+
+      const currentUsage = data.usage || 0;
+      if (!data.allowed) {
+        throw new Error(
+          `Project limit reached. You currently have ${currentUsage} project${currentUsage !== 1 ? "s" : ""}. Purchase additional projects or upgrade your plan.`,
+        );
+      }
+
+      await ctx.db.patch(args.projectId, { isArchived: false, updatedAt: Date.now() });
+
+      await autumn.track(ctx, {
+        entityId: project.ownerId,
+        featureId: "organization_projects",
+        value: 1,
       });
     }
 
