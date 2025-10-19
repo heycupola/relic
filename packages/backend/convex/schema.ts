@@ -8,6 +8,7 @@ export default defineSchema({
     name: v.optional(v.string()),
     avatarUrl: v.optional(v.string()),
     freeOrganizationUsed: v.boolean(),
+    planDowngradedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
