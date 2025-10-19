@@ -1,7 +1,9 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
+import { internalMutation } from "./_generated/server";
 import { autumn } from "./autumn";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
+import { checkOrganizationSuspended, getOrganizationPaymentStatus } from "./lib/organizationAccess";
 import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
 
 export const initializeOrganization = protectedMutation({
@@ -13,18 +15,6 @@ export const initializeOrganization = protectedMutation({
     ctx: ProtectedMutationCtx,
     args: { organizationId: string; wrapperOrgKey: string },
   ) => {
-    const { data, error } = await autumn.check(ctx, {
-      featureId: "can_create_org",
-    });
-
-    if (error || !data) {
-      throw new Error(`Failed to check subscription: ${error?.message || "Unknown error"}`);
-    }
-
-    if (!data.allowed) {
-      throw new Error("You need a Pro plan to create organizations. Please upgrade.");
-    }
-
     const existingSetting = await ctx.db
       .query("organizationSetting")
       .withIndex("by_organization", (q) => q.eq("organizationId", args.organizationId))
@@ -34,14 +24,68 @@ export const initializeOrganization = protectedMutation({
       throw new Error("Organization already initialized");
     }
 
+    const user = await ctx.db.get(ctx.userId);
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    let isFreeWithProPlan = false;
+
+    if (!user.freeOrganizationUsed) {
+      const proCheck = await autumn.check(ctx, {
+        featureId: "can_create_org",
+      });
+
+      if (proCheck.error || !proCheck.data) {
+        throw new Error(`Failed to check Pro plan: ${proCheck.error?.message || "Unknown error"}`);
+      }
+
+      if (proCheck.data.allowed) {
+        const freeOrgCheck = await autumn.check(ctx, {
+          featureId: "free_org",
+        });
+
+        if (freeOrgCheck.error || !freeOrgCheck.data) {
+          throw new Error(
+            `Failed to check free org: ${freeOrgCheck.error?.message || "Unknown error"}`,
+          );
+        }
+
+        if (freeOrgCheck.data.allowed) {
+          isFreeWithProPlan = true;
+        }
+      }
+    }
+
+    if (!isFreeWithProPlan) {
+      const orgSubCheck = await autumn.check(ctx, {
+        entityId: args.organizationId,
+        featureId: "organization_projects",
+      });
+
+      if (orgSubCheck.error || !orgSubCheck.data) {
+        throw new Error(
+          `Failed to check organization subscription: ${orgSubCheck.error?.message || "Unknown error"}`,
+        );
+      }
+
+      if (!orgSubCheck.data.allowed) {
+        throw new Error(
+          "Subscribe this organization to the Organization plan on Autumn before initializing it.",
+        );
+      }
+    }
+
     const now = Date.now();
 
     await ctx.db.insert("organizationSetting", {
       organizationId: args.organizationId,
       billingUserId: ctx.userId,
-      isFreeWithProPlan: true,
+      isFreeWithProPlan,
       autumnCustomerId: args.organizationId,
       currentKeyVersion: 1,
+      subscriptionStatus: "active",
       createdAt: now,
       updatedAt: now,
     });
@@ -56,14 +100,25 @@ export const initializeOrganization = protectedMutation({
       grantedAt: now,
     });
 
-    // Track initial member - entity will be auto-created
     await autumn.track(ctx, {
       entityId: args.organizationId,
       featureId: "members",
       value: 1,
     });
 
-    return { success: true };
+    if (isFreeWithProPlan) {
+      await ctx.db.patch(ctx.userId, {
+        freeOrganizationUsed: true,
+        updatedAt: now,
+      });
+
+      await autumn.track(ctx, {
+        featureId: "free_org",
+        value: 1,
+      });
+    }
+
+    return { success: true, isFreeWithProPlan };
   },
 });
 
@@ -71,7 +126,7 @@ export const addMember = protectedMutation({
   args: {
     organizationId: v.string(),
     userEmail: v.string(),
-    role: v.union(v.literal("owner"), v.literal("admin"), v.literal("member"), v.literal("viewer")),
+    role: v.union(v.literal("admin"), v.literal("member"), v.literal("viewer")),
     wrappedOrgKey: v.string(),
   },
   handler: async (
@@ -79,10 +134,12 @@ export const addMember = protectedMutation({
     args: {
       organizationId: string;
       userEmail: string;
-      role: "owner" | "admin" | "member" | "viewer";
+      role: "admin" | "member" | "viewer";
       wrappedOrgKey: string;
     },
   ) => {
+    await checkOrganizationSuspended(ctx, args.organizationId);
+
     const requesterMembership = await ctx.db
       .query("organizationMember")
       .withIndex("by_org_and_user", (q) =>
@@ -109,10 +166,14 @@ export const addMember = protectedMutation({
       );
     }
 
-    const limit = data.included_usage || 5;
-    const currentUsage = data.usage || 0;
+    const limit = data.included_usage;
+    const currentUsage = data.usage;
 
-    if (!data.allowed) {
+    if (!limit || !currentUsage) {
+      throw new Error("No members found");
+    }
+
+    if (limit - currentUsage === 0) {
       throw new Error(
         `Organization member limit reached (${currentUsage}/${limit}). Please add more seats.`,
       );
@@ -183,11 +244,19 @@ export const removeMember = protectedMutation({
     organizationId: v.string(),
     userId: v.id("user"),
     reason: v.union(v.literal("left"), v.literal("removed")),
+    newOwnerUserId: v.optional(v.id("user")),
   },
   handler: async (
     ctx: ProtectedMutationCtx,
-    args: { organizationId: string; userId: Id<"user">; reason: "left" | "removed" },
+    args: {
+      organizationId: string;
+      userId: Id<"user">;
+      reason: "left" | "removed";
+      newOwnerUserId?: Id<"user">;
+    },
   ) => {
+    await checkOrganizationSuspended(ctx, args.organizationId);
+
     const requesterMembership = await ctx.db
       .query("organizationMember")
       .withIndex("by_org_and_user", (q) =>
@@ -212,19 +281,176 @@ export const removeMember = protectedMutation({
       throw new Error("Target user is not a member of this organization");
     }
 
-    if (args.reason === "removed") {
-      if (requesterMembership.role !== "owner" && requesterMembership.role !== "admin") {
-        throw new Error("Only owners and admins can remove members");
-      }
-      if (targetMembership.role === "owner" && requesterMembership.role !== "owner") {
-        throw new Error("Only owners can remove other owners");
-      }
-    } else {
-      if (ctx.userId !== args.userId) {
-        throw new Error("You can only remove yourself with reason 'left'");
-      }
+    // NOTE: get organization settings to check billing ownership
+    const settings = await ctx.db
+      .query("organizationSetting")
+      .withIndex("by_organization", (q) => q.eq("organizationId", args.organizationId))
+      .first();
+
+    if (!settings) {
+      throw new Error("Organization settings not found");
     }
 
+    // NOTE: permission check based on roles
+    const isRequesterOwner = requesterMembership.role === "owner";
+    const isRequesterAdmin = requesterMembership.role === "admin";
+    const isRemovingSelf = ctx.userId === args.userId;
+    const isTargetOwner = targetMembership.role === "owner";
+
+    // NOTE: admins cannot remove the owner
+    if (isRequesterAdmin && isTargetOwner && !isRemovingSelf) {
+      throw new Error("Admins cannot remove the organization owner");
+    }
+
+    // NOTE: non-owner and non-admin can only remove themselves
+    if (!isRequesterOwner && !isRequesterAdmin && !isRemovingSelf) {
+      throw new Error("You can only remove yourself from the organization");
+    }
+
+    // NOTE: only owner and admins can remove other members (excluding owner removal by admin, checked above)
+    if (!isRemovingSelf && !isRequesterOwner && !isRequesterAdmin) {
+      throw new Error("Only organization owners and admins can remove members");
+    }
+
+    // NOTE: check if owner is leaving
+    const isOwnerLeaving = settings.billingUserId === args.userId;
+
+    if (isOwnerLeaving) {
+      // NOTE: count active members
+      const activeMembers = await ctx.db
+        .query("organizationMember")
+        .withIndex("by_organization", (q) => q.eq("organizationId", args.organizationId))
+        .filter((q) => q.eq(q.field("revokedAt"), undefined))
+        .collect();
+
+      if (activeMembers.length > 1) {
+        // NOTE: owner must provide newOwnerUserId to transfer ownership
+        if (!args.newOwnerUserId) {
+          throw new Error(
+            "Owner must specify newOwnerUserId to transfer ownership before leaving the organization.",
+          );
+        }
+
+        const newOwnerUserId = args.newOwnerUserId;
+
+        // NOTE: validate new owner is a member
+        const newOwnerMembership = await ctx.db
+          .query("organizationMember")
+          .withIndex("by_org_and_user", (q) =>
+            q.eq("organizationId", args.organizationId).eq("userId", newOwnerUserId),
+          )
+          .filter((q) => q.eq(q.field("revokedAt"), undefined))
+          .first();
+
+        if (!newOwnerMembership) {
+          throw new Error("New owner must be an active member of the organization");
+        }
+
+        const newOwner = await ctx.db.get(newOwnerUserId);
+
+        if (!newOwner) {
+          throw new Error("New owner user not found");
+        }
+
+        // NOTE: validation for free org transfer
+        // NOTE: free orgs can be transferred and remain free (like GitHub, Vercel, etc.)
+        // NOTE: new owner's free benefit is NOT consumed (transfer is not creation)
+        // NOTE: however, users can only own 1 free org at a time (either created or transferred)
+        if (settings.isFreeWithProPlan) {
+          const newOwnerFreeOrg = await ctx.db
+            .query("organizationSetting")
+            .withIndex("by_billing_user", (q) => q.eq("billingUserId", newOwnerUserId))
+            .filter((q) => q.eq(q.field("isFreeWithProPlan"), true))
+            .first();
+
+          if (newOwnerFreeOrg) {
+            throw new Error(
+              "The new owner already owns a free organization. They must convert it to paid or transfer it before accepting another free organization.",
+            );
+          }
+        }
+        // NOTE: for paid orgs, no validation needed
+        // NOTE: billing responsibility transfers to new owner
+        // NOTE: if they don't maintain Organization subscription, org will be suspended by cron job
+
+        const now = Date.now();
+
+        // NOTE: promote new owner to owner role
+        await ctx.db.patch(newOwnerMembership._id, {
+          role: "owner",
+        });
+
+        // NOTE: transfer billing ownership (free orgs remain free, paid remain paid)
+        await ctx.db.patch(settings._id, {
+          billingUserId: args.newOwnerUserId,
+          updatedAt: now,
+        });
+
+        // NOTE: remove old owner
+        await ctx.db.patch(targetMembership._id, {
+          revokedAt: now,
+          revokedBy: ctx.userId,
+          revocationReason: args.reason,
+        });
+
+        await autumn.track(ctx, {
+          entityId: args.organizationId,
+          featureId: "members",
+          value: -1,
+        });
+
+        return {
+          success: true,
+          shouldRotateKey: true,
+          message: "Ownership transferred successfully. Consider key rotation for security.",
+          ownershipTransferred: true,
+          newOwnerUserId: args.newOwnerUserId,
+          isFreeOrg: settings.isFreeWithProPlan,
+        };
+      }
+
+      // NOTE: owner is the only member - delete organization
+      const activeProjects = await ctx.db
+        .query("project")
+        .withIndex("by_owner", (q) =>
+          q.eq("ownerType", "organization").eq("ownerId", args.organizationId),
+        )
+        .filter((q) => q.eq(q.field("isArchived"), false))
+        .first();
+
+      if (activeProjects) {
+        throw new Error(
+          "Cannot delete organization with active projects. Please archive or delete all projects first.",
+        );
+      }
+
+      const now = Date.now();
+
+      // NOTE: remove membership
+      await ctx.db.patch(targetMembership._id, {
+        revokedAt: now,
+        revokedBy: ctx.userId,
+        revocationReason: args.reason,
+      });
+
+      // NOTE: delete organization settings
+      await ctx.db.delete(settings._id);
+
+      await autumn.track(ctx, {
+        entityId: args.organizationId,
+        featureId: "members",
+        value: -1,
+      });
+
+      return {
+        success: true,
+        shouldRotateKey: false,
+        message: "Organization deleted successfully.",
+        organizationDeleted: true,
+      };
+    }
+
+    // NOTE: non-owner removal (permissions already checked above)
     const now = Date.now();
     await ctx.db.patch(targetMembership._id, {
       revokedAt: now,
@@ -251,6 +477,8 @@ export const listMembers = protectedQuery({
     organizationId: v.string(),
   },
   handler: async (ctx: ProtectedQueryCtx, args: { organizationId: string }) => {
+    await checkOrganizationSuspended(ctx, args.organizationId);
+
     const membership = await ctx.db
       .query("organizationMember")
       .withIndex("by_org_and_user", (q) =>
@@ -304,6 +532,8 @@ export const getOrganizationSettings = protectedQuery({
     organizationId: v.string(),
   },
   handler: async (ctx: ProtectedQueryCtx, args: { organizationId: string }) => {
+    await checkOrganizationSuspended(ctx, args.organizationId);
+
     const membership = await ctx.db
       .query("organizationMember")
       .withIndex("by_org_and_user", (q) =>
@@ -325,6 +555,8 @@ export const getOrganizationSettings = protectedQuery({
       throw new Error("Organization settings not found");
     }
 
+    const paymentStatus = await getOrganizationPaymentStatus(ctx, args.organizationId);
+
     return {
       organizationId: settings.organizationId,
       currentKeyVersion: settings.currentKeyVersion,
@@ -333,6 +565,9 @@ export const getOrganizationSettings = protectedQuery({
       userWrappedOrgKey: membership.wrappedOrgKey,
       userKeyVersion: membership.keyVersion,
       needsKeyRotation: membership.keyVersion < settings.currentKeyVersion,
+      paymentStatus: paymentStatus.status,
+      paymentWarning: paymentStatus.warning,
+      daysRemaining: paymentStatus.daysRemaining,
     };
   },
 });
@@ -372,6 +607,8 @@ export const rotateOrganizationKeys = protectedMutation({
       reason?: "member_removed" | "scheduled" | "manual";
     },
   ) => {
+    await checkOrganizationSuspended(ctx, args.organizationId);
+
     const requesterMembership = await ctx.db
       .query("organizationMember")
       .withIndex("by_org_and_user", (q) =>
@@ -456,5 +693,62 @@ export const rotateOrganizationKeys = protectedMutation({
       secretsReEncrypted: args.secrets.length,
       membersRewrapped: args.members.length,
     };
+  },
+});
+
+export const checkAllSubscriptionStatus = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const allOrgs = await ctx.db.query("organizationSetting").collect();
+    const now = Date.now();
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+
+    for (const org of allOrgs) {
+      // NOTE: skip free orgs - they remain active indefinitely once created
+      // NOTE: the freeOrganizationUsed flag prevents users from creating multiple free orgs
+      if (org.isFreeWithProPlan) {
+        continue;
+      }
+
+      // NOTE: for paid orgs, check subscription status
+      const orgCheck = await autumn.check(ctx, {
+        entityId: org.organizationId,
+        featureId: "organization_projects",
+      });
+      const isActive = orgCheck.data?.allowed || false;
+
+      if (isActive) {
+        // NOTE: subscription is active - restore if needed
+        if (org.subscriptionStatus !== "active") {
+          await ctx.db.patch(org._id, {
+            subscriptionStatus: "active",
+            paymentLapsedAt: undefined,
+            suspendedAt: undefined,
+            updatedAt: now,
+          });
+        }
+      } else {
+        // NOTE: subscription is not active - handle grace period and suspension
+        if (org.subscriptionStatus === "active") {
+          // NOTE: payment failed - start 7-day grace period
+          await ctx.db.patch(org._id, {
+            subscriptionStatus: "payment_lapsed",
+            paymentLapsedAt: now,
+            updatedAt: now,
+          });
+        } else if (org.subscriptionStatus === "payment_lapsed") {
+          // NOTE: check if 7 days have passed
+          if (org.paymentLapsedAt && now - org.paymentLapsedAt >= sevenDaysMs) {
+            await ctx.db.patch(org._id, {
+              subscriptionStatus: "suspended",
+              suspendedAt: now,
+              updatedAt: now,
+            });
+          }
+        }
+      }
+    }
+
+    return { success: true, checkedOrgs: allOrgs.length };
   },
 });
