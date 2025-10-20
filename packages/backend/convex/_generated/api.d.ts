@@ -19,6 +19,7 @@ import type * as lib_access from "../lib/access.js";
 import type * as lib_accessLog from "../lib/accessLog.js";
 import type * as lib_middleware from "../lib/middleware.js";
 import type * as lib_organizationAccess from "../lib/organizationAccess.js";
+import type * as lib_projectAccess from "../lib/projectAccess.js";
 import type * as lib_types from "../lib/types.js";
 import type * as organization from "../organization.js";
 import type * as project from "../project.js";
@@ -52,6 +53,7 @@ declare const fullApi: ApiFromModules<{
   "lib/accessLog": typeof lib_accessLog;
   "lib/middleware": typeof lib_middleware;
   "lib/organizationAccess": typeof lib_organizationAccess;
+  "lib/projectAccess": typeof lib_projectAccess;
   "lib/types": typeof lib_types;
   organization: typeof organization;
   project: typeof project;

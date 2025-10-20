@@ -62,6 +62,14 @@ export function getGracePeriodDaysRemaining(user: Doc<"user">): number {
 
 // NOTE: detect and sync user plan changes (both upgrades and downgrades)
 // NOTE: call this in any project-related query/mutation
+
+// NOTE: overload for mutation context (can sync instantly)
+export async function syncUserPlanStatus(ctx: ProtectedMutationCtx): Promise<void>;
+
+// NOTE: overload for query context (read-only check)
+export async function syncUserPlanStatus(ctx: ProtectedQueryCtx): Promise<void>;
+
+// NOTE: implementation
 export async function syncUserPlanStatus(
   ctx: ProtectedQueryCtx | ProtectedMutationCtx,
 ): Promise<void> {
@@ -91,23 +99,33 @@ export async function syncUserPlanStatus(
 
   // NOTE: upgrade detection - user upgraded (limit increased), clear downgrade flag
   if (user.planDowngradedAt && projectCount <= currentLimit) {
-    await ctx.db.patch(ctx.userId, {
-      planDowngradedAt: undefined,
-      updatedAt: now,
-    });
-    // NOTE: clear cache on plan change to prevent inconsistency
-    clearAccessCache(ctx as CtxWithCache);
+    // NOTE: sync instantly if in mutation context, otherwise cron job will handle it
+    if ("patch" in ctx.db) {
+      // NOTE: runtime check confirms this is mutation context, safe to cast
+      const mutationDb = ctx.db as ProtectedMutationCtx["db"];
+      await mutationDb.patch(ctx.userId, {
+        planDowngradedAt: undefined,
+        updatedAt: now,
+      });
+      // NOTE: clear cache on plan change to prevent inconsistency
+      clearAccessCache(ctx as CtxWithCache);
+    }
     return;
   }
 
   // NOTE: downgrade detection - user downgraded (over limit), set downgrade flag
   if (!user.planDowngradedAt && projectCount > currentLimit) {
-    await ctx.db.patch(ctx.userId, {
-      planDowngradedAt: now,
-      updatedAt: now,
-    });
-    // NOTE: clear cache on plan change to prevent inconsistency
-    clearAccessCache(ctx as CtxWithCache);
+    // NOTE: sync instantly if in mutation context, otherwise cron job will handle it
+    if ("patch" in ctx.db) {
+      // NOTE: runtime check confirms this is mutation context, safe to cast
+      const mutationDb = ctx.db as ProtectedMutationCtx["db"];
+      await mutationDb.patch(ctx.userId, {
+        planDowngradedAt: now,
+        updatedAt: now,
+      });
+      // NOTE: clear cache on plan change to prevent inconsistency
+      clearAccessCache(ctx as CtxWithCache);
+    }
   }
 }
 

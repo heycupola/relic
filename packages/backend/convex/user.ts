@@ -88,7 +88,7 @@ export const checkAllUserPlanStatus = internalMutation({
     for (const user of allUsers) {
       // NOTE: check current plan limit
       const { data } = await autumn.check(ctx, {
-        userId: user._id,
+        entityId: user._id,
         featureId: "personal_projects",
       });
 
