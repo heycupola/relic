@@ -2,27 +2,47 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  user: defineTable({
+    authId: v.string(),
+    email: v.string(),
+    name: v.optional(v.string()),
+    avatarUrl: v.optional(v.string()),
+    freeOrganizationUsed: v.boolean(),
+    planDowngradedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_auth_id", ["authId"])
+    .index("by_email", ["email"]),
   userKey: defineTable({
     userId: v.id("user"),
     publicKey: v.string(),
-    encryptedPrivateKey: v.string(), // NOTE: this is encrypted with user's master key
+    encryptedPrivateKey: v.string(),
     salt: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
   organizationSetting: defineTable({
-    organizationId: v.id("organization"),
+    organizationId: v.string(),
     billingUserId: v.id("user"),
     isFreeWithProPlan: v.boolean(),
     autumnCustomerId: v.string(),
     currentKeyVersion: v.number(),
+    subscriptionStatus: v.union(
+      v.literal("active"),
+      v.literal("payment_lapsed"),
+      v.literal("suspended"),
+    ),
+    paymentLapsedAt: v.optional(v.number()),
+    suspendedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_organization", ["organizationId"])
-    .index("by_billing_user", ["billingUserId"]),
+    .index("by_billing_user", ["billingUserId"])
+    .index("by_status", ["subscriptionStatus"]),
   organizationMember: defineTable({
-    organizationId: v.id("organization"),
+    organizationId: v.string(),
     userId: v.id("user"),
     role: v.union(v.literal("owner"), v.literal("admin"), v.literal("member"), v.literal("viewer")),
     wrappedOrgKey: v.string(),
@@ -97,7 +117,9 @@ export default defineSchema({
     .index("by_project", ["projectId"])
     .index("by_environment", ["environmentId"])
     .index("by_folder", ["folderId"])
-    .index("by_env_and_key", ["environmentId", "key"]),
+    .index("by_env_and_key", ["environmentId", "key"])
+    .index("by_created_by", ["createdBy"])
+    .index("by_updated_by", ["updatedBy"]),
   secretHistory: defineTable({
     secretId: v.id("secret"),
     projectId: v.id("project"),
@@ -117,7 +139,8 @@ export default defineSchema({
   })
     .index("by_secret", ["secretId"])
     .index("by_project", ["projectId"])
-    .index("by_timestamp", ["changedAt"]),
+    .index("by_timestamp", ["changedAt"])
+    .index("by_changed_by", ["changedBy"]),
   accessLog: defineTable({
     userId: v.id("user"),
     resourceType: v.union(
@@ -142,15 +165,16 @@ export default defineSchema({
     .index("by_resource", ["resourceType", "resourceId"])
     .index("by_timestamp", ["timestamp"]),
   keyRotation: defineTable({
-    organizationId: v.id("organization"),
+    organizationId: v.string(),
     oldKeyVersion: v.number(),
     newKeyVersion: v.number(),
     secretsReEncrypted: v.number(),
     membersRewrapped: v.number(),
-    reason: v.optional(v.string()), // NOTE: it can be "member_removed", "scheduled", "manual"
+    reason: v.optional(v.string()),
     rotatedBy: v.id("user"),
     rotatedAt: v.number(),
   })
     .index("by_organization", ["organizationId"])
-    .index("by_timestamp", ["rotatedAt"]),
+    .index("by_timestamp", ["rotatedAt"])
+    .index("by_rotated_by", ["rotatedBy"]),
 });

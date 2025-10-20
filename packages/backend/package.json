@@ -15,8 +15,9 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "autumn-js": "catalog:",
     "@convex-dev/better-auth": "catalog:",
+    "@useautumn/convex": "^0.0.12",
+    "autumn-js": "catalog:",
     "better-auth": "catalog:",
     "convex": "catalog:",
     "convex-helpers": "catalog:"
