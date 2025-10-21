@@ -24,7 +24,6 @@ export default defineSchema({
   }).index("by_user", ["userId"]),
   organizationSetting: defineTable({
     organizationId: v.string(),
-    billingUserId: v.id("user"),
     isFreeWithProPlan: v.boolean(),
     autumnCustomerId: v.string(),
     currentKeyVersion: v.number(),
@@ -39,7 +38,6 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_organization", ["organizationId"])
-    .index("by_billing_user", ["billingUserId"])
     .index("by_status", ["subscriptionStatus"]),
   organizationMember: defineTable({
     organizationId: v.string(),

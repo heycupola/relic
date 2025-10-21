@@ -81,7 +81,6 @@ export const initializeOrganization = protectedMutation({
 
     await ctx.db.insert("organizationSetting", {
       organizationId: args.organizationId,
-      billingUserId: ctx.userId,
       isFreeWithProPlan,
       autumnCustomerId: args.organizationId,
       currentKeyVersion: 1,
@@ -244,7 +243,6 @@ export const removeMember = protectedMutation({
     organizationId: v.string(),
     userId: v.id("user"),
     reason: v.union(v.literal("left"), v.literal("removed")),
-    newOwnerUserId: v.optional(v.id("user")),
   },
   handler: async (
     ctx: ProtectedMutationCtx,
@@ -252,7 +250,6 @@ export const removeMember = protectedMutation({
       organizationId: string;
       userId: Id<"user">;
       reason: "left" | "removed";
-      newOwnerUserId?: Id<"user">;
     },
   ) => {
     await checkOrganizationSuspended(ctx, args.organizationId);
@@ -281,7 +278,6 @@ export const removeMember = protectedMutation({
       throw new Error("Target user is not a member of this organization");
     }
 
-    // NOTE: get organization settings to check billing ownership
     const settings = await ctx.db
       .query("organizationSetting")
       .withIndex("by_organization", (q) => q.eq("organizationId", args.organizationId))
@@ -291,32 +287,26 @@ export const removeMember = protectedMutation({
       throw new Error("Organization settings not found");
     }
 
-    // NOTE: permission check based on roles
     const isRequesterOwner = requesterMembership.role === "owner";
     const isRequesterAdmin = requesterMembership.role === "admin";
     const isRemovingSelf = ctx.userId === args.userId;
     const isTargetOwner = targetMembership.role === "owner";
 
-    // NOTE: admins cannot remove the owner
     if (isRequesterAdmin && isTargetOwner && !isRemovingSelf) {
       throw new Error("Admins cannot remove the organization owner");
     }
 
-    // NOTE: non-owner and non-admin can only remove themselves
     if (!isRequesterOwner && !isRequesterAdmin && !isRemovingSelf) {
       throw new Error("You can only remove yourself from the organization");
     }
 
-    // NOTE: only owner and admins can remove other members (excluding owner removal by admin, checked above)
     if (!isRemovingSelf && !isRequesterOwner && !isRequesterAdmin) {
       throw new Error("Only organization owners and admins can remove members");
     }
 
-    // NOTE: check if owner is leaving
-    const isOwnerLeaving = settings.billingUserId === args.userId;
+    const isOwnerLeaving = targetMembership.role === "owner";
 
     if (isOwnerLeaving) {
-      // NOTE: count active members
       const activeMembers = await ctx.db
         .query("organizationMember")
         .withIndex("by_organization", (q) => q.eq("organizationId", args.organizationId))
@@ -324,92 +314,12 @@ export const removeMember = protectedMutation({
         .collect();
 
       if (activeMembers.length > 1) {
-        // NOTE: owner must provide newOwnerUserId to transfer ownership
-        if (!args.newOwnerUserId) {
-          throw new Error(
-            "Owner must specify newOwnerUserId to transfer ownership before leaving the organization.",
-          );
-        }
-
-        const newOwnerUserId = args.newOwnerUserId;
-
-        // NOTE: validate new owner is a member
-        const newOwnerMembership = await ctx.db
-          .query("organizationMember")
-          .withIndex("by_org_and_user", (q) =>
-            q.eq("organizationId", args.organizationId).eq("userId", newOwnerUserId),
-          )
-          .filter((q) => q.eq(q.field("revokedAt"), undefined))
-          .first();
-
-        if (!newOwnerMembership) {
-          throw new Error("New owner must be an active member of the organization");
-        }
-
-        const newOwner = await ctx.db.get(newOwnerUserId);
-
-        if (!newOwner) {
-          throw new Error("New owner user not found");
-        }
-
-        // NOTE: validation for free org transfer
-        // NOTE: free orgs can be transferred and remain free (like GitHub, Vercel, etc.)
-        // NOTE: new owner's free benefit is NOT consumed (transfer is not creation)
-        // NOTE: however, users can only own 1 free org at a time (either created or transferred)
-        if (settings.isFreeWithProPlan) {
-          const newOwnerFreeOrg = await ctx.db
-            .query("organizationSetting")
-            .withIndex("by_billing_user", (q) => q.eq("billingUserId", newOwnerUserId))
-            .filter((q) => q.eq(q.field("isFreeWithProPlan"), true))
-            .first();
-
-          if (newOwnerFreeOrg) {
-            throw new Error(
-              "The new owner already owns a free organization. They must convert it to paid or transfer it before accepting another free organization.",
-            );
-          }
-        }
-        // NOTE: for paid orgs, no validation needed
-        // NOTE: billing responsibility transfers to new owner
-        // NOTE: if they don't maintain Organization subscription, org will be suspended by cron job
-
-        const now = Date.now();
-
-        // NOTE: promote new owner to owner role
-        await ctx.db.patch(newOwnerMembership._id, {
-          role: "owner",
-        });
-
-        // NOTE: transfer billing ownership (free orgs remain free, paid remain paid)
-        await ctx.db.patch(settings._id, {
-          billingUserId: args.newOwnerUserId,
-          updatedAt: now,
-        });
-
-        // NOTE: remove old owner
-        await ctx.db.patch(targetMembership._id, {
-          revokedAt: now,
-          revokedBy: ctx.userId,
-          revocationReason: args.reason,
-        });
-
-        await autumn.track(ctx, {
-          entityId: args.organizationId,
-          featureId: "members",
-          value: -1,
-        });
-
-        return {
-          success: true,
-          shouldRotateKey: true,
-          message: "Ownership transferred successfully. Consider key rotation for security.",
-          ownershipTransferred: true,
-          newOwnerUserId: args.newOwnerUserId,
-          isFreeOrg: settings.isFreeWithProPlan,
-        };
+        // NOTE: MVP: owner transfer disabled - owner cannot leave while other members exist
+        throw new Error(
+          "As the organization owner, you cannot leave while other members exist. Please remove all members first or delete the organization.",
+        );
       }
 
-      // NOTE: owner is the only member - delete organization
       const activeProjects = await ctx.db
         .query("project")
         .withIndex("by_owner", (q) =>
@@ -426,14 +336,12 @@ export const removeMember = protectedMutation({
 
       const now = Date.now();
 
-      // NOTE: remove membership
       await ctx.db.patch(targetMembership._id, {
         revokedAt: now,
         revokedBy: ctx.userId,
         revocationReason: args.reason,
       });
 
-      // NOTE: delete organization settings
       await ctx.db.delete(settings._id);
 
       await autumn.track(ctx, {
