@@ -175,4 +175,22 @@ export default defineSchema({
     .index("by_organization", ["organizationId"])
     .index("by_timestamp", ["rotatedAt"])
     .index("by_rotated_by", ["rotatedBy"]),
+  deviceCode: defineTable({
+    deviceCode: v.string(),
+    userCode: v.string(),
+    userId: v.optional(v.id("user")),
+    clientId: v.optional(v.string()),
+    scope: v.optional(v.string()),
+    status: v.union(v.literal("pending"), v.literal("approved"), v.literal("denied")),
+    expiresAt: v.number(),
+    lastPolledAt: v.optional(v.number()),
+    pollingInterval: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_device_code", ["deviceCode"])
+    .index("by_user_code", ["userCode"])
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"])
+    .index("by_expires", ["expiresAt"]),
 });

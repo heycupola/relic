@@ -12,6 +12,7 @@ import type * as accessLog from "../accessLog.js";
 import type * as auth from "../auth.js";
 import type * as autumn from "../autumn.js";
 import type * as crons from "../crons.js";
+import type * as deviceAuth from "../deviceAuth.js";
 import type * as environment from "../environment.js";
 import type * as folder from "../folder.js";
 import type * as http from "../http.js";
@@ -45,6 +46,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   autumn: typeof autumn;
   crons: typeof crons;
+  deviceAuth: typeof deviceAuth;
   environment: typeof environment;
   folder: typeof folder;
   http: typeof http;

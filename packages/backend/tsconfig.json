@@ -1,3 +1,6 @@
 {
-  "extends": "@repo/typescript-config/convex.json"
+  "extends": "@repo/typescript-config/convex.json",
+  "compilerOptions": {
+    "skipLibCheck": true
+  }
 }
