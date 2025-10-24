@@ -24,6 +24,7 @@ import type * as lib_types from "../lib/types.js";
 import type * as organization from "../organization.js";
 import type * as project from "../project.js";
 import type * as secret from "../secret.js";
+import type * as test_helpers_setup from "../test/helpers/setup.js";
 import type * as user from "../user.js";
 import type * as userKey from "../userKey.js";
 
@@ -58,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   organization: typeof organization;
   project: typeof project;
   secret: typeof secret;
+  "test/helpers/setup": typeof test_helpers_setup;
   user: typeof user;
   userKey: typeof userKey;
 }>;
