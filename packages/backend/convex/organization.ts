@@ -83,7 +83,6 @@ export const initializeOrganization = protectedMutation({
     await ctx.db.insert("organizationSetting", {
       organizationId: args.organizationId,
       isFreeWithProPlan,
-      autumnCustomerId: args.organizationId,
       currentKeyVersion: 1,
       subscriptionStatus: "active",
       createdAt: now,

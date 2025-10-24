@@ -25,7 +25,6 @@ export default defineSchema({
   organizationSetting: defineTable({
     organizationId: v.string(),
     isFreeWithProPlan: v.boolean(),
-    autumnCustomerId: v.string(),
     currentKeyVersion: v.number(),
     subscriptionStatus: v.union(
       v.literal("active"),
