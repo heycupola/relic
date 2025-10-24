@@ -6,6 +6,7 @@ import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkOrganizationSuspended, getOrganizationPaymentStatus } from "./lib/organizationAccess";
 import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
 
+// NOTE: better-auth org check doesn't exist
 export const initializeOrganization = protectedMutation({
   args: {
     organizationId: v.string(),

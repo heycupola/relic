@@ -31,7 +31,7 @@ export const createPersonalProject = protectedMutation({
     if (!data.allowed) {
       const currentUsage = data.usage || 0;
       throw new Error(
-        `Project limit reached. You currently have ${currentUsage} project${currentUsage !== 1 ? "s" : ""}. Purchase additional projects or upgrade your plan.`,
+        `Project limit reached. You currently have ${currentUsage} project${currentUsage !== 1 ? "s" : ""}. Purchase additional projects or upgrade your plan`,
       );
     }
 
@@ -229,6 +229,7 @@ export const getProject = protectedQuery({
   handler: async (ctx: ProtectedQueryCtx, args: { projectId: Id<"project"> }) => {
     const project = await ctx.db.get(args.projectId);
 
+    // NOTE: isProjectAccessible also performs the same project check
     if (!project) {
       throw new Error("Project not found");
     }
