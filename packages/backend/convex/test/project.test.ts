@@ -602,7 +602,6 @@ describe("project.ts", () => {
         mockAutumn.setFeature(owner.authId, "personal_projects", 2, 2);
 
         const a = mockAutumn.getUserFeature(owner.authId, "personal_projects");
-        console.log("personal_projects", a);
 
         await expect(
           owner.asUser.mutation(api.project.unarchiveProject, { projectId: personalProjectId }),
