@@ -1,7 +1,9 @@
+import { Autumn } from "@useautumn/convex";
 import { v } from "convex/values";
+import { components } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
-import { autumn } from "./autumn";
+import { autumn, initLocalAutumn, localAutumn } from "./autumn";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkOrganizationSuspended, getOrganizationPaymentStatus } from "./lib/organizationAccess";
 import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
@@ -618,8 +620,32 @@ export const checkAllSubscriptionStatus = internalMutation({
         continue;
       }
 
+      const ownership = await ctx.db
+        .query("organizationMember")
+        .withIndex("by_organization", (q) => q.eq("organizationId", org.organizationId))
+        .filter((q) => q.eq(q.field("role"), "owner"))
+        .first();
+
+      if (!ownership) {
+        continue;
+      }
+
+      const owner = await ctx.db.get(ownership.userId);
+
+      if (!owner) {
+        continue;
+      }
+
+      const localAutumnInstance = initLocalAutumn({
+        customerId: owner.authId,
+        customerData: {
+          name: owner.name,
+          email: owner.email,
+        },
+      });
+
       // NOTE: for paid orgs, check subscription status
-      const orgCheck = await autumn.check(ctx, {
+      const orgCheck = await localAutumnInstance.check(ctx, {
         entityId: org.organizationId,
         featureId: "organization_projects",
       });
