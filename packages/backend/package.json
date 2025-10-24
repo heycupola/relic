@@ -6,10 +6,18 @@
   "scripts": {
     "dev": "bunx convex dev",
     "lint": "biome check --write .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "test": "vitest",
+    "test:once": "vitest run",
+    "test:debug": "vitest --inspect-brk --no-file-parallelism",
+    "test:coverage": "vitest run --coverage --coverage.reporter=text"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@edge-runtime/vm": "^5.0.0",
+    "@repo/typescript-config": "*",
+    "@types/bun": "latest",
+    "convex-test": "^0.0.38",
+    "vitest": "^3.2.4"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -17,7 +25,6 @@
   "dependencies": {
     "@convex-dev/better-auth": "catalog:",
     "@useautumn/convex": "^0.0.12",
-    "autumn-js": "catalog:",
     "better-auth": "catalog:",
     "convex": "catalog:",
     "convex-helpers": "catalog:"

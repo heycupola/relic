@@ -17,7 +17,6 @@ export const protectedQuery = customQuery(query, {
 
     const authId = identity.subject;
 
-    // Look up user by authId
     const existingUser = await ctx.db
       .query("user")
       .withIndex("by_auth_id", (q) => q.eq("authId", authId))
@@ -51,7 +50,6 @@ export const protectedMutation = customMutation(mutation, {
     const name = identity.name as string | undefined;
     const avatarUrl = identity.pictureUrl as string | undefined;
 
-    // Sync user from auth
     const existingUser = await ctx.db
       .query("user")
       .withIndex("by_auth_id", (q) => q.eq("authId", authId))
@@ -60,7 +58,6 @@ export const protectedMutation = customMutation(mutation, {
     let userId: Id<"user">;
 
     if (existingUser) {
-      // Update if changed
       const updates: {
         email?: string;
         name?: string;
@@ -82,7 +79,6 @@ export const protectedMutation = customMutation(mutation, {
 
       userId = existingUser._id;
     } else {
-      // Create new user
       const now = Date.now();
       userId = await ctx.db.insert("user", {
         authId,

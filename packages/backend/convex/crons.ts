@@ -15,4 +15,10 @@ crons.daily(
   internal.user.checkAllUserPlanStatus,
 );
 
+crons.hourly(
+  "cleanup-expired-device-codes",
+  { minuteUTC: 0 },
+  internal.deviceAuth.cleanupExpiredDeviceCodes,
+);
+
 export default crons;

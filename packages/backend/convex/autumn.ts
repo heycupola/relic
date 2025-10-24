@@ -5,6 +5,20 @@ import type { DataModel } from "./_generated/dataModel";
 
 type AutumnContext = GenericActionCtx<DataModel>;
 
+export const initLocalAutumn = (identity: {
+  customerId: string;
+  customerData?: {
+    name?: string | null;
+    email?: string | null;
+  };
+}) =>
+  new Autumn(components.autumn, {
+    secretKey: process.env.AUTUMN_SECRET_KEY ?? "",
+    identify: async (_ctx: AutumnContext) => {
+      return identity;
+    },
+  });
+
 export const autumn = new Autumn(components.autumn, {
   secretKey: process.env.AUTUMN_SECRET_KEY ?? "",
   identify: async (ctx: AutumnContext) => {

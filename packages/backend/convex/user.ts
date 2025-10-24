@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
-import { autumn } from "./autumn";
+import { initLocalAutumn } from "./autumn";
 import { protectedQuery } from "./lib/middleware";
 import type { ProtectedQueryCtx } from "./lib/types";
 
@@ -86,9 +86,16 @@ export const checkAllUserPlanStatus = internalMutation({
     let upgrades = 0;
 
     for (const user of allUsers) {
+      const localAutumnInstance = initLocalAutumn({
+        customerId: user._id,
+        customerData: {
+          name: user.name,
+          email: user.email,
+        },
+      });
+
       // NOTE: check current plan limit
-      const { data } = await autumn.check(ctx, {
-        entityId: user._id,
+      const { data } = await localAutumnInstance.check(ctx, {
         featureId: "personal_projects",
       });
 

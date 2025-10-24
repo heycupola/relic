@@ -5,7 +5,11 @@
     "paths": {
       "@/*": ["./*"],
       "@repo/ui/*": ["../../packages/ui/src/*"]
-    }
+    },
+    /* Fix: Bun 1.3.0+ jose type portability error - declaration files disabled */
+    "declaration": false,
+    "declarationMap": false
+    /* ============================== */
   },
   "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", "next.config.js", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]
