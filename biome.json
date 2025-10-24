@@ -129,6 +129,12 @@
           }
         }
       }
+    },
+    {
+      "includes": ["**/*.test.ts", "**/*.spec.ts", "**/*.test.tsx", "**/*.spec.tsx"],
+      "linter": {
+        "enabled": false
+      }
     }
   ]
 }
