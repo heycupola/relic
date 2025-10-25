@@ -6,6 +6,8 @@ import { checkProjectOrganizationSuspended } from "./lib/organizationAccess";
 import { isProjectAccessible } from "./lib/projectAccess";
 import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
 
+const MAX_ENV_COUNT = 32;
+
 export const createEnvironment = protectedMutation({
   args: {
     projectId: v.id("project"),
@@ -64,6 +66,12 @@ export const createEnvironment = protectedMutation({
       .query("environment")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
+
+    if (environments.length >= MAX_ENV_COUNT) {
+      throw new Error(
+        `You've reached the maximum number of environments (${MAX_ENV_COUNT}) for this project`,
+      );
+    }
 
     const maxSortOrder = environments.reduce((max, env) => Math.max(max, env.sortOrder), -1);
 
@@ -434,6 +442,7 @@ export const getEnvironmentData = protectedQuery({
     type SecretSummary = {
       id: Id<"secret">;
       key: string;
+      encryptedValue: string;
       description?: string;
       tags?: string[];
       isDeleted: boolean;
@@ -451,6 +460,7 @@ export const getEnvironmentData = protectedQuery({
         const summary: SecretSummary = {
           id: secret._id,
           key: secret.key,
+          encryptedValue: secret.encryptedValue,
           description: secret.description,
           tags: secret.tags,
           isDeleted: secret.isDeleted,
