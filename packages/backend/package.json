@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@convex-dev/better-auth": "catalog:",
+    "@convex-dev/rate-limiter": "^0.2.14",
     "@useautumn/convex": "^0.0.12",
     "better-auth": "catalog:",
     "convex": "catalog:",
