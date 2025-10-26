@@ -8,6 +8,18 @@ import { getTestUsers, type TestUser } from "./helpers/setup";
 
 const modules = import.meta.glob("../**/*.ts");
 
+vi.mock("../rateLimiter", () => ({
+  rateLimiter: {
+    limit: vi.fn().mockResolvedValue({ ok: true, retryAfter: 0 }),
+    check: vi.fn().mockResolvedValue({ ok: true, retryAfter: 0 }),
+    reset: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+vi.mock("@convex-dev/rate-limiter/convex.config", () => ({
+  default: {},
+}));
+
 // NOTE: Only the beginnings of error messages are shown; full messages are truncated
 const mockAutumn = createMockAutumn(async (ctx) => {
   const identity = await ctx.auth.getUserIdentity();
@@ -35,9 +47,9 @@ describe("environment.ts", () => {
     t = convexTest(schema, modules);
 
     testUsers = await getTestUsers(t);
-    owner = testUsers.get("user1");
-    member = testUsers.get("user2");
-    non_member = testUsers.get("user3");
+    owner = testUsers.get("user1")!;
+    member = testUsers.get("user2")!;
+    non_member = testUsers.get("user3")!;
 
     const organizationId = "org-id";
     const wrapperOrgKey = "org-key";

@@ -7,6 +7,18 @@ import { getTestUsers, type TestUser } from "./helpers/setup";
 
 const modules = import.meta.glob("../**/*.ts");
 
+vi.mock("../rateLimiter", () => ({
+  rateLimiter: {
+    limit: vi.fn().mockResolvedValue({ ok: true, retryAfter: 0 }),
+    check: vi.fn().mockResolvedValue({ ok: true, retryAfter: 0 }),
+    reset: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+vi.mock("@convex-dev/rate-limiter/convex.config", () => ({
+  default: {},
+}));
+
 // NOTE: error messages are not fully written, only the beginnings are shown
 const mockAutumn = createMockAutumn(async (ctx) => {
   const identity = await ctx.auth.getUserIdentity();
