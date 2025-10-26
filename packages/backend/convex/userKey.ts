@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
+import { checkRateLimit } from "./lib/rateLimit";
 import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
 
 export const storeUserKey = protectedMutation({
@@ -20,6 +21,8 @@ export const storeUserKey = protectedMutation({
     if (existingKey) {
       throw new Error("User keys already exist. Use updateUserKey to rotate keys.");
     }
+
+    await checkRateLimit(ctx, "write");
 
     const now = Date.now();
     const userKeyId = await ctx.db.insert("userKey", {
@@ -88,6 +91,8 @@ export const updateUserKey = protectedMutation({
     if (!existingKey) {
       throw new Error("No existing keys found. Use storeUserKey first.");
     }
+
+    await checkRateLimit(ctx, "write");
 
     await ctx.db.patch(existingKey._id, {
       publicKey: args.publicKey,

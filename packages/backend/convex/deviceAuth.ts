@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { components } from "./_generated/api";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { protectedMutation } from "./lib/middleware";
+import { checkRateLimit } from "./lib/rateLimit";
 import type { ProtectedMutationCtx } from "./lib/types";
 
 function generateSecureDeviceCode(): string {
@@ -35,6 +36,8 @@ export const requestDeviceCode = mutation({
     scope: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await checkRateLimit(ctx, "write", "device-auth-request");
+
     const deviceCode = generateSecureDeviceCode();
     const userCode = generateSecureUserCode(8);
     const now = Date.now();
@@ -71,6 +74,8 @@ export const pollDeviceToken = mutation({
     device_code: v.string(),
   },
   handler: async (ctx, args) => {
+    await checkRateLimit(ctx, "read", args.device_code);
+
     const deviceCodeEntry = await ctx.db
       .query("deviceCode")
       .withIndex("by_device_code", (q) => q.eq("deviceCode", args.device_code))
@@ -147,6 +152,8 @@ export const getDeviceCodeInfo = query({
     user_code: v.string(),
   },
   handler: async (ctx, args) => {
+    await checkRateLimit(ctx, "read", args.user_code);
+
     const deviceCodeEntry = await ctx.db
       .query("deviceCode")
       .withIndex("by_user_code", (q) => q.eq("userCode", args.user_code))
@@ -194,6 +201,8 @@ export const approveDeviceCode = protectedMutation({
       throw new Error("Code already processed");
     }
 
+    await checkRateLimit(ctx, "write");
+
     await ctx.db.patch(deviceCodeEntry._id, {
       userId: ctx.userId,
       status: "approved",
@@ -217,6 +226,8 @@ export const denyDeviceCode = protectedMutation({
     if (!deviceCodeEntry) {
       throw new Error("Invalid user code");
     }
+
+    await checkRateLimit(ctx, "write");
 
     await ctx.db.patch(deviceCodeEntry._id, {
       status: "denied",

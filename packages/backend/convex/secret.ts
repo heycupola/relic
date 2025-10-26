@@ -4,6 +4,7 @@ import { canWriteProject, hasProjectAccess } from "./lib/access";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkProjectIdOrganizationSuspended } from "./lib/organizationAccess";
 import { isProjectAccessible } from "./lib/projectAccess";
+import { checkRateLimit } from "./lib/rateLimit";
 import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
 
 export const createSecret = protectedMutation({
@@ -58,6 +59,8 @@ export const createSecret = protectedMutation({
     if (!(await canWriteProject(ctx, project))) {
       throw new Error("You do not have permission to create secrets");
     }
+
+    await checkRateLimit(ctx, "write");
 
     if (args.folderId) {
       const folder = await ctx.db.get(args.folderId);
@@ -158,6 +161,8 @@ export const listSecrets = protectedQuery({
     if (!(await hasProjectAccess(ctx, project))) {
       throw new Error("You do not have access to this environment");
     }
+
+    await checkRateLimit(ctx, "read");
 
     const includeDeleted = args.includeDeleted || false;
 
@@ -299,6 +304,8 @@ export const updateSecret = protectedMutation({
       throw new Error("You do not have permission to update this secret");
     }
 
+    await checkRateLimit(ctx, "write");
+
     const now = Date.now();
     const updates: {
       updatedBy: Id<"user">;
@@ -377,6 +384,8 @@ export const deleteSecret = protectedMutation({
       throw new Error("You do not have permission to delete this secret");
     }
 
+    await checkRateLimit(ctx, "delete");
+
     const now = Date.now();
     await ctx.db.patch(args.secretId, {
       isDeleted: true,
@@ -440,6 +449,8 @@ export const restoreSecret = protectedMutation({
     if (!(await canWriteProject(ctx, project))) {
       throw new Error("You do not have permission to restore this secret");
     }
+
+    await checkRateLimit(ctx, "write");
 
     const existingSecret = await ctx.db
       .query("secret")
@@ -515,6 +526,8 @@ export const listSecretHistory = protectedQuery({
     if (!(await hasProjectAccess(ctx, project))) {
       throw new Error("You do not have access to this secret");
     }
+
+    await checkRateLimit(ctx, "read");
 
     const history = await ctx.db
       .query("secretHistory")

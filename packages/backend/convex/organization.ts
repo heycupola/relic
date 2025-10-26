@@ -366,6 +366,8 @@ export const removeMember = protectedMutation({
     }
 
     // NOTE: non-owner removal (permissions already checked above)
+    await checkRateLimit(ctx, "write", args.organizationId);
+
     const now = Date.now();
     await ctx.db.patch(targetMembership._id, {
       revokedAt: now,
