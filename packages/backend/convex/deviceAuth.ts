@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { components } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { protectedMutation } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
@@ -29,6 +29,29 @@ function generateSecureUserCode(length: number = 8): string {
 
   return code.match(/.{1,4}/g)?.join("-") || code;
 }
+
+export const createSessionForDevice = internalMutation({
+  args: {
+    sessionToken: v.string(),
+    authId: v.string(),
+    expiresAt: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    await ctx.runMutation(components.betterAuth.adapter.create, {
+      input: {
+        model: "session",
+        data: {
+          token: args.sessionToken,
+          userId: args.authId,
+          expiresAt: args.expiresAt,
+          createdAt: now,
+          updatedAt: now,
+        },
+      },
+    });
+  },
+});
 
 export const requestDeviceCode = mutation({
   args: {
@@ -74,7 +97,7 @@ export const pollDeviceToken = mutation({
     device_code: v.string(),
   },
   handler: async (ctx, args) => {
-    await checkRateLimit(ctx, "read", args.device_code);
+    await checkRateLimit(ctx, "write", args.device_code);
 
     const deviceCodeEntry = await ctx.db
       .query("deviceCode")
@@ -91,11 +114,6 @@ export const pollDeviceToken = mutation({
       await ctx.db.delete(deviceCodeEntry._id);
       throw new Error("expired_token");
     }
-
-    await ctx.db.patch(deviceCodeEntry._id, {
-      lastPolledAt: now,
-      updatedAt: now,
-    });
 
     if (deviceCodeEntry.status === "pending") {
       throw new Error("authorization_pending");
@@ -120,17 +138,10 @@ export const pollDeviceToken = mutation({
     const sessionToken = generateSecureDeviceCode();
     const sessionExpiresAt = now + 30 * 24 * 60 * 60 * 1000;
 
-    await ctx.runMutation(components.betterAuth.adapter.create, {
-      input: {
-        model: "session",
-        data: {
-          token: sessionToken,
-          userId: user.authId,
-          expiresAt: sessionExpiresAt,
-          createdAt: now,
-          updatedAt: now,
-        },
-      },
+    await ctx.runMutation(internal.deviceAuth.createSessionForDevice, {
+      sessionToken,
+      authId: user.authId,
+      expiresAt: sessionExpiresAt,
     });
 
     return {
@@ -225,6 +236,12 @@ export const denyDeviceCode = protectedMutation({
 
     if (!deviceCodeEntry) {
       throw new Error("Invalid user code");
+    }
+
+    const now = Date.now();
+    if (now > deviceCodeEntry.expiresAt) {
+      await ctx.db.delete(deviceCodeEntry._id);
+      throw new Error("Code expired");
     }
 
     await checkRateLimit(ctx, "write");
