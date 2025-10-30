@@ -4,6 +4,7 @@ pub mod util {
 }
 
 pub mod helper {
+    pub mod function;
     pub mod session;
 }
 
