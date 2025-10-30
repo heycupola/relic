@@ -1,4 +1,5 @@
 pub mod util {
+    pub mod app_config;
     pub mod crypto;
 }
 
