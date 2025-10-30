@@ -3,6 +3,10 @@ pub mod util {
     pub mod crypto;
 }
 
+pub mod service {
+    pub mod auth;
+}
+
 pub mod helper {
     pub mod function;
     pub mod session;
@@ -93,18 +97,18 @@ pub extern "C" fn run_terminal_app() -> i32 {
                         .ok();
                 }
 
-                if event::poll(Duration::from_millis(100)).unwrap_or(false) {
-                    if let Ok(Event::Key(key)) = event::read() {
-                        let mut state_lock = state.lock().unwrap();
-                        match key.code {
-                            KeyCode::Char('q') => {
-                                state_lock.should_quit = true;
-                                break;
-                            }
-                            KeyCode::Char('u') => state_lock.counter += 1,
-                            KeyCode::Char('d') => state_lock.counter -= 1,
-                            _ => {}
+                if event::poll(Duration::from_millis(100)).unwrap_or(false)
+                    && let Ok(Event::Key(key)) = event::read()
+                {
+                    let mut state_lock = state.lock().unwrap();
+                    match key.code {
+                        KeyCode::Char('q') => {
+                            state_lock.should_quit = true;
+                            break;
                         }
+                        KeyCode::Char('u') => state_lock.counter += 1,
+                        KeyCode::Char('d') => state_lock.counter -= 1,
+                        _ => {}
                     }
                 }
 
