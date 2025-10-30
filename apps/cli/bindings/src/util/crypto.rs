@@ -1,16 +1,17 @@
+use anyhow::{Context, Result, bail};
 use argon2::{
-    password_hash::{rand_core::OsRng as Argon2Rng, SaltString},
     Algorithm, Argon2, ParamsBuilder, PasswordHasher, Version,
+    password_hash::{SaltString, rand_core::OsRng as Argon2Rng},
 };
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chacha20poly1305::{
-    aead::{Aead, KeyInit, OsRng as ChaChaRng},
     ChaCha20Poly1305,
+    aead::{Aead, KeyInit, OsRng as ChaChaRng},
 };
 use rsa::{
+    Oaep, RsaPrivateKey, RsaPublicKey,
     pkcs8::{DecodePrivateKey, DecodePublicKey, EncodePrivateKey, EncodePublicKey, LineEnding},
     rand_core::RngCore,
-    Oaep, RsaPrivateKey, RsaPublicKey,
 };
 use sha2::Sha256;
 
@@ -41,15 +42,15 @@ pub fn generate_salt() -> String {
     BASE64.encode(salt.as_str().as_bytes())
 }
 
-pub fn derive_key(password: &str, salt_base64: &str) -> Result<Vec<u8>, String> {
+pub fn derive_key(password: &str, salt_base64: &str) -> Result<Vec<u8>> {
     let salt_bytes = BASE64
         .decode(salt_base64)
-        .map_err(|e| format!("Failed to decode salt: {}", e))?;
+        .context("Failed to decode salt from base64")?;
 
-    let salt_str =
-        std::str::from_utf8(&salt_bytes).map_err(|e| format!("Invalid salt format: {}", e))?;
+    let salt_str = std::str::from_utf8(&salt_bytes).context("Invalid UTF-8 in salt")?;
 
-    let salt = SaltString::from_b64(salt_str).map_err(|e| format!("Invalid salt format: {}", e))?;
+    let salt = SaltString::from_b64(salt_str)
+        .map_err(|e| anyhow::anyhow!("Invalid salt format: {}", e))?;
 
     let params = ParamsBuilder::new()
         .m_cost(ARGON2_MEMORY_COST)
@@ -57,18 +58,18 @@ pub fn derive_key(password: &str, salt_base64: &str) -> Result<Vec<u8>, String> 
         .p_cost(ARGON2_PARALLELISM)
         .output_len(KEY_LENGTH)
         .build()
-        .map_err(|e| format!("Failed to build Argon2 params: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to build Argon2 parameters: {}", e))?;
 
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
     let password_bytes = password.as_bytes();
     let hash = argon2
         .hash_password(password_bytes, &salt)
-        .map_err(|e| format!("Key derivation failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Key derivation failed: {}", e))?;
 
     let key_bytes = hash
         .hash
-        .ok_or_else(|| "No has produced".to_string())?
+        .context("No hash produced by Argon2")?
         .as_bytes()
         .to_vec();
 
@@ -102,18 +103,16 @@ pub fn derive_key(password: &str, salt_base64: &str) -> Result<Vec<u8>, String> 
 /// let encrypted = encrypt("my-secret-api-key", &master_key)?;
 /// // NOTE: Store `encrypted` in Convex database
 /// ```
-pub fn encrypt(plaintext: &str, key: &[u8]) -> Result<String, String> {
+pub fn encrypt(plaintext: &str, key: &[u8]) -> Result<String> {
     if key.len() != KEY_LENGTH {
-        return Err(format!(
+        bail!(
             "Invalid key length: expected {}, got {}",
             KEY_LENGTH,
             key.len()
-        ));
+        );
     }
 
-    let key_array: [u8; 32] = key
-        .try_into()
-        .map_err(|_| "Invalid key format".to_string())?;
+    let key_array: [u8; 32] = key.try_into().context("Invalid key format")?;
 
     let cipher = ChaCha20Poly1305::new(chacha20poly1305::Key::from_slice(&key_array));
 
@@ -123,11 +122,11 @@ pub fn encrypt(plaintext: &str, key: &[u8]) -> Result<String, String> {
 
     let ciphertext = cipher
         .encrypt(nonce, plaintext.as_bytes())
-        .map_err(|e| format!("Encryption failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Encryption failed: {}", e))?;
 
     let result = format!(
         "{}:{}",
-        BASE64.encode(&nonce_bytes),
+        BASE64.encode(nonce_bytes),
         BASE64.encode(&ciphertext)
     );
 
@@ -155,30 +154,26 @@ pub fn encrypt(plaintext: &str, key: &[u8]) -> Result<String, String> {
 /// let encrypted = "nonce_base64:ciphertext_base64";  // From database
 /// let plaintext = decrypt(encrypted, &master_key)?;
 /// ```
-pub fn decrypt(ciphertext: &str, key: &[u8]) -> Result<String, String> {
+pub fn decrypt(ciphertext: &str, key: &[u8]) -> Result<String> {
     let parts: Vec<&str> = ciphertext.split(':').collect();
     if parts.len() != 2 {
-        return Err("Invalid ciphertext format: expected 'nonce:ciphertext'".to_string());
+        bail!("Invalid ciphertext format: expected 'nonce:ciphertext'");
     }
 
-    let nonce_bytes = BASE64
-        .decode(parts[0])
-        .map_err(|_| "Invalid nonce encoding".to_string())?;
+    let nonce_bytes = BASE64.decode(parts[0]).context("Invalid nonce encoding")?;
 
     let ciphertext_bytes = BASE64
         .decode(parts[1])
-        .map_err(|_| "Invalid ciphertext encoding".to_string())?;
+        .context("Invalid ciphertext encoding")?;
 
     if key.len() != KEY_LENGTH {
-        return Err(format!("Invalid key length: expected {}", KEY_LENGTH));
+        bail!("Invalid key length: expected {}", KEY_LENGTH);
     }
     if nonce_bytes.len() != NONCE_LENGTH {
-        return Err(format!("Invalid nonce length: expected {}", NONCE_LENGTH));
+        bail!("Invalid nonce length: expected {}", NONCE_LENGTH);
     }
 
-    let key_array: [u8; 32] = key
-        .try_into()
-        .map_err(|_| "Invalid key format".to_string())?;
+    let key_array: [u8; 32] = key.try_into().context("Invalid key format")?;
 
     let cipher = ChaCha20Poly1305::new(chacha20poly1305::Key::from_slice(&key_array));
 
@@ -186,9 +181,9 @@ pub fn decrypt(ciphertext: &str, key: &[u8]) -> Result<String, String> {
 
     let plaintext_bytes = cipher
         .decrypt(nonce, ciphertext_bytes.as_ref())
-        .map_err(|_| "Decryption failed: wrong key or tampered data".to_string())?;
+        .map_err(|_| anyhow::anyhow!("Decryption failed: wrong key or tampered data"))?;
 
-    String::from_utf8(plaintext_bytes).map_err(|_| "Invalid UTF-8 in decrypted data".to_string())
+    String::from_utf8(plaintext_bytes).context("Invalid UTF-8 in decrypted data")
 }
 
 /// Generate RSA 4096-bit keypair and encrypt private key
@@ -216,26 +211,26 @@ pub fn decrypt(ciphertext: &str, key: &[u8]) -> Result<String, String> {
 /// // NOTE: Store in Convex userKey table:
 /// // { userId, publicKey, encryptedPrivateKey, salt }
 /// ```
-pub fn generate_keypair(master_key: &[u8]) -> Result<(String, String), String> {
+pub fn generate_keypair(master_key: &[u8]) -> Result<(String, String)> {
     if master_key.len() != KEY_LENGTH {
-        return Err("Invalid master key length".to_string());
+        bail!("Invalid master key length");
     }
 
     let mut rng = ChaChaRng;
-    let private_key = RsaPrivateKey::new(&mut rng, RSA_KEY_SIZE)
-        .map_err(|e| format!("Failed to generate RSA keypair: {}", e))?;
+    let private_key =
+        RsaPrivateKey::new(&mut rng, RSA_KEY_SIZE).context("Failed to generate RSA keypair")?;
 
     let public_key = RsaPublicKey::from(&private_key);
 
     let public_key_pem = public_key
         .to_public_key_pem(LineEnding::LF)
-        .map_err(|e| format!("Failed to encode private key: {}", e))?;
+        .context("Failed to encode public key")?;
 
     let public_key_base64 = BASE64.encode(public_key_pem.as_bytes());
 
     let private_key_pem = private_key
         .to_pkcs8_pem(LineEnding::LF)
-        .map_err(|e| format!("Failed to encode private key: {}", e))?;
+        .context("Failed to encode private key")?;
 
     let encrypted_private_key = encrypt(private_key_pem.as_str(), master_key)?;
 
@@ -255,11 +250,10 @@ pub fn generate_keypair(master_key: &[u8]) -> Result<(String, String), String> {
 pub fn decrypt_private_key(
     encrypted_private_key: &str,
     master_key: &[u8],
-) -> Result<RsaPrivateKey, String> {
+) -> Result<RsaPrivateKey> {
     let private_key_pem = decrypt(encrypted_private_key, master_key)?;
 
-    RsaPrivateKey::from_pkcs8_pem(&private_key_pem)
-        .map_err(|e| format!("Failed to parse private key: {}", e))
+    RsaPrivateKey::from_pkcs8_pem(&private_key_pem).context("Failed to parse private key")
 }
 
 pub fn generate_org_key() -> Vec<u8> {
@@ -294,31 +288,31 @@ pub fn generate_org_key() -> Vec<u8> {
 ///
 /// // Store in organizationMember table:
 /// // { orgId, userId, wrappedOrgKey, role }
-pub fn wrap_org_key(org_key: &[u8], public_key_base64: &str) -> Result<String, String> {
+pub fn wrap_org_key(org_key: &[u8], public_key_base64: &str) -> Result<String> {
     if org_key.len() != KEY_LENGTH {
-        return Err(format!(
+        bail!(
             "Invalid org key length: expected {}, got {}",
             KEY_LENGTH,
             org_key.len()
-        ));
+        );
     }
 
     let public_key_pem_bytes = BASE64
         .decode(public_key_base64)
-        .map_err(|e| format!("Failed to decode public key: {}", e))?;
+        .context("Failed to decode public key from base64")?;
 
-    let public_key_pem = std::str::from_utf8(&public_key_pem_bytes)
-        .map_err(|e| format!("Invalid UTF-8 in public key: {}", e))?;
+    let public_key_pem =
+        std::str::from_utf8(&public_key_pem_bytes).context("Invalid UTF-8 in public key")?;
 
-    let public_key = RsaPublicKey::from_public_key_pem(public_key_pem)
-        .map_err(|e| format!("Failed to parse public key: {}", e))?;
+    let public_key =
+        RsaPublicKey::from_public_key_pem(public_key_pem).context("Failed to parse public key")?;
 
     let padding = Oaep::new::<Sha256>();
     let mut rng = ChaChaRng;
 
     let wrapper_key = public_key
         .encrypt(&mut rng, padding, org_key)
-        .map_err(|e| format!("Failed to wrap org key: {}", e))?;
+        .context("Failed to wrap org key")?;
 
     Ok(BASE64.encode(&wrapper_key))
 }
@@ -353,26 +347,23 @@ pub fn wrap_org_key(org_key: &[u8], public_key_base64: &str) -> Result<String, S
 /// // Now decrypt secrets
 /// let secret = decrypt(&encrypted_secret, &org_key)?;
 /// ```
-pub fn unwrap_org_key(
-    wrapped_key_base64: &str,
-    private_key: &RsaPrivateKey,
-) -> Result<Vec<u8>, String> {
+pub fn unwrap_org_key(wrapped_key_base64: &str, private_key: &RsaPrivateKey) -> Result<Vec<u8>> {
     let wrapped_key = BASE64
         .decode(wrapped_key_base64)
-        .map_err(|e| format!("Failed to decode wrapped key: {}", e))?;
+        .context("Failed to decode wrapped key from base64")?;
 
     let padding = Oaep::new::<Sha256>();
 
     let org_key = private_key
         .decrypt(padding, &wrapped_key)
-        .map_err(|_| "Failed to unwrap org key: wrong private key or corrupted data".to_string())?;
+        .context("Failed to unwrap org key: wrong private key or corrupted data")?;
 
     if org_key.len() != KEY_LENGTH {
-        return Err(format!(
+        bail!(
             "Invalid unwrapped key length: expected {}, got {}",
             KEY_LENGTH,
             org_key.len()
-        ));
+        );
     }
 
     Ok(org_key)
@@ -460,7 +451,7 @@ mod tests {
         let result = decrypt(&ciphertext, &key_2);
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("wrong key"))
+        assert!(result.unwrap_err().to_string().contains("wrong key"))
     }
 
     #[test]
@@ -481,7 +472,12 @@ mod tests {
         let result = encrypt("encrypt-me-daddy", &short_key);
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Invalid key length"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid key length")
+        );
     }
 
     #[test]
@@ -546,7 +542,12 @@ mod tests {
         let result = generate_keypair(&short_key);
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Invalid master key length"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid master key length")
+        );
     }
 
     #[test]
@@ -603,6 +604,11 @@ mod tests {
 
         let result = wrap_org_key(&short_key, &public_key);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Invalid org key length"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid org key length")
+        );
     }
 }
