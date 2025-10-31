@@ -36,6 +36,9 @@ pub extern "C" fn run_relic(args_json: *const c_char) {
     if args.is_empty() {
         tui::app::start_tui();
     } else {
-        cli::app::run_cli_from_args(args);
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+        if let Err(e) = rt.block_on(cli::app::run_cli_from_args(args)) {
+            eprintln!("Error running CLI: {}", e);
+        }
     }
 }

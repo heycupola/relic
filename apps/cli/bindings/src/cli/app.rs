@@ -1,4 +1,7 @@
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+
+use crate::{service, util::app_config::AppConfig};
 
 #[derive(Parser)]
 #[command(name = "relic")]
@@ -13,21 +16,19 @@ enum Commands {
     Login,
 }
 
-pub fn run_cli_from_args(mut args: Vec<String>) {
+pub async fn run_cli_from_args(mut args: Vec<String>) -> Result<()> {
+    let mut app_config = AppConfig::new().await?;
+
     // Add program name to the beginning for clap
     args.insert(0, "relic".to_string());
 
-    let cli = match Cli::try_parse_from(args) {
-        Ok(cli) => cli,
-        Err(e) => {
-            eprintln!("{}", e);
-            return;
-        }
-    };
+    let cli = Cli::try_parse_from(args).context("Unable to parse args...")?;
 
     match cli.command {
         Commands::Login => {
-            println!("Login command");
+            service::auth::login(&mut app_config).await?;
         }
     }
+
+    Ok(())
 }

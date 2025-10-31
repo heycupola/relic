@@ -7,6 +7,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use convex::ConvexClient;
+use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -123,9 +124,11 @@ pub async fn login(app_config: &mut AppConfig) -> Result<Session> {
     .await
     .context("Failed to initiate device authentication flow")?;
 
-    println!("Please visit: {}", device_response.verification_uri);
-    println!("Enter code: {}", device_response.user_code);
-    println!("Waiting for approval...");
+    println!("\n{} {}", "→".cyan(), "Please visit:".bold());
+    println!("  {}", device_response.verification_uri.bright_blue());
+    println!("\n{} {}", "→".cyan(), "Enter code:".bold());
+    println!("  {}", device_response.user_code.bright_yellow().bold());
+    println!("\n{}", "⏳ Waiting for approval...".dimmed());
 
     let interval = std::time::Duration::from_secs(device_response.interval);
     let expires_at =
@@ -160,6 +163,12 @@ pub async fn login(app_config: &mut AppConfig) -> Result<Session> {
                 );
 
                 session::save_session(session).context("Failed to save session")?;
+                println!(
+                    "{} {}",
+                    "✓".green().bold(),
+                    "Authentication successful!".bold()
+                );
+                println!("{}", "Session saved and ready to use.".dimmed());
 
                 return session::load_session()
                     .context("Failed to load session after save")?

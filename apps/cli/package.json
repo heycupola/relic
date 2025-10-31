@@ -18,6 +18,7 @@
   "private": true,
   "scripts": {
     "build:bindings": "cd bindings && cargo build --release",
+    "dev": "bun run build:bindings && bun run index.ts",
     "lint": "biome check --write .",
     "format": "biome format --write ."
   },
