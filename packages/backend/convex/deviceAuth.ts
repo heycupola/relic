@@ -1,7 +1,8 @@
 import { v } from "convex/values";
-import { components } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { protectedMutation } from "./lib/middleware";
+import { checkRateLimit } from "./lib/rateLimit";
 import type { ProtectedMutationCtx } from "./lib/types";
 
 function generateSecureDeviceCode(): string {
@@ -29,12 +30,37 @@ function generateSecureUserCode(length: number = 8): string {
   return code.match(/.{1,4}/g)?.join("-") || code;
 }
 
+export const createSessionForDevice = internalMutation({
+  args: {
+    sessionToken: v.string(),
+    authId: v.string(),
+    expiresAt: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    await ctx.runMutation(components.betterAuth.adapter.create, {
+      input: {
+        model: "session",
+        data: {
+          token: args.sessionToken,
+          userId: args.authId,
+          expiresAt: args.expiresAt,
+          createdAt: now,
+          updatedAt: now,
+        },
+      },
+    });
+  },
+});
+
 export const requestDeviceCode = mutation({
   args: {
     clientId: v.optional(v.string()),
     scope: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await checkRateLimit(ctx, "write", "device-auth-request");
+
     const deviceCode = generateSecureDeviceCode();
     const userCode = generateSecureUserCode(8);
     const now = Date.now();
@@ -71,6 +97,8 @@ export const pollDeviceToken = mutation({
     device_code: v.string(),
   },
   handler: async (ctx, args) => {
+    await checkRateLimit(ctx, "write", args.device_code);
+
     const deviceCodeEntry = await ctx.db
       .query("deviceCode")
       .withIndex("by_device_code", (q) => q.eq("deviceCode", args.device_code))
@@ -86,11 +114,6 @@ export const pollDeviceToken = mutation({
       await ctx.db.delete(deviceCodeEntry._id);
       throw new Error("expired_token");
     }
-
-    await ctx.db.patch(deviceCodeEntry._id, {
-      lastPolledAt: now,
-      updatedAt: now,
-    });
 
     if (deviceCodeEntry.status === "pending") {
       throw new Error("authorization_pending");
@@ -115,29 +138,16 @@ export const pollDeviceToken = mutation({
     const sessionToken = generateSecureDeviceCode();
     const sessionExpiresAt = now + 30 * 24 * 60 * 60 * 1000;
 
-    await ctx.runMutation(components.betterAuth.adapter.create, {
-      input: {
-        model: "session",
-        data: {
-          token: sessionToken,
-          userId: user.authId,
-          expiresAt: sessionExpiresAt,
-          createdAt: now,
-          updatedAt: now,
-        },
-      },
+    await ctx.runMutation(internal.deviceAuth.createSessionForDevice, {
+      sessionToken,
+      authId: user.authId,
+      expiresAt: sessionExpiresAt,
     });
 
     return {
       access_token: sessionToken,
       token_type: "Bearer",
       expires_in: 30 * 24 * 60 * 60,
-      user: {
-        id: user._id,
-        authId: user.authId,
-        email: user.email,
-        name: user.name,
-      },
     };
   },
 });
@@ -147,6 +157,8 @@ export const getDeviceCodeInfo = query({
     user_code: v.string(),
   },
   handler: async (ctx, args) => {
+    await checkRateLimit(ctx, "read", args.user_code);
+
     const deviceCodeEntry = await ctx.db
       .query("deviceCode")
       .withIndex("by_user_code", (q) => q.eq("userCode", args.user_code))
@@ -194,6 +206,8 @@ export const approveDeviceCode = protectedMutation({
       throw new Error("Code already processed");
     }
 
+    await checkRateLimit(ctx, "write");
+
     await ctx.db.patch(deviceCodeEntry._id, {
       userId: ctx.userId,
       status: "approved",
@@ -217,6 +231,14 @@ export const denyDeviceCode = protectedMutation({
     if (!deviceCodeEntry) {
       throw new Error("Invalid user code");
     }
+
+    const now = Date.now();
+    if (now > deviceCodeEntry.expiresAt) {
+      await ctx.db.delete(deviceCodeEntry._id);
+      throw new Error("Code expired");
+    }
+
+    await checkRateLimit(ctx, "write");
 
     await ctx.db.patch(deviceCodeEntry._id, {
       status: "denied",

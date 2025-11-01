@@ -8,6 +8,18 @@ import { getTestUsers, type TestUser } from "./helpers/setup";
 
 const modules = import.meta.glob("../**/*.ts");
 
+vi.mock("../rateLimiter", () => ({
+  rateLimiter: {
+    limit: vi.fn().mockResolvedValue({ ok: true, retryAfter: 0 }),
+    check: vi.fn().mockResolvedValue({ ok: true, retryAfter: 0 }),
+    reset: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+vi.mock("@convex-dev/rate-limiter/convex.config", () => ({
+  default: {},
+}));
+
 // NOTE: error messages are not fully written, only the beginnings are shown
 const mockAutumn = createMockAutumn(async (ctx) => {
   const identity = await ctx.auth.getUserIdentity();
@@ -466,7 +478,7 @@ describe("project.ts", () => {
 
     beforeAll(() => {
       owner = testUsers.get("user1")!;
-      nonOwner = testUsers.get("user2");
+      nonOwner = testUsers.get("user2")!;
     });
 
     beforeEach(async () => {
@@ -546,7 +558,7 @@ describe("project.ts", () => {
 
     beforeAll(() => {
       owner = testUsers.get("user1")!;
-      nonOwner = testUsers.get("user2");
+      nonOwner = testUsers.get("user2")!;
     });
 
     beforeEach(async () => {
@@ -600,8 +612,6 @@ describe("project.ts", () => {
         await owner.asUser.mutation(api.project.archiveProject, { projectId: personalProjectId });
 
         mockAutumn.setFeature(owner.authId, "personal_projects", 2, 2);
-
-        const a = mockAutumn.getUserFeature(owner.authId, "personal_projects");
 
         await expect(
           owner.asUser.mutation(api.project.unarchiveProject, { projectId: personalProjectId }),

@@ -1,11 +1,10 @@
-import { Autumn } from "@useautumn/convex";
 import { v } from "convex/values";
-import { components } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
-import { autumn, initLocalAutumn, localAutumn } from "./autumn";
+import { autumn, initLocalAutumn } from "./autumn";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkOrganizationSuspended, getOrganizationPaymentStatus } from "./lib/organizationAccess";
+import { checkRateLimit } from "./lib/rateLimit";
 import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
 
 // NOTE: better-auth org check doesn't exist
@@ -79,6 +78,8 @@ export const initializeOrganization = protectedMutation({
         );
       }
     }
+
+    await checkRateLimit(ctx, "write");
 
     const now = Date.now();
 
@@ -219,6 +220,8 @@ export const addMember = protectedMutation({
       throw new Error("Organization settings not found");
     }
 
+    await checkRateLimit(ctx, "write", args.organizationId);
+
     const now = Date.now();
     const memberId = await ctx.db.insert("organizationMember", {
       organizationId: args.organizationId,
@@ -336,6 +339,8 @@ export const removeMember = protectedMutation({
         );
       }
 
+      await checkRateLimit(ctx, "write", args.organizationId);
+
       const now = Date.now();
 
       await ctx.db.patch(targetMembership._id, {
@@ -361,6 +366,8 @@ export const removeMember = protectedMutation({
     }
 
     // NOTE: non-owner removal (permissions already checked above)
+    await checkRateLimit(ctx, "write", args.organizationId);
+
     const now = Date.now();
     await ctx.db.patch(targetMembership._id, {
       revokedAt: now,
@@ -400,6 +407,8 @@ export const listMembers = protectedQuery({
     if (!membership) {
       throw new Error("You are not a member of this organization");
     }
+
+    await checkRateLimit(ctx, "read");
 
     const members = await ctx.db
       .query("organizationMember")
@@ -545,6 +554,8 @@ export const rotateOrganizationKeys = protectedMutation({
         `Invalid key version. Expected ${settings.currentKeyVersion + 1}, got ${args.newKeyVersion}`,
       );
     }
+
+    await checkRateLimit(ctx, "keyRotation", args.organizationId);
 
     const now = Date.now();
 

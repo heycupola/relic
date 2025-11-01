@@ -4,6 +4,7 @@ import { canAdminProject, canWriteProject, hasProjectAccess } from "./lib/access
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkProjectIdOrganizationSuspended } from "./lib/organizationAccess";
 import { isProjectAccessible } from "./lib/projectAccess";
+import { checkRateLimit } from "./lib/rateLimit";
 import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
 
 export const createFolder = protectedMutation({
@@ -47,6 +48,8 @@ export const createFolder = protectedMutation({
     if (!(await canWriteProject(ctx, project))) {
       throw new Error("You do not have access to this environment");
     }
+
+    await checkRateLimit(ctx, "write");
 
     const path = `/${args.slug}`;
 
@@ -224,6 +227,8 @@ export const updateFolder = protectedMutation({
       throw new Error("You do not have permission to update this folder");
     }
 
+    await checkRateLimit(ctx, "write");
+
     const updates: {
       updatedAt: number;
       name?: string;
@@ -264,6 +269,8 @@ export const deleteFolder = protectedMutation({
     if (!(await canAdminProject(ctx, project))) {
       throw new Error("You do not have permission to delete this folder");
     }
+
+    await checkRateLimit(ctx, "delete");
 
     const secrets = await ctx.db
       .query("secret")

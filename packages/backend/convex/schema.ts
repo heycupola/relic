@@ -182,7 +182,6 @@ export default defineSchema({
     scope: v.optional(v.string()),
     status: v.union(v.literal("pending"), v.literal("approved"), v.literal("denied")),
     expiresAt: v.number(),
-    lastPolledAt: v.optional(v.number()),
     pollingInterval: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),

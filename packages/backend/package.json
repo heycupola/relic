@@ -17,6 +17,7 @@
     "@repo/typescript-config": "*",
     "@types/bun": "latest",
     "convex-test": "^0.0.38",
+    "vite": "^7.1.12",
     "vitest": "^3.2.4"
   },
   "peerDependencies": {
@@ -24,6 +25,7 @@
   },
   "dependencies": {
     "@convex-dev/better-auth": "catalog:",
+    "@convex-dev/rate-limiter": "^0.2.14",
     "@useautumn/convex": "^0.0.12",
     "better-auth": "catalog:",
     "convex": "catalog:",

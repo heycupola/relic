@@ -8,6 +8,7 @@ import {
   checkProjectOrganizationSuspended,
 } from "./lib/organizationAccess";
 import { getUserProjectsWithRestrictions, isProjectAccessible } from "./lib/projectAccess";
+import { checkRateLimit } from "./lib/rateLimit";
 import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
 
 export const createPersonalProject = protectedMutation({
@@ -34,6 +35,8 @@ export const createPersonalProject = protectedMutation({
         `Project limit reached. You currently have ${currentUsage} project${currentUsage !== 1 ? "s" : ""}. Purchase additional projects or upgrade your plan`,
       );
     }
+
+    await checkRateLimit(ctx, "write");
 
     const existingProjects = await ctx.db
       .query("project")
@@ -110,6 +113,8 @@ export const createOrganizationProject = protectedMutation({
         `Organization project limit reached. You currently have ${currentUsage} project${currentUsage !== 1 ? "s" : ""}. Purchase additional projects to increase your limit.`,
       );
     }
+
+    await checkRateLimit(ctx, "write");
 
     const existingProjects = await ctx.db
       .query("project")
@@ -299,6 +304,8 @@ export const updateProject = protectedMutation({
       );
     }
 
+    await checkRateLimit(ctx, "write");
+
     const updates: {
       updatedAt: number;
       name?: string;
@@ -333,6 +340,8 @@ export const archiveProject = protectedMutation({
     if (!(await isProjectOwner(ctx, project))) {
       throw new Error("Only project owners can archive projects");
     }
+
+    await checkRateLimit(ctx, "delete");
 
     await ctx.db.patch(args.projectId, { isArchived: true, updatedAt: Date.now() });
 
@@ -373,6 +382,8 @@ export const unarchiveProject = protectedMutation({
     if (!(await isProjectOwner(ctx, project))) {
       throw new Error("Only project owners can unarchive projects");
     }
+
+    await checkRateLimit(ctx, "write");
 
     if (project.ownerType === "user") {
       const { data, error } = await autumn.check(ctx, {

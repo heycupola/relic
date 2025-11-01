@@ -4,7 +4,10 @@ import { canAdminProject, canWriteProject, hasProjectAccess, isProjectOwner } fr
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkProjectOrganizationSuspended } from "./lib/organizationAccess";
 import { isProjectAccessible } from "./lib/projectAccess";
+import { checkRateLimit } from "./lib/rateLimit";
 import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
+
+const MAX_ENV_COUNT = 32;
 
 export const createEnvironment = protectedMutation({
   args: {
@@ -49,6 +52,8 @@ export const createEnvironment = protectedMutation({
       throw new Error("You do not have permission to create environments");
     }
 
+    await checkRateLimit(ctx, "write");
+
     const existingEnv = await ctx.db
       .query("environment")
       .withIndex("by_project_and_slug", (q) =>
@@ -64,6 +69,12 @@ export const createEnvironment = protectedMutation({
       .query("environment")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
+
+    if (environments.length >= MAX_ENV_COUNT) {
+      throw new Error(
+        `You've reached the maximum number of environments (${MAX_ENV_COUNT}) for this project`,
+      );
+    }
 
     const maxSortOrder = environments.reduce((max, env) => Math.max(max, env.sortOrder), -1);
 
@@ -234,6 +245,8 @@ export const updateEnvironment = protectedMutation({
       throw new Error("You do not have permission to update this environment");
     }
 
+    await checkRateLimit(ctx, "write");
+
     const updates: {
       updatedAt: number;
       name?: string;
@@ -278,6 +291,8 @@ export const deleteEnvironment = protectedMutation({
     if (!(await isProjectOwner(ctx, project))) {
       throw new Error("Only project owners can delete environments");
     }
+
+    await checkRateLimit(ctx, "delete");
 
     const secrets = await ctx.db
       .query("secret")
@@ -339,6 +354,8 @@ export const reorderEnvironments = protectedMutation({
     if (!(await canAdminProject(ctx, project))) {
       throw new Error("You do not have permission to reorder environments");
     }
+
+    await checkRateLimit(ctx, "write");
 
     for (const envId of args.environmentIds) {
       const env = await ctx.db.get(envId);
@@ -407,6 +424,8 @@ export const getEnvironmentData = protectedQuery({
       throw new Error("You do not have access to this environment");
     }
 
+    await checkRateLimit(ctx, "read");
+
     const includeDeleted = args.includeDeleted || false;
     const includeRecentActivity = args.includeRecentActivity || false;
 
@@ -434,6 +453,7 @@ export const getEnvironmentData = protectedQuery({
     type SecretSummary = {
       id: Id<"secret">;
       key: string;
+      encryptedValue: string;
       description?: string;
       tags?: string[];
       isDeleted: boolean;
@@ -451,6 +471,7 @@ export const getEnvironmentData = protectedQuery({
         const summary: SecretSummary = {
           id: secret._id,
           key: secret.key,
+          encryptedValue: secret.encryptedValue,
           description: secret.description,
           tags: secret.tags,
           isDeleted: secret.isDeleted,
