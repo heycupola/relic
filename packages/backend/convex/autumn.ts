@@ -35,3 +35,5 @@ export const autumn = new Autumn(components.autumn, {
     };
   },
 });
+
+export const autumnApi = autumn.api();
