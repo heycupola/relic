@@ -408,8 +408,6 @@ export const listMembers = protectedQuery({
       throw new Error("You are not a member of this organization");
     }
 
-    await checkRateLimit(ctx, "read");
-
     const members = await ctx.db
       .query("organizationMember")
       .withIndex("by_organization", (q) => q.eq("organizationId", args.organizationId))

@@ -162,8 +162,6 @@ export const listSecrets = protectedQuery({
       throw new Error("You do not have access to this environment");
     }
 
-    await checkRateLimit(ctx, "read");
-
     const includeDeleted = args.includeDeleted || false;
 
     const allSecrets = await (async () => {
@@ -526,8 +524,6 @@ export const listSecretHistory = protectedQuery({
     if (!(await hasProjectAccess(ctx, project))) {
       throw new Error("You do not have access to this secret");
     }
-
-    await checkRateLimit(ctx, "read");
 
     const history = await ctx.db
       .query("secretHistory")

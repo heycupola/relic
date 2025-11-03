@@ -424,8 +424,6 @@ export const getEnvironmentData = protectedQuery({
       throw new Error("You do not have access to this environment");
     }
 
-    await checkRateLimit(ctx, "read");
-
     const includeDeleted = args.includeDeleted || false;
     const includeRecentActivity = args.includeRecentActivity || false;
 

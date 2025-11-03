@@ -98,8 +98,6 @@ export const getResourceAccessLogs = protectedQuery({
     // NOTE: check if user has access to view logs for this resource
     await checkResourceAccess(ctx, args.resourceType, args.resourceId);
 
-    await checkRateLimit(ctx, "read");
-
     const result = await ctx.db
       .query("accessLog")
       .withIndex("by_resource", (q) =>
@@ -128,8 +126,6 @@ export const getUserAccessLogs = protectedQuery({
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx: ProtectedQueryCtx, args: { paginationOpts: PaginationOptions }) => {
-    await checkRateLimit(ctx, "read");
-
     // NOTE: user can always view their own access logs, so no need to checkResourceAccess
     const result = await ctx.db
       .query("accessLog")
