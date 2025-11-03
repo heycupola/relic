@@ -36,4 +36,20 @@ export const autumn = new Autumn(components.autumn, {
   },
 });
 
-export const autumnApi = autumn.api();
+export const {
+  track,
+  cancel,
+  query,
+  attach,
+  check,
+  checkout,
+  usage,
+  setupPayment,
+  createCustomer,
+  listProducts,
+  billingPortal,
+  createReferralCode,
+  redeemReferralCode,
+  createEntity,
+  getEntity,
+} = autumn.api();
