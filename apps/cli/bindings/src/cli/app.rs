@@ -14,6 +14,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     Login,
+    Logout,
 }
 
 pub async fn run_cli_from_args(mut args: Vec<String>) -> Result<()> {
@@ -27,6 +28,9 @@ pub async fn run_cli_from_args(mut args: Vec<String>) -> Result<()> {
     match cli.command {
         Commands::Login => {
             service::auth::login(&mut app_config).await?;
+        }
+        Commands::Logout => {
+            service::auth::logout()?;
         }
     }
 

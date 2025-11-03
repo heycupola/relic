@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-const DIR_NAME: &str = "relic-tui";
+const DIR_NAME: &str = "relic";
 const FILE_NAME: &str = "session.json";
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

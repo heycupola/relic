@@ -114,6 +114,14 @@ pub async fn poll_device_code(
 }
 
 pub async fn login(app_config: &mut AppConfig) -> Result<Session> {
+    if let Ok(Some(session)) = session::load_session() {
+        if !session.is_expired() {
+            anyhow::bail!("Already logged in. Use 'logout' first.");
+        }
+
+        session::delete_session()?;
+    }
+
     let device_response = request_device_code(
         &mut app_config.convex_client,
         RequestDeviceCodeArg {
@@ -191,6 +199,10 @@ pub async fn login(app_config: &mut AppConfig) -> Result<Session> {
             },
         }
     }
+}
+
+pub fn logout() -> Result<()> {
+    session::delete_session()
 }
 
 #[cfg(test)]
