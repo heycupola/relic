@@ -27,7 +27,8 @@
   "workspaces": {
     "packages": [
       "apps/*",
-      "packages/*"
+      "packages/*",
+      "!packages/sentry-proxy"
     ],
     "catalog": {
       "autumn-js": "^0.1.40",
