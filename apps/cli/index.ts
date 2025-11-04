@@ -1,4 +1,4 @@
-import { type Pointer, ptr } from "bun:ffi";
+import { ptr } from "bun:ffi";
 import { Bridge } from "./ffi/bridge";
 
 (async () => {
@@ -10,5 +10,5 @@ import { Bridge } from "./ffi/bridge";
   const buffer = Buffer.from(`${argsJson}\0`, "utf-8");
   const pointer = ptr(buffer);
 
-  bridge.run_relic(pointer);
+  bridge.runApp(pointer);
 })();
