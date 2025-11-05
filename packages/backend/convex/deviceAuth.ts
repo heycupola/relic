@@ -79,7 +79,7 @@ export const requestDeviceCode = mutation({
       updatedAt: now,
     });
 
-    const verificationUri = `${process.env.SITE_URL}/auth/device`;
+    const verificationUri = `${process.env.SITE_URL}/oauth/authorize`;
 
     return {
       device_code: deviceCode,

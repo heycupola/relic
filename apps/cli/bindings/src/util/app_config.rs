@@ -19,8 +19,9 @@ pub struct AppConfig {
     pub authors: String,
     pub description: String,
     pub git_hash: String,
-    pub sentry_proxy_endpoint: String,
+    pub sentry_proxy_url: String,
     pub sentry_reporter: SentryReporter,
+    pub relic_web_url: String,
 }
 
 impl std::fmt::Debug for AppConfig {
@@ -34,8 +35,9 @@ impl std::fmt::Debug for AppConfig {
             .field("authors", &self.authors)
             .field("description", &self.description)
             .field("git_hash", &self.git_hash)
-            .field("sentry_proxy_endpoint", &self.sentry_proxy_endpoint)
+            .field("sentry_proxy_url", &self.sentry_proxy_url)
             .field("sentry_reporter", &"<SentryReporter>")
+            .field("relic_web_url", &self.relic_web_url)
             .finish()
     }
 }
@@ -63,10 +65,13 @@ impl AppConfig {
 
         let git_hash = Self::retrieve_git_hash();
 
-        let sentry_proxy_endpoint = std::env::var("SENTRY_PROXY_ENDPOINT")
+        let sentry_proxy_url = std::env::var("SENTRY_PROXY_URL")
             .unwrap_or_else(|_| "https://telemetry.relic.so".to_string());
 
-        let sentry_reporter = SentryReporter::new(sentry_proxy_endpoint.clone());
+        let sentry_reporter = SentryReporter::new(sentry_proxy_url.clone());
+
+        let relic_web_url =
+            std::env::var("RELIC_WEB_URL").unwrap_or_else(|_| "https://relic.so".to_string());
 
         Ok(Self {
             client_id: std::env::var("CLIENT_ID").unwrap_or_else(|_| "relic-tui".to_string()),
@@ -77,8 +82,9 @@ impl AppConfig {
             authors: AUTHORS.to_string(),
             description: DESCRIPTION.to_string(),
             git_hash,
-            sentry_proxy_endpoint,
+            sentry_proxy_url,
             sentry_reporter,
+            relic_web_url,
         })
     }
 

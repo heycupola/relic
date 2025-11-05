@@ -13,6 +13,7 @@ pub mod service {
 }
 
 pub mod helper {
+    pub mod device_cache;
     pub mod function;
     pub mod session;
 }
@@ -23,6 +24,12 @@ pub mod cli {
 
 pub mod tui {
     pub mod app;
+    pub(crate) mod components;
+    pub(crate) mod home;
+    pub(crate) mod modal;
+    pub(crate) mod project_screen;
+    pub(crate) mod screen;
+    pub(crate) mod state;
 }
 
 pub mod telemetry {
