@@ -35,7 +35,10 @@ pub enum Modal {
         name: String,
         slug: String,
         description: String,
+        selected_scope: Scope,
         focused_field: usize,
+        selecting_scope: bool,
+        scope_selector_index: usize,
     },
     CreateOrganization {
         organization_name: String,

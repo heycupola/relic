@@ -167,7 +167,10 @@ fn handle_home_key_event(state: &mut AppState, key: KeyEvent) {
                     name: String::new(),
                     slug: String::new(),
                     description: String::new(),
+                    selected_scope: state.current_scope.clone(),
                     focused_field: 0,
+                    selecting_scope: false,
+                    scope_selector_index: 0,
                 };
             }
             KeyCode::Char('o') => {
@@ -259,23 +262,64 @@ fn handle_create_project_key_event(state: &mut AppState, key: KeyEvent) {
         name,
         slug,
         description,
+        selected_scope,
         focused_field,
+        selecting_scope,
+        scope_selector_index,
     } = &mut state.modal
     {
+        if *selecting_scope {
+            match key.code {
+                KeyCode::Up | KeyCode::Char('k') => {
+                    if *scope_selector_index > 0 {
+                        *scope_selector_index -= 1;
+                    }
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    if *scope_selector_index < state.available_scopes.len() - 1 {
+                        *scope_selector_index += 1;
+                    }
+                }
+                KeyCode::Enter => {
+                    if let Some(scope) = state.available_scopes.get(*scope_selector_index).cloned()
+                    {
+                        *selected_scope = scope;
+                        *selecting_scope = false;
+                    }
+                }
+                KeyCode::Esc => {
+                    *selecting_scope = false;
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        match key.modifiers {
+            KeyModifiers::SHIFT => {
+                if *focused_field > 0 {
+                    *focused_field -= 1;
+                }
+            }
+            _ => {}
+        }
+
         match key.code {
             KeyCode::Esc => {
                 state.modal = Modal::None;
             }
             KeyCode::Tab => {
-                if key.modifiers.contains(KeyModifiers::SHIFT) {
-                    if *focused_field > 0 {
-                        *focused_field -= 1;
-                    }
-                } else {
-                    if *focused_field < 2 {
-                        *focused_field += 1;
-                    }
+                if *focused_field < 3 {
+                    *focused_field += 1;
                 }
+            }
+            KeyCode::Enter if *focused_field == 3 => {
+                *selecting_scope = true;
+                *scope_selector_index = state
+                    .available_scopes
+                    .iter()
+                    .position(|s| s == selected_scope)
+                    .unwrap_or(0);
             }
             KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 state.error_message = Some(

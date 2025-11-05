@@ -1,6 +1,6 @@
 use super::{
     components::{ELECTRIC_PURPLE, centered_rect},
-    state::{AppState, Modal},
+    state::{AppState, Modal, Scope},
 };
 use ratatui::{
     Frame,
@@ -20,9 +20,23 @@ pub fn render_modal(frame: &mut Frame, state: &AppState, area: Rect) {
             name,
             slug,
             description,
+            selected_scope,
             focused_field,
+            selecting_scope,
+            scope_selector_index,
         } => {
-            render_create_project_modal(frame, name, slug, description, *focused_field, area);
+            render_create_project_modal(
+                frame,
+                state,
+                name,
+                slug,
+                description,
+                selected_scope,
+                *focused_field,
+                *selecting_scope,
+                *scope_selector_index,
+                area,
+            );
         }
         Modal::CreateOrganization {
             organization_name,
@@ -83,10 +97,14 @@ fn render_scope_selector(frame: &mut Frame, state: &AppState, selected_index: us
 
 fn render_create_project_modal(
     frame: &mut Frame,
+    state: &AppState,
     name: &str,
     slug: &str,
     description: &str,
+    selected_scope: &Scope,
     focused_field: usize,
+    selecting_scope: bool,
+    scope_selector_index: usize,
     area: Rect,
 ) {
     let modal_area = centered_rect(60, 60, area);
@@ -113,6 +131,7 @@ fn render_create_project_modal(
             Constraint::Length(3),
             Constraint::Length(3),
             Constraint::Length(5),
+            Constraint::Length(3),
             Constraint::Min(1),
             Constraint::Length(2),
         ])
@@ -139,13 +158,25 @@ fn render_create_project_modal(
         description,
         focused_field == 2,
     );
+    render_input_field(
+        frame,
+        chunks[3],
+        "Scope",
+        selected_scope.display_name(),
+        focused_field == 3,
+    );
 
     let help_text =
-        Paragraph::new("Tab: next field | Shift+Tab: prev | Ctrl+S: create | Esc: cancel")
+        Paragraph::new("Tab: next | Enter on Scope: select | Ctrl+S: create | Esc: cancel")
             .style(Style::default().fg(Color::DarkGray))
             .wrap(Wrap { trim: true });
 
-    frame.render_widget(help_text, chunks[4]);
+    frame.render_widget(help_text, chunks[5]);
+
+    // Render nested scope selector overlay when selecting_scope is true
+    if selecting_scope {
+        render_nested_scope_selector(frame, state, scope_selector_index, modal_area);
+    }
 }
 
 fn render_create_org_modal(
@@ -278,6 +309,53 @@ fn render_text_area_field(
         .wrap(Wrap { trim: false });
 
     frame.render_widget(textarea, area);
+}
+
+fn render_nested_scope_selector(
+    frame: &mut Frame,
+    state: &AppState,
+    selected_index: usize,
+    parent_area: Rect,
+) {
+    let selector_area = centered_rect(40, 30, parent_area);
+
+    frame.render_widget(Clear, selector_area);
+
+    let items: Vec<ListItem> = state
+        .available_scopes
+        .iter()
+        .map(|scope| {
+            let line = Line::from(scope.display_name());
+            ListItem::new(line)
+        })
+        .collect();
+
+    let mut list_state = ListState::default();
+    list_state.select(Some(selected_index));
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .title("Select Scope")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(ELECTRIC_PURPLE)),
+        )
+        .highlight_style(Style::default().bg(ELECTRIC_PURPLE).fg(Color::White))
+        .highlight_symbol("→ ");
+
+    frame.render_stateful_widget(list, selector_area, &mut list_state);
+
+    let help_area = Rect {
+        x: selector_area.x + 1,
+        y: selector_area.y + selector_area.height - 2,
+        width: selector_area.width - 2,
+        height: 1,
+    };
+
+    let help_text = Paragraph::new("↑/↓ or j/k: navigate | Enter: select | Esc: cancel")
+        .style(Style::default().fg(Color::DarkGray));
+
+    frame.render_widget(help_text, help_area);
 }
 
 fn render_device_code_modal(frame: &mut Frame, user_code: &str, redirect_url: &str, area: Rect) {
