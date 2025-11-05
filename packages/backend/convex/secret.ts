@@ -13,6 +13,7 @@ export const createSecret = protectedMutation({
     folderId: v.optional(v.id("folder")),
     key: v.string(),
     encryptedValue: v.string(),
+    primitiveType: v.union(v.literal("string"), v.literal("int64"), v.literal("boolean")),
     description: v.optional(v.string()),
     encryptionKeyVersion: v.number(),
     tags: v.optional(v.array(v.string())),
@@ -24,6 +25,7 @@ export const createSecret = protectedMutation({
       folderId?: Id<"folder">;
       key: string;
       encryptedValue: string;
+      primitiveType: "string" | "int64" | "boolean";
       description?: string;
       encryptionKeyVersion: number;
       tags?: string[];
@@ -96,6 +98,7 @@ export const createSecret = protectedMutation({
       encryptedValue: args.encryptedValue,
       description: args.description,
       encryptionKeyVersion: args.encryptionKeyVersion,
+      primitiveType: args.primitiveType,
       tags: args.tags,
       isDeleted: false,
       createdBy: ctx.userId,
@@ -110,6 +113,7 @@ export const createSecret = protectedMutation({
       environmentId: args.environmentId,
       key: args.key,
       encryptedValue: args.encryptedValue,
+      primitiveType: args.primitiveType,
       description: args.description,
       encryptionKeyVersion: args.encryptionKeyVersion,
       action: "created",
@@ -237,6 +241,7 @@ export const getSecret = protectedQuery({
       folderId: secret.folderId,
       key: secret.key,
       encryptedValue: secret.encryptedValue,
+      primitiveType: secret.primitiveType,
       description: secret.description,
       encryptionKeyVersion: secret.encryptionKeyVersion,
       tags: secret.tags,
@@ -331,6 +336,7 @@ export const updateSecret = protectedMutation({
       environmentId: secret.environmentId,
       key: secret.key,
       encryptedValue: args.encryptedValue || secret.encryptedValue,
+      primitiveType: secret.primitiveType,
       description: args.description !== undefined ? args.description : secret.description,
       encryptionKeyVersion: args.encryptionKeyVersion || secret.encryptionKeyVersion,
       action: "updated",
@@ -397,6 +403,7 @@ export const deleteSecret = protectedMutation({
       environmentId: secret.environmentId,
       key: secret.key,
       encryptedValue: secret.encryptedValue,
+      primitiveType: secret.primitiveType,
       description: secret.description,
       encryptionKeyVersion: secret.encryptionKeyVersion,
       action: "deleted",
@@ -478,6 +485,7 @@ export const restoreSecret = protectedMutation({
       environmentId: secret.environmentId,
       key: secret.key,
       encryptedValue: secret.encryptedValue,
+      primitiveType: secret.primitiveType,
       description: secret.description,
       encryptionKeyVersion: secret.encryptionKeyVersion,
       action: "restored",
@@ -535,6 +543,7 @@ export const listSecretHistory = protectedQuery({
       id: h._id,
       key: h.key,
       encryptedValue: h.encryptedValue,
+      primitiveType: h.primitiveType,
       description: h.description,
       encryptionKeyVersion: h.encryptionKeyVersion,
       action: h.action,

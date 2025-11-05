@@ -276,6 +276,7 @@ describe("environment.ts", () => {
         key: "API_KEY",
         folderId,
         encryptedValue: "api-key-encrypted-value",
+        primitiveType: "string",
         encryptionKeyVersion: 1,
         environmentId,
         description: "This is an API key.",
@@ -285,6 +286,7 @@ describe("environment.ts", () => {
       await owner.asUser.mutation(api.secret.createSecret, {
         key: "DB_URI",
         encryptedValue: "db-uri-encrypted-value",
+        primitiveType: "string",
         encryptionKeyVersion: 1,
         environmentId,
         description: "This is an DB uri.",

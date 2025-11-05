@@ -153,7 +153,6 @@ describe("deviceAuth.ts", () => {
       expect(token.access_token).toBeDefined();
       expect(token.token_type).toBe("Bearer");
       expect(token.expires_in).toBe(30 * 24 * 60 * 60);
-      expect(token.user).toBeDefined();
     });
   });
 

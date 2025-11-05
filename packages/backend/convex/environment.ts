@@ -452,6 +452,7 @@ export const getEnvironmentData = protectedQuery({
       id: Id<"secret">;
       key: string;
       encryptedValue: string;
+      primitiveType: string;
       description?: string;
       tags?: string[];
       isDeleted: boolean;
@@ -470,6 +471,7 @@ export const getEnvironmentData = protectedQuery({
           id: secret._id,
           key: secret.key,
           encryptedValue: secret.encryptedValue,
+          primitiveType: secret.primitiveType,
           description: secret.description,
           tags: secret.tags,
           isDeleted: secret.isDeleted,
