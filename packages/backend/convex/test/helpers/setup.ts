@@ -6,7 +6,6 @@ export interface TestUserData {
   authId: string;
   email: string;
   name?: string;
-  avatarUrl?: string;
 }
 
 type ConvexTestInstance = ReturnType<typeof convexTest>;
@@ -29,7 +28,6 @@ export async function createTestUser(
       authId: userData.authId,
       email: userData.email,
       name: userData.name,
-      avatarUrl: userData.avatarUrl,
       freeOrganizationUsed: false,
       createdAt: now,
       updatedAt: now,
@@ -40,7 +38,6 @@ export async function createTestUser(
     subject: userData.authId,
     email: userData.email,
     name: userData.name,
-    pictureUrl: userData.avatarUrl,
   };
 
   return { userId, identity };

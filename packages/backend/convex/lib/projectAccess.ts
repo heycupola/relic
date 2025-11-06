@@ -73,7 +73,7 @@ export async function syncUserPlanStatus(
     featureId: "personal_projects",
   });
 
-  const currentLimit = data?.included_usage || 2;
+  const currentLimit = Math.max(0, data?.included_usage ?? 2);
 
   const projects = await ctx.db
     .query("project")
@@ -156,7 +156,7 @@ export async function getUserProjectsWithRestrictions(ctx: ProtectedQueryCtx): P
     featureId: "personal_projects",
   });
 
-  const limit = data?.included_usage || 2;
+  const limit = Math.max(0, data?.included_usage ?? 2);
   const currentProjectCount = allProjects.length;
 
   if (currentProjectCount <= limit) {
@@ -170,7 +170,12 @@ export async function getUserProjectsWithRestrictions(ctx: ProtectedQueryCtx): P
     return result;
   }
 
-  const sortedProjects = [...allProjects].sort((a, b) => b.createdAt - a.createdAt);
+  const sortedProjects = [...allProjects].sort((a, b) => {
+    if (b.createdAt !== a.createdAt) {
+      return b.createdAt - a.createdAt;
+    }
+    return b._id.localeCompare(a._id);
+  });
   const accessibleProjects = sortedProjects.slice(0, limit);
   const restrictedProjects = sortedProjects.slice(limit);
 

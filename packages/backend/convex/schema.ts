@@ -6,7 +6,6 @@ export default defineSchema({
     authId: v.string(),
     email: v.string(),
     name: v.optional(v.string()),
-    avatarUrl: v.optional(v.string()),
     freeOrganizationUsed: v.boolean(),
     planDowngradedAt: v.optional(v.number()),
     createdAt: v.number(),
@@ -28,16 +27,19 @@ export default defineSchema({
     currentKeyVersion: v.number(),
     subscriptionStatus: v.union(
       v.literal("active"),
+      v.literal("pending"),
       v.literal("payment_lapsed"),
       v.literal("suspended"),
     ),
+    paymentExpiresAt: v.optional(v.number()),
     paymentLapsedAt: v.optional(v.number()),
     suspendedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_organization", ["organizationId"])
-    .index("by_status", ["subscriptionStatus"]),
+    .index("by_status", ["subscriptionStatus"])
+    .index("by_payment_expires", ["paymentExpiresAt"]),
   organizationMember: defineTable({
     organizationId: v.string(),
     userId: v.id("user"),

@@ -48,51 +48,33 @@ export const protectedMutation = customMutation(mutation, {
     const authId = identity.subject;
     const email = identity.email as string;
     const name = identity.name as string | undefined;
-    const avatarUrl = identity.pictureUrl as string | undefined;
 
     const existingUser = await ctx.db
       .query("user")
       .withIndex("by_auth_id", (q) => q.eq("authId", authId))
       .first();
 
-    let userId: Id<"user">;
+    if (!existingUser) {
+      throw new Error("User not found. Please complete registration.");
+    }
 
-    if (existingUser) {
-      const updates: {
-        email?: string;
-        name?: string;
-        avatarUrl?: string;
-        updatedAt: number;
-      } = {
-        updatedAt: Date.now(),
-      };
+    const updates: {
+      email?: string;
+      name?: string;
+      updatedAt: number;
+    } = {
+      updatedAt: Date.now(),
+    };
 
-      if (existingUser.email !== email) updates.email = email;
-      if (name && existingUser.name !== name) updates.name = name;
-      if (avatarUrl && existingUser.avatarUrl !== avatarUrl) {
-        updates.avatarUrl = avatarUrl;
-      }
+    if (existingUser.email !== email) updates.email = email;
+    if (name && existingUser.name !== name) updates.name = name;
 
-      if (Object.keys(updates).length > 1) {
-        await ctx.db.patch(existingUser._id, updates);
-      }
-
-      userId = existingUser._id;
-    } else {
-      const now = Date.now();
-      userId = await ctx.db.insert("user", {
-        authId,
-        email,
-        name,
-        avatarUrl,
-        freeOrganizationUsed: false,
-        createdAt: now,
-        updatedAt: now,
-      });
+    if (Object.keys(updates).length > 1) {
+      await ctx.db.patch(existingUser._id, updates);
     }
 
     return {
-      ctx: { userId },
+      ctx: { userId: existingUser._id },
       args: {},
     };
   },
@@ -143,7 +125,6 @@ export const optionalMutation = customMutation(mutation, {
       const authId = identity.subject;
       const email = identity.email as string;
       const name = identity.name as string | undefined;
-      const avatarUrl = identity.pictureUrl as string | undefined;
 
       const existingUser = await ctx.db
         .query("user")
@@ -154,7 +135,6 @@ export const optionalMutation = customMutation(mutation, {
         const updates: {
           email?: string;
           name?: string;
-          avatarUrl?: string;
           updatedAt: number;
         } = {
           updatedAt: Date.now(),
@@ -162,26 +142,12 @@ export const optionalMutation = customMutation(mutation, {
 
         if (existingUser.email !== email) updates.email = email;
         if (name && existingUser.name !== name) updates.name = name;
-        if (avatarUrl && existingUser.avatarUrl !== avatarUrl) {
-          updates.avatarUrl = avatarUrl;
-        }
 
         if (Object.keys(updates).length > 1) {
           await ctx.db.patch(existingUser._id, updates);
         }
 
         userId = existingUser._id;
-      } else {
-        const now = Date.now();
-        userId = await ctx.db.insert("user", {
-          authId,
-          email,
-          name,
-          avatarUrl,
-          freeOrganizationUsed: false,
-          createdAt: now,
-          updatedAt: now,
-        });
       }
     }
 

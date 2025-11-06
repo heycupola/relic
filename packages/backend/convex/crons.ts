@@ -21,4 +21,10 @@ crons.hourly(
   internal.deviceAuth.cleanupExpiredDeviceCodes,
 );
 
+crons.interval(
+  "cleanup-and-activate-organizations",
+  { minutes: 5 },
+  internal.organization.cleanupAndActivateOrganizations,
+);
+
 export default crons;
