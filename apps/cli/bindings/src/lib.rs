@@ -31,10 +31,8 @@ pub mod cli {
 pub mod tui {
     pub mod app;
     pub(crate) mod components;
-    pub(crate) mod home;
-    pub(crate) mod modal;
-    pub(crate) mod project_screen;
-    pub(crate) mod screen;
+    pub(crate) mod modals;
+    pub(crate) mod screens;
     pub(crate) mod state;
 }
 

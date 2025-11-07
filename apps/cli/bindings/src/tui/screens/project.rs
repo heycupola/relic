@@ -1,8 +1,4 @@
-use super::{
-    components::{ELECTRIC_PURPLE, render_help_bar},
-    screen::ProjectScreenData,
-    state::AppState,
-};
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
@@ -11,7 +7,14 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
 };
 
-pub fn render_project_screen(frame: &mut Frame, _state: &AppState, project: &ProjectScreenData) {
+use super::types::{ProjectScreenData, Screen};
+use crate::tui::{
+    components::{ELECTRIC_PURPLE, render_help_bar},
+    state::AppState,
+};
+
+/// Renders the project screen
+pub fn render(frame: &mut Frame, _state: &AppState, project: &ProjectScreenData) {
     let area = frame.area();
 
     let chunks = Layout::default()
@@ -98,6 +101,18 @@ pub fn render_project_screen(frame: &mut Frame, _state: &AppState, project: &Pro
     let help_items = [("Esc/b", "back to home"), ("q", "quit")];
     render_help_bar(frame, chunks[1], &help_items);
 }
+
+/// Handles key events for the project screen
+pub fn handle_key_event(state: &mut AppState, key: KeyEvent) {
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('b') => {
+            state.current_screen = Screen::Home;
+        }
+        _ => {}
+    }
+}
+
+// Helper functions
 
 fn format_timestamp(timestamp: i64) -> String {
     use std::time::{Duration, UNIX_EPOCH};

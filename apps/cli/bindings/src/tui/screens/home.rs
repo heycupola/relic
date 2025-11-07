@@ -1,9 +1,4 @@
-use super::{
-    components::{
-        ELECTRIC_PURPLE, LogoSize, centered_rect, render_help_bar, render_logo, render_subtitle,
-    },
-    state::{AppState, LoginOption, MessageType},
-};
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -12,7 +7,16 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
 
-pub fn render_home_screen(frame: &mut Frame, state: &AppState) {
+use super::types::{ProjectScreenData, Screen};
+use crate::tui::{
+    components::{
+        ELECTRIC_PURPLE, LogoSize, centered_rect, render_help_bar, render_logo, render_subtitle,
+    },
+    state::{AppState, LoginOption, MessageType, Modal},
+};
+
+/// Renders the home screen
+pub fn render(frame: &mut Frame, state: &AppState) {
     let area = frame.area();
 
     if !state.is_logged_in() {
@@ -21,6 +25,83 @@ pub fn render_home_screen(frame: &mut Frame, state: &AppState) {
         render_projects_view(frame, state, area);
     }
 }
+
+/// Handles key events for the home screen
+/// Returns true if Enter was pressed on login (signals device flow should start)
+pub fn handle_key_event(state: &mut AppState, key: KeyEvent) -> bool {
+    if !state.is_logged_in() {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                if state.login_selected_index > 0 {
+                    state.login_selected_index -= 1;
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let options = AppState::get_login_options();
+                if state.login_selected_index < options.len() - 1 {
+                    state.login_selected_index += 1;
+                }
+            }
+            KeyCode::Enter => {
+                return true; // Signal to start device flow
+            }
+            _ => {}
+        }
+    } else {
+        match key.code {
+            KeyCode::Char('s') => {
+                state.modal = Modal::ScopeSelector { selected_index: 0 };
+            }
+            KeyCode::Char('n') => {
+                state.modal = Modal::CreateProject {
+                    name: String::new(),
+                    slug: String::new(),
+                    description: String::new(),
+                    selected_scope: state.current_scope.clone(),
+                    focused_field: 0,
+                    selecting_scope: false,
+                    scope_selector_index: 0,
+                };
+            }
+            KeyCode::Char('o') => {
+                state.modal = Modal::CreateOrganization {
+                    organization_name: String::new(),
+                    focused_field: 0,
+                };
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if !state.projects.is_empty() && state.selected_project_index > 0 {
+                    state.selected_project_index -= 1;
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if !state.projects.is_empty()
+                    && state.selected_project_index < state.projects.len() - 1
+                {
+                    state.selected_project_index += 1;
+                }
+            }
+            KeyCode::Enter => {
+                if let Some(project) = state.projects.get(state.selected_project_index) {
+                    state.current_screen = Screen::Project(ProjectScreenData {
+                        project_id: project.id.clone(),
+                        project_name: project.name.clone(),
+                        project_slug: project.slug.clone(),
+                        project_description: project.description.clone(),
+                        owner_type: "personal".to_string(),
+                        owner_id: "".to_string(),
+                        created_at: project.created_at,
+                        updated_at: project.updated_at,
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+// Private rendering helper functions
 
 fn render_login_view(frame: &mut Frame, state: &AppState, area: Rect) {
     let container_width = if area.width < 80 {

@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::SystemTime};
 
-use super::screen::{OrganizationItem, ProjectListItem, Screen};
+use super::screens::{OrganizationItem, ProjectListItem, Screen};
 use crate::{helper::session, util::app_config::AppConfig};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
