@@ -2,7 +2,7 @@ use super::{
     components::{
         ELECTRIC_PURPLE, LogoSize, centered_rect, render_help_bar, render_logo, render_subtitle,
     },
-    state::{AppState, LoginOption},
+    state::{AppState, LoginOption, MessageType},
 };
 use ratatui::{
     Frame,
@@ -191,18 +191,26 @@ fn render_projects_view(frame: &mut Frame, state: &AppState, area: Rect) {
     ];
     render_help_bar(frame, chunks[3], &help_items);
 
-    if let Some(error) = &state.error_message {
-        let error_area = centered_rect(60, 20, area);
-        let error_block = Block::default()
-            .title("Error")
+    if let Some((message_text, message_type)) = &state.message {
+        let message_area = centered_rect(60, 20, area);
+
+        let (title, color) = match message_type {
+            MessageType::Success => ("Success", Color::Green),
+            MessageType::Error => ("Error", Color::Red),
+            MessageType::Info => ("Info", Color::Cyan),
+        };
+
+        let message_block = Block::default()
+            .title(title)
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Red));
+            .border_style(Style::default().fg(color));
 
-        let error_text = Paragraph::new(error.as_str())
-            .block(error_block)
-            .style(Style::default().fg(Color::Red))
-            .alignment(Alignment::Center);
+        let message_para = Paragraph::new(message_text.as_str())
+            .block(message_block)
+            .style(Style::default().fg(color))
+            .alignment(Alignment::Center)
+            .wrap(ratatui::widgets::Wrap { trim: true });
 
-        frame.render_widget(error_text, error_area);
+        frame.render_widget(message_para, message_area);
     }
 }

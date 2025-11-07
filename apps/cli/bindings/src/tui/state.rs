@@ -26,6 +26,13 @@ pub enum LoginOption {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MessageType {
+    Success,
+    Error,
+    Info,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Modal {
     None,
     ScopeSelector {
@@ -48,6 +55,12 @@ pub enum Modal {
         user_code: String,
         redirect_url: String,
     },
+    MasterPasswordSetup {
+        password: String,
+        confirm_password: String,
+        focused_field: usize,
+        show_password: bool,
+    },
 }
 
 pub struct AppState {
@@ -60,7 +73,7 @@ pub struct AppState {
     pub login_selected_index: usize,
     pub modal: Modal,
     pub should_quit: bool,
-    pub error_message: Option<String>,
+    pub message: Option<(String, MessageType)>,
     pub last_device_poll: Option<SystemTime>,
 }
 
@@ -76,7 +89,7 @@ impl AppState {
             login_selected_index: 0,
             modal: Modal::None,
             should_quit: false,
-            error_message: None,
+            message: None,
             last_device_poll: None,
         }
     }

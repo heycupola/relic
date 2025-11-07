@@ -50,6 +50,21 @@ pub fn render_modal(frame: &mut Frame, state: &AppState, area: Rect) {
         } => {
             render_device_code_modal(frame, user_code, redirect_url, area);
         }
+        Modal::MasterPasswordSetup {
+            password,
+            confirm_password,
+            focused_field,
+            show_password,
+        } => {
+            render_master_password_setup_modal(
+                frame,
+                password,
+                confirm_password,
+                *focused_field,
+                *show_password,
+                area,
+            );
+        }
     }
 }
 
@@ -420,4 +435,210 @@ fn render_device_code_modal(frame: &mut Frame, user_code: &str, redirect_url: &s
         .alignment(ratatui::layout::Alignment::Center);
 
     frame.render_widget(waiting_text, chunks[3]);
+}
+
+fn render_master_password_setup_modal(
+    frame: &mut Frame,
+    password: &str,
+    confirm_password: &str,
+    focused_field: usize,
+    show_password: bool,
+    area: Rect,
+) {
+    let modal_area = centered_rect(70, 60, area);
+
+    frame.render_widget(Clear, modal_area);
+
+    let block = Block::default()
+        .title("Master Password Setup")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(ELECTRIC_PURPLE));
+
+    frame.render_widget(block, modal_area);
+
+    let inner_area = Rect {
+        x: modal_area.x + 2,
+        y: modal_area.y + 2,
+        width: modal_area.width - 4,
+        height: modal_area.height - 4,
+    };
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(4), // Info text
+            Constraint::Length(3), // Password field
+            Constraint::Length(3), // Confirm password field
+            Constraint::Length(5), // Requirements list
+            Constraint::Min(1),    // Spacer
+            Constraint::Length(2), // Help text
+        ])
+        .split(inner_area);
+
+    // Info text
+    let info_text = Paragraph::new(vec![
+        Line::from(Span::styled(
+            "🔐 Create Your Master Password",
+            Style::default().fg(ELECTRIC_PURPLE).add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "This password will encrypt your encryption keys. It will be stored",
+            Style::default().fg(Color::Gray),
+        )),
+        Line::from(Span::styled(
+            "securely in your OS keychain (macOS Keychain/Windows Credential Manager/Linux keyutils).",
+            Style::default().fg(Color::Gray),
+        )),
+    ])
+    .wrap(Wrap { trim: true });
+
+    frame.render_widget(info_text, chunks[0]);
+
+    // Password field
+    let password_display = if show_password {
+        password.to_string()
+    } else {
+        "•".repeat(password.len())
+    };
+    render_password_input_field(
+        frame,
+        chunks[1],
+        "Master Password",
+        &password_display,
+        focused_field == 0,
+    );
+
+    // Confirm password field
+    let confirm_display = if show_password {
+        confirm_password.to_string()
+    } else {
+        "•".repeat(confirm_password.len())
+    };
+    render_password_input_field(
+        frame,
+        chunks[2],
+        "Confirm Password",
+        &confirm_display,
+        focused_field == 1,
+    );
+
+    // Requirements list
+    let password_strength = get_password_strength(password);
+    let passwords_match =
+        !password.is_empty() && !confirm_password.is_empty() && password == confirm_password;
+
+    let req_lines = vec![
+        Line::from(vec![
+            Span::styled(
+                if password.len() >= 12 { "✓" } else { "✗" },
+                Style::default().fg(if password.len() >= 12 {
+                    Color::Green
+                } else {
+                    Color::Red
+                }),
+            ),
+            Span::raw(" At least 12 characters"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                if passwords_match { "✓" } else { "✗" },
+                Style::default().fg(if passwords_match {
+                    Color::Green
+                } else {
+                    Color::Red
+                }),
+            ),
+            Span::raw(" Passwords match"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                if password_strength >= 2 { "✓" } else { "✗" },
+                Style::default().fg(if password_strength >= 2 {
+                    Color::Green
+                } else {
+                    Color::Red
+                }),
+            ),
+            Span::raw(" Contains mix of characters (uppercase, lowercase, numbers, symbols)"),
+        ]),
+    ];
+
+    let requirements = Paragraph::new(req_lines)
+        .style(Style::default().fg(Color::Gray))
+        .block(
+            Block::default()
+                .title("Requirements")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::DarkGray)),
+        );
+
+    frame.render_widget(requirements, chunks[3]);
+
+    // Help text
+    let help_text = Paragraph::new(vec![Line::from(
+        "Tab: next field | Ctrl+H: toggle visibility | Ctrl+S: save | Esc: cancel",
+    )])
+    .style(Style::default().fg(Color::DarkGray))
+    .wrap(Wrap { trim: true });
+
+    frame.render_widget(help_text, chunks[5]);
+}
+
+fn render_password_input_field(
+    frame: &mut Frame,
+    area: Rect,
+    label: &str,
+    value: &str,
+    is_focused: bool,
+) {
+    let style = if is_focused {
+        Style::default()
+            .fg(ELECTRIC_PURPLE)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::Gray)
+    };
+
+    let border_style = if is_focused {
+        Style::default().fg(ELECTRIC_PURPLE)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let input_text = if is_focused {
+        format!("{}_", value)
+    } else {
+        value.to_string()
+    };
+
+    let input = Paragraph::new(input_text)
+        .block(
+            Block::default()
+                .title(label)
+                .borders(Borders::ALL)
+                .border_style(border_style),
+        )
+        .style(style);
+
+    frame.render_widget(input, area);
+}
+
+fn get_password_strength(password: &str) -> u8 {
+    let mut strength = 0;
+
+    if password.chars().any(|c| c.is_lowercase()) {
+        strength += 1;
+    }
+    if password.chars().any(|c| c.is_uppercase()) {
+        strength += 1;
+    }
+    if password.chars().any(|c| c.is_ascii_digit()) {
+        strength += 1;
+    }
+    if password.chars().any(|c| !c.is_alphanumeric()) {
+        strength += 1;
+    }
+
+    strength
 }

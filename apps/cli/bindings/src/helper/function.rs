@@ -25,6 +25,8 @@ where
     }
 }
 
+impl FunctionArg for () {}
+
 fn from_convex_value<T>(value: Value) -> Result<T>
 where
     T: serde::de::DeserializeOwned,
@@ -53,6 +55,28 @@ where
             }
         }
         _ => Err(serde::de::Error::custom("expected number")),
+    }
+}
+
+pub fn deserialize_optional_number_from_float<'de, D>(
+    deserializer: D,
+) -> Result<Option<u64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    match value {
+        serde_json::Value::Null => Ok(None),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_u64() {
+                Ok(Some(i))
+            } else if let Some(f) = n.as_f64() {
+                Ok(Some(f as u64))
+            } else {
+                Err(serde::de::Error::custom("invalid number"))
+            }
+        }
+        _ => Err(serde::de::Error::custom("expected number or null")),
     }
 }
 

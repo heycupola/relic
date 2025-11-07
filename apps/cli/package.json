@@ -19,6 +19,7 @@
   "scripts": {
     "build:bindings": "cd bindings && cargo build",
     "dev": "bun run build:bindings && bun run index.ts",
+    "logs": "tail -f ~/Library/Application\\ Support/com.cupolalabs.relic/relic.log",
     "lint": "biome check --write .",
     "format": "biome format --write ."
   },

@@ -1,7 +1,10 @@
 use anyhow::Result;
 use std::{ffi::CStr, os::raw::c_char};
 
-use crate::{telemetry::panic::setup_panic_handler, util::app_config::AppConfig};
+use crate::{
+    telemetry::{panic::setup_panic_handler, tracing::initialize_logging},
+    util::app_config::AppConfig,
+};
 
 pub mod util {
     pub mod app_config;
@@ -10,11 +13,14 @@ pub mod util {
 
 pub mod service {
     pub mod auth;
+    pub mod organization;
+    pub mod user;
 }
 
 pub mod helper {
     pub mod device_cache;
     pub mod function;
+    pub mod master_password;
     pub mod session;
 }
 
@@ -36,6 +42,7 @@ pub mod telemetry {
     pub mod core;
     pub mod macros;
     pub mod panic;
+    pub mod tracing;
 }
 
 #[unsafe(no_mangle)]
@@ -47,6 +54,16 @@ pub extern "C" fn run_app(args_json: *const c_char) {
 }
 
 async fn run_app_async(args_json: *const c_char) -> Result<()> {
+    if color_eyre::install().is_err() {
+        anyhow::bail!("Unable to install color_eyre");
+    }
+
+    if initialize_logging().is_err() {
+        anyhow::bail!("Unable to initialize logging");
+    }
+
+    tracing::info!("The app has started.");
+
     let app_config = AppConfig::new().await?;
 
     setup_panic_handler(app_config.sentry_reporter.clone());
