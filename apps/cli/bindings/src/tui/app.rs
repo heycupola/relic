@@ -81,11 +81,11 @@ pub fn start_tui(app_config: AppConfig) {
             }
 
             if let Some(terminal) = TERMINAL.lock().unwrap().as_mut() {
-                let state_lock = state.lock().unwrap();
+                let mut state_lock = state.lock().unwrap();
 
                 terminal
                     .draw(|f| {
-                        render_screen(f, &state_lock);
+                        render_screen(f, &mut state_lock);
                         render_modal(f, &state_lock, f.area());
                     })
                     .ok();
@@ -107,7 +107,7 @@ pub fn start_tui(app_config: AppConfig) {
 }
 
 fn handle_key_event(state: &mut AppState, key: KeyEvent) {
-    // Handle Esc to dismiss messages (takes priority)
+    // NOTE: handle Esc to dismiss messages (takes priority)
     if key.code == KeyCode::Esc && state.message.is_some() && state.modal == Modal::None {
         state.message = None;
         return;
@@ -120,7 +120,7 @@ fn handle_key_event(state: &mut AppState, key: KeyEvent) {
 
     match &state.modal {
         Modal::None => {
-            // Delegate to screens module, check if device flow should start
+            // NOTE: delegate to screens module, check if device flow should start
             if handle_screen_key_event(state, key) {
                 start_device_flow(state);
             }
@@ -128,7 +128,6 @@ fn handle_key_event(state: &mut AppState, key: KeyEvent) {
         _ => handle_modal_key_event(state, key),
     }
 }
-
 
 fn start_device_flow(state: &mut AppState) {
     if let Ok(Some(cached)) = device_cache::load_device_code() {
@@ -150,7 +149,10 @@ fn start_device_flow(state: &mut AppState) {
     let rt = match tokio::runtime::Runtime::new() {
         Ok(r) => r,
         Err(e) => {
-            state.message = Some((format!("Failed to create runtime: {}", e), MessageType::Error));
+            state.message = Some((
+                format!("Failed to create runtime: {}", e),
+                MessageType::Error,
+            ));
             return;
         }
     };
@@ -172,7 +174,8 @@ fn start_device_flow(state: &mut AppState) {
     match result {
         Ok(response) => {
             if let Err(e) = opener::open(&response.verification_uri_complete) {
-                state.message = Some((format!("Failed to open browser: {}", e), MessageType::Error));
+                state.message =
+                    Some((format!("Failed to open browser: {}", e), MessageType::Error));
                 return;
             }
 
@@ -242,7 +245,10 @@ fn poll_device_flow(state: &mut AppState) {
     if now_secs >= cached.expires_at {
         tracing::warn!("poll_device_flow: Device code expired");
         device_cache::delete_device_code().ok();
-        state.message = Some(("Device code expired. Please try again.".to_string(), MessageType::Error));
+        state.message = Some((
+            "Device code expired. Please try again.".to_string(),
+            MessageType::Error,
+        ));
         state.modal = Modal::None;
         state.last_device_poll = None;
         return;
@@ -301,7 +307,8 @@ fn poll_device_flow(state: &mut AppState) {
             tracing::info!("poll_device_flow: Saving session...");
             if let Err(e) = session::save_session(new_session) {
                 tracing::error!("poll_device_flow: Failed to save session: {}", e);
-                state.message = Some((format!("Failed to save session: {}", e), MessageType::Error));
+                state.message =
+                    Some((format!("Failed to save session: {}", e), MessageType::Error));
             } else {
                 tracing::info!("poll_device_flow: Session saved successfully");
                 device_cache::delete_device_code().ok();
@@ -309,6 +316,9 @@ fn poll_device_flow(state: &mut AppState) {
 
                 // Check if master password exists in OS keychain
                 tracing::info!("poll_device_flow: Checking for master password in OS keychain");
+
+                // Transition from Login screen to Home screen
+                state.current_screen = crate::tui::screens::Screen::Home;
 
                 match master_password::get_master_password() {
                     Ok(Some(_)) => {
@@ -340,8 +350,10 @@ fn poll_device_flow(state: &mut AppState) {
                             focused_field: 0,
                             show_password: false,
                         };
-                        state.message =
-                            Some(("🔐 Please set up your master password to continue.".to_string(), MessageType::Info));
+                        state.message = Some((
+                            "🔐 Please set up your master password to continue.".to_string(),
+                            MessageType::Info,
+                        ));
                     }
                 }
 
@@ -357,24 +369,30 @@ fn poll_device_flow(state: &mut AppState) {
                 Some(DeviceAuthError::AccessDenied) => {
                     tracing::warn!("poll_device_flow: Access denied");
                     device_cache::delete_device_code().ok();
-                    state.message =
-                        Some(("Access denied. Authorization was rejected.".to_string(), MessageType::Error));
+                    state.message = Some((
+                        "Access denied. Authorization was rejected.".to_string(),
+                        MessageType::Error,
+                    ));
                     state.modal = Modal::None;
                     state.last_device_poll = None;
                 }
                 Some(DeviceAuthError::ExpiredToken) => {
                     tracing::warn!("poll_device_flow: Expired token");
                     device_cache::delete_device_code().ok();
-                    state.message =
-                        Some(("Device code expired. Please try again.".to_string(), MessageType::Error));
+                    state.message = Some((
+                        "Device code expired. Please try again.".to_string(),
+                        MessageType::Error,
+                    ));
                     state.modal = Modal::None;
                     state.last_device_poll = None;
                 }
                 Some(DeviceAuthError::InvalidGrant) => {
                     tracing::warn!("poll_device_flow: Invalid grant");
                     device_cache::delete_device_code().ok();
-                    state.message =
-                        Some(("Invalid device code. Please try again.".to_string(), MessageType::Error));
+                    state.message = Some((
+                        "Invalid device code. Please try again.".to_string(),
+                        MessageType::Error,
+                    ));
                     state.modal = Modal::None;
                     state.last_device_poll = None;
                 }

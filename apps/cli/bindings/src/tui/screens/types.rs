@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Screen {
+    Login,
     Home,
     Project(ProjectScreenData),
 }

@@ -79,9 +79,25 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(app_config: AppConfig) -> Self {
+        // Check if user is already logged in to determine initial screen
+        let is_logged_in = if let Ok(session) = session::load_session() {
+            match session {
+                Some(s) => !s.is_expired(),
+                None => false,
+            }
+        } else {
+            false
+        };
+
+        let initial_screen = if is_logged_in {
+            Screen::Home
+        } else {
+            Screen::Login
+        };
+
         Self {
             app_config: Arc::new(app_config),
-            current_screen: Screen::Home,
+            current_screen: initial_screen,
             current_scope: Scope::Personal,
             available_scopes: vec![Scope::Personal],
             projects: Vec::new(),

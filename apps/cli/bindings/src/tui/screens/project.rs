@@ -13,7 +13,6 @@ use crate::tui::{
     state::AppState,
 };
 
-/// Renders the project screen
 pub fn render(frame: &mut Frame, _state: &AppState, project: &ProjectScreenData) {
     let area = frame.area();
 
@@ -102,18 +101,18 @@ pub fn render(frame: &mut Frame, _state: &AppState, project: &ProjectScreenData)
     render_help_bar(frame, chunks[1], &help_items);
 }
 
-/// Handles key events for the project screen
-pub fn handle_key_event(state: &mut AppState, key: KeyEvent) {
+pub fn handle_key_event(state: &mut AppState, key: KeyEvent) -> bool {
     match key.code {
         KeyCode::Esc | KeyCode::Char('b') => {
             state.current_screen = Screen::Home;
         }
         _ => {}
     }
+
+    false
 }
 
-// Helper functions
-
+// NOTE: helper functions
 fn format_timestamp(timestamp: i64) -> String {
     use std::time::{Duration, UNIX_EPOCH};
 

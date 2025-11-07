@@ -5,7 +5,7 @@ mod logo;
 mod subtitle;
 
 pub use layout::centered_rect;
-pub use logo::{LogoSize, ELECTRIC_PURPLE};
+pub use logo::{ELECTRIC_PURPLE, LogoSize};
 
 // Re-export render functions with descriptive names
 pub use help_bar::render as render_help_bar;
