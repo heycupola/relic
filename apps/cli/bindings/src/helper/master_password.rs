@@ -1,5 +1,8 @@
 use anyhow::{Context, Result};
 use keyring::Entry;
+use serde::{Deserialize, Serialize};
+
+use crate::helper::master_password;
 
 const SERVICE_NAME: &str = "com.relic.cli";
 const MASTER_PASSWORD_KEY: &str = "master_password";
@@ -98,6 +101,52 @@ pub fn generate_random_master_password() -> String {
     )
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MPGuard {
+    pub is_set: bool,
+    pub interval: u64,
+    pub last_checked: u64,
+}
+
+impl MPGuard {
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            is_set: false,
+            interval: 5, // secs
+            last_checked: 0,
+        })
+    }
+
+    pub fn is_available(&mut self) -> Result<bool> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .context("Unable to get epoch time")?
+            .as_secs();
+
+        if now - self.last_checked > self.interval {
+            self.last_checked = now;
+
+            match master_password::get_master_password() {
+                Ok(Some(_)) => {
+                    self.is_set = true;
+                    return Ok(true);
+                }
+                Ok(None) => {
+                    self.is_set = false;
+                    return Ok(false);
+                }
+                Err(e) => {
+                    tracing::error!("Failed to check master password: {}", e);
+                }
+            }
+
+            return Ok(false);
+        }
+
+        Ok(true)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,10 +170,8 @@ mod tests {
         let test_password = "test-password-123";
         let entry = get_test_entry();
 
-        // Store password
         entry.set_password(test_password).unwrap();
 
-        // Retrieve password
         let retrieved = entry.get_password().unwrap();
         assert_eq!(retrieved, test_password);
 
@@ -137,13 +184,10 @@ mod tests {
 
         let entry = get_test_entry();
 
-        // Store password
         entry.set_password("test-password").unwrap();
 
-        // Delete password
         entry.delete_credential().unwrap();
 
-        // Verify it's gone
         match entry.get_password() {
             Err(keyring::Error::NoEntry) => {}
             _ => panic!("Password should have been deleted"),

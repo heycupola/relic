@@ -1,7 +1,10 @@
 use std::{sync::Arc, time::SystemTime};
 
 use super::screens::{OrganizationItem, ProjectListItem, Screen};
-use crate::{helper::session, util::app_config::AppConfig};
+use crate::{
+    helper::{master_password::MPGuard, session},
+    util::app_config::AppConfig,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -75,6 +78,7 @@ pub struct AppState {
     pub should_quit: bool,
     pub message: Option<(String, MessageType)>,
     pub last_device_poll: Option<SystemTime>,
+    pub mp_guard: MPGuard,
 }
 
 impl AppState {
@@ -107,6 +111,7 @@ impl AppState {
             should_quit: false,
             message: None,
             last_device_poll: None,
+            mp_guard: MPGuard::new().expect("Unable to instantiate MPGuard"),
         }
     }
 
