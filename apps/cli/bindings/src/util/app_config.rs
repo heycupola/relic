@@ -22,6 +22,8 @@ pub struct AppConfig {
     pub sentry_proxy_url: String,
     pub sentry_reporter: SentryReporter,
     pub relic_web_url: String,
+    pub better_auth_url: String,
+    pub runtime_handle: tokio::runtime::Handle,
 }
 
 impl std::fmt::Debug for AppConfig {
@@ -38,6 +40,8 @@ impl std::fmt::Debug for AppConfig {
             .field("sentry_proxy_url", &self.sentry_proxy_url)
             .field("sentry_reporter", &"<SentryReporter>")
             .field("relic_web_url", &self.relic_web_url)
+            .field("better_auth_url", &self.better_auth_url)
+            .field("runtime_handle", &"RuntimeHandle")
             .finish()
     }
 }
@@ -73,6 +77,9 @@ impl AppConfig {
         let relic_web_url =
             std::env::var("RELIC_WEB_URL").unwrap_or_else(|_| "https://relic.so".to_string());
 
+        let better_auth_url =
+            std::env::var("BETTER_AUTH_URL").unwrap_or_else(|_| relic_web_url.clone());
+
         Ok(Self {
             client_id: std::env::var("CLIENT_ID").unwrap_or_else(|_| "relic-tui".to_string()),
             convex_client,
@@ -85,6 +92,8 @@ impl AppConfig {
             sentry_proxy_url,
             sentry_reporter,
             relic_web_url,
+            better_auth_url,
+            runtime_handle: tokio::runtime::Handle::current(),
         })
     }
 
