@@ -66,6 +66,6 @@ macro_rules! fn_name {
             std::any::type_name::<T>()
         }
         let name = type_name_of(f);
-        &name[..name.len() - 3] // son 3 karakteri ("::f") at
+        &name[..name.len() - 3]
     }};
 }
