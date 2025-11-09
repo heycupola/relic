@@ -39,6 +39,10 @@ export const protectedMutation = customMutation(mutation, {
     ctx: MutationCtx,
     _args: Record<string, never>,
   ): Promise<{ ctx: { userId: Id<"user"> }; args: Record<string, never> }> => {
+    // DEBUG: Log what's available in ctx.auth
+    console.log("DEBUG ctx.auth keys:", Object.keys(ctx.auth));
+    console.log("DEBUG ctx.auth:", JSON.stringify(ctx.auth, null, 2));
+
     const identity = await ctx.auth.getUserIdentity();
 
     if (!identity) {
@@ -82,78 +86,3 @@ export const protectedMutation = customMutation(mutation, {
 
 export const publicQuery = query;
 export const publicMutation = mutation;
-
-export const optionalQuery = customQuery(query, {
-  args: {},
-  input: async (
-    ctx: QueryCtx,
-    _args: Record<string, never>,
-  ): Promise<{ ctx: { userId: Id<"user"> | null }; args: Record<string, never> }> => {
-    const identity = await ctx.auth.getUserIdentity();
-
-    let userId: Id<"user"> | null = null;
-    if (identity) {
-      const authId = identity.subject;
-
-      const existingUser = await ctx.db
-        .query("user")
-        .withIndex("by_auth_id", (q) => q.eq("authId", authId))
-        .first();
-
-      if (existingUser) {
-        userId = existingUser._id;
-      }
-    }
-
-    return {
-      ctx: { userId },
-      args: {},
-    };
-  },
-});
-
-export const optionalMutation = customMutation(mutation, {
-  args: {},
-  input: async (
-    ctx: MutationCtx,
-    _args: Record<string, never>,
-  ): Promise<{ ctx: { userId: Id<"user"> | null }; args: Record<string, never> }> => {
-    const identity = await ctx.auth.getUserIdentity();
-
-    let userId: Id<"user"> | null = null;
-    if (identity) {
-      const authId = identity.subject;
-      const email = identity.email as string;
-      const name = identity.name as string | undefined;
-
-      const existingUser = await ctx.db
-        .query("user")
-        .withIndex("by_auth_id", (q) => q.eq("authId", authId))
-        .first();
-
-      if (existingUser) {
-        const updates: {
-          email?: string;
-          name?: string;
-          updatedAt: number;
-        } = {
-          updatedAt: Date.now(),
-        };
-
-        if (existingUser.email !== email) updates.email = email;
-        if (name && existingUser.name !== name) updates.name = name;
-
-        if (Object.keys(updates).length > 1) {
-          await ctx.db.patch(existingUser._id, updates);
-        }
-
-        userId = existingUser._id;
-      }
-    }
-
-    return {
-      ctx: { userId },
-      args: {},
-    };
-  },
-});
