@@ -21,6 +21,7 @@ pub mod helper {
     pub mod device_cache;
     pub mod function;
     pub mod master_password;
+    pub mod scope_guard;
     pub mod session;
 }
 
