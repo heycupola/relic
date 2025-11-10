@@ -7,11 +7,10 @@ use ratatui::{
 };
 
 use crate::tui::{
-    components::{centered_rect, ELECTRIC_PURPLE},
+    components::{ELECTRIC_PURPLE, centered_rect},
     state::{AppState, Modal},
 };
 
-/// Renders the device code authorization modal
 pub fn render(frame: &mut Frame, user_code: &str, redirect_url: &str, area: Rect) {
     let background = Block::default().style(Style::default().bg(Color::Black).fg(Color::DarkGray));
     frame.render_widget(background, area);
@@ -76,7 +75,6 @@ pub fn render(frame: &mut Frame, user_code: &str, redirect_url: &str, area: Rect
     frame.render_widget(waiting_text, chunks[3]);
 }
 
-/// Handles key events for the device code authorization modal
 pub fn handle_key_event(state: &mut AppState, key: KeyEvent) {
     match key.code {
         KeyCode::Esc => {

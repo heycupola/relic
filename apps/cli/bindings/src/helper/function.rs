@@ -4,6 +4,66 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+use crate::helper::session::{load_session, save_session};
+
+#[derive(serde::Deserialize)]
+struct TokenResponse {
+    token: String,
+}
+
+async fn convert_session_to_jwt(session_token: &str, better_auth_url: &str) -> Result<String> {
+    let url = format!("{}/api/auth/convex/token", better_auth_url);
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", session_token))
+        .send()
+        .await
+        .context("Failed to request JWT from Better-Auth")?;
+
+    if !response.status().is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to convert session token to JWT: HTTP {}",
+            response.status()
+        ));
+    }
+
+    let token_response: TokenResponse = response
+        .json()
+        .await
+        .context("Failed to parse JWT token response")?;
+
+    Ok(token_response.token)
+}
+
+async fn get_valid_jwt(better_auth_url: &str) -> Result<String> {
+    let mut session = load_session()?.ok_or_else(|| anyhow::anyhow!("No session found"))?;
+
+    if session.is_expired() {
+        return Err(anyhow::anyhow!("Session expired. Please login again."));
+    }
+
+    if let Some(cached_jwt) = session.jwt_token() {
+        if !session.is_jwt_expired() {
+            return Ok(cached_jwt.to_string());
+        }
+    }
+
+    let jwt = convert_session_to_jwt(session.session_token(), better_auth_url).await?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let jwt_expires_at = now + (15 * 60) - 30;
+
+    session.set_jwt(jwt.clone(), jwt_expires_at);
+    save_session(session)?;
+
+    Ok(jwt)
+}
+
 pub trait FunctionArg
 where
     Self: Serialize,
@@ -205,13 +265,14 @@ pub async fn protected_query<T, K>(
     client: &mut ConvexClient,
     function_name: &str,
     arg: T,
-    access_token: String,
+    better_auth_url: &str,
 ) -> Result<K>
 where
     T: FunctionArg,
     K: DeserializeOwned,
 {
-    client.set_auth(Some(access_token)).await;
+    let jwt = get_valid_jwt(better_auth_url).await?;
+    client.set_auth(Some(jwt)).await;
     let result = query(client, function_name, arg)
         .await
         .context("Failed to execute protected query")?;
@@ -265,13 +326,14 @@ pub async fn protected_mutation<T, K>(
     client: &mut ConvexClient,
     function_name: &str,
     arg: T,
-    access_token: String,
+    better_auth_url: &str,
 ) -> Result<K>
 where
     T: FunctionArg,
     K: DeserializeOwned,
 {
-    client.set_auth(Some(access_token)).await;
+    let jwt = get_valid_jwt(better_auth_url).await?;
+    client.set_auth(Some(jwt)).await;
     let result = mutation(client, function_name, arg)
         .await
         .context("Failed to execute protected mutation")?;

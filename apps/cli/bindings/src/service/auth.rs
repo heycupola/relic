@@ -90,7 +90,7 @@ impl FunctionArg for PollDeviceTokenArg {}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PollDeviceTokenResponse {
-    pub access_token: String,
+    pub session_token: String,
     pub token_type: String,
     #[serde(deserialize_with = "deserialize_number_from_float")]
     pub expires_in: u64,
@@ -171,7 +171,11 @@ pub async fn login(app_config: &mut AppConfig) -> Result<Session> {
         );
 
         if let Err(e) = device_cache::save_device_code(cache) {
-            eprintln!("{} {}", "⚠".yellow(), format!("Warning: Failed to cache device code: {}", e).dimmed());
+            eprintln!(
+                "{} {}",
+                "⚠".yellow(),
+                format!("Warning: Failed to cache device code: {}", e).dimmed()
+            );
         }
 
         println!("\n{} {}", "→".cyan(), "Please visit:".bold());
@@ -210,7 +214,7 @@ pub async fn login(app_config: &mut AppConfig) -> Result<Session> {
                     + token_response.expires_in;
 
                 let session = Session::new(
-                    token_response.access_token,
+                    token_response.session_token,
                     token_response.token_type,
                     expires_at_timestamp,
                 );
@@ -318,7 +322,7 @@ mod tests {
         mock::mock_mutation(
             "deviceAuth:pollDeviceToken",
             PollDeviceTokenResponse {
-                access_token: "test_access_token_123".to_string(),
+                session_token: "test_session_token_123".to_string(),
                 token_type: "Bearer".to_string(),
                 expires_in: 3600,
             },
@@ -333,7 +337,7 @@ mod tests {
         )
         .await?;
 
-        assert_eq!(result.access_token, "test_access_token_123");
+        assert_eq!(result.session_token, "test_session_token_123");
         assert_eq!(result.token_type, "Bearer");
         assert_eq!(result.expires_in, 3600);
 
@@ -404,7 +408,7 @@ mod tests {
         mock::mock_mutation(
             "deviceAuth:pollDeviceToken",
             PollDeviceTokenResponse {
-                access_token: "final_access_token".to_string(),
+                session_token: "final_session_token".to_string(),
                 token_type: "Bearer".to_string(),
                 expires_in: 3600,
             },
@@ -413,7 +417,7 @@ mod tests {
         let mut app_config = AppConfig::new().await?;
         let result = login(&mut app_config).await?;
 
-        assert_eq!(result.access_token(), "final_access_token");
+        assert_eq!(result.session_token(), "final_session_token");
         assert_eq!(result.token_type(), "Bearer");
         assert!(!result.is_expired());
 

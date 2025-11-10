@@ -55,9 +55,14 @@ pub struct CreateOrgResponse {
 pub async fn create_organization(
     client: &mut ConvexClient,
     arg: CreateOrgArg,
-    access_token: String,
+    better_auth_url: &str,
 ) -> Result<CreateOrgResponse> {
-    function::protected_mutation(client, "organization:createOrganization", arg, access_token)
-        .await
-        .context("Failed to create organization")
+    function::protected_mutation(
+        client,
+        "organization:createOrganization",
+        arg,
+        better_auth_url,
+    )
+    .await
+    .context("Failed to create organization")
 }

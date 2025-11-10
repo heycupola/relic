@@ -10,15 +10,18 @@ use ratatui::{
 };
 
 use crate::{
-    helper::{master_password, session},
+    helper::{master_password, scope_guard::ScopeGuard},
+    service::user::{StoreUserKeyArg, get_user_key, store_user_key},
     tui::{
-        components::{centered_rect, ELECTRIC_PURPLE},
+        components::{ELECTRIC_PURPLE, centered_rect},
         state::{AppState, MessageType, Modal},
     },
-    util::crypto::{derive_key, generate_keypair, generate_salt},
+    util::crypto::{
+        decrypt_private_key, derive_key, extract_public_key_from_rsa_private_key, generate_keypair,
+        generate_salt,
+    },
 };
 
-/// Renders the master password setup modal
 pub fn render(
     frame: &mut Frame,
     password: &str,
@@ -57,7 +60,6 @@ pub fn render(
         ])
         .split(inner_area);
 
-    // Info text
     let info_text = Paragraph::new(vec![
         Line::from(Span::styled(
             "🔐 Create Your Master Password",
@@ -77,7 +79,6 @@ pub fn render(
 
     frame.render_widget(info_text, chunks[0]);
 
-    // Password field
     let password_display = if show_password {
         password.to_string()
     } else {
@@ -91,7 +92,6 @@ pub fn render(
         focused_field == 0,
     );
 
-    // Confirm password field
     let confirm_display = if show_password {
         confirm_password.to_string()
     } else {
@@ -105,7 +105,6 @@ pub fn render(
         focused_field == 1,
     );
 
-    // Requirements list
     let password_strength = get_password_strength(password);
     let passwords_match =
         !password.is_empty() && !confirm_password.is_empty() && password == confirm_password;
@@ -167,7 +166,6 @@ pub fn render(
     frame.render_widget(help_text, chunks[5]);
 }
 
-/// Handles key events for the master password setup modal
 pub fn handle_key_event(state: &mut AppState, key: KeyEvent) {
     if let Modal::MasterPasswordSetup {
         password,
@@ -179,7 +177,10 @@ pub fn handle_key_event(state: &mut AppState, key: KeyEvent) {
         match key.code {
             KeyCode::Esc => {
                 state.modal = Modal::None;
-                state.message = Some(("Master password setup cancelled".to_string(), MessageType::Info));
+                state.message = Some((
+                    "Master password setup cancelled".to_string(),
+                    MessageType::Info,
+                ));
             }
             KeyCode::Tab => {
                 *focused_field = (*focused_field + 1) % 2;
@@ -188,15 +189,17 @@ pub fn handle_key_event(state: &mut AppState, key: KeyEvent) {
                 *show_password = !*show_password;
             }
             KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                // Validate password
                 if password.len() < 12 {
-                    state.message =
-                        Some(("Password must be at least 12 characters long".to_string(), MessageType::Error));
+                    state.message = Some((
+                        "Password must be at least 12 characters long".to_string(),
+                        MessageType::Error,
+                    ));
                     return;
                 }
 
                 if password != confirm_password {
-                    state.message = Some(("Passwords do not match".to_string(), MessageType::Error));
+                    state.message =
+                        Some(("Passwords do not match".to_string(), MessageType::Error));
                     return;
                 }
 
@@ -221,76 +224,169 @@ pub fn handle_key_event(state: &mut AppState, key: KeyEvent) {
                     return;
                 }
 
-                let master_password_clone = password.clone();
-                state.modal = Modal::None;
-                state.message = Some(("Setting up encryption keys...".to_string(), MessageType::Info));
-
-                let rt = match tokio::runtime::Runtime::new() {
-                    Ok(r) => r,
-                    Err(e) => {
-                        state.message = Some((format!("Failed to create runtime: {}", e), MessageType::Error));
-                        return;
-                    }
-                };
-
                 let app_config = Arc::clone(&state.app_config);
 
-                tracing::info!("Starting key generation with user-defined master password");
+                let mut client = app_config.convex_client.clone();
+                let better_auth_url = app_config.better_auth_url.clone();
+                let master_password_clone = password.clone();
+                let message_queue = Arc::clone(&state.background_messages);
+                let background_task_running = Arc::clone(&state.background_task_running);
 
-                let result = rt.block_on(async {
-                    let mut client = app_config.convex_client.clone();
+                state.modal = Modal::None;
+                state.message = Some((
+                    "Setting up encryption keys...".to_string(),
+                    MessageType::Info,
+                ));
 
-                    let access_token = match session::get_token() {
-                        Ok(Some(token)) => token,
-                        Ok(None) => {
-                            return Err(anyhow::anyhow!("Not logged in. Please login first."));
-                        }
+                // DON'T use block_on - just spawn the task and let it run in the background
+                // The mutation will work because auth is already set on the client
+                let runtime_handle = app_config.runtime_handle.clone();
+                runtime_handle.spawn(async move {
+                    tracing::info!("Checking if user already has keys...");
+
+                    *background_task_running.lock().unwrap() = true;
+
+                    // guard ensures background_task_running is reset to false when scope exits
+                    let bg_flag = Arc::clone(&background_task_running);
+                    let _guard = ScopeGuard::new(move || {
+                        *bg_flag.lock().unwrap() = false;
+                        tracing::info!("Background task finished, flag reset");
+                    });
+
+                    let existing_key = match get_user_key(&mut client, &better_auth_url).await {
+                        Ok(key) => key,
                         Err(e) => {
-                            return Err(anyhow::anyhow!("Failed to get session token: {}", e));
+                            tracing::error!("Failed to check existing keys: {}", e);
+                            message_queue.lock().unwrap().push_back((
+                                format!("Failed to check existing keys: {}", e),
+                                MessageType::Error,
+                            ));
+                            return;
                         }
                     };
 
-                    // Store master password in keychain
-                    master_password::store_master_password(&master_password_clone)?;
-                    tracing::info!("Master password stored in keychain");
+                    if let Some(existing) = existing_key {
+                        tracing::info!("Existing keys found, verifying master password...");
 
-                    let salt = generate_salt();
-                    let master_key = derive_key(&master_password_clone, &salt)?;
+                        let master_key = match derive_key(&master_password_clone, &existing.salt) {
+                            Ok(key) => key,
+                            Err(e) => {
+                                tracing::error!("Failed to derive master key: {}", e);
+                                message_queue.lock().unwrap().push_back((
+                                    format!("Failed to derive master key: {}", e),
+                                    MessageType::Error
+                                ));
+                                return;
+                            }
+                        };
 
-                    tracing::info!("Generating RSA keypair (this may take a moment)...");
-                    let (public_key, encrypted_private_key) = generate_keypair(&master_key)?;
-                    tracing::info!("RSA keypair generated successfully");
+                        match decrypt_private_key(
+                            &existing.encrypted_private_key,
+                            &master_key
+                        ) {
+                            Ok(_decrypted_private_key) => {
+                                tracing::info!("Master password verified successfully!"); 
 
-                    // store_user_key(
-                    //     &mut client,
-                    //     StoreUserKeyArg {
-                    //         public_key,
-                    //         encrypted_private_key,
-                    //         salt,
-                    //     },
-                    //     access_token,
-                    // )
-                    // .await?;
+                                tracing::info!("✅ Public keys match! Password is correct and was used for encryption.");
 
-                    tracing::info!("User keys stored successfully");
+                                if let Err(e) =
+                                    master_password::store_master_password(&master_password_clone)
+                                {
+                                    tracing::error!("Failed to store master password: {}", e);
+                                    message_queue.lock().unwrap().push_back((
+                                        format!("Failed to store master password: {}", e),
+                                        MessageType::Error,
+                                     ));
+                                    return;
+                                }
 
-                    Ok(())
+                                message_queue.lock().unwrap().push_back((
+                                    "Master password verified and stored successfully!".to_string(),
+                                    MessageType::Success,
+                                 ));
+                            }
+                            Err(_e) => {
+                                // NOTE: IMPLEMENT KEY ROTATION
+                                tracing::warn!("⚠️ Public keys don't match! This password was never used for encryption.");
+                                message_queue.lock().unwrap().push_back((
+                                    "Warning: This password was never used to encrypt your data. All your secrets will require key rotation.".to_string(),
+                                    MessageType::Error,
+                                ));
+                            }
+                        };
+                    } else {
+                        tracing::info!("No existing keys found, creating new keys...");
+
+                        if let Err(e) = master_password::store_master_password(&master_password_clone) {
+                            tracing::error!("Failed to store master password: {}", e);
+                            message_queue.lock().unwrap().push_back((
+                                format!("Failed to store master password: {}", e),
+                                MessageType::Error,
+                            ));
+                            return;
+                        }
+                        tracing::info!("Master password stored in keychain!");
+
+                        tracing::info!("Genetaring user keys...");
+                        let salt = generate_salt();
+                        let master_key = match derive_key(&master_password_clone, &salt) {
+                            Ok(key) => key,
+                            Err(e) => {
+                                tracing::error!("Failed to derive master key: {}", e);
+                                message_queue.lock().unwrap().push_back((
+                                    format!("Failed to derive encryption key: {}", e),
+                                    MessageType::Error
+                                ));
+                                return;
+                            }
+                        };
+
+                        let (public_key, encrypted_private_key) = match generate_keypair(&master_key) {
+                            Ok(keys) => keys,
+                            Err(e) => {
+                                tracing::error!("Failed to generate keypair: {}", e);
+                                message_queue.lock().unwrap().push_back((
+                                    format!("Failed to generate keypair: {}", e),
+                                    MessageType::Error,
+                                ));
+                                return;
+                            }
+                        };
+                        tracing::info!("User keys generated!");
+
+                        match store_user_key(
+                            &mut client,
+                            StoreUserKeyArg {
+                                public_key,
+                                encrypted_private_key,
+                                salt,
+                            },
+                            &better_auth_url,
+                        )
+                        .await
+                        {
+                            Ok(_) => {
+                                tracing::info!("✅ User keys stored successfully!");
+                                message_queue.lock().unwrap().push_back((
+                                    "Encryption keys created successfully!".to_string(),
+                                    MessageType::Success,
+                                ));
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to store user keys: {}", e);
+                                message_queue.lock().unwrap().push_back((
+                                    format!("Failed to store keys: {}", e),
+                                    MessageType::Error,
+                                ));
+                            }
+                        }
+                    }
                 });
 
-                match result {
-                    Ok(_) => {
-                        state.message = Some((
-                            "Encryption keys set up successfully! Master password stored securely in OS keychain."
-                                .to_string(),
-                            MessageType::Success,
-                        ));
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to set up encryption keys: {}", e);
-                        state.message =
-                            Some((format!("Failed to set up encryption keys: {}", e), MessageType::Error));
-                    }
-                }
+                state.message = Some((
+                    "Encryption keys being set up in background...".to_string(),
+                    MessageType::Success,
+                ));
             }
             KeyCode::Char(c) => {
                 let target = match *focused_field {

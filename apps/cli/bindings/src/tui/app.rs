@@ -13,7 +13,7 @@ use crossterm::{
 use ratatui::{Terminal, prelude::CrosstermBackend};
 
 use crate::{
-    helper::{device_cache, master_password, session},
+    helper::{device_cache, session},
     service::auth::{
         DeviceAuthError, PollDeviceTokenArg, RequestDeviceCodeArg, poll_device_code,
         request_device_code,
@@ -78,6 +78,24 @@ pub fn start_tui(app_config: AppConfig) {
             {
                 let mut state_lock = state.lock().unwrap();
                 poll_device_flow(&mut state_lock);
+
+                if !*state_lock.background_task_running.lock().unwrap() {
+                    let msg = {
+                        if let Ok(mut queue) = state_lock.background_messages.lock() {
+                            queue.pop_front()
+                        } else {
+                            None
+                        }
+                    };
+
+                    if let Some(msg) = msg {
+                        state_lock.message = Some(msg)
+                    }
+
+                    if state_lock.message.is_none() {
+                        check_master_password(&mut state_lock);
+                    }
+                }
             }
 
             if let Some(terminal) = TERMINAL.lock().unwrap().as_mut() {
@@ -299,7 +317,7 @@ fn poll_device_flow(state: &mut AppState) {
                 + token_response.expires_in;
 
             let new_session = session::Session::new(
-                token_response.access_token.clone(),
+                token_response.session_token.clone(),
                 token_response.token_type,
                 expires_at_timestamp,
             );
@@ -313,49 +331,7 @@ fn poll_device_flow(state: &mut AppState) {
                 tracing::info!("poll_device_flow: Session saved successfully");
                 device_cache::delete_device_code().ok();
                 state.last_device_poll = None;
-
-                // Check if master password exists in OS keychain
-                tracing::info!("poll_device_flow: Checking for master password in OS keychain");
-
-                // Transition from Login screen to Home screen
                 state.current_screen = crate::tui::screens::Screen::Home;
-
-                match master_password::get_master_password() {
-                    Ok(Some(_)) => {
-                        // Master password exists, user is fully set up
-                        tracing::info!("Master password found in keychain");
-                        state.modal = Modal::None;
-                    }
-                    Ok(None) => {
-                        // No master password, MUST set it up
-                        tracing::info!("No master password found - user MUST set one up");
-                        state.modal = Modal::MasterPasswordSetup {
-                            password: String::new(),
-                            confirm_password: String::new(),
-                            focused_field: 0,
-                            show_password: false,
-                        };
-                        state.message = Some((
-                            "🔐 Welcome! Please create your master password to secure your secrets."
-                                .to_string(),
-                            MessageType::Info,
-                        ));
-                    }
-                    Err(e) => {
-                        // Error checking keychain, show modal to be safe
-                        tracing::error!("Failed to check master password: {}", e);
-                        state.modal = Modal::MasterPasswordSetup {
-                            password: String::new(),
-                            confirm_password: String::new(),
-                            focused_field: 0,
-                            show_password: false,
-                        };
-                        state.message = Some((
-                            "🔐 Please set up your master password to continue.".to_string(),
-                            MessageType::Info,
-                        ));
-                    }
-                }
 
                 tracing::info!("poll_device_flow: Login flow completed successfully");
             }
@@ -401,6 +377,34 @@ fn poll_device_flow(state: &mut AppState) {
                 }
             }
         }
+    }
+}
+
+fn check_master_password(state: &mut AppState) {
+    if !state.is_logged_in() {
+        return;
+    }
+
+    if !matches!(state.modal, Modal::None) {
+        return;
+    }
+
+    if !state
+        .mp_guard
+        .is_available()
+        .expect("Unable to check master password availability")
+    {
+        tracing::info!("No master password found");
+        state.modal = Modal::MasterPasswordSetup {
+            password: String::new(),
+            confirm_password: String::new(),
+            focused_field: 0,
+            show_password: false,
+        };
+        state.message = Some((
+            "Please set up your master password to continue.".to_string(),
+            crate::tui::state::MessageType::Info,
+        ));
     }
 }
 

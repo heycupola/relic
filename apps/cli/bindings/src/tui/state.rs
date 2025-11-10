@@ -1,4 +1,8 @@
-use std::{sync::Arc, time::SystemTime};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+    time::SystemTime,
+};
 
 use super::screens::{OrganizationItem, ProjectListItem, Screen};
 use crate::{
@@ -79,6 +83,8 @@ pub struct AppState {
     pub message: Option<(String, MessageType)>,
     pub last_device_poll: Option<SystemTime>,
     pub mp_guard: MPGuard,
+    pub background_messages: Arc<Mutex<VecDeque<(String, MessageType)>>>,
+    pub background_task_running: Arc<Mutex<bool>>,
 }
 
 impl AppState {
@@ -112,6 +118,8 @@ impl AppState {
             message: None,
             last_device_poll: None,
             mp_guard: MPGuard::new().expect("Unable to instantiate MPGuard"),
+            background_messages: Arc::new(Mutex::new(VecDeque::new())),
+            background_task_running: Arc::new(Mutex::new(false)),
         }
     }
 

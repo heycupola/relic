@@ -145,7 +145,7 @@ export const pollDeviceToken = mutation({
     });
 
     return {
-      access_token: sessionToken,
+      session_token: sessionToken,
       token_type: "Bearer",
       expires_in: 30 * 24 * 60 * 60,
     };
