@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
@@ -38,7 +38,11 @@ export const createOrganization = protectedMutation({
     const user = await ctx.db.get(ctx.userId);
 
     if (!user) {
-      throw new Error("User not found");
+      throw new ConvexError({
+        code: "USER_NOT_FOUND",
+        message: "User not found",
+        severity: "high" as const,
+      });
     }
 
     const proCheck = await autumn.check(ctx, {
@@ -46,7 +50,11 @@ export const createOrganization = protectedMutation({
     });
 
     if (!proCheck.data?.allowed) {
-      throw new Error("Pro plan required to create organizations. Please upgrade your plan.");
+      throw new ConvexError({
+        code: "PRO_PLAN_REQUIRED",
+        message: "Pro plan required to create organizations. Please upgrade your plan.",
+        severity: "medium" as const,
+      });
     }
 
     await checkRateLimit(ctx, "write");
@@ -143,9 +151,11 @@ export const createOrganization = protectedMutation({
     });
 
     if (checkoutResult.error || !checkoutResult.data) {
-      throw new Error(
-        `Failed to create checkout session: ${checkoutResult.error?.message || "Unknown error"}`,
-      );
+      throw new ConvexError({
+        code: "CHECKOUT_FAILED",
+        message: `Failed to create checkout session: ${checkoutResult.error?.message || "Unknown error"}`,
+        severity: "high" as const,
+      });
     }
 
     return {
@@ -179,13 +189,21 @@ export const initializeOrganization = internalMutation({
       .first();
 
     if (existingSetting) {
-      throw new Error("Organization already initialized");
+      throw new ConvexError({
+        code: "ORGANIZATION_ALREADY_INITIALIZED",
+        message: "Organization already initialized",
+        severity: "medium" as const,
+      });
     }
 
     const user = await ctx.db.get(args.userId);
 
     if (!user) {
-      throw new Error("User not found");
+      throw new ConvexError({
+        code: "USER_NOT_FOUND",
+        message: "User not found",
+        severity: "high" as const,
+      });
     }
 
     const isFreeWithProPlan = !user.freeOrganizationUsed;
