@@ -10,7 +10,7 @@ use ratatui::{
 use super::types::{ProjectScreenData, Screen};
 use crate::tui::{
     components::{ELECTRIC_PURPLE, LogoSize, centered_rect, render_help_bar, render_logo},
-    state::{AppState, MessageType, Modal},
+    state::{AppState, Modal},
 };
 
 pub fn render(frame: &mut Frame, state: &AppState) {
@@ -117,29 +117,6 @@ pub fn render(frame: &mut Frame, state: &AppState) {
         ("q", "quit"),
     ];
     render_help_bar(frame, chunks[3], &help_items);
-
-    if let Some((message_text, message_type)) = &state.message {
-        let message_area = centered_rect(60, 20, area);
-
-        let (title, color) = match message_type {
-            MessageType::Success => ("Success", Color::Green),
-            MessageType::Error => ("Error", Color::Red),
-            MessageType::Info => ("Info", Color::Cyan),
-        };
-
-        let message_block = Block::default()
-            .title(title)
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(color));
-
-        let message_para = Paragraph::new(message_text.as_str())
-            .block(message_block)
-            .style(Style::default().fg(color))
-            .alignment(Alignment::Center)
-            .wrap(ratatui::widgets::Wrap { trim: true });
-
-        frame.render_widget(message_para, message_area);
-    }
 }
 
 /// NOTE: returns false as device flow is only triggered from login screen

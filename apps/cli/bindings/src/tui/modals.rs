@@ -2,6 +2,7 @@ mod create_organization;
 mod create_project;
 mod device_code_auth;
 mod master_password;
+mod pro_plan_upgrade;
 mod scope_selector;
 
 use crossterm::event::KeyEvent;
@@ -65,6 +66,9 @@ pub fn render_modal(frame: &mut Frame, state: &AppState, area: Rect) {
                 area,
             );
         }
+        Modal::ProPlanUpgrade => {
+            pro_plan_upgrade::render(frame, area);
+        }
     }
 }
 
@@ -77,5 +81,6 @@ pub fn handle_modal_key_event(state: &mut AppState, key: KeyEvent) {
         Modal::CreateOrganization { .. } => create_organization::handle_key_event(state, key),
         Modal::DeviceCodeAuth { .. } => device_code_auth::handle_key_event(state, key),
         Modal::MasterPasswordSetup { .. } => master_password::handle_key_event(state, key),
+        Modal::ProPlanUpgrade => pro_plan_upgrade::handle_key_event(state, key),
     }
 }

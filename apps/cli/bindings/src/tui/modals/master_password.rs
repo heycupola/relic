@@ -14,12 +14,9 @@ use crate::{
     service::user::{StoreUserKeyArg, get_user_key, store_user_key},
     tui::{
         components::{ELECTRIC_PURPLE, centered_rect},
-        state::{AppState, MessageType, Modal},
+        state::{AppState, BackgroundTask, MessageType, Modal},
     },
-    util::crypto::{
-        decrypt_private_key, derive_key, extract_public_key_from_rsa_private_key, generate_keypair,
-        generate_salt,
-    },
+    util::crypto::{decrypt_private_key, derive_key, generate_keypair, generate_salt},
 };
 
 pub fn render(
@@ -30,7 +27,10 @@ pub fn render(
     show_password: bool,
     area: Rect,
 ) {
-    let modal_area = centered_rect(70, 60, area);
+    let background = Block::default().style(Style::default().bg(Color::Black).fg(Color::DarkGray));
+    frame.render_widget(background, area);
+
+    let modal_area = centered_rect(60, 50, area);
 
     frame.render_widget(Clear, modal_area);
 
@@ -51,12 +51,15 @@ pub fn render(
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(4), // Info text
-            Constraint::Length(3), // Password field
-            Constraint::Length(3), // Confirm password field
-            Constraint::Length(5), // Requirements list
-            Constraint::Min(1),    // Spacer
-            Constraint::Length(2), // Help text
+            Constraint::Length(1),
+            Constraint::Length(4),
+            Constraint::Length(1),
+            Constraint::Length(3),
+            Constraint::Length(3),
+            Constraint::Length(1),
+            Constraint::Length(6),
+            Constraint::Length(1),
+            Constraint::Length(2),
         ])
         .split(inner_area);
 
@@ -77,7 +80,7 @@ pub fn render(
     ])
     .wrap(Wrap { trim: true });
 
-    frame.render_widget(info_text, chunks[0]);
+    frame.render_widget(info_text, chunks[1]);
 
     let password_display = if show_password {
         password.to_string()
@@ -86,7 +89,7 @@ pub fn render(
     };
     render_password_input_field(
         frame,
-        chunks[1],
+        chunks[3],
         "Master Password",
         &password_display,
         focused_field == 0,
@@ -99,7 +102,7 @@ pub fn render(
     };
     render_password_input_field(
         frame,
-        chunks[2],
+        chunks[4],
         "Confirm Password",
         &confirm_display,
         focused_field == 1,
@@ -154,16 +157,16 @@ pub fn render(
                 .border_style(Style::default().fg(Color::DarkGray)),
         );
 
-    frame.render_widget(requirements, chunks[3]);
+    frame.render_widget(requirements, chunks[6]);
 
-    // Help text
     let help_text = Paragraph::new(vec![Line::from(
         "Tab: next field | Ctrl+H: toggle visibility | Ctrl+S: save | Esc: cancel",
     )])
     .style(Style::default().fg(Color::DarkGray))
+    .alignment(ratatui::layout::Alignment::Center)
     .wrap(Wrap { trim: true });
 
-    frame.render_widget(help_text, chunks[5]);
+    frame.render_widget(help_text, chunks[8]);
 }
 
 pub fn handle_key_event(state: &mut AppState, key: KeyEvent) {
@@ -230,27 +233,36 @@ pub fn handle_key_event(state: &mut AppState, key: KeyEvent) {
                 let better_auth_url = app_config.better_auth_url.clone();
                 let master_password_clone = password.clone();
                 let message_queue = Arc::clone(&state.background_messages);
-                let background_task_running = Arc::clone(&state.background_task_running);
+                let background_task = Arc::clone(&state.background_task);
 
                 state.modal = Modal::None;
-                state.message = Some((
-                    "Setting up encryption keys...".to_string(),
-                    MessageType::Info,
-                ));
 
-                // DON'T use block_on - just spawn the task and let it run in the background
-                // The mutation will work because auth is already set on the client
                 let runtime_handle = app_config.runtime_handle.clone();
                 runtime_handle.spawn(async move {
                     tracing::info!("Checking if user already has keys...");
 
-                    *background_task_running.lock().unwrap() = true;
+                    {
+                        let mut task_guard = background_task.lock().unwrap();
+                        *task_guard = Some(BackgroundTask::run(
+                            "Master Password Setup".to_string(),
+                            "Setting up encryption keys".to_string(),
+                        ));
+                    }
 
-                    // guard ensures background_task_running is reset to false when scope exits
-                    let bg_flag = Arc::clone(&background_task_running);
+                    let success_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+                    let bg_task_clone = Arc::clone(&background_task);
+                    let success_flag_clone = Arc::clone(&success_flag);
+
                     let _guard = ScopeGuard::new(move || {
-                        *bg_flag.lock().unwrap() = false;
-                        tracing::info!("Background task finished, flag reset");
+                        if let Ok(mut task_guard) = bg_task_clone.lock() {
+                            if let Some(task) = task_guard.take() {
+                                if success_flag_clone.load(std::sync::atomic::Ordering::Relaxed) {
+                                    *task_guard = Some(task.success());
+                                } else {
+                                    *task_guard = Some(task.failed());
+                                }
+                            }
+                        }
                     });
 
                     let existing_key = match get_user_key(&mut client, &better_auth_url).await {
@@ -285,8 +297,7 @@ pub fn handle_key_event(state: &mut AppState, key: KeyEvent) {
                             &master_key
                         ) {
                             Ok(_decrypted_private_key) => {
-                                tracing::info!("Master password verified successfully!"); 
-
+                                tracing::info!("Master password verified successfully!");
                                 tracing::info!("✅ Public keys match! Password is correct and was used for encryption.");
 
                                 if let Err(e) =
@@ -300,18 +311,20 @@ pub fn handle_key_event(state: &mut AppState, key: KeyEvent) {
                                     return;
                                 }
 
+                                success_flag.store(true, std::sync::atomic::Ordering::Relaxed);
+
                                 message_queue.lock().unwrap().push_back((
                                     "Master password verified and stored successfully!".to_string(),
                                     MessageType::Success,
                                  ));
                             }
                             Err(_e) => {
-                                // NOTE: IMPLEMENT KEY ROTATION
                                 tracing::warn!("⚠️ Public keys don't match! This password was never used for encryption.");
                                 message_queue.lock().unwrap().push_back((
                                     "Warning: This password was never used to encrypt your data. All your secrets will require key rotation.".to_string(),
                                     MessageType::Error,
                                 ));
+                                return;
                             }
                         };
                     } else {
@@ -327,7 +340,7 @@ pub fn handle_key_event(state: &mut AppState, key: KeyEvent) {
                         }
                         tracing::info!("Master password stored in keychain!");
 
-                        tracing::info!("Genetaring user keys...");
+                        tracing::info!("Generating user keys...");
                         let salt = generate_salt();
                         let master_key = match derive_key(&master_password_clone, &salt) {
                             Ok(key) => key,
@@ -354,39 +367,50 @@ pub fn handle_key_event(state: &mut AppState, key: KeyEvent) {
                         };
                         tracing::info!("User keys generated!");
 
-                        match store_user_key(
-                            &mut client,
-                            StoreUserKeyArg {
-                                public_key,
-                                encrypted_private_key,
-                                salt,
-                            },
-                            &better_auth_url,
+                        tracing::info!("Calling store_user_key API...");
+                        let store_result = tokio::time::timeout(
+                            std::time::Duration::from_secs(30),
+                            store_user_key(
+                                &mut client,
+                                StoreUserKeyArg {
+                                    public_key,
+                                    encrypted_private_key,
+                                    salt,
+                                },
+                                &better_auth_url,
+                            ),
                         )
-                        .await
-                        {
-                            Ok(_) => {
-                                tracing::info!("✅ User keys stored successfully!");
+                        .await;
+
+                        match store_result {
+                            Err(_timeout) => {
+                                tracing::error!("store_user_key timed out after 30 seconds");
+                                message_queue.lock().unwrap().push_back((
+                                    "Request timed out. Please try again.".to_string(),
+                                    MessageType::Error,
+                                ));
+                                return;
+                            }
+                            Ok(Err(e)) => {
+                                tracing::error!("store_user_key failed: {}", e);
+                                message_queue.lock().unwrap().push_back((
+                                    format!("Failed to store keys: {}", e),
+                                    MessageType::Error,
+                                ));
+                                return;
+                            }
+                            Ok(Ok(_response)) => {
+                                tracing::info!("User keys stored successfully!");
+                                success_flag.store(true, std::sync::atomic::Ordering::Relaxed);
+
                                 message_queue.lock().unwrap().push_back((
                                     "Encryption keys created successfully!".to_string(),
                                     MessageType::Success,
                                 ));
                             }
-                            Err(e) => {
-                                tracing::error!("Failed to store user keys: {}", e);
-                                message_queue.lock().unwrap().push_back((
-                                    format!("Failed to store keys: {}", e),
-                                    MessageType::Error,
-                                ));
-                            }
                         }
                     }
                 });
-
-                state.message = Some((
-                    "Encryption keys being set up in background...".to_string(),
-                    MessageType::Success,
-                ));
             }
             KeyCode::Char(c) => {
                 let target = match *focused_field {

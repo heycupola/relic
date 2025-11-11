@@ -10,7 +10,13 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::{Terminal, prelude::CrosstermBackend};
+use ratatui::{
+    Frame, Terminal,
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    prelude::CrosstermBackend,
+    style::{Color, Style},
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+};
 
 use crate::{
     helper::{device_cache, session},
@@ -19,6 +25,7 @@ use crate::{
         request_device_code,
     },
     tui::{
+        components::{centered_rect, render_status_bar},
         modals::{handle_modal_key_event, render_modal},
         screens::{handle_screen_key_event, render_screen},
         state::{AppState, MessageType, Modal},
@@ -79,7 +86,41 @@ pub fn start_tui(app_config: AppConfig) {
                 let mut state_lock = state.lock().unwrap();
                 poll_device_flow(&mut state_lock);
 
-                if !*state_lock.background_task_running.lock().unwrap() {
+                // NOTE: check if background task should be dismissed (3 second timeout for success/failed)
+                let should_dismiss = {
+                    if let Ok(task_guard) = state_lock.background_task.lock() {
+                        task_guard
+                            .as_ref()
+                            .map(|task| task.should_dismiss(3))
+                            .unwrap_or(false)
+                    } else {
+                        false
+                    }
+                };
+
+                if should_dismiss {
+                    if let Ok(mut task_guard) = state_lock.background_task.lock() {
+                        *task_guard = None;
+                    }
+                }
+
+                if state_lock.background_task.lock().unwrap().is_none() {
+                    // Process modal requests first
+                    if state_lock.modal == Modal::None {
+                        let modal_request = {
+                            if let Ok(mut queue) = state_lock.modal_requests.lock() {
+                                queue.pop_front()
+                            } else {
+                                None
+                            }
+                        };
+
+                        if let Some(modal) = modal_request {
+                            state_lock.modal = modal;
+                        }
+                    }
+
+                    // Then process messages
                     let msg = {
                         if let Ok(mut queue) = state_lock.background_messages.lock() {
                             queue.pop_front()
@@ -103,8 +144,31 @@ pub fn start_tui(app_config: AppConfig) {
 
                 terminal
                     .draw(|f| {
+                        let area = f.area();
+
+                        // Check if we have a background task to display
+                        let has_status_bar = state_lock.background_task.lock().unwrap().is_some();
+
+                        let chunks = Layout::default()
+                            .direction(Direction::Vertical)
+                            .constraints(if has_status_bar {
+                                [Constraint::Min(0), Constraint::Length(1)]
+                            } else {
+                                [Constraint::Min(0), Constraint::Length(0)]
+                            })
+                            .split(area);
+
                         render_screen(f, &mut state_lock);
-                        render_modal(f, &state_lock, f.area());
+                        render_modal(f, &state_lock, chunks[0]);
+                        render_message(f, &state_lock, chunks[0]);
+
+                        if has_status_bar {
+                            if let Ok(task_guard) = state_lock.background_task.lock() {
+                                if let Some(ref task) = *task_guard {
+                                    render_status_bar(f, task, chunks[1]);
+                                }
+                            }
+                        }
                     })
                     .ok();
             }
@@ -125,8 +189,7 @@ pub fn start_tui(app_config: AppConfig) {
 }
 
 fn handle_key_event(state: &mut AppState, key: KeyEvent) {
-    // NOTE: handle Esc to dismiss messages (takes priority)
-    if key.code == KeyCode::Esc && state.message.is_some() && state.modal == Modal::None {
+    if key.code == KeyCode::Esc && state.message.is_some() {
         state.message = None;
         return;
     }
@@ -138,7 +201,6 @@ fn handle_key_event(state: &mut AppState, key: KeyEvent) {
 
     match &state.modal {
         Modal::None => {
-            // NOTE: delegate to screens module, check if device flow should start
             if handle_screen_key_event(state, key) {
                 start_device_flow(state);
             }
@@ -405,6 +467,53 @@ fn check_master_password(state: &mut AppState) {
             "Please set up your master password to continue.".to_string(),
             crate::tui::state::MessageType::Info,
         ));
+    }
+}
+
+fn render_message(frame: &mut Frame, state: &AppState, area: Rect) {
+    if let Some((message_text, message_type)) = &state.message {
+        let background = Block::default().style(Style::default().bg(Color::Black).fg(Color::DarkGray));
+        frame.render_widget(background, area);
+
+        let message_area = centered_rect(40, 20, area);
+
+        frame.render_widget(Clear, message_area);
+
+        let (title, color) = match message_type {
+            MessageType::Success => ("✓ Success", Color::Green),
+            MessageType::Error => ("✗ Error", Color::Red),
+            MessageType::Info => ("ℹ Info", Color::Cyan),
+        };
+
+        let message_block = Block::default()
+            .title(title)
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(color));
+
+        frame.render_widget(message_block, message_area);
+
+        let inner_area = Rect {
+            x: message_area.x + 2,
+            y: message_area.y + 2,
+            width: message_area.width - 4,
+            height: message_area.height - 4,
+        };
+
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(1),
+                Constraint::Min(1),
+                Constraint::Length(1),
+            ])
+            .split(inner_area);
+
+        let message_para = Paragraph::new(message_text.as_str())
+            .style(Style::default().fg(color))
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true });
+
+        frame.render_widget(message_para, chunks[1]);
     }
 }
 

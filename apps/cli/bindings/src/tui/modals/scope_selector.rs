@@ -12,9 +12,11 @@ use crate::tui::{
     state::{AppState, Modal},
 };
 
-/// Renders the scope selector modal
 pub fn render(frame: &mut Frame, state: &AppState, selected_index: usize, area: Rect) {
-    let modal_area = centered_rect(50, 40, area);
+    let background = Block::default().style(Style::default().bg(Color::Black).fg(Color::DarkGray));
+    frame.render_widget(background, area);
+
+    let modal_area = centered_rect(40, 35, area);
 
     frame.render_widget(Clear, modal_area);
 

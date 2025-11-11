@@ -8,11 +8,10 @@ use ratatui::{
 };
 
 use crate::tui::{
-    components::{centered_rect, ELECTRIC_PURPLE},
+    components::{ELECTRIC_PURPLE, centered_rect},
     state::{AppState, MessageType, Modal, Scope},
 };
 
-/// Renders the create project modal
 pub fn render(
     frame: &mut Frame,
     state: &AppState,
@@ -25,7 +24,10 @@ pub fn render(
     scope_selector_index: usize,
     area: Rect,
 ) {
-    let modal_area = centered_rect(60, 60, area);
+    let background = Block::default().style(Style::default().bg(Color::Black).fg(Color::DarkGray));
+    frame.render_widget(background, area);
+
+    let modal_area = centered_rect(55, 50, area);
 
     frame.render_widget(Clear, modal_area);
 
@@ -46,50 +48,51 @@ pub fn render(
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
+            Constraint::Length(1),
             Constraint::Length(3),
             Constraint::Length(3),
             Constraint::Length(5),
             Constraint::Length(3),
-            Constraint::Min(1),
+            Constraint::Length(1),
             Constraint::Length(2),
         ])
         .split(inner_area);
 
     render_input_field(
         frame,
-        chunks[0],
+        chunks[1],
         "Name (required)",
         name,
         focused_field == 0,
     );
     render_input_field(
         frame,
-        chunks[1],
+        chunks[2],
         "Slug (required)",
         slug,
         focused_field == 1,
     );
     render_text_area_field(
         frame,
-        chunks[2],
+        chunks[3],
         "Description (optional)",
         description,
         focused_field == 2,
     );
     render_input_field(
         frame,
-        chunks[3],
+        chunks[4],
         "Scope",
         selected_scope.display_name(),
         focused_field == 3,
     );
 
-    let help_text =
-        Paragraph::new("Tab: next | Enter on Scope: select | Ctrl+S: create | Esc: cancel")
-            .style(Style::default().fg(Color::DarkGray))
-            .wrap(Wrap { trim: true });
+    let help_text = Paragraph::new("Tab: next | Enter on Scope: select | Ctrl+S: create | Esc: cancel")
+        .style(Style::default().fg(Color::DarkGray))
+        .alignment(ratatui::layout::Alignment::Center)
+        .wrap(Wrap { trim: true });
 
-    frame.render_widget(help_text, chunks[5]);
+    frame.render_widget(help_text, chunks[6]);
 
     // Render nested scope selector overlay when selecting_scope is true
     if selecting_scope {
@@ -97,7 +100,6 @@ pub fn render(
     }
 }
 
-/// Handles key events for the create project modal
 pub fn handle_key_event(state: &mut AppState, key: KeyEvent) {
     if let Modal::CreateProject {
         name,
@@ -191,8 +193,6 @@ pub fn handle_key_event(state: &mut AppState, key: KeyEvent) {
         }
     }
 }
-
-// Helper functions
 
 fn render_input_field(frame: &mut Frame, area: Rect, label: &str, value: &str, is_focused: bool) {
     let style = if is_focused {
