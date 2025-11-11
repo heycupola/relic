@@ -14,12 +14,11 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     Login,
+    Logout,
 }
 
-pub async fn run_cli_from_args(mut args: Vec<String>) -> Result<()> {
-    let mut app_config = AppConfig::new().await?;
-
-    // Add program name to the beginning for clap
+pub async fn run_cli_from_args(mut args: Vec<String>, mut app_config: AppConfig) -> Result<()> {
+    // NOTE: add program name to the beginning for clap
     args.insert(0, "relic".to_string());
 
     let cli = Cli::try_parse_from(args).context("Unable to parse args...")?;
@@ -27,6 +26,9 @@ pub async fn run_cli_from_args(mut args: Vec<String>) -> Result<()> {
     match cli.command {
         Commands::Login => {
             service::auth::login(&mut app_config).await?;
+        }
+        Commands::Logout => {
+            service::auth::logout()?;
         }
     }
 

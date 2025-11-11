@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
-import { AutumnProvider } from "autumn-js/react";
 import { ConvexClientProvider } from "./providers";
 
 const inter = Inter({
@@ -31,11 +30,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${spaceGrotesk.variable} font-sans`}>
-        <ConvexClientProvider>
-          <AutumnProvider betterAuthUrl={process.env.NEXT_PUBLIC_BETTER_AUTH_URL}>
-            {children}
-          </AutumnProvider>
-        </ConvexClientProvider>
+        <ConvexClientProvider>{children}</ConvexClientProvider>
       </body>
     </html>
   );

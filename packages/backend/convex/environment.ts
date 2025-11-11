@@ -424,8 +424,6 @@ export const getEnvironmentData = protectedQuery({
       throw new Error("You do not have access to this environment");
     }
 
-    await checkRateLimit(ctx, "read");
-
     const includeDeleted = args.includeDeleted || false;
     const includeRecentActivity = args.includeRecentActivity || false;
 
@@ -454,6 +452,7 @@ export const getEnvironmentData = protectedQuery({
       id: Id<"secret">;
       key: string;
       encryptedValue: string;
+      primitiveType: string;
       description?: string;
       tags?: string[];
       isDeleted: boolean;
@@ -472,6 +471,7 @@ export const getEnvironmentData = protectedQuery({
           id: secret._id,
           key: secret.key,
           encryptedValue: secret.encryptedValue,
+          primitiveType: secret.primitiveType,
           description: secret.description,
           tags: secret.tags,
           isDeleted: secret.isDeleted,

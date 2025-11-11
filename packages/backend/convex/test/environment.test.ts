@@ -1,6 +1,6 @@
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import schema from "../schema";
 import { createMockAutumn } from "./helpers/autumn.mock";
@@ -27,8 +27,21 @@ const mockAutumn = createMockAutumn(async (ctx) => {
   return { customerId: identity.subject };
 });
 
+function mockInitLocalAutumn(identity: {
+  customerId: string;
+  customerData?: {
+    name?: string | null;
+    email?: string | null;
+  };
+}) {
+  return createMockAutumn(async (_ctx) => {
+    return { customerId: identity.customerId, customerData: identity.customerData };
+  });
+}
+
 vi.mock("../autumn", () => ({
   autumn: mockAutumn,
+  initLocalAutumn: mockInitLocalAutumn,
 }));
 
 describe("environment.ts", () => {
@@ -61,9 +74,10 @@ describe("environment.ts", () => {
 
     mockAutumn.setFeature(owner.authId, "personal_projects", 2);
 
-    await owner.asUser.mutation(api.organization.initializeOrganization, {
+    await t.mutation(internal.organization.initializeOrganization, {
       organizationId,
       wrapperOrgKey,
+      userId: owner.userId,
     });
 
     const organizationProject = await owner.asUser.mutation(api.project.createOrganizationProject, {
@@ -276,6 +290,7 @@ describe("environment.ts", () => {
         key: "API_KEY",
         folderId,
         encryptedValue: "api-key-encrypted-value",
+        primitiveType: "string",
         encryptionKeyVersion: 1,
         environmentId,
         description: "This is an API key.",
@@ -285,6 +300,7 @@ describe("environment.ts", () => {
       await owner.asUser.mutation(api.secret.createSecret, {
         key: "DB_URI",
         encryptedValue: "db-uri-encrypted-value",
+        primitiveType: "string",
         encryptionKeyVersion: 1,
         environmentId,
         description: "This is an DB uri.",

@@ -1,57 +1,121 @@
-import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
-import { initLocalAutumn } from "./autumn";
-import { protectedQuery } from "./lib/middleware";
+import { ConvexError, v } from "convex/values";
+import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import { internalMutation, internalQuery } from "./_generated/server";
+import { autumn, initLocalAutumn } from "./autumn";
+import { protectedAction, protectedQuery } from "./lib/middleware";
 import type { ProtectedQueryCtx } from "./lib/types";
 
-export const syncUserFromAuth = internalMutation({
-  args: {
-    authId: v.string(),
-    email: v.string(),
-    name: v.optional(v.string()),
-    avatarUrl: v.optional(v.string()),
+export const getProPlan = protectedAction({
+  args: {},
+  handler: async (ctx) => {
+    const user = await ctx.runQuery(internal.user.getUserById, { userId: ctx.userId });
+
+    const localAutumnInstance = initLocalAutumn({
+      customerId: user.authId,
+      customerData: {
+        name: user.name || undefined,
+        email: user.email,
+      },
+    });
+
+    const hasPro = await localAutumnInstance.check(ctx, {
+      featureId: "can_create_org",
+    });
+
+    if (!hasPro.data?.allowed) {
+      const checkoutResult = await localAutumnInstance.checkout(ctx, {
+        productId: "pro",
+        successUrl: `${process.env.SITE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+        customerData: {
+          name: user.name || undefined,
+          email: user.email,
+        },
+        checkoutSessionParams: {
+          cancel_url: `${process.env.SITE_URL}/subscription/cancel`,
+          metadata: {
+            userId: ctx.userId,
+          },
+        },
+      });
+
+      return {
+        success: true,
+        hasPro: false,
+        checkoutLink: checkoutResult.data?.url || null,
+      };
+    }
+
+    return {
+      success: true,
+      hasPro: true,
+      checkoutLink: null,
+    };
   },
+});
+
+export const checkProPlan = protectedQuery({
+  args: {},
+  handler: async (ctx: ProtectedQueryCtx) => {
+    const hasPro = await autumn.check(ctx, {
+      featureId: "can_create_org",
+    });
+
+    return { success: true, hasProPlan: hasPro.data?.allowed ?? false };
+  },
+});
+
+export const getUserByAuthId = internalQuery({
+  args: { authId: v.string() },
   handler: async (ctx, args) => {
-    const existingUser = await ctx.db
+    const user = await ctx.db
       .query("user")
       .withIndex("by_auth_id", (q) => q.eq("authId", args.authId))
       .first();
 
-    if (existingUser) {
-      const updates: {
-        email?: string;
-        name?: string;
-        avatarUrl?: string;
-        updatedAt: number;
-      } = {
-        updatedAt: Date.now(),
-      };
-
-      if (existingUser.email !== args.email) updates.email = args.email;
-      if (args.name && existingUser.name !== args.name) updates.name = args.name;
-      if (args.avatarUrl && existingUser.avatarUrl !== args.avatarUrl) {
-        updates.avatarUrl = args.avatarUrl;
-      }
-
-      if (Object.keys(updates).length > 1) {
-        await ctx.db.patch(existingUser._id, updates);
-      }
-
-      return existingUser._id;
+    if (!user) {
+      throw new ConvexError({
+        code: "USER_NOT_FOUND",
+        message: "User not found",
+        severity: "high" as const,
+      });
     }
 
-    const now = Date.now();
-    const userId = await ctx.db.insert("user", {
-      authId: args.authId,
-      email: args.email,
-      name: args.name,
-      avatarUrl: args.avatarUrl,
-      freeOrganizationUsed: false,
-      createdAt: now,
-      updatedAt: now,
-    });
+    return user;
+  },
+});
 
-    return userId;
+export const getUserById = internalQuery({
+  args: { userId: v.id("user") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+
+    if (!user) {
+      throw new ConvexError({
+        code: "USER_NOT_FOUND",
+        message: "User not found",
+        severity: "high" as const,
+      });
+    }
+
+    return user;
+  },
+});
+
+export const updateUser = internalMutation({
+  args: {
+    userId: v.string(),
+    updates: v.object({
+      email: v.optional(v.string()),
+      name: v.optional(v.string()),
+      updatedAt: v.number(),
+    }),
+  },
+  handler: async (
+    ctx,
+    args: { userId: Id<"user">; updates: { email?: string; name?: string; updatedAt: number } },
+  ) => {
+    await ctx.db.patch(args.userId, args.updates);
   },
 });
 
@@ -69,7 +133,6 @@ export const getCurrentUser = protectedQuery({
       authId: user.authId,
       email: user.email,
       name: user.name,
-      avatarUrl: user.avatarUrl,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };

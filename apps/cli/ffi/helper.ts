@@ -50,27 +50,7 @@ export async function getPlatformLibrary(): Promise<string> {
 
 export async function getLibrary() {
   const lib = dlopen(await getPlatformLibrary(), {
-    init_terminal: {
-      args: [],
-      returns: FFIType.i32,
-    },
-    run_terminal_app: {
-      args: [],
-      returns: FFIType.i32,
-    },
-    is_running: {
-      args: [],
-      returns: FFIType.i32,
-    },
-    stop_terminal_app: {
-      args: [],
-      returns: FFIType.void,
-    },
-    cleanup_terminal: {
-      args: [],
-      returns: FFIType.void,
-    },
-    run_relic: {
+    run_app: {
       args: [FFIType.cstring],
       returns: FFIType.void,
     },

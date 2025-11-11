@@ -6,7 +6,6 @@ export default defineSchema({
     authId: v.string(),
     email: v.string(),
     name: v.optional(v.string()),
-    avatarUrl: v.optional(v.string()),
     freeOrganizationUsed: v.boolean(),
     planDowngradedAt: v.optional(v.number()),
     createdAt: v.number(),
@@ -28,16 +27,19 @@ export default defineSchema({
     currentKeyVersion: v.number(),
     subscriptionStatus: v.union(
       v.literal("active"),
+      v.literal("pending"),
       v.literal("payment_lapsed"),
       v.literal("suspended"),
     ),
+    paymentExpiresAt: v.optional(v.number()),
     paymentLapsedAt: v.optional(v.number()),
     suspendedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_organization", ["organizationId"])
-    .index("by_status", ["subscriptionStatus"]),
+    .index("by_status", ["subscriptionStatus"])
+    .index("by_payment_expires", ["paymentExpiresAt"]),
   organizationMember: defineTable({
     organizationId: v.string(),
     userId: v.id("user"),
@@ -102,6 +104,36 @@ export default defineSchema({
     folderId: v.optional(v.id("folder")),
     key: v.string(),
     encryptedValue: v.string(),
+    primitiveType: v.union(
+      v.literal("string"),
+      v.literal("int64"),
+      v.literal("boolean"),
+      // NOTE: planned primitive types for the next versions
+      // v.literal("int32"),
+      // v.literal("uint32"),
+      // v.literal("uint64"),
+      // v.literal("float32"),
+      // v.literal("float64"),
+      // v.literal("json"),
+      // v.literal("array"),
+      // v.literal("bytes")
+    ),
+    // NOTE: planned semantic types for the next versions
+    // semanticType: v.union(
+    // v.literal("generic"),
+    // v.literal("api_key"),
+    // v.literal("token"),
+    // v.literal("database_url"),
+    // v.literal("url"),
+    // v.literal("email"),
+    // v.literal("password"),
+    // v.literal("secret_key"),
+    // v.literal("private_key"),
+    // v.literal("redis_url"),
+    // v.literal("phone"),
+    // v.literal("ipv4"),
+    // v.literal("ipv6"),
+    // ),
     description: v.optional(v.string()),
     encryptionKeyVersion: v.number(),
     tags: v.optional(v.array(v.string())),
@@ -123,6 +155,7 @@ export default defineSchema({
     environmentId: v.id("environment"),
     key: v.string(),
     encryptedValue: v.string(),
+    primitiveType: v.union(v.literal("string"), v.literal("int64"), v.literal("boolean")),
     description: v.optional(v.string()),
     encryptionKeyVersion: v.number(),
     action: v.union(

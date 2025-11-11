@@ -15,6 +15,16 @@ export async function checkOrganizationSuspended(
     throw new Error("Organization settings not found");
   }
 
+  if (settings.subscriptionStatus === "pending") {
+    const now = Date.now();
+    const timeRemaining = settings.paymentExpiresAt ? settings.paymentExpiresAt - now : 0;
+    const minutesRemaining = Math.max(0, Math.floor(timeRemaining / (1000 * 60)));
+
+    throw new Error(
+      `Organization payment is pending. Complete payment within ${minutesRemaining} minutes or the organization will be deleted.`,
+    );
+  }
+
   if (settings.subscriptionStatus === "suspended") {
     // NOTE: free orgs should never be suspended - they remain active indefinitely
     // NOTE: if we encounter this, it's likely a data inconsistency, but allow access
@@ -52,8 +62,9 @@ export async function getOrganizationPaymentStatus(
   ctx: QueryCtx,
   organizationId: string,
 ): Promise<{
-  status: "active" | "payment_lapsed" | "suspended";
+  status: "active" | "pending" | "payment_lapsed" | "suspended";
   daysRemaining?: number;
+  minutesRemaining?: number;
   warning?: string;
 }> {
   const settings = await ctx.db
@@ -63,6 +74,17 @@ export async function getOrganizationPaymentStatus(
 
   if (!settings) {
     return { status: "active" };
+  }
+
+  if (settings.subscriptionStatus === "pending" && settings.paymentExpiresAt) {
+    const now = Date.now();
+    const timeRemaining = settings.paymentExpiresAt - now;
+    const minutesRemaining = Math.max(0, Math.floor(timeRemaining / (1000 * 60)));
+    return {
+      status: "pending",
+      minutesRemaining,
+      warning: `Payment pending. Complete within ${minutesRemaining} minutes or organization will be deleted.`,
+    };
   }
 
   if (settings.subscriptionStatus === "payment_lapsed" && settings.paymentLapsedAt) {

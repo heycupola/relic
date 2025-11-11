@@ -3,27 +3,55 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-const DIR_NAME: &str = "relic-tui";
+const DIR_NAME: &str = "relic";
 const FILE_NAME: &str = "session.json";
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Session {
-    access_token: String,
+    session_token: String,
     token_type: String,
     expires_at: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    jwt_token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    jwt_expires_at: Option<u64>,
 }
 
 impl Session {
-    pub fn new(access_token: String, token_type: String, expires_at: u64) -> Self {
+    pub fn new(session_token: String, token_type: String, expires_at: u64) -> Self {
         Self {
-            access_token,
+            session_token,
             token_type,
             expires_at,
+            jwt_token: None,
+            jwt_expires_at: None,
         }
     }
 
-    pub fn access_token(&self) -> &str {
-        self.access_token.as_str()
+    pub fn jwt_token(&self) -> Option<&str> {
+        self.jwt_token.as_deref()
+    }
+
+    pub fn is_jwt_expired(&self) -> bool {
+        match self.jwt_expires_at {
+            None => true,
+            Some(exp) => {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+                now >= exp
+            }
+        }
+    }
+
+    pub fn set_jwt(&mut self, jwt_token: String, jwt_expires_at: u64) {
+        self.jwt_token = Some(jwt_token);
+        self.jwt_expires_at = Some(jwt_expires_at);
+    }
+
+    pub fn session_token(&self) -> &str {
+        self.session_token.as_str()
     }
 
     pub fn token_type(&self) -> &str {
@@ -100,8 +128,8 @@ pub fn delete_session() -> Result<()> {
     Ok(())
 }
 
-pub fn get_token() -> Result<Option<String>> {
-    Ok(load_session()?.map(|s| s.access_token))
+pub fn get_session_token() -> Result<Option<String>> {
+    Ok(load_session()?.map(|s| s.session_token))
 }
 
 pub fn update_session<F>(update_fn: F) -> Result<()>

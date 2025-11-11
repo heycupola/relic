@@ -1,5 +1,6 @@
 use crate::{
     helper::{
+        device_cache,
         function::{self, FunctionArg, FunctionError, deserialize_number_from_float},
         session::{self, Session},
     },
@@ -11,7 +12,7 @@ use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DeviceAuthError {
+pub enum DeviceAuthError {
     AuthorizationPending,
     AccessDenied,
     ExpiredToken,
@@ -19,7 +20,7 @@ enum DeviceAuthError {
 }
 
 impl DeviceAuthError {
-    fn from_anyhow_error(err: &anyhow::Error) -> Option<Self> {
+    pub fn from_anyhow_error(err: &anyhow::Error) -> Option<Self> {
         if let Some(func_err) = err.downcast_ref::<FunctionError>() {
             let check_str = if func_err.code != "SERVER_ERROR" {
                 &func_err.code
@@ -61,9 +62,9 @@ impl From<DeviceCodeStatus> for String {
 #[derive(Serialize)]
 pub struct RequestDeviceCodeArg {
     #[serde(rename = "clientId")]
-    client_id: String,
+    pub client_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    scope: Option<Vec<String>>,
+    pub scope: Option<Vec<String>>,
 }
 
 impl FunctionArg for RequestDeviceCodeArg {}
@@ -89,7 +90,7 @@ impl FunctionArg for PollDeviceTokenArg {}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PollDeviceTokenResponse {
-    pub access_token: String,
+    pub session_token: String,
     pub token_type: String,
     #[serde(deserialize_with = "deserialize_number_from_float")]
     pub expires_in: u64,
@@ -114,21 +115,77 @@ pub async fn poll_device_code(
 }
 
 pub async fn login(app_config: &mut AppConfig) -> Result<Session> {
-    let device_response = request_device_code(
-        &mut app_config.convex_client,
-        RequestDeviceCodeArg {
-            client_id: app_config.client_id.clone(),
-            scope: None,
-        },
-    )
-    .await
-    .context("Failed to initiate device authentication flow")?;
+    if let Ok(Some(session)) = session::load_session() {
+        if !session.is_expired() {
+            anyhow::bail!("Already logged in. Use 'logout' first.");
+        }
 
-    println!("\n{} {}", "→".cyan(), "Please visit:".bold());
-    println!("  {}", device_response.verification_uri.bright_blue());
-    println!("\n{} {}", "→".cyan(), "Enter code:".bold());
-    println!("  {}", device_response.user_code.bright_yellow().bold());
-    println!("\n{}", "⏳ Waiting for approval...".dimmed());
+        session::delete_session()?;
+    }
+
+    let device_response = if let Ok(Some(cached)) = device_cache::load_device_code() {
+        println!("\n{} {}", "→".cyan(), "Using cached device code".dimmed());
+        println!("\n{} {}", "→".cyan(), "Please visit:".bold());
+        println!("  {}", cached.verification_uri_complete.bright_blue());
+        println!("\n{} {}", "→".cyan(), "Verify code:".bold());
+        println!("  {}", cached.user_code.bright_yellow().bold());
+        println!("\n{}", "⏳ Waiting for approval...".dimmed());
+
+        RequestDeviceCodeResponse {
+            device_code: cached.device_code,
+            user_code: cached.user_code,
+            verification_uri: cached.verification_uri,
+            verification_uri_complete: cached.verification_uri_complete,
+            expires_in: cached.expires_at.saturating_sub(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+            ),
+            interval: cached.interval,
+        }
+    } else {
+        let response = request_device_code(
+            &mut app_config.convex_client,
+            RequestDeviceCodeArg {
+                client_id: app_config.client_id.clone(),
+                scope: None,
+            },
+        )
+        .await
+        .context("Failed to initiate device authentication flow")?;
+
+        let expires_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + response.expires_in;
+
+        let cache = device_cache::DeviceCodeCache::new(
+            response.device_code.clone(),
+            response.user_code.clone(),
+            response.verification_uri.clone(),
+            response.verification_uri_complete.clone(),
+            expires_at,
+            response.interval,
+        );
+
+        if let Err(e) = device_cache::save_device_code(cache) {
+            eprintln!(
+                "{} {}",
+                "⚠".yellow(),
+                format!("Warning: Failed to cache device code: {}", e).dimmed()
+            );
+        }
+
+        println!("\n{} {}", "→".cyan(), "Please visit:".bold());
+        println!("  {}", response.verification_uri_complete.bright_blue());
+        println!("\n{} {}", "→".cyan(), "Verify code:".bold());
+        println!("  {}", response.user_code.bright_yellow().bold());
+        println!("\n{}", "⏳ Waiting for approval...".dimmed());
+
+        response
+    };
 
     let interval = std::time::Duration::from_secs(device_response.interval);
     let expires_at =
@@ -157,12 +214,15 @@ pub async fn login(app_config: &mut AppConfig) -> Result<Session> {
                     + token_response.expires_in;
 
                 let session = Session::new(
-                    token_response.access_token,
+                    token_response.session_token,
                     token_response.token_type,
                     expires_at_timestamp,
                 );
 
                 session::save_session(session).context("Failed to save session")?;
+
+                device_cache::delete_device_code().ok();
+
                 println!(
                     "{} {}",
                     "✓".green().bold(),
@@ -177,12 +237,15 @@ pub async fn login(app_config: &mut AppConfig) -> Result<Session> {
             Err(e) => match DeviceAuthError::from_anyhow_error(&e) {
                 Some(DeviceAuthError::AuthorizationPending) => continue,
                 Some(DeviceAuthError::AccessDenied) => {
+                    device_cache::delete_device_code().ok();
                     anyhow::bail!("User denied access");
                 }
                 Some(DeviceAuthError::ExpiredToken) => {
+                    device_cache::delete_device_code().ok();
                     anyhow::bail!("Device code expired");
                 }
                 Some(DeviceAuthError::InvalidGrant) => {
+                    device_cache::delete_device_code().ok();
                     anyhow::bail!("Invalid device code");
                 }
                 None => {
@@ -191,6 +254,19 @@ pub async fn login(app_config: &mut AppConfig) -> Result<Session> {
             },
         }
     }
+}
+
+pub fn logout() -> Result<()> {
+    session::delete_session()?;
+
+    println!(
+        "{} {}",
+        "✓".green().bold(),
+        "Successfully logged out".bold()
+    );
+    println!("{}", "Session cleared.".dimmed());
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -246,7 +322,7 @@ mod tests {
         mock::mock_mutation(
             "deviceAuth:pollDeviceToken",
             PollDeviceTokenResponse {
-                access_token: "test_access_token_123".to_string(),
+                session_token: "test_session_token_123".to_string(),
                 token_type: "Bearer".to_string(),
                 expires_in: 3600,
             },
@@ -261,7 +337,7 @@ mod tests {
         )
         .await?;
 
-        assert_eq!(result.access_token, "test_access_token_123");
+        assert_eq!(result.session_token, "test_session_token_123");
         assert_eq!(result.token_type, "Bearer");
         assert_eq!(result.expires_in, 3600);
 
@@ -332,7 +408,7 @@ mod tests {
         mock::mock_mutation(
             "deviceAuth:pollDeviceToken",
             PollDeviceTokenResponse {
-                access_token: "final_access_token".to_string(),
+                session_token: "final_session_token".to_string(),
                 token_type: "Bearer".to_string(),
                 expires_in: 3600,
             },
@@ -341,7 +417,7 @@ mod tests {
         let mut app_config = AppConfig::new().await?;
         let result = login(&mut app_config).await?;
 
-        assert_eq!(result.access_token(), "final_access_token");
+        assert_eq!(result.session_token(), "final_session_token");
         assert_eq!(result.token_type(), "Bearer");
         assert!(!result.is_expired());
 

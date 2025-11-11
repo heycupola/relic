@@ -1,6 +1,6 @@
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import schema from "../schema";
 import { createMockAutumn } from "./helpers/autumn.mock";
@@ -27,8 +27,21 @@ const mockAutumn = createMockAutumn(async (ctx) => {
   return { customerId: identity.subject };
 });
 
+function mockInitLocalAutumn(identity: {
+  customerId: string;
+  customerData?: {
+    name?: string | null;
+    email?: string | null;
+  };
+}) {
+  return createMockAutumn(async (_ctx) => {
+    return { customerId: identity.customerId, customerData: identity.customerData };
+  });
+}
+
 vi.mock("../autumn", () => ({
   autumn: mockAutumn,
+  initLocalAutumn: mockInitLocalAutumn,
 }));
 
 describe("project.ts", () => {
@@ -152,11 +165,12 @@ describe("project.ts", () => {
       mockAutumn.setBooleanFeature(owner.authId, "can_create_org", true);
       mockAutumn.setFeature(owner.authId, "free_org", 1);
       mockAutumn.setEntityFeature(owner.authId, organizationId, "organization_projects", 10);
-      mockAutumn.setEntityFeature(owner.authId, organizationId, "members", 10);
+      mockAutumn.setEntityFeature(owner.authId, organizationId, "members", 10, 1);
 
-      await owner.asUser.mutation(api.organization.initializeOrganization, {
+      await t.mutation(internal.organization.initializeOrganization, {
         organizationId,
         wrapperOrgKey,
+        userId: owner.userId,
       });
     });
 
@@ -178,7 +192,7 @@ describe("project.ts", () => {
     });
 
     it("should not create org project if the creator is not either owner or admin", async () => {
-      mockAutumn.setEntityFeature(owner.authId, organizationId, "organization_projects", 10);
+      mockAutumn.setEntityFeature(owner.authId, organizationId, "members", 10, 1);
 
       await owner.asUser.mutation(api.organization.addMember, {
         organizationId,
@@ -293,11 +307,12 @@ describe("project.ts", () => {
       mockAutumn.setBooleanFeature(owner.authId, "can_create_org", true);
       mockAutumn.setFeature(owner.authId, "free_org", 1);
       mockAutumn.setEntityFeature(owner.authId, organizationId, "organization_projects", 10);
-      mockAutumn.setEntityFeature(owner.authId, organizationId, "members", 10);
+      mockAutumn.setEntityFeature(owner.authId, organizationId, "members", 10, 1);
 
-      await owner.asUser.mutation(api.organization.initializeOrganization, {
+      await t.mutation(internal.organization.initializeOrganization, {
         organizationId,
         wrapperOrgKey,
+        userId: owner.userId,
       });
     });
 
@@ -364,11 +379,12 @@ describe("project.ts", () => {
       mockAutumn.setFeature(owner.authId, "personal_projects", 2);
       mockAutumn.setFeature(owner.authId, "free_org", 1);
       mockAutumn.setEntityFeature(owner.authId, organizationId, "organization_projects", 10);
-      mockAutumn.setEntityFeature(owner.authId, organizationId, "members", 10);
+      mockAutumn.setEntityFeature(owner.authId, organizationId, "members", 10, 1);
 
-      await owner.asUser.mutation(api.organization.initializeOrganization, {
+      await t.mutation(internal.organization.initializeOrganization, {
         organizationId,
         wrapperOrgKey,
+        userId: owner.userId,
       });
 
       let result = await owner.asUser.mutation(api.project.createPersonalProject, {
@@ -451,7 +467,7 @@ describe("project.ts", () => {
     });
 
     it("should return an error if the project is restricted", async () => {
-      const { projectId } = await owner.asUser.mutation(api.project.createPersonalProject, {
+      await owner.asUser.mutation(api.project.createPersonalProject, {
         name: "Personal Project 2",
         slug: "personal-project-2",
       });
@@ -464,9 +480,9 @@ describe("project.ts", () => {
         await ctx.db.patch(owner.userId, { planDowngradedAt: mockDate });
       });
 
-      await expect(owner.asUser.query(api.project.getProject, { projectId })).rejects.toThrow(
-        "This project is restricted.",
-      );
+      await expect(
+        owner.asUser.query(api.project.getProject, { projectId: personalProjectId }),
+      ).rejects.toThrow("This project is restricted.");
     });
   });
 

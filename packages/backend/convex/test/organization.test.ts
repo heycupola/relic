@@ -78,9 +78,10 @@ describe("organization.ts", () => {
       mockAutumn.setEntityBooleanFeature(owner.authId, organizationId, "can_create_org", true);
       mockAutumn.setEntityFeature(owner.authId, organizationId, "free_org", 1);
 
-      await owner.asUser.mutation(api.organization.initializeOrganization, {
+      await t.mutation(internal.organization.initializeOrganization, {
         organizationId,
         wrapperOrgKey,
+        userId: owner.userId,
       });
 
       await t.run(async (ctx) => {
@@ -111,9 +112,10 @@ describe("organization.ts", () => {
         await ctx.db.patch(owner.userId, { freeOrganizationUsed: true });
       });
 
-      await owner.asUser.mutation(api.organization.initializeOrganization, {
+      await t.mutation(internal.organization.initializeOrganization, {
         organizationId,
         wrapperOrgKey,
+        userId: owner.userId,
       });
 
       await t.run(async (ctx) => {
@@ -135,12 +137,13 @@ describe("organization.ts", () => {
     beforeEach(async () => {
       mockAutumn.setEntityFeature(owner.authId, organizationId, "free_org", 0);
       mockAutumn.setEntityBooleanFeature(owner.authId, organizationId, "can_create_org", true);
-      mockAutumn.setEntityFeature(owner.authId, organizationId, "members", 10);
+      mockAutumn.setEntityFeature(owner.authId, organizationId, "members", 10, 1);
       mockAutumn.setEntityFeature(owner.authId, organizationId, "organization_projects", 10);
 
-      await owner.asUser.mutation(api.organization.initializeOrganization, {
+      await t.mutation(internal.organization.initializeOrganization, {
         organizationId,
         wrapperOrgKey,
+        userId: owner.userId,
       });
     });
 
@@ -192,14 +195,15 @@ describe("organization.ts", () => {
     beforeEach(async () => {
       mockAutumn.setEntityFeature(owner.authId, organizationId, "free_org", 0);
       mockAutumn.setEntityBooleanFeature(owner.authId, organizationId, "can_create_org", true);
-      mockAutumn.setEntityFeature(owner.authId, organizationId, "members", 10);
+      mockAutumn.setEntityFeature(owner.authId, organizationId, "members", 10, 1);
       mockAutumn.setEntityFeature(owner.authId, organizationId, "organization_projects", 10);
 
       admin = testUsers.get("user4")!;
 
-      await owner.asUser.mutation(api.organization.initializeOrganization, {
+      await t.mutation(internal.organization.initializeOrganization, {
         organizationId,
         wrapperOrgKey,
+        userId: owner.userId,
       });
     });
 
@@ -301,14 +305,19 @@ describe("organization.ts", () => {
     beforeEach(async () => {
       mockAutumn.setEntityFeature(owner.authId, organizationId, "free_org", 0);
       mockAutumn.setEntityBooleanFeature(owner.authId, organizationId, "can_create_org", true);
-      mockAutumn.setEntityFeature(owner.authId, organizationId, "members", 10);
-      mockAutumn.setEntityFeature(owner.authId, organizationId, "organization_projects", 10);
+      mockAutumn.setEntityFeature(owner.authId, organizationId, "members", 10, 1);
+      mockAutumn.setEntityFeature(owner.authId, organizationId, "organization_projects", 10, 0);
 
       admin = testUsers.get("user4")!;
 
-      await owner.asUser.mutation(api.organization.initializeOrganization, {
+      await t.run(async (ctx) => {
+        await ctx.db.patch(owner.userId, { freeOrganizationUsed: true });
+      });
+
+      await t.mutation(internal.organization.initializeOrganization, {
         organizationId,
         wrapperOrgKey,
+        userId: owner.userId,
       });
     });
 

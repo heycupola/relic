@@ -79,7 +79,7 @@ export const requestDeviceCode = mutation({
       updatedAt: now,
     });
 
-    const verificationUri = `${process.env.SITE_URL}/auth/device`;
+    const verificationUri = `${process.env.SITE_URL}/oauth/authorize`;
 
     return {
       device_code: deviceCode,
@@ -145,7 +145,7 @@ export const pollDeviceToken = mutation({
     });
 
     return {
-      access_token: sessionToken,
+      session_token: sessionToken,
       token_type: "Bearer",
       expires_in: 30 * 24 * 60 * 60,
     };
@@ -157,8 +157,6 @@ export const getDeviceCodeInfo = query({
     user_code: v.string(),
   },
   handler: async (ctx, args) => {
-    await checkRateLimit(ctx, "read", args.user_code);
-
     const deviceCodeEntry = await ctx.db
       .query("deviceCode")
       .withIndex("by_user_code", (q) => q.eq("userCode", args.user_code))

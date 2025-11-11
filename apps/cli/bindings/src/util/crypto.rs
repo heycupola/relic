@@ -256,6 +256,16 @@ pub fn decrypt_private_key(
     RsaPrivateKey::from_pkcs8_pem(&private_key_pem).context("Failed to parse private key")
 }
 
+pub fn extract_public_key_from_rsa_private_key(private_key: &RsaPrivateKey) -> Result<String> {
+    let public_key = RsaPublicKey::from(private_key);
+
+    let public_key_pem = public_key
+        .to_public_key_pem(LineEnding::LF)
+        .context("Failed to encode public key")?;
+
+    Ok(BASE64.encode(public_key_pem.as_bytes()))
+}
+
 pub fn generate_org_key() -> Vec<u8> {
     let mut key = vec![0u8; KEY_LENGTH];
     ChaChaRng.fill_bytes(&mut key);

@@ -3,6 +3,8 @@ use std::process::Command;
 
 use convex::ConvexClient;
 
+use crate::telemetry::core::SentryReporter;
+
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const NAME: &str = env!("CARGO_PKG_NAME");
 pub const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
@@ -17,6 +19,11 @@ pub struct AppConfig {
     pub authors: String,
     pub description: String,
     pub git_hash: String,
+    pub sentry_proxy_url: String,
+    pub sentry_reporter: SentryReporter,
+    pub relic_web_url: String,
+    pub better_auth_url: String,
+    pub runtime_handle: tokio::runtime::Handle,
 }
 
 impl std::fmt::Debug for AppConfig {
@@ -30,6 +37,11 @@ impl std::fmt::Debug for AppConfig {
             .field("authors", &self.authors)
             .field("description", &self.description)
             .field("git_hash", &self.git_hash)
+            .field("sentry_proxy_url", &self.sentry_proxy_url)
+            .field("sentry_reporter", &"<SentryReporter>")
+            .field("relic_web_url", &self.relic_web_url)
+            .field("better_auth_url", &self.better_auth_url)
+            .field("runtime_handle", &"RuntimeHandle")
             .finish()
     }
 }
@@ -38,12 +50,14 @@ impl AppConfig {
     pub async fn new() -> Result<Self> {
         #[cfg(debug_assertions)]
         {
-            dotenvy::dotenv().ok();
+            let env_path = format!("{}/.env", env!("CARGO_MANIFEST_DIR"));
+            dotenvy::from_filename(&env_path).ok();
         }
 
         #[cfg(test)]
         {
-            dotenvy::from_filename(".env.test").ok();
+            let env_path = format!("{}/.env.test", env!("CARGO_MANIFEST_DIR"));
+            dotenvy::from_filename(env_path).ok();
         }
 
         let convex_deployment_url =
@@ -55,6 +69,17 @@ impl AppConfig {
 
         let git_hash = Self::retrieve_git_hash();
 
+        let sentry_proxy_url = std::env::var("SENTRY_PROXY_URL")
+            .unwrap_or_else(|_| "https://telemetry.relic.so".to_string());
+
+        let sentry_reporter = SentryReporter::new(sentry_proxy_url.clone());
+
+        let relic_web_url =
+            std::env::var("RELIC_WEB_URL").unwrap_or_else(|_| "https://relic.so".to_string());
+
+        let better_auth_url =
+            std::env::var("BETTER_AUTH_URL").unwrap_or_else(|_| relic_web_url.clone());
+
         Ok(Self {
             client_id: std::env::var("CLIENT_ID").unwrap_or_else(|_| "relic-tui".to_string()),
             convex_client,
@@ -64,6 +89,11 @@ impl AppConfig {
             authors: AUTHORS.to_string(),
             description: DESCRIPTION.to_string(),
             git_hash,
+            sentry_proxy_url,
+            sentry_reporter,
+            relic_web_url,
+            better_auth_url,
+            runtime_handle: tokio::runtime::Handle::current(),
         })
     }
 

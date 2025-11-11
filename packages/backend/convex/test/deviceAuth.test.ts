@@ -150,10 +150,9 @@ describe("deviceAuth.ts", () => {
         device_code: result.device_code,
       });
 
-      expect(token.access_token).toBeDefined();
+      expect(token.session_token).toBeDefined();
       expect(token.token_type).toBe("Bearer");
       expect(token.expires_in).toBe(30 * 24 * 60 * 60);
-      expect(token.user).toBeDefined();
     });
   });
 
