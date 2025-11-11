@@ -68,6 +68,54 @@ pub enum Modal {
         focused_field: usize,
         show_password: bool,
     },
+    ProPlanUpgrade,
+}
+
+pub enum BackgroundTaskStatus {
+    Running,
+    Failed,
+    Success,
+}
+
+pub struct BackgroundTask {
+    pub operation: String,
+    pub message: String,
+    pub status: BackgroundTaskStatus,
+    pub created_at: SystemTime,
+}
+
+impl BackgroundTask {
+    pub fn run(operation: String, message: String) -> Self {
+        Self {
+            operation,
+            message,
+            status: BackgroundTaskStatus::Running,
+            created_at: SystemTime::now(),
+        }
+    }
+
+    pub fn success(mut self) -> Self {
+        self.status = BackgroundTaskStatus::Success;
+        self.created_at = SystemTime::now();
+        self
+    }
+
+    pub fn failed(mut self) -> Self {
+        self.status = BackgroundTaskStatus::Failed;
+        self.created_at = SystemTime::now();
+        self
+    }
+
+    pub fn should_dismiss(&self, timeout_secs: u64) -> bool {
+        matches!(
+            self.status,
+            BackgroundTaskStatus::Success | BackgroundTaskStatus::Failed
+        ) && self
+            .created_at
+            .elapsed()
+            .map(|d| d.as_secs() >= timeout_secs)
+            .unwrap_or(false)
+    }
 }
 
 pub struct AppState {
@@ -84,7 +132,8 @@ pub struct AppState {
     pub last_device_poll: Option<SystemTime>,
     pub mp_guard: MPGuard,
     pub background_messages: Arc<Mutex<VecDeque<(String, MessageType)>>>,
-    pub background_task_running: Arc<Mutex<bool>>,
+    pub background_task: Arc<Mutex<Option<BackgroundTask>>>,
+    pub modal_requests: Arc<Mutex<VecDeque<Modal>>>,
 }
 
 impl AppState {
@@ -119,7 +168,8 @@ impl AppState {
             last_device_poll: None,
             mp_guard: MPGuard::new().expect("Unable to instantiate MPGuard"),
             background_messages: Arc::new(Mutex::new(VecDeque::new())),
-            background_task_running: Arc::new(Mutex::new(false)),
+            background_task: Arc::new(Mutex::new(None)),
+            modal_requests: Arc::new(Mutex::new(VecDeque::new())),
         }
     }
 
