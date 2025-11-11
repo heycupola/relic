@@ -1,4 +1,4 @@
-import { createClient, type GenericCtx } from "@convex-dev/better-auth";
+import { type AuthFunctions, createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
 import { betterAuth } from "better-auth";
 import { components, internal } from "./_generated/api";
@@ -6,19 +6,38 @@ import type { DataModel } from "./_generated/dataModel";
 
 const siteUrl = process.env.SITE_URL || "";
 
+const authFunctions: AuthFunctions = internal.auth;
+
 export const authComponent = createClient<DataModel>(components.betterAuth, {
+  authFunctions,
   triggers: {
     user: {
-      onCreate: async (ctx, user) => {
-        await ctx.runMutation(internal.user.syncUserFromAuth, {
-          authId: user._id,
-          email: user.email,
-          name: user.name ?? undefined,
-        });
+      onCreate: async (ctx, authUser) => {
+        const existingUser = await ctx.db
+          .query("user")
+          .withIndex("by_auth_id", (q) => q.eq("authId", authUser._id))
+          .first();
+
+        if (!existingUser) {
+          console.log("✨ Creating new user in app database:", authUser.email);
+          const now = Date.now();
+          await ctx.db.insert("user", {
+            authId: authUser._id,
+            email: authUser.email,
+            name: authUser.name ?? undefined,
+            freeOrganizationUsed: false,
+            createdAt: now,
+            updatedAt: now,
+          });
+        } else {
+          console.log("⚠️ User already exists in app database:", authUser.email);
+        }
       },
     },
   },
 }) as ReturnType<typeof createClient<DataModel>>;
+
+export const { onCreate, onUpdate, onDelete } = authComponent.triggersApi();
 
 export const createAuth = (
   ctx: GenericCtx<DataModel>,
