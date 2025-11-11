@@ -341,6 +341,57 @@ where
     Ok(result)
 }
 
+pub async fn action<T, K>(client: &mut ConvexClient, action_name: &str, arg: T) -> Result<K>
+where
+    T: FunctionArg,
+    K: DeserializeOwned,
+{
+    let args = arg.to_args()?;
+    let result = client
+        .action(action_name, args)
+        .await
+        .context("Failed to execute Convex action")?;
+
+    let value = match result {
+        FunctionResult::Value(v) => v,
+        FunctionResult::ErrorMessage(msg) => {
+            return Err(FunctionError {
+                code: "SERVER_ERROR".to_string(),
+                message: msg,
+                severity: ErrorSeverity::High,
+            }
+            .into());
+        }
+        FunctionResult::ConvexError(err) => {
+            let structured_err = parse_function_error(&err);
+            return Err(structured_err.into());
+        }
+    };
+
+    let response: K = from_convex_value(value)?;
+
+    Ok(response)
+}
+
+pub async fn protected_action<T, K>(
+    client: &mut ConvexClient,
+    action_name: &str,
+    arg: T,
+    better_auth_url: &str,
+) -> Result<K>
+where
+    T: FunctionArg,
+    K: DeserializeOwned,
+{
+    let jwt = get_valid_jwt(better_auth_url).await?;
+    client.set_auth(Some(jwt)).await;
+    let result = action(client, action_name, arg)
+        .await
+        .context("Failed to execute protected action")?;
+    client.set_auth(None).await;
+    Ok(result)
+}
+
 #[cfg(test)]
 pub mod mock {
     use super::*;
