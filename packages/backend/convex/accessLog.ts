@@ -8,7 +8,6 @@ import {
   checkOrganizationSuspended,
   checkProjectOrganizationSuspended,
 } from "./lib/organizationAccess";
-import { checkRateLimit } from "./lib/rateLimit";
 import type { ProtectedQueryCtx } from "./lib/types";
 
 async function checkResourceAccess(
