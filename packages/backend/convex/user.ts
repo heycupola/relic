@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { autumn, initLocalAutumn } from "./autumn";
+import { initLocalAutumn } from "./autumn";
 import { protectedAction, protectedQuery } from "./lib/middleware";
 import type { ProtectedQueryCtx } from "./lib/types";
 
@@ -39,10 +39,20 @@ export const getProPlan = protectedAction({
         },
       });
 
+      const checkoutUrl = checkoutResult.data?.url || null;
+      let sessionId: string | null = null;
+
+      if (checkoutUrl) {
+        const urlParts = checkoutUrl.split("/");
+        const lastPart = urlParts[urlParts.length - 1];
+        sessionId = lastPart?.split("?")[0] || null;
+      }
+
       return {
         success: true,
         hasPro: false,
-        checkoutLink: checkoutResult.data?.url || null,
+        checkoutLink: checkoutUrl,
+        sessionId,
       };
     }
 
@@ -50,18 +60,108 @@ export const getProPlan = protectedAction({
       success: true,
       hasPro: true,
       checkoutLink: null,
+      sessionId: null,
     };
   },
 });
 
-export const checkProPlan = protectedQuery({
+export const checkProPlan = protectedAction({
   args: {},
-  handler: async (ctx: ProtectedQueryCtx) => {
-    const hasPro = await autumn.check(ctx, {
+  handler: async (ctx) => {
+    const user = await ctx.runQuery(internal.user.getUserById, { userId: ctx.userId });
+
+    const localAutumnInstance = initLocalAutumn({
+      customerId: user.authId,
+      customerData: {
+        name: user.name,
+        email: user.email,
+      },
+    });
+
+    const hasPro = await localAutumnInstance.check(ctx, {
       featureId: "can_create_org",
     });
 
     return { success: true, hasProPlan: hasPro.data?.allowed ?? false };
+  },
+});
+
+export const checkProPlanPayment = protectedAction({
+  args: {
+    sessionId: v.string(),
+  },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{
+    success: boolean;
+    hasProPlan: boolean;
+    paymentStatus: "none" | "open" | "complete" | "expired";
+  }> => {
+    const user = await ctx.runQuery(internal.user.getUserById, { userId: ctx.userId });
+
+    const localAutumnInstance = initLocalAutumn({
+      customerId: user.authId,
+      customerData: {
+        name: user.name || undefined,
+        email: user.email,
+      },
+    });
+
+    const hasPro = await localAutumnInstance.check(ctx, {
+      featureId: "can_create_org",
+    });
+
+    if (hasPro.data?.allowed) {
+      return {
+        success: true,
+        hasProPlan: true,
+        paymentStatus: "complete" as const,
+      };
+    }
+
+    try {
+      const response = await fetch(
+        `https://api.stripe.com/v1/checkout/sessions/${args.sessionId}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        return {
+          success: true,
+          hasProPlan: false,
+          paymentStatus: "none" as const,
+        };
+      }
+
+      const stripeSession = (await response.json()) as {
+        status: "open" | "complete" | "expired";
+      };
+
+      const status =
+        stripeSession.status === "open"
+          ? "open"
+          : stripeSession.status === "complete"
+            ? "complete"
+            : "expired";
+
+      return {
+        success: true,
+        hasProPlan: false,
+        paymentStatus: status,
+      };
+    } catch (_e) {
+      return {
+        success: true,
+        hasProPlan: false,
+        paymentStatus: "none" as const,
+      };
+    }
   },
 });
 

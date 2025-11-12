@@ -9,7 +9,15 @@ export const protectedQuery = customQuery(query, {
   input: async (
     ctx: QueryCtx,
     _args: Record<string, never>,
-  ): Promise<{ ctx: { userId: Id<"user"> }; args: Record<string, never> }> => {
+  ): Promise<{
+    ctx: {
+      userId: Id<"user">;
+      authId: string;
+      name: string | undefined;
+      email: string | undefined;
+    };
+    args: Record<string, never>;
+  }> => {
     const identity = await ctx.auth.getUserIdentity();
 
     if (!identity) {
@@ -17,6 +25,8 @@ export const protectedQuery = customQuery(query, {
     }
 
     const authId = identity.subject;
+    const name = identity.name;
+    const email = identity.email;
 
     const existingUser = await ctx.db
       .query("user")
@@ -28,7 +38,7 @@ export const protectedQuery = customQuery(query, {
     }
 
     return {
-      ctx: { userId: existingUser._id },
+      ctx: { userId: existingUser._id, authId, name, email },
       args: {},
     };
   },
@@ -39,7 +49,15 @@ export const protectedMutation = customMutation(mutation, {
   input: async (
     ctx: MutationCtx,
     _args: Record<string, never>,
-  ): Promise<{ ctx: { userId: Id<"user"> }; args: Record<string, never> }> => {
+  ): Promise<{
+    ctx: {
+      userId: Id<"user">;
+      authId: string;
+      name: string | undefined;
+      email: string | undefined;
+    };
+    args: Record<string, never>;
+  }> => {
     const identity = await ctx.auth.getUserIdentity();
 
     if (!identity) {
@@ -75,7 +93,7 @@ export const protectedMutation = customMutation(mutation, {
     }
 
     return {
-      ctx: { userId: existingUser._id },
+      ctx: { userId: existingUser._id, authId, name, email },
       args: {},
     };
   },
@@ -86,7 +104,15 @@ export const protectedAction = customAction(action, {
   input: async (
     ctx: ActionCtx,
     _args: Record<string, never>,
-  ): Promise<{ ctx: { userId: Id<"user"> }; args: Record<string, never> }> => {
+  ): Promise<{
+    ctx: {
+      userId: Id<"user">;
+      authId: string;
+      name: string | undefined;
+      email: string | undefined;
+    };
+    args: Record<string, never>;
+  }> => {
     type InternalUser = {
       _id: Id<"user">;
       _creationTime: number;
@@ -136,7 +162,7 @@ export const protectedAction = customAction(action, {
     }
 
     return {
-      ctx: { userId: existingUser._id },
+      ctx: { userId: existingUser._id, authId, name, email },
       args: {},
     };
   },
