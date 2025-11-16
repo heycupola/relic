@@ -1,10 +1,23 @@
 import { ConvexError, v } from "convex/values";
 import { doc } from "convex-helpers/validators";
+import { ErrorSeverity } from "../lib/types";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { generateSlug } from "./lib/helpers";
-import { ErrorSeverity, OrgRole, OrgSubscriptionStatus } from "./lib/types";
+import { OrgRole, OrgSubscriptionStatus } from "./lib/types";
 import schema from "./schema";
+
+export const loadOrganizationById = query({
+  args: {
+    organizationId: v.id("organization"),
+  },
+  returns: v.union(v.null(), doc(schema, "organization")),
+  handler: async (ctx, args) => {
+    const organization = await ctx.db.get(args.organizationId);
+
+    return organization;
+  },
+});
 
 export const getOrganizations = query({
   args: {
@@ -41,6 +54,99 @@ export const getOrganizations = query({
       totalOrganizations: validOrgs.length,
       organizations: validOrgs,
     };
+  },
+});
+
+export const activateOrganization = mutation({
+  args: {
+    organizationId: v.id("organization"),
+  },
+  returns: v.object({
+    success: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const org = await ctx.db.get(args.organizationId);
+
+    if (!org) {
+      throw new ConvexError({
+        code: "ORGANIZATION_NOT_FOUND",
+        message: "Organization not found",
+        severity: ErrorSeverity.High,
+      });
+    }
+
+    if (org.subscriptionStatus === OrgSubscriptionStatus.Active) {
+      return { success: true };
+    }
+
+    await ctx.db.patch(args.organizationId, {
+      subscriptionStatus: OrgSubscriptionStatus.Active,
+      paymentExpiresAt: null,
+      suspendedAt: null,
+    });
+
+    return { success: true };
+  },
+});
+
+export const wipeOrganization = mutation({
+  args: {
+    organizationId: v.id("organization"),
+  },
+  returns: v.object({
+    success: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const members = await ctx.db
+      .query("member")
+      .withIndex("by_organizationId", (q) => q.eq("organizationId", args.organizationId))
+      .filter((q) => q.and(q.eq(q.field("isPending"), false), q.eq(q.field("revokedAt"), null)))
+      .collect();
+
+    await ctx.db.delete(args.organizationId);
+
+    if (members.length > 0) {
+      for (const member of members) {
+        await ctx.db.delete(member._id);
+      }
+    }
+
+    return { success: true };
+  },
+});
+
+export const suspendOrganization = mutation({
+  args: {
+    organizationId: v.id("organization"),
+  },
+  returns: v.object({
+    success: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.organizationId, {
+      paymentLapsedAt: undefined,
+      subscriptionStatus: OrgSubscriptionStatus.Suspended,
+      suspendedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+export const markOrganizationPaymentLapsed = mutation({
+  args: {
+    organizationId: v.id("organization"),
+  },
+  returns: v.object({
+    success: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.organizationId, {
+      paymentLapsedAt: Date.now(),
+      subscriptionStatus: OrgSubscriptionStatus.PaymentLapsed,
+    });
+
+    return { success: true };
   },
 });
 
@@ -112,6 +218,7 @@ export const createOrganization = mutation({
   handler: async (ctx, args) => {
     const slug = generateSlug(args.name);
     const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1_000;
 
     const organizationId = await ctx.db.insert("organization", {
       name: args.name,
@@ -122,6 +229,7 @@ export const createOrganization = mutation({
       subscriptionStatus: args.isFreeWithProPlan
         ? OrgSubscriptionStatus.Active
         : OrgSubscriptionStatus.Pending,
+      paymentExpiresAt: args.isFreeWithProPlan ? null : now + oneDay,
     });
 
     await ctx.db.insert("member", {

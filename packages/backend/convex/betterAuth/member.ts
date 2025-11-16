@@ -1,7 +1,8 @@
 import { ConvexError, v } from "convex/values";
 import { doc } from "convex-helpers/validators";
+import { ErrorSeverity } from "../lib/types";
 import { mutation, query } from "./_generated/server";
-import { ErrorSeverity, MembershipRevocationReason, OrgRole } from "./lib/types";
+import { MembershipRevocationReason, OrgRole } from "./lib/types";
 import schema from "./schema";
 
 export const getOrganizationMembers = query({
@@ -229,5 +230,37 @@ export const updateMemberKey = mutation({
     });
 
     return { success: true };
+  },
+});
+
+export const getMemberRole = query({
+  args: {
+    userId: v.id("user"),
+    organizationId: v.id("organization"),
+  },
+  returns: v.object({
+    success: v.boolean(),
+    role: v.union(
+      v.null(),
+      v.literal(OrgRole.Owner),
+      v.literal(OrgRole.Admin),
+      v.literal(OrgRole.Member),
+      v.literal(OrgRole.Viewer),
+    ),
+  }),
+  handler: async (ctx, args) => {
+    const membership = await ctx.db
+      .query("member")
+      .withIndex("organizationId_userId", (q) =>
+        q.eq("organizationId", args.organizationId).eq("userId", args.userId),
+      )
+      .filter((q) => q.and(q.eq(q.field("revokedAt"), null), q.eq(q.field("isPending"), false)))
+      .first();
+
+    if (!membership) {
+      return { success: false, role: null };
+    }
+
+    return { success: true, role: membership.role as OrgRole };
   },
 });

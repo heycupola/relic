@@ -1760,6 +1760,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     member: {
+      getMemberRole: FunctionReference<
+        "query",
+        "internal",
+        { organizationId: string; userId: string },
+        { role: null | string; success: boolean },
+        Name
+      >;
       getOrganizationMembers: FunctionReference<
         "query",
         "internal",
@@ -1816,6 +1823,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     organization: {
+      activateOrganization: FunctionReference<
+        "mutation",
+        "internal",
+        { organizationId: string },
+        { success: boolean },
+        Name
+      >;
       createOrganization: FunctionReference<
         "mutation",
         "internal",
@@ -1860,6 +1874,34 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         },
         Name
       >;
+      loadOrganizationById: FunctionReference<
+        "query",
+        "internal",
+        { organizationId: string },
+        null | {
+          _creationTime: number;
+          _id: string;
+          createdAt: number;
+          currentKeyVersion: number;
+          isFreeWithProPlan: boolean;
+          logo?: null | string;
+          metadata?: null | string;
+          name: string;
+          paymentExpiresAt?: null | number;
+          paymentLapsedAt?: null | number;
+          slug?: null | string;
+          subscriptionStatus: string;
+          suspendedAt?: null | number;
+        },
+        Name
+      >;
+      markOrganizationPaymentLapsed: FunctionReference<
+        "mutation",
+        "internal",
+        { organizationId: string },
+        { success: boolean },
+        Name
+      >;
       rotateKeys: FunctionReference<
         "mutation",
         "internal",
@@ -1869,6 +1911,20 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           skippedKeysLength: number;
           success: boolean;
         },
+        Name
+      >;
+      suspendOrganization: FunctionReference<
+        "mutation",
+        "internal",
+        { organizationId: string },
+        { success: boolean },
+        Name
+      >;
+      wipeOrganization: FunctionReference<
+        "mutation",
+        "internal",
+        { organizationId: string },
+        { success: boolean },
         Name
       >;
     };

@@ -1,8 +1,9 @@
 import { ConvexError, v } from "convex/values";
+import { ErrorSeverity } from "../lib/types.ts";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { mutation } from "./_generated/server";
-import { ErrorSeverity, InvitationStatus, OrgRole } from "./lib/types.ts";
+import { InvitationStatus, OrgRole } from "./lib/types.ts";
 
 export const inviteMember = mutation({
   args: {
@@ -115,7 +116,7 @@ export const inviteMember = mutation({
       expiresAt: now + sevenDays,
     });
 
-    if (member && !!member.revokedAt) {
+    if (member && member.revokedAt !== null && member.revokedAt !== undefined) {
       await ctx.db.patch(member._id, {
         wrappedOrgKey: args.wrappedOrgKey,
         keyVersion: organization.currentKeyVersion,

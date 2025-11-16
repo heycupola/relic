@@ -1,8 +1,8 @@
 import { ConvexError, v } from "convex/values";
 import { doc } from "convex-helpers/validators";
+import { ErrorSeverity } from "../lib/types";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
-import { ErrorSeverity } from "./lib/types";
 import schema from "./schema";
 
 export const loadUserById = query({
