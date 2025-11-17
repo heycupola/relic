@@ -1791,6 +1791,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         }>,
         Name
       >;
+      isOrganizationMember: FunctionReference<
+        "query",
+        "internal",
+        { organizationId: string; userId: string },
+        { isMember: boolean; success: boolean },
+        Name
+      >;
       leaveOrganization: FunctionReference<
         "mutation",
         "internal",

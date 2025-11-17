@@ -5,6 +5,34 @@ import { mutation, query } from "./_generated/server";
 import { MembershipRevocationReason, OrgRole } from "./lib/types";
 import schema from "./schema";
 
+export const isOrganizationMember = query({
+  args: {
+    organizationId: v.id("organization"),
+    userId: v.id("user"),
+  },
+  returns: v.object({ success: v.boolean(), isMember: v.boolean() }),
+  handler: async (ctx, args) => {
+    const membership = await ctx.db
+      .query("member")
+      .withIndex("organizationId_userId", (q) =>
+        q.eq("organizationId", args.organizationId).eq("userId", args.userId),
+      )
+      .first();
+
+    if (!membership) {
+      return {
+        success: true,
+        isMember: false,
+      };
+    }
+
+    return {
+      success: true,
+      isMember: true,
+    };
+  },
+});
+
 export const getOrganizationMembers = query({
   args: {
     orgId: v.id("organization"),
