@@ -294,7 +294,7 @@ export const rotateKeys = mutation({
   },
 });
 
-export const sweepPendingOrganizations = internalMutation({
+export const _sweepPendingOrganizations = internalMutation({
   returns: v.object({
     success: v.boolean(),
     totalSwept: v.number(),
