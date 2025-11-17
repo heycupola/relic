@@ -1764,7 +1764,10 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "query",
         "internal",
         { organizationId: string; userId: string },
-        { role: null | string; success: boolean },
+        {
+          role: null | "owner" | "admin" | "member" | "viewer";
+          success: boolean;
+        },
         Name
       >;
       getOrganizationMembers: FunctionReference<
@@ -1898,7 +1901,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       markOrganizationPaymentLapsed: FunctionReference<
         "mutation",
         "internal",
-        { organizationId: string },
+        { organizationId: string; paymentLapsedAt: number },
         { success: boolean },
         Name
       >;
@@ -1933,7 +1936,26 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "mutation",
         "internal",
         { userId: string },
-        { success: boolean },
+        {
+          success: boolean;
+          user: {
+            _creationTime: number;
+            _id: string;
+            createdAt: number;
+            email: string;
+            emailVerified: boolean;
+            encryptedPrivateKey?: null | string;
+            freeOrganizationUsed: boolean;
+            hasPro: boolean;
+            image?: null | string;
+            name: string;
+            planDowngradedAt?: null | number;
+            publicKey?: null | string;
+            salt?: null | string;
+            updatedAt: number;
+            userId?: null | string;
+          };
+        },
         Name
       >;
       loadUserById: FunctionReference<
@@ -1975,7 +1997,26 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "mutation",
         "internal",
         { userId: string },
-        { success: boolean },
+        {
+          success: boolean;
+          user: {
+            _creationTime: number;
+            _id: string;
+            createdAt: number;
+            email: string;
+            emailVerified: boolean;
+            encryptedPrivateKey?: null | string;
+            freeOrganizationUsed: boolean;
+            hasPro: boolean;
+            image?: null | string;
+            name: string;
+            planDowngradedAt?: null | number;
+            publicKey?: null | string;
+            salt?: null | string;
+            updatedAt: number;
+            userId?: null | string;
+          };
+        },
         Name
       >;
       useFreeOrg: FunctionReference<

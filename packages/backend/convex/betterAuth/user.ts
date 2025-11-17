@@ -53,6 +53,7 @@ export const upgradeToPro = mutation({
   },
   returns: v.object({
     success: v.boolean(),
+    user: doc(schema, "user"),
   }),
   handler: async (ctx: MutationCtx, args) => {
     const user = await ctx.db.get(args.userId);
@@ -65,9 +66,15 @@ export const upgradeToPro = mutation({
       });
     }
 
-    await ctx.db.patch(args.userId, { hasPro: true, planDowngradedAt: null });
+    await ctx.db.patch(args.userId, {
+      hasPro: true,
+      planDowngradedAt: undefined,
+    });
 
-    return { success: true };
+    user.hasPro = true;
+    user.planDowngradedAt = undefined;
+
+    return { success: true, user };
   },
 });
 
@@ -77,6 +84,7 @@ export const downgradeToFree = mutation({
   },
   returns: v.object({
     success: v.boolean(),
+    user: doc(schema, "user"),
   }),
   handler: async (ctx: MutationCtx, args) => {
     const user = await ctx.db.get(args.userId);
@@ -90,10 +98,12 @@ export const downgradeToFree = mutation({
     }
 
     const now = Date.now();
-
     await ctx.db.patch(args.userId, { hasPro: false, planDowngradedAt: now });
 
-    return { success: true };
+    user.hasPro = false;
+    user.planDowngradedAt = now;
+
+    return { success: true, user };
   },
 });
 

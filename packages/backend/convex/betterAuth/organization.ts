@@ -136,13 +136,14 @@ export const suspendOrganization = mutation({
 export const markOrganizationPaymentLapsed = mutation({
   args: {
     organizationId: v.id("organization"),
+    paymentLapsedAt: v.number(),
   },
   returns: v.object({
     success: v.boolean(),
   }),
   handler: async (ctx, args) => {
     await ctx.db.patch(args.organizationId, {
-      paymentLapsedAt: Date.now(),
+      paymentLapsedAt: args.paymentLapsedAt,
       subscriptionStatus: OrgSubscriptionStatus.PaymentLapsed,
     });
 
