@@ -1,8 +1,11 @@
+import type { Autumn } from "@useautumn/convex";
+import { ConvexError } from "convex/values";
 import { customAction, customMutation, customQuery } from "convex-helpers/server/customFunctions";
-import { internal } from "../_generated/api";
-import type { Id } from "../_generated/dataModel";
-import type { ActionCtx, MutationCtx, QueryCtx } from "../_generated/server";
+import type { ActionCtx, QueryCtx } from "../_generated/server";
 import { action, mutation, query } from "../_generated/server";
+import { initAutumn } from "../autumn";
+import type { Id as BetterAuthId } from "../betterAuth/_generated/dataModel";
+import { ErrorSeverity } from "./types";
 
 export const protectedQuery = customQuery(query, {
   args: {},
@@ -11,9 +14,7 @@ export const protectedQuery = customQuery(query, {
     _args: Record<string, never>,
   ): Promise<{
     ctx: {
-      userId: Id<"user">;
-      authId: string;
-      name: string | undefined;
+      userId: BetterAuthId<"user">;
       email: string | undefined;
     };
     args: Record<string, never>;
@@ -24,21 +25,11 @@ export const protectedQuery = customQuery(query, {
       throw new Error("Unauthorized - Please sign in");
     }
 
-    const authId = identity.subject;
-    const name = identity.name;
-    const email = identity.email;
-
-    const existingUser = await ctx.db
-      .query("user")
-      .withIndex("by_auth_id", (q) => q.eq("authId", authId))
-      .first();
-
-    if (!existingUser) {
-      throw new Error("User not found. Please complete registration.");
-    }
-
     return {
-      ctx: { userId: existingUser._id, authId, name, email },
+      ctx: {
+        userId: identity.subject as BetterAuthId<"user">,
+        email: identity.email,
+      },
       args: {},
     };
   },
@@ -47,13 +38,11 @@ export const protectedQuery = customQuery(query, {
 export const protectedMutation = customMutation(mutation, {
   args: {},
   input: async (
-    ctx: MutationCtx,
+    ctx: QueryCtx,
     _args: Record<string, never>,
   ): Promise<{
     ctx: {
-      userId: Id<"user">;
-      authId: string;
-      name: string | undefined;
+      userId: BetterAuthId<"user">;
       email: string | undefined;
     };
     args: Record<string, never>;
@@ -61,39 +50,18 @@ export const protectedMutation = customMutation(mutation, {
     const identity = await ctx.auth.getUserIdentity();
 
     if (!identity) {
-      throw new Error("Unauthorized - Please sign in");
-    }
-
-    const authId = identity.subject;
-    const email = identity.email as string;
-    const name = identity.name as string | undefined;
-
-    const existingUser = await ctx.db
-      .query("user")
-      .withIndex("by_auth_id", (q) => q.eq("authId", authId))
-      .first();
-
-    if (!existingUser) {
-      throw new Error("User not found. Please complete registration.");
-    }
-
-    const updates: {
-      email?: string;
-      name?: string;
-      updatedAt: number;
-    } = {
-      updatedAt: Date.now(),
-    };
-
-    if (existingUser.email !== email) updates.email = email;
-    if (name && existingUser.name !== name) updates.name = name;
-
-    if (Object.keys(updates).length > 1) {
-      await ctx.db.patch(existingUser._id, updates);
+      throw new ConvexError({
+        code: "USER_NOT_FOUND",
+        message: "Please sign in",
+        severity: ErrorSeverity.Low,
+      });
     }
 
     return {
-      ctx: { userId: existingUser._id, authId, name, email },
+      ctx: {
+        userId: identity.subject as BetterAuthId<"user">,
+        email: identity.email,
+      },
       args: {},
     };
   },
@@ -106,63 +74,36 @@ export const protectedAction = customAction(action, {
     _args: Record<string, never>,
   ): Promise<{
     ctx: {
-      userId: Id<"user">;
-      authId: string;
-      name: string | undefined;
+      autumn: Autumn;
+      userId: BetterAuthId<"user">;
       email: string | undefined;
     };
     args: Record<string, never>;
   }> => {
-    type InternalUser = {
-      _id: Id<"user">;
-      _creationTime: number;
-      name?: string | undefined;
-      planDowngradedAt?: number | undefined;
-      authId: string;
-      email: string;
-      freeOrganizationUsed: boolean;
-      createdAt: number;
-      updatedAt: number;
-    };
-
     const identity = await ctx.auth.getUserIdentity();
 
     if (!identity) {
-      throw new Error("Unauthorized - Please sign in");
+      throw new ConvexError({
+        code: "USER_NOT_FOUND",
+        message: "Please sign in",
+        severity: ErrorSeverity.Low,
+      });
     }
 
-    const authId = identity.subject;
-    const email = identity.email as string;
-    const name = identity.name as string | undefined;
-
-    let existingUser: InternalUser | null;
-    try {
-      existingUser = await ctx.runQuery(internal.user.getUserByAuthId, { authId });
-    } catch (_error) {
-      existingUser = null;
-    }
-
-    if (!existingUser) {
-      throw new Error("User not found. Please complete registration.");
-    }
-
-    const updates: {
-      email?: string;
-      name?: string;
-      updatedAt: number;
-    } = {
-      updatedAt: Date.now(),
-    };
-
-    if (existingUser.email !== email) updates.email = email;
-    if (name && existingUser.name !== name) updates.name = name;
-
-    if (Object.keys(updates).length > 1) {
-      await ctx.runMutation(internal.user.updateUser, { userId: existingUser._id, updates });
-    }
+    const autumn = initAutumn({
+      customerId: identity.subject,
+      customerData: {
+        email: identity.email,
+        name: identity.name,
+      },
+    });
 
     return {
-      ctx: { userId: existingUser._id, authId, name, email },
+      ctx: {
+        autumn,
+        userId: identity.subject as BetterAuthId<"user">,
+        email: identity.email,
+      },
       args: {},
     };
   },
