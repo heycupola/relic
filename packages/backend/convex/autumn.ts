@@ -5,7 +5,7 @@ import type { DataModel } from "./_generated/dataModel";
 
 type AutumnContext = GenericActionCtx<DataModel>;
 
-export const initLocalAutumn = (identity: {
+export const initAutumn = (identity: {
   customerId: string;
   customerData?: {
     name?: string | null;
