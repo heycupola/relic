@@ -285,6 +285,7 @@ export enum ProjectAccessReason {
   GracePeriod = "grace_period",
   WithinLimit = "within_limit",
   Restricted = "restricted",
+  Archived = "archived",
 }
 
 export type ProjectAccessResult = {
@@ -366,7 +367,7 @@ export async function syncUserPlanStatus(ctx: ProtectedActionCtx): Promise<{
 
   const currentLimit = Math.max(0, data?.included_usage ?? 2);
 
-  const projects = await ctx.runQuery(internal.project.loadProjects, {
+  const projects = await ctx.runQuery(internal.project._loadProjects, {
     userId: user._id as BetterAuthId<"user">,
   });
 
@@ -472,6 +473,13 @@ export async function isProjectAccessible(
   ctx: ProtectedActionCtx,
   project: Doc<"project">,
 ): Promise<ProjectAccessResult> {
+  if (project.isArchived) {
+    return {
+      accessible: false,
+      reason: ProjectAccessReason.Archived,
+    };
+  }
+
   const ctxWithCache = ctx as CtxWithCache;
   const cache = getAccessCache(ctxWithCache);
 
@@ -516,10 +524,10 @@ export async function isProjectAccessible(
   return result;
 }
 
-export const isAccessible = async (
+export const assertProjectAccess = async (
   ctx: ProtectedActionCtx,
   project: Doc<"project">,
-): Promise<boolean> => {
+): Promise<void> => {
   switch (project.ownerType) {
     case ProjectOwner.User: {
       if (ctx.userId !== project.ownerId) {
@@ -540,7 +548,7 @@ export const isAccessible = async (
         });
       }
 
-      return accessible;
+      break;
     }
     case ProjectOwner.Organization: {
       const { isMember } = await ctx.runQuery(components.betterAuth.member.isOrganizationMember, {
@@ -566,9 +574,7 @@ export const isAccessible = async (
         });
       }
 
-      return accessible;
+      break;
     }
-    default:
-      return false;
   }
 };
