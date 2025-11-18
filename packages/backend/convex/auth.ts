@@ -5,8 +5,8 @@ import { deviceAuthorization, organization } from "better-auth/plugins";
 import { components, internal } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
+import { OrgRole } from "./betterAuth/lib/types";
 import authSchema from "./betterAuth/schema";
-import { ac, admin, member, owner, viewer } from "./lib/permissions";
 
 const siteUrl = process.env.SITE_URL || "";
 
@@ -19,9 +19,7 @@ export const authComponent = createClient<DataModel, typeof authSchema>(componen
   authFunctions,
   triggers: {
     invitation: {},
-    organization: {
-      // when a new org created, add owner as a member
-    },
+    organization: {},
   },
 }) as ReturnType<typeof createClient<DataModel>>;
 
@@ -86,10 +84,7 @@ export const createAuth = (
     },
     plugins: [
       convex(),
-      deviceAuthorization({
-        expiresIn: "30m",
-        interval: "5s",
-      }),
+      deviceAuthorization(),
       organization({
         allowUserToCreateOrganization: async (user) => {
           const existingUser = await ctx.runQuery(components.betterAuth.user.loadUserById, {
@@ -98,14 +93,7 @@ export const createAuth = (
 
           return existingUser.hasPro;
         },
-        creatorRole: "owner",
-        ac,
-        roles: {
-          owner,
-          admin,
-          member,
-          viewer,
-        },
+        creatorRole: OrgRole.Owner,
         schema: {
           organization: {
             modelName: "organization",
@@ -127,11 +115,6 @@ export const createAuth = (
                 required: true,
               },
               paymentExpiresAt: {
-                type: "number",
-                input: true,
-                required: false,
-              },
-              deletedAt: {
                 type: "number",
                 input: true,
                 required: false,
