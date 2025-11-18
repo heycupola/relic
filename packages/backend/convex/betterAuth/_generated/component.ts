@@ -1731,6 +1731,43 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         Name
       >;
     };
+    deviceAuth: {
+      approveDeviceCode: FunctionReference<
+        "mutation",
+        "internal",
+        { userId: string; user_code: string },
+        any,
+        Name
+      >;
+      denyDeviceCode: FunctionReference<
+        "mutation",
+        "internal",
+        { user_code: string },
+        any,
+        Name
+      >;
+      getDeviceCodeInfo: FunctionReference<
+        "query",
+        "internal",
+        { user_code: string },
+        any,
+        Name
+      >;
+      pollDeviceToken: FunctionReference<
+        "mutation",
+        "internal",
+        { device_code: string },
+        any,
+        Name
+      >;
+      requestDeviceCode: FunctionReference<
+        "mutation",
+        "internal",
+        { clientId?: string; scope?: string },
+        any,
+        Name
+      >;
+    };
     invitation: {
       acceptOrCancelInvitation: FunctionReference<
         "mutation",
