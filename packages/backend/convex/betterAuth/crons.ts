@@ -10,4 +10,11 @@ crons.daily(
   {},
 );
 
+crons.daily(
+  "cleanup-expired-device-codes",
+  { hourUTC: 3, minuteUTC: 0 },
+  internal.deviceAuth._cleanupExpiredDeviceCodes,
+  {},
+);
+
 export default crons;
