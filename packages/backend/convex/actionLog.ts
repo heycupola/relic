@@ -108,7 +108,7 @@ export const _logSecretBulkUpdate = internalMutation({
   returns: v.object({ success: v.boolean() }),
   handler: async (ctx, args) => {
     await ctx.db.insert("actionLog", {
-      action: "secrets.bulk_exported",
+      action: "secrets.bulk.updated",
       projectId: args.projectId,
       timestamp: Date.now(),
       userId: args.userId,
