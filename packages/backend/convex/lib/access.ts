@@ -49,7 +49,7 @@ const accessControl: AccessControl = {
 };
 
 // NOTE: this is for checking permissions of organization members
-export function hasPermission(sector: Sector, role: OrgRole, permissions: AccessEntity[]) {
+export function assertPermission(sector: Sector, role: OrgRole, permissions: AccessEntity[]) {
   const rolePermissions = accessControl[sector][role];
 
   const missingPermissions = permissions.filter((p) => !rolePermissions.includes(p));
@@ -63,8 +63,6 @@ export function hasPermission(sector: Sector, role: OrgRole, permissions: Access
       severity: ErrorSeverity.High,
     });
   }
-
-  return true;
 }
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1_000;
@@ -527,6 +525,8 @@ export async function isProjectAccessible(
 export const assertProjectAccess = async (
   ctx: ProtectedActionCtx,
   project: Doc<"project">,
+  sector?: Sector,
+  permissions?: AccessEntity[],
 ): Promise<void> => {
   switch (project.ownerType) {
     case ProjectOwner.User: {
@@ -551,17 +551,40 @@ export const assertProjectAccess = async (
       break;
     }
     case ProjectOwner.Organization: {
-      const { isMember } = await ctx.runQuery(components.betterAuth.member.isOrganizationMember, {
-        userId: ctx.userId,
-        organizationId: project.ownerId,
-      });
+      const { isOrganizationMember, role } = await ctx.runQuery(
+        components.betterAuth.member.isOrganizationMember,
+        {
+          userId: ctx.userId,
+          organizationId: project.ownerId,
+        },
+      );
 
-      if (!isMember) {
+      if (!isOrganizationMember) {
         throw new ConvexError({
           code: "INSUFFICIENT_AUTHORIZATION",
           message: "You are not the member of the organization of the project",
           severity: ErrorSeverity.High,
         });
+      }
+
+      if ((sector && !permissions) || (!sector && permissions)) {
+        throw new ConvexError({
+          code: "INVALID_ARGUMENTS",
+          message: "sector and permissions must be provided together",
+          severity: ErrorSeverity.High,
+        });
+      }
+
+      if (sector && permissions) {
+        if (role) {
+          assertPermission(sector, role as OrgRole, permissions);
+        } else {
+          throw new ConvexError({
+            code: "MEMBER_ROLE_MISSING",
+            message: "The member's role is missing",
+            severity: ErrorSeverity.High,
+          });
+        }
       }
 
       const { message, accessible } = await isProjectOrganizationAccessible(ctx, project);
