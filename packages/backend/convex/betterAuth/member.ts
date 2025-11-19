@@ -10,7 +10,18 @@ export const isOrganizationMember = query({
     organizationId: v.id("organization"),
     userId: v.id("user"),
   },
-  returns: v.object({ success: v.boolean(), isMember: v.boolean() }),
+  returns: v.object({
+    success: v.boolean(),
+    isOrganizationMember: v.boolean(),
+    role: v.optional(
+      v.union(
+        v.literal(OrgRole.Owner),
+        v.literal(OrgRole.Admin),
+        v.literal(OrgRole.Member),
+        v.literal(OrgRole.Viewer),
+      ),
+    ),
+  }),
   handler: async (ctx, args) => {
     const membership = await ctx.db
       .query("member")
@@ -22,13 +33,15 @@ export const isOrganizationMember = query({
     if (!membership) {
       return {
         success: true,
-        isMember: false,
+        isOrganizationMember: false,
+        role: undefined,
       };
     }
 
     return {
       success: true,
-      isMember: true,
+      isOrganizationMember: true,
+      role: membership.role as OrgRole,
     };
   },
 });

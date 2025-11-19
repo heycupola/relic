@@ -1,9 +1,9 @@
 import { ConvexError, v } from "convex/values";
 import { doc } from "convex-helpers/validators";
+import { generateSlug } from "../lib/helpers";
 import { ErrorSeverity } from "../lib/types";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query } from "./_generated/server";
-import { generateSlug } from "./lib/helpers";
 import { OrgRole, OrgSubscriptionStatus } from "./lib/types";
 import schema from "./schema";
 

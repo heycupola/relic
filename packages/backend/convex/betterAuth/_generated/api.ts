@@ -14,7 +14,6 @@ import type * as crons from "../crons.js";
 import type * as deviceAuth from "../deviceAuth.js";
 import type * as generatedSchema from "../generatedSchema.js";
 import type * as invitation from "../invitation.js";
-import type * as lib_helpers from "../lib/helpers.js";
 import type * as lib_types from "../lib/types.js";
 import type * as member from "../member.js";
 import type * as organization from "../organization.js";
@@ -34,7 +33,6 @@ const fullApi: ApiFromModules<{
   deviceAuth: typeof deviceAuth;
   generatedSchema: typeof generatedSchema;
   invitation: typeof invitation;
-  "lib/helpers": typeof lib_helpers;
   "lib/types": typeof lib_types;
   member: typeof member;
   organization: typeof organization;

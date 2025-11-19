@@ -1832,7 +1832,11 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "query",
         "internal",
         { organizationId: string; userId: string },
-        { isMember: boolean; success: boolean },
+        {
+          isOrganizationMember: boolean;
+          role?: "owner" | "admin" | "member" | "viewer";
+          success: boolean;
+        },
         Name
       >;
       leaveOrganization: FunctionReference<
