@@ -23,7 +23,7 @@ crons.hourly(
 
 crons.interval(
   "cleanup-and-activate-organizations",
-  { minutes: 5 },
+  { minutes: 15 },
   internal.organization.cleanupAndActivateOrganizations,
 );
 
