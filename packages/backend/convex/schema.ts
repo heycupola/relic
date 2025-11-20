@@ -2,60 +2,6 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
-  user: defineTable({
-    authId: v.string(),
-    email: v.string(),
-    name: v.optional(v.string()),
-    freeOrganizationUsed: v.boolean(),
-    planDowngradedAt: v.optional(v.number()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_auth_id", ["authId"])
-    .index("by_email", ["email"]),
-  userKey: defineTable({
-    userId: v.id("user"),
-    publicKey: v.string(),
-    encryptedPrivateKey: v.string(),
-    salt: v.string(),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  }).index("by_user", ["userId"]),
-  organizationSetting: defineTable({
-    organizationId: v.string(),
-    isFreeWithProPlan: v.boolean(),
-    currentKeyVersion: v.number(),
-    subscriptionStatus: v.union(
-      v.literal("active"),
-      v.literal("pending"),
-      v.literal("payment_lapsed"),
-      v.literal("suspended"),
-    ),
-    paymentExpiresAt: v.optional(v.number()),
-    paymentLapsedAt: v.optional(v.number()),
-    suspendedAt: v.optional(v.number()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_organization", ["organizationId"])
-    .index("by_status", ["subscriptionStatus"])
-    .index("by_payment_expires", ["paymentExpiresAt"]),
-  organizationMember: defineTable({
-    organizationId: v.string(),
-    userId: v.id("user"),
-    role: v.union(v.literal("owner"), v.literal("admin"), v.literal("member"), v.literal("viewer")),
-    wrappedOrgKey: v.string(),
-    keyVersion: v.number(),
-    grantedBy: v.id("user"),
-    grantedAt: v.number(),
-    revokedAt: v.optional(v.number()),
-    revokedBy: v.optional(v.id("user")),
-    revocationReason: v.optional(v.union(v.literal("left"), v.literal("removed"))),
-  })
-    .index("by_organization", ["organizationId"])
-    .index("by_user", ["userId"])
-    .index("by_org_and_user", ["organizationId", "userId"])
-    .index("by_org_active", ["organizationId", "revokedAt"]),
   project: defineTable({
     name: v.string(),
     slug: v.string(),
@@ -95,6 +41,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_environment", ["environmentId"])
+    .index("by_environment_and_slug", ["environmentId", "slug"])
     .index("by_project", ["projectId"])
     .index("by_parent", ["parentFolderId"])
     .index("by_env_and_parent", ["environmentId", "parentFolderId"]),
@@ -104,36 +51,7 @@ export default defineSchema({
     folderId: v.optional(v.id("folder")),
     key: v.string(),
     encryptedValue: v.string(),
-    primitiveType: v.union(
-      v.literal("string"),
-      v.literal("int64"),
-      v.literal("boolean"),
-      // NOTE: planned primitive types for the next versions
-      // v.literal("int32"),
-      // v.literal("uint32"),
-      // v.literal("uint64"),
-      // v.literal("float32"),
-      // v.literal("float64"),
-      // v.literal("json"),
-      // v.literal("array"),
-      // v.literal("bytes")
-    ),
-    // NOTE: planned semantic types for the next versions
-    // semanticType: v.union(
-    // v.literal("generic"),
-    // v.literal("api_key"),
-    // v.literal("token"),
-    // v.literal("database_url"),
-    // v.literal("url"),
-    // v.literal("email"),
-    // v.literal("password"),
-    // v.literal("secret_key"),
-    // v.literal("private_key"),
-    // v.literal("redis_url"),
-    // v.literal("phone"),
-    // v.literal("ipv4"),
-    // v.literal("ipv6"),
-    // ),
+    primitiveType: v.union(v.literal("string"), v.literal("int64"), v.literal("boolean")),
     description: v.optional(v.string()),
     encryptionKeyVersion: v.number(),
     tags: v.optional(v.array(v.string())),
@@ -149,51 +67,32 @@ export default defineSchema({
     .index("by_env_and_key", ["environmentId", "key"])
     .index("by_created_by", ["createdBy"])
     .index("by_updated_by", ["updatedBy"]),
-  secretHistory: defineTable({
-    secretId: v.id("secret"),
+  actionLog: defineTable({
     projectId: v.id("project"),
-    environmentId: v.id("environment"),
-    key: v.string(),
-    encryptedValue: v.string(),
-    primitiveType: v.union(v.literal("string"), v.literal("int64"), v.literal("boolean")),
-    description: v.optional(v.string()),
-    encryptionKeyVersion: v.number(),
-    action: v.union(
-      v.literal("created"),
-      v.literal("updated"),
-      v.literal("deleted"),
-      v.literal("restored"),
-    ),
-    changedBy: v.id("user"),
-    changedAt: v.number(),
-  })
-    .index("by_secret", ["secretId"])
-    .index("by_project", ["projectId"])
-    .index("by_timestamp", ["changedAt"])
-    .index("by_changed_by", ["changedBy"]),
-  accessLog: defineTable({
     userId: v.id("user"),
-    resourceType: v.union(
-      v.literal("secret"),
-      v.literal("project"),
-      v.literal("environment"),
-      v.literal("organization"),
-    ),
-    resourceId: v.string(),
     action: v.union(
-      v.literal("viewed"),
-      v.literal("created"),
-      v.literal("updated"),
-      v.literal("deleted"),
-      v.literal("exported"),
+      v.literal("secret.created"),
+      v.literal("secret.updated"),
+      v.literal("secret.deleted"),
+      v.literal("secret.exported"),
+      v.literal("secrets.bulk.updated"),
+      v.literal("secrets.bulk_deleted"),
+      v.literal("secrets.bulk_exported"),
     ),
-    ipAddress: v.optional(v.string()),
-    userAgent: v.optional(v.string()),
+    metadata: v.optional(
+      v.object({
+        keyPath: v.optional(v.string()), // -> with folder: folder/ENV_NAME - without folder: ENV_NAME
+        folderName: v.optional(v.string()), // -> if the folder is specifically exported, user this field as well
+        affectedValueCount: v.optional(v.number()),
+        deleteCount: v.optional(v.number()),
+        exportCount: v.optional(v.number()),
+        exportFormat: v.optional(v.union(v.literal("relic"), v.literal("env"), v.literal("json"))),
+      }),
+    ),
     timestamp: v.number(),
   })
-    .index("by_user", ["userId"])
-    .index("by_resource", ["resourceType", "resourceId"])
-    .index("by_timestamp", ["timestamp"]),
+    .index("by_project", ["projectId", "timestamp"])
+    .index("by_user", ["userId", "timestamp"]),
   keyRotation: defineTable({
     organizationId: v.string(),
     oldKeyVersion: v.number(),
@@ -207,21 +106,4 @@ export default defineSchema({
     .index("by_organization", ["organizationId"])
     .index("by_timestamp", ["rotatedAt"])
     .index("by_rotated_by", ["rotatedBy"]),
-  deviceCode: defineTable({
-    deviceCode: v.string(),
-    userCode: v.string(),
-    userId: v.optional(v.id("user")),
-    clientId: v.optional(v.string()),
-    scope: v.optional(v.string()),
-    status: v.union(v.literal("pending"), v.literal("approved"), v.literal("denied")),
-    expiresAt: v.number(),
-    pollingInterval: v.optional(v.number()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_device_code", ["deviceCode"])
-    .index("by_user_code", ["userCode"])
-    .index("by_user", ["userId"])
-    .index("by_status", ["status"])
-    .index("by_expires", ["expiresAt"]),
 });
