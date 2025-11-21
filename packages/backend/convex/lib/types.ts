@@ -36,3 +36,9 @@ export enum ResourceType {
   Folder = "folder",
   Secret = "secret",
 }
+
+export enum RotationReason {
+  MemberRemoved = "member_removed",
+  Scheduled = "scheduled",
+  Manual = "manual",
+}
