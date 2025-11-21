@@ -17,4 +17,10 @@ crons.daily(
   {},
 );
 
+crons.daily(
+  "check-organization-subscriptions",
+  { hourUTC: 2, minuteUTC: 0 },
+  internal.organization._checkOrganizationSubscriptions,
+);
+
 export default crons;
