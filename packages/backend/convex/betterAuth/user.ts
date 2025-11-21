@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { doc } from "convex-helpers/validators";
 import { ErrorSeverity } from "../lib/types";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import schema from "./schema";
 
 export const loadUserById = query({
@@ -20,6 +20,14 @@ export const loadUserById = query({
     }
 
     return user;
+  },
+});
+
+export const _loadUserById_unchecked = internalQuery({
+  args: { userId: v.id("user") },
+  returns: v.union(v.null(), doc(schema, "user")),
+  handler: async (ctx: QueryCtx, args) => {
+    return await ctx.db.get(args.userId);
   },
 });
 
