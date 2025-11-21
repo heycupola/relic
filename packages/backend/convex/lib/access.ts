@@ -69,7 +69,7 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1_000;
 const MILLISECONDS_PER_MINUTE = 1_000 * 60;
 const MILLISECONDS_PER_DAY = 1_000 * 60 * 60 * 24;
 
-async function isOrganizationAccessible(
+export async function isOrganizationAccessible(
   ctx: ProtectedActionCtx,
   organization: BetterAuthDoc<"organization">,
 ): Promise<{
@@ -137,6 +137,19 @@ async function isOrganizationAccessible(
       }
     }
     case OrgSubscriptionStatus.Pending: {
+      const isActive = await hasActiveSubscription();
+
+      if (isActive) {
+        await ctx.runMutation(components.betterAuth.organization.activateOrganization, {
+          organizationId: organization._id,
+        });
+
+        return {
+          accessible: true,
+          message: null,
+        };
+      }
+
       const now = Date.now();
 
       if (!organization.paymentExpiresAt) {
@@ -599,5 +612,35 @@ export const assertProjectAccess = async (
 
       break;
     }
+  }
+};
+
+export const assertProPlan = async (
+  ctx: ProtectedActionCtx,
+  user: BetterAuthDoc<"user">,
+): Promise<void> => {
+  const { data } = await ctx.autumn.check(ctx, {
+    featureId: "can_create_org",
+  });
+
+  if (data?.allowed) {
+    if (user.planDowngradedAt && !user.hasPro) {
+      await ctx.runMutation(components.betterAuth.user.upgradeToPro, {
+        userId: user._id,
+      });
+      clearAccessCache(ctx as CtxWithCache);
+    }
+  } else {
+    if (!user.planDowngradedAt && user.hasPro) {
+      await ctx.runMutation(components.betterAuth.user.downgradeToFree, {
+        userId: user._id,
+      });
+    }
+
+    throw new ConvexError({
+      code: "PRO_PLAN_REQUIRED",
+      message: "Pro plan required to create organizations. Please upgrade your plan.",
+      severity: ErrorSeverity.High,
+    });
   }
 };
