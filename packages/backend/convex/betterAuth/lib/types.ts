@@ -25,6 +25,11 @@ export enum OrgSubscriptionStatus {
   Suspended = "suspended",
 }
 
+export enum OrgEmailType {
+  PaymentLapsed = "payment_lapsed",
+  Suspended = "suspended",
+}
+
 export enum MembershipRevocationReason {
   Removed = "removed",
   Left = "left",

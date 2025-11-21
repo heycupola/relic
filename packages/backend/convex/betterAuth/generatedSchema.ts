@@ -87,12 +87,15 @@ export const tables = {
     logo: v.optional(v.union(v.null(), v.string())),
     createdAt: v.number(),
     metadata: v.optional(v.union(v.null(), v.string())),
+    ownerId: v.string(),
     isFreeWithProPlan: v.boolean(),
     currentKeyVersion: v.number(),
     subscriptionStatus: v.string(),
     paymentExpiresAt: v.optional(v.union(v.null(), v.number())),
     paymentLapsedAt: v.optional(v.union(v.null(), v.number())),
+    paymentLapsedEmailSent: v.optional(v.union(v.null(), v.boolean())),
     suspendedAt: v.optional(v.union(v.null(), v.number())),
+    suspendedEmailSent: v.optional(v.union(v.null(), v.boolean())),
   })
     .index("name", ["name"])
     .index("slug", ["slug"]),
