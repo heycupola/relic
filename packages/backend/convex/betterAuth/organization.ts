@@ -1,10 +1,18 @@
 import { ConvexError, v } from "convex/values";
 import { doc } from "convex-helpers/validators";
+import { initAutumn } from "../autumn";
 import { generateSlug } from "../lib/helpers";
 import { ErrorSeverity } from "../lib/types";
-import type { Id } from "./_generated/dataModel";
-import { internalMutation, mutation, query } from "./_generated/server";
-import { OrgRole, OrgSubscriptionStatus } from "./lib/types";
+import { api, internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
+import {
+  internalAction,
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "./_generated/server";
+import { OrgEmailType, OrgRole, OrgSubscriptionStatus } from "./lib/types";
 import schema from "./schema";
 
 export const loadOrganizationById = query({
@@ -249,6 +257,7 @@ export const createOrganization = mutation({
       createdAt: now,
       subscriptionStatus,
       paymentExpiresAt,
+      ownerId: args.ownerId,
     });
 
     await ctx.db.insert("member", {
@@ -388,5 +397,151 @@ export const _sweepPendingOrganizations = internalMutation({
     }
 
     return { success: true, totalSwept, totalSkipped };
+  },
+});
+
+export const _markEmailSent = internalMutation({
+  args: {
+    organizationId: v.id("organization"),
+    emailType: v.union(v.literal(OrgEmailType.PaymentLapsed), v.literal(OrgEmailType.Suspended)),
+  },
+  returns: v.object({ success: v.boolean() }),
+  handler: async (ctx, args) => {
+    if (args.emailType === OrgEmailType.PaymentLapsed) {
+      await ctx.db.patch(args.organizationId, {
+        paymentLapsedEmailSent: true,
+      });
+    } else {
+      await ctx.db.patch(args.organizationId, {
+        suspendedEmailSent: true,
+      });
+    }
+
+    return { success: true };
+  },
+});
+
+export const _loadOrganizations = internalQuery({
+  args: {},
+  returns: v.array(doc(schema, "organization")),
+  handler: async (ctx, _args) => {
+    const activeOrgs = await ctx.db
+      .query("organization")
+      .withIndex("by_subscriptionStatus", (q) =>
+        q.eq("subscriptionStatus", OrgSubscriptionStatus.Active),
+      )
+      .collect();
+
+    const lapsedOrgs = await ctx.db
+      .query("organization")
+      .withIndex("by_subscriptionStatus", (q) =>
+        q.eq("subscriptionStatus", OrgSubscriptionStatus.PaymentLapsed),
+      )
+      .collect();
+
+    return [...activeOrgs, ...lapsedOrgs].flat();
+  },
+});
+
+export const _checkOrganizationSubscriptions = internalAction({
+  handler: async (ctx, _args) => {
+    const now = Date.now();
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+
+    const orgsToCheck: Doc<"organization">[] = await ctx.runQuery(
+      internal.organization._loadOrganizations,
+    );
+
+    let emailsSent = 0;
+    let statusTransitions = 0;
+
+    for (const org of orgsToCheck) {
+      if (org.isFreeWithProPlan) {
+        continue;
+      }
+
+      const owner = await ctx.runQuery(internal.user._loadUserById_unchecked, {
+        userId: org.ownerId as Id<"user">,
+      });
+
+      if (!owner) {
+        console.error(`Owner not found for org ${org._id}`);
+        continue;
+      }
+
+      const autumn = initAutumn({
+        customerId: owner._id,
+        customerData: {
+          email: owner.email,
+          name: owner.name,
+        },
+      });
+
+      const orgCheck = await autumn.check(ctx, {
+        entityId: org._id,
+        featureId: "organization_projects",
+      });
+
+      const isActive = orgCheck.data?.allowed || false;
+
+      if (isActive) {
+        if (org.subscriptionStatus !== OrgSubscriptionStatus.Active) {
+          await ctx.runMutation(api.organization.activateOrganization, {
+            organizationId: org._id,
+          });
+          statusTransitions += 1;
+          console.log(`Restored org ${org._id} to Active`);
+        }
+      } else {
+        if (org.subscriptionStatus === OrgSubscriptionStatus.Active) {
+          await ctx.runMutation(api.organization.markOrganizationPaymentLapsed, {
+            organizationId: org._id,
+            paymentLapsedAt: now,
+          });
+          statusTransitions += 1;
+          console.log(`Transitioned org ${org._id} to PaymentLapsed`);
+        }
+
+        if (
+          org.subscriptionStatus === OrgSubscriptionStatus.PaymentLapsed &&
+          !org.paymentLapsedEmailSent
+        ) {
+          await ctx.runMutation(internal.organization._markEmailSent, {
+            organizationId: org._id,
+            emailType: OrgEmailType.PaymentLapsed,
+          });
+          emailsSent += 1;
+          console.log(`Payment lapsed email queued for org ${org._id}`);
+        }
+
+        if (org.subscriptionStatus === OrgSubscriptionStatus.PaymentLapsed && org.paymentLapsedAt) {
+          const timeElapsed = now - org.paymentLapsedAt;
+
+          if (timeElapsed >= sevenDaysMs) {
+            await ctx.runMutation(api.organization.suspendOrganization, {
+              organizationId: org._id,
+            });
+            statusTransitions += 1;
+            console.log(`Suspended org ${org._id}`);
+
+            if (!org.suspendedEmailSent) {
+              await ctx.runMutation(internal.organization._markEmailSent, {
+                organizationId: org._id,
+                emailType: OrgEmailType.Suspended,
+              });
+              emailsSent += 1;
+              console.log(`Suspension email queued for org ${org._id}`);
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      success: true,
+      checkedOrgs: orgsToCheck.length,
+      statusTransitions,
+      emailsSent,
+    };
   },
 });

@@ -606,234 +606,46 @@ export const _rotateAllKeys = internalMutation({
   },
 });
 
-// export const verifyAndActivate = protectedMutation({
-//   args: {
-//     organizationId: v.string(),
-//     sessionId: v.string(),
-//   },
-//   handler: async (
-//     ctx: ProtectedMutationCtx,
-//     args: { organizationId: string; sessionId: string },
-//   ) => {
-//     const proCheck = await autumn.check(ctx, {
-//       featureId: "can_create_org",
-//     });
-//
-//     if (!proCheck.data?.allowed) {
-//       throw new Error("Pro plan required to activate organizations. Please upgrade your plan.");
-//     }
-//
-//     const orgSetting = await ctx.db
-//       .query("organizationSetting")
-//       .withIndex("by_organization", (q) => q.eq("organizationId", args.organizationId))
-//       .first();
-//
-//     if (!orgSetting) {
-//       throw new Error("Organization not found");
-//     }
-//
-//     if (orgSetting.subscriptionStatus === "active") {
-//       return { success: true, alreadyActive: true };
-//     }
-//
-//     if (orgSetting.subscriptionStatus !== "pending") {
-//       throw new Error("Organization is not pending payment");
-//     }
-//
-//     const orgSubCheck = await autumn.check(ctx, {
-//       entityId: args.organizationId,
-//       featureId: "organization_projects",
-//     });
-//
-//     if (!orgSubCheck.data?.allowed) {
-//       throw new Error("Payment not confirmed yet. Please wait a moment and try again.");
-//     }
-//
-//     const now = Date.now();
-//     await ctx.db.patch(orgSetting._id, {
-//       subscriptionStatus: "active",
-//       paymentExpiresAt: undefined,
-//       updatedAt: now,
-//     });
-//
-//     await autumn.track(ctx, {
-//       entityId: args.organizationId,
-//       featureId: "members",
-//       value: 1,
-//     });
-//
-//     return { success: true, organizationId: args.organizationId };
-//   },
-// });
-//
-// export const cleanupAndActivateOrganizations = internalMutation({
-//   args: {},
-//   handler: async (ctx) => {
-//     const now = Date.now();
-//     let deletedCount = 0;
-//     let activatedCount = 0;
-//
-//     const allPendingOrgs = await ctx.db
-//       .query("organizationSetting")
-//       .withIndex("by_status", (q) => q.eq("subscriptionStatus", "pending"))
-//       .collect();
-//
-//     for (const org of allPendingOrgs) {
-//       if (org.paymentExpiresAt && now > org.paymentExpiresAt) {
-//         await ctx.runMutation(components.betterAuth.adapter.deleteOne, {
-//           input: {
-//             model: "organization",
-//             where: [
-//               {
-//                 field: "id",
-//                 operator: "eq",
-//                 value: org.organizationId,
-//               },
-//             ],
-//           },
-//         });
-//
-//         const members = await ctx.db
-//           .query("organizationMember")
-//           .withIndex("by_organization", (q) => q.eq("organizationId", org.organizationId))
-//           .collect();
-//
-//         for (const member of members) {
-//           await ctx.db.delete(member._id);
-//         }
-//
-//         await ctx.db.delete(org._id);
-//         deletedCount++;
-//         continue;
-//       }
-//
-//       const owner = await ctx.db
-//         .query("organizationMember")
-//         .withIndex("by_organization", (q) => q.eq("organizationId", org.organizationId))
-//         .filter((q) => q.eq(q.field("role"), "owner"))
-//         .first();
-//
-//       if (!owner) continue;
-//
-//       const user = await ctx.db.get(owner.userId);
-//       if (!user) continue;
-//
-//       const localAutumn = initLocalAutumn({
-//         customerId: user.authId,
-//         customerData: {
-//           name: user.name,
-//           email: user.email,
-//         },
-//       });
-//
-//       const orgSubCheck = await localAutumn.check(ctx, {
-//         entityId: org.organizationId,
-//         featureId: "organization_projects",
-//       });
-//
-//       if (orgSubCheck.data?.allowed) {
-//         await ctx.db.patch(org._id, {
-//           subscriptionStatus: "active",
-//           paymentExpiresAt: undefined,
-//           updatedAt: now,
-//         });
-//
-//         await localAutumn.track(ctx, {
-//           entityId: org.organizationId,
-//           featureId: "members",
-//           value: 1,
-//         });
-//
-//         activatedCount++;
-//       }
-//     }
-//
-//     return {
-//       success: true,
-//       deleted: deletedCount,
-//       activated: activatedCount,
-//       checked: allPendingOrgs.length,
-//     };
-//   },
-// });
-//
-// export const checkAllSubscriptionStatus = internalMutation({
-//   args: {},
-//   handler: async (ctx) => {
-//     const allOrgs = await ctx.db.query("organizationSetting").collect();
-//     const now = Date.now();
-//     const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-//
-//     for (const org of allOrgs) {
-//       // NOTE: skip free orgs - they remain active indefinitely once created
-//       // NOTE: the freeOrganizationUsed flag prevents users from creating multiple free orgs
-//       if (org.isFreeWithProPlan) {
-//         continue;
-//       }
-//
-//       const ownership = await ctx.db
-//         .query("organizationMember")
-//         .withIndex("by_organization", (q) => q.eq("organizationId", org.organizationId))
-//         .filter((q) => q.eq(q.field("role"), "owner"))
-//         .first();
-//
-//       if (!ownership) {
-//         continue;
-//       }
-//
-//       const owner = await ctx.db.get(ownership.userId);
-//
-//       if (!owner) {
-//         continue;
-//       }
-//
-//       const localAutumnInstance = initLocalAutumn({
-//         customerId: owner.authId,
-//         customerData: {
-//           name: owner.name,
-//           email: owner.email,
-//         },
-//       });
-//
-//       // NOTE: for paid orgs, check subscription status
-//       const orgCheck = await localAutumnInstance.check(ctx, {
-//         entityId: org.organizationId,
-//         featureId: "organization_projects",
-//       });
-//       const isActive = orgCheck.data?.allowed || false;
-//
-//       if (isActive) {
-//         // NOTE: subscription is active - restore if needed
-//         if (org.subscriptionStatus !== "active") {
-//           await ctx.db.patch(org._id, {
-//             subscriptionStatus: "active",
-//             paymentLapsedAt: undefined,
-//             suspendedAt: undefined,
-//             updatedAt: now,
-//           });
-//         }
-//       } else {
-//         // NOTE: subscription is not active - handle grace period and suspension
-//         if (org.subscriptionStatus === "active") {
-//           // NOTE: payment failed - start 7-day grace period
-//           await ctx.db.patch(org._id, {
-//             subscriptionStatus: "payment_lapsed",
-//             paymentLapsedAt: now,
-//             updatedAt: now,
-//           });
-//         } else if (org.subscriptionStatus === "payment_lapsed") {
-//           // NOTE: check if 7 days have passed
-//           if (org.paymentLapsedAt && now - org.paymentLapsedAt >= sevenDaysMs) {
-//             await ctx.db.patch(org._id, {
-//               subscriptionStatus: "suspended",
-//               suspendedAt: now,
-//               updatedAt: now,
-//             });
-//           }
-//         }
-//       }
-//     }
-//
-//     return { success: true, checkedOrgs: allOrgs.length };
-//   },
-// });
+export const verifyAndActivate = protectedAction({
+  args: {
+    organizationId: v.string(),
+    sessionId: v.string(),
+  },
+  handler: async (ctx: ProtectedActionCtx, args) => {
+    const proCheck = await ctx.autumn.check(ctx, {
+      featureId: "can_create_org",
+    });
+
+    if (!proCheck.data?.allowed) {
+      throw new Error("Pro plan required to activate organizations. Please upgrade your plan.");
+    }
+
+    const organization = await ctx.runQuery(
+      components.betterAuth.organization.loadOrganizationById,
+      { organizationId: args.organizationId },
+    );
+
+    if (!organization) {
+      throw new ConvexError({
+        code: "ORGANIZATION_NOT_FOUND",
+        message: "Organization doesn't exist",
+        severity: ErrorSeverity.High,
+      });
+    }
+
+    const { accessible, message } = await isOrganizationAccessible(
+      ctx,
+      organization as BetterAuthDoc<"organization">,
+    );
+
+    if (!accessible) {
+      throw new ConvexError({
+        code: "ORGANIZATION_NOT_ACCESSIBLE",
+        message,
+        severity: ErrorSeverity.High,
+      });
+    }
+
+    return { success: true, organizationId: args.organizationId };
+  },
+});
