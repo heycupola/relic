@@ -61,7 +61,7 @@ export const getOrganizationMembers = query({
   },
 });
 
-export const removeUser = mutation({
+export const removeMember = mutation({
   args: {
     organizationId: v.id("organization"),
     fromId: v.id("user"),
@@ -242,20 +242,15 @@ export const updateMemberRole = mutation({
   },
 });
 
-export const updateMemberKey = mutation({
+export const setMemberKey = mutation({
   args: {
-    userId: v.id("user"),
-    orgId: v.id("organization"),
+    memberId: v.id("member"),
     wrappedOrgKey: v.string(),
+    newKeyVersion: v.number(),
   },
   returns: v.object({ success: v.boolean() }),
   handler: async (ctx, args) => {
-    const member = await ctx.db
-      .query("member")
-      .withIndex("organizationId_userId", (q) =>
-        q.eq("organizationId", args.orgId).eq("userId", args.userId),
-      )
-      .first();
+    const member = await ctx.db.get(args.memberId);
 
     if (!member || member.revokedAt) {
       throw new ConvexError({
@@ -267,7 +262,7 @@ export const updateMemberKey = mutation({
 
     await ctx.db.patch(member._id, {
       wrappedOrgKey: args.wrappedOrgKey,
-      keyVersion: member.keyVersion || 1,
+      keyVersion: args.newKeyVersion,
     });
 
     return { success: true };

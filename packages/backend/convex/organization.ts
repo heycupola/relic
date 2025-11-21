@@ -1,82 +1,31 @@
 import { ConvexError, v } from "convex/values";
 import { components, internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
-import { autumn, initLocalAutumn } from "./autumn";
-import { protectedMutation, protectedQuery } from "./lib/middleware";
-import { checkOrganizationSuspended, getOrganizationPaymentStatus } from "./lib/organizationAccess";
+import type { Doc as BetterAuthDoc, Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
+import { OrgRole } from "./betterAuth/lib/types";
+import { assertProPlan, isOrganizationAccessible } from "./lib/access";
+import { protectedAction } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
-import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
+import { ErrorSeverity, type ProtectedActionCtx, RotationReason } from "./lib/types";
 
-interface InitializeOrganizationResult {
-  success: true;
-  isFreeWithProPlan: boolean;
-}
-
-export const createOrganization = protectedMutation({
+export const createOrganization = protectedAction({
   args: {
     name: v.string(),
-    slug: v.string(),
-    wrapperOrgKey: v.string(),
+    wrappedOrgKey: v.string(),
   },
-  handler: async (
-    ctx: ProtectedMutationCtx,
-    args: {
-      name: string;
-      slug: string;
-      wrapperOrgKey: string;
-    },
-  ) => {
-    interface BetterAuthOrg {
-      id: string;
-      name: string;
-      slug: string;
-      createdAt: number;
-      metadata?: string;
-    }
-
-    const user = await ctx.db.get(ctx.userId);
-
-    if (!user) {
-      throw new ConvexError({
-        code: "USER_NOT_FOUND",
-        message: "User not found",
-        severity: "high" as const,
-      });
-    }
-
-    const proCheck = await autumn.check(ctx, {
-      featureId: "can_create_org",
+  handler: async (ctx: ProtectedActionCtx, args) => {
+    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: ctx.userId,
     });
 
-    if (!proCheck.data?.allowed) {
-      throw new ConvexError({
-        code: "PRO_PLAN_REQUIRED",
-        message: "Pro plan required to create organizations. Please upgrade your plan.",
-        severity: "medium" as const,
-      });
-    }
+    await assertProPlan(ctx, user as BetterAuthDoc<"user">);
 
     await checkRateLimit(ctx, "write");
-
-    const betterAuthOrg = (await ctx.runMutation(components.betterAuth.adapter.create, {
-      input: {
-        model: "organization",
-        data: {
-          name: args.name,
-          slug: args.slug,
-          createdAt: Date.now(),
-          metadata: "created using the Better-Auth adapter through the Convex handler",
-        },
-      },
-    })) as BetterAuthOrg;
-
-    const organizationId = betterAuthOrg.id;
 
     let canUseFreeOrg = false;
 
     if (!user.freeOrganizationUsed) {
-      const freeOrgCheck = await autumn.check(ctx, {
+      const freeOrgCheck = await ctx.autumn.check(ctx, {
         featureId: "free_org",
       });
 
@@ -85,434 +34,235 @@ export const createOrganization = protectedMutation({
       }
     }
 
-    if (canUseFreeOrg) {
-      const result: InitializeOrganizationResult = await ctx.runMutation(
-        internal.organization.initializeOrganization,
-        {
-          organizationId,
-          wrapperOrgKey: args.wrapperOrgKey,
-          userId: ctx.userId,
-        },
-      );
-
-      return {
-        success: true,
-        subscriptionType: "free" as const,
-        status: "active" as const,
-        organizationId,
+    const { organizationId, slug, subscriptionStatus, paymentExpiresAt } = await ctx.runMutation(
+      components.betterAuth.organization.createOrganization,
+      {
+        isFreeWithProPlan: canUseFreeOrg,
         name: args.name,
-        slug: args.slug,
-        isFreeWithProPlan: result.isFreeWithProPlan,
-        expiresAt: null,
-        checkoutUrl: null,
-        message: null,
-      };
-    }
+        ownerId: ctx.userId,
+        wrappedOrgKey: args.wrappedOrgKey,
+      },
+    );
 
-    const now = Date.now();
-    const oneHour = 60 * 60 * 1000;
-
-    await ctx.db.insert("organizationSetting", {
-      organizationId,
-      isFreeWithProPlan: false,
-      currentKeyVersion: 1,
-      subscriptionStatus: "pending",
-      paymentExpiresAt: now + oneHour,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    await ctx.db.insert("organizationMember", {
-      organizationId,
-      userId: ctx.userId,
-      role: "owner",
-      wrappedOrgKey: args.wrapperOrgKey,
-      keyVersion: 1,
-      grantedBy: ctx.userId,
-      grantedAt: now,
-    });
-
-    const checkoutResult = await autumn.checkout(ctx, {
-      productId: "org_plan",
+    await ctx.autumn.track(ctx, {
       entityId: organizationId,
-      successUrl: `${process.env.SITE_URL}/org/${organizationId}/success?session_id={CHECKOUT_SESSION_ID}`,
-      customerData: {
-        name: user.name || undefined,
-        email: user.email,
-      },
-      checkoutSessionParams: {
-        cancel_url: `${process.env.SITE_URL}/org/${organizationId}/cancel`,
-        metadata: {
-          organizationId,
-          userId: ctx.userId,
-          organizationName: args.name,
-        },
-      },
-    });
-
-    if (checkoutResult.error || !checkoutResult.data) {
-      throw new ConvexError({
-        code: "CHECKOUT_FAILED",
-        message: `Failed to create checkout session: ${checkoutResult.error?.message || "Unknown error"}`,
-        severity: "high" as const,
-      });
-    }
-
-    return {
-      success: true,
-      subscriptionType: "paid" as const,
-      status: "pending" as const,
-      organizationId,
-      name: args.name,
-      slug: args.slug,
-      isFreeWithProPlan: false,
-      expiresAt: now + oneHour,
-      checkoutUrl: checkoutResult.data.url,
-      message: "Complete payment within 1 hour or organization will be deleted",
-    };
-  },
-});
-
-export const initializeOrganization = internalMutation({
-  args: {
-    organizationId: v.string(),
-    wrapperOrgKey: v.string(),
-    userId: v.id("user"),
-  },
-  handler: async (
-    ctx,
-    args: { organizationId: string; wrapperOrgKey: string; userId: Id<"user"> },
-  ): Promise<InitializeOrganizationResult> => {
-    const existingSetting = await ctx.db
-      .query("organizationSetting")
-      .withIndex("by_organization", (q) => q.eq("organizationId", args.organizationId))
-      .first();
-
-    if (existingSetting) {
-      throw new ConvexError({
-        code: "ORGANIZATION_ALREADY_INITIALIZED",
-        message: "Organization already initialized",
-        severity: "medium" as const,
-      });
-    }
-
-    const user = await ctx.db.get(args.userId);
-
-    if (!user) {
-      throw new ConvexError({
-        code: "USER_NOT_FOUND",
-        message: "User not found",
-        severity: "high" as const,
-      });
-    }
-
-    const isFreeWithProPlan = !user.freeOrganizationUsed;
-
-    await checkRateLimit(ctx, "write", args.userId);
-
-    const now = Date.now();
-
-    await ctx.db.insert("organizationSetting", {
-      organizationId: args.organizationId,
-      isFreeWithProPlan,
-      currentKeyVersion: 1,
-      subscriptionStatus: "active",
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    await ctx.db.insert("organizationMember", {
-      organizationId: args.organizationId,
-      userId: args.userId,
-      role: "owner",
-      wrappedOrgKey: args.wrapperOrgKey,
-      keyVersion: 1,
-      grantedBy: args.userId,
-      grantedAt: now,
-    });
-
-    const localAutumn = initLocalAutumn({
-      customerId: user.authId,
-      customerData: {
-        name: user.name,
-        email: user.email,
-      },
-    });
-
-    await localAutumn.track(ctx, {
-      entityId: args.organizationId,
       featureId: "members",
       value: 1,
     });
 
-    if (isFreeWithProPlan) {
-      await ctx.db.patch(args.userId, {
-        freeOrganizationUsed: true,
-        updatedAt: now,
-      });
-
-      await localAutumn.track(ctx, {
+    if (canUseFreeOrg) {
+      await ctx.autumn.track(ctx, {
         featureId: "free_org",
         value: 1,
       });
-    }
 
-    return { success: true, isFreeWithProPlan };
+      await ctx.runMutation(components.betterAuth.user.useFreeOrg, {
+        userId: ctx.userId,
+      });
+
+      return {
+        success: true,
+        status: subscriptionStatus,
+        organizationId,
+        name: args.name,
+        slug,
+        isFreeWithProPlan: canUseFreeOrg,
+        expiresAt: null,
+        checkoutUrl: null,
+        message: null,
+      };
+    } else {
+      const checkoutResult = await ctx.autumn.checkout(ctx, {
+        productId: "org_plan",
+        entityId: organizationId,
+        successUrl: `${process.env.SITE_URL}/org/${organizationId}/success?session_id={CHECKOUT_SESSION_ID}`,
+        customerData: {
+          name: user.name || undefined,
+          email: user.email,
+        },
+        checkoutSessionParams: {
+          cancel_url: `${process.env.SITE_URL}/org/${organizationId}/cancel`,
+          metadata: {
+            organizationId,
+            userId: ctx.userId,
+            organizationName: args.name,
+          },
+        },
+      });
+
+      if (checkoutResult.error || !checkoutResult.data) {
+        throw new ConvexError({
+          code: "CHECKOUT_FAILED",
+          message: `Failed to create checkout session: ${checkoutResult.error?.message || "Unknown error"}`,
+          severity: "high" as const,
+        });
+      }
+
+      return {
+        success: true,
+        status: subscriptionStatus,
+        organizationId,
+        name: args.name,
+        slug,
+        isFreeWithProPlan: canUseFreeOrg,
+        expiresAt: paymentExpiresAt ?? null,
+        checkoutUrl: checkoutResult.data.url,
+        message: "Complete payment within 1 hour or organization will be deleted",
+      };
+    }
   },
 });
 
-export const addMember = protectedMutation({
+export const inviteMember = protectedAction({
   args: {
     organizationId: v.string(),
-    userEmail: v.string(),
+    email: v.string(),
     role: v.union(v.literal("admin"), v.literal("member"), v.literal("viewer")),
     wrappedOrgKey: v.string(),
   },
   handler: async (
-    ctx: ProtectedMutationCtx,
+    ctx: ProtectedActionCtx,
     args: {
       organizationId: string;
-      userEmail: string;
-      role: "admin" | "member" | "viewer";
+      email: string;
+      role: OrgRole.Admin | OrgRole.Member | OrgRole.Viewer;
       wrappedOrgKey: string;
     },
   ) => {
-    await checkOrganizationSuspended(ctx, args.organizationId);
+    const organization = await ctx.runQuery(
+      components.betterAuth.organization.loadOrganizationById,
+      { organizationId: args.organizationId },
+    );
 
-    const requesterMembership = await ctx.db
-      .query("organizationMember")
-      .withIndex("by_org_and_user", (q) =>
-        q.eq("organizationId", args.organizationId).eq("userId", ctx.userId),
-      )
-      .filter((q) => q.eq(q.field("revokedAt"), undefined))
-      .first();
-
-    if (
-      !requesterMembership ||
-      (requesterMembership.role !== "owner" && requesterMembership.role !== "admin")
-    ) {
-      throw new Error("Only organization owners and admins can add members");
+    if (!organization) {
+      throw new ConvexError({
+        code: "ORGANIZATION_NOT_FOUND",
+        message: "Organization doesn't exist",
+        severity: ErrorSeverity.High,
+      });
     }
 
-    const { data, error } = await autumn.check(ctx, {
+    const { accessible, message } = await isOrganizationAccessible(
+      ctx,
+      organization as BetterAuthDoc<"organization">,
+    );
+
+    if (!accessible) {
+      throw new ConvexError({
+        code: "ORGANIZATION_NOT_ACCESSIBLE",
+        message,
+        severity: ErrorSeverity.High,
+      });
+    }
+
+    const { data, error } = await ctx.autumn.check(ctx, {
       entityId: args.organizationId,
       featureId: "members",
     });
 
     if (error || !data) {
-      throw new Error(
-        `Failed to check organization subscription: ${error?.message || "Unknown error"}`,
-      );
+      throw new ConvexError({
+        code: "MEMBER_DATA_INACCESSIBLE",
+        message: "Unable to access member data",
+        severity: ErrorSeverity.High,
+      });
     }
 
     const limit = data.included_usage;
     const currentUsage = data.usage;
 
-    if (!limit || !currentUsage) {
-      throw new Error("No members found");
+    if (limit === undefined || currentUsage === undefined) {
+      throw new ConvexError({
+        code: "NO_MEMBER_DATA_FOUND",
+        message: "Members were not found",
+        severity: ErrorSeverity.High,
+      });
     }
 
-    if (limit - currentUsage === 0) {
-      throw new Error(
-        `Organization member limit reached (${currentUsage}/${limit}). Please add more seats.`,
-      );
-    }
-
-    const targetUser = await ctx.db
-      .query("user")
-      .withIndex("by_email", (q) => q.eq("email", args.userEmail))
-      .first();
-
-    if (!targetUser) {
-      throw new Error("User not found. They must sign up first.");
-    }
-
-    const targetUserKey = await ctx.db
-      .query("userKey")
-      .withIndex("by_user", (q) => q.eq("userId", targetUser._id))
-      .first();
-
-    if (!targetUserKey) {
-      throw new Error("Target user does not have encryption keys");
-    }
-
-    const existingMembership = await ctx.db
-      .query("organizationMember")
-      .withIndex("by_org_and_user", (q) =>
-        q.eq("organizationId", args.organizationId).eq("userId", targetUser._id),
-      )
-      .filter((q) => q.eq(q.field("revokedAt"), undefined))
-      .first();
-
-    if (existingMembership) {
-      throw new Error("User is already a member of this organization");
-    }
-
-    const settings = await ctx.db
-      .query("organizationSetting")
-      .withIndex("by_organization", (q) => q.eq("organizationId", args.organizationId))
-      .first();
-
-    if (!settings) {
-      throw new Error("Organization settings not found");
+    if (currentUsage >= limit) {
+      throw new ConvexError({
+        code: "MEMBER_LIMIT_REACHED",
+        message: `Organization member limit reached (${currentUsage}/${limit}). Please add more seats.`,
+        severity: ErrorSeverity.High,
+      });
     }
 
     await checkRateLimit(ctx, "write", args.organizationId);
 
-    const now = Date.now();
-    const memberId = await ctx.db.insert("organizationMember", {
+    const { role } = await ctx.runQuery(components.betterAuth.member.getMemberRole, {
       organizationId: args.organizationId,
-      userId: targetUser._id,
+      userId: ctx.userId,
+    });
+
+    if (!role) {
+      throw new ConvexError({
+        code: "INVITER_HAS_NO_ROLE",
+        message: "You are not part of this organization",
+        severity: ErrorSeverity.High,
+      });
+    }
+
+    // NOTE: Permission validation (owner/admin only) is handled by Better-Auth's inviteMember
+    await ctx.runMutation(components.betterAuth.invitation.inviteMember, {
+      email: args.email,
+      inviterId: ctx.userId,
+      inviterRole: role,
+      organizationId: args.organizationId,
       role: args.role,
       wrappedOrgKey: args.wrappedOrgKey,
-      keyVersion: settings.currentKeyVersion,
-      grantedBy: ctx.userId,
-      grantedAt: now,
     });
 
-    await autumn.track(ctx, {
-      entityId: args.organizationId,
-      featureId: "members",
-      value: 1,
-    });
-
-    return { success: true, memberId, userId: targetUser._id };
+    return { success: true };
   },
 });
 
-export const removeMember = protectedMutation({
+export const removeMember = protectedAction({
   args: {
-    organizationId: v.string(),
+    organizationId: v.id("organization"),
     userId: v.id("user"),
-    reason: v.union(v.literal("left"), v.literal("removed")),
   },
   handler: async (
-    ctx: ProtectedMutationCtx,
+    ctx: ProtectedActionCtx,
     args: {
-      organizationId: string;
-      userId: Id<"user">;
-      reason: "left" | "removed";
+      organizationId: BetterAuthId<"organization">;
+      userId: BetterAuthId<"user">;
     },
   ) => {
-    await checkOrganizationSuspended(ctx, args.organizationId);
+    const organization = await ctx.runQuery(
+      components.betterAuth.organization.loadOrganizationById,
+      { organizationId: args.organizationId },
+    );
 
-    const requesterMembership = await ctx.db
-      .query("organizationMember")
-      .withIndex("by_org_and_user", (q) =>
-        q.eq("organizationId", args.organizationId).eq("userId", ctx.userId),
-      )
-      .filter((q) => q.eq(q.field("revokedAt"), undefined))
-      .first();
-
-    if (!requesterMembership) {
-      throw new Error("You are not a member of this organization");
-    }
-
-    const targetMembership = await ctx.db
-      .query("organizationMember")
-      .withIndex("by_org_and_user", (q) =>
-        q.eq("organizationId", args.organizationId).eq("userId", args.userId),
-      )
-      .filter((q) => q.eq(q.field("revokedAt"), undefined))
-      .first();
-
-    if (!targetMembership) {
-      throw new Error("Target user is not a member of this organization");
-    }
-
-    const settings = await ctx.db
-      .query("organizationSetting")
-      .withIndex("by_organization", (q) => q.eq("organizationId", args.organizationId))
-      .first();
-
-    if (!settings) {
-      throw new Error("Organization settings not found");
-    }
-
-    const isRequesterOwner = requesterMembership.role === "owner";
-    const isRequesterAdmin = requesterMembership.role === "admin";
-    const isRemovingSelf = ctx.userId === args.userId;
-    const isTargetOwner = targetMembership.role === "owner";
-
-    if (isRequesterAdmin && isTargetOwner && !isRemovingSelf) {
-      throw new Error("Admins cannot remove the organization owner");
-    }
-
-    if (!isRequesterOwner && !isRequesterAdmin && !isRemovingSelf) {
-      throw new Error("You can only remove yourself from the organization");
-    }
-
-    if (!isRemovingSelf && !isRequesterOwner && !isRequesterAdmin) {
-      throw new Error("Only organization owners and admins can remove members");
-    }
-
-    const isOwnerLeaving = targetMembership.role === "owner";
-
-    if (isOwnerLeaving) {
-      const activeMembers = await ctx.db
-        .query("organizationMember")
-        .withIndex("by_organization", (q) => q.eq("organizationId", args.organizationId))
-        .filter((q) => q.eq(q.field("revokedAt"), undefined))
-        .collect();
-
-      if (activeMembers.length > 1) {
-        // NOTE: MVP: owner transfer disabled - owner cannot leave while other members exist
-        throw new Error(
-          "As the organization owner, you cannot leave while other members exist. Please remove all members first or delete the organization.",
-        );
-      }
-
-      const activeProjects = await ctx.db
-        .query("project")
-        .withIndex("by_owner", (q) =>
-          q.eq("ownerType", "organization").eq("ownerId", args.organizationId),
-        )
-        .filter((q) => q.eq(q.field("isArchived"), false))
-        .first();
-
-      if (activeProjects) {
-        throw new Error(
-          "Cannot delete organization with active projects. Please archive or delete all projects first.",
-        );
-      }
-
-      await checkRateLimit(ctx, "write", args.organizationId);
-
-      const now = Date.now();
-
-      await ctx.db.patch(targetMembership._id, {
-        revokedAt: now,
-        revokedBy: ctx.userId,
-        revocationReason: args.reason,
+    if (!organization) {
+      throw new ConvexError({
+        code: "ORGANIZATION_NOT_FOUND",
+        message: "Organization doesn't exist",
+        severity: ErrorSeverity.High,
       });
-
-      await ctx.db.delete(settings._id);
-
-      await autumn.track(ctx, {
-        entityId: args.organizationId,
-        featureId: "members",
-        value: -1,
-      });
-
-      return {
-        success: true,
-        shouldRotateKey: false,
-        message: "Organization deleted successfully.",
-        organizationDeleted: true,
-      };
     }
 
-    // NOTE: non-owner removal (permissions already checked above)
+    const { accessible, message } = await isOrganizationAccessible(
+      ctx,
+      organization as BetterAuthDoc<"organization">,
+    );
+
+    if (!accessible) {
+      throw new ConvexError({
+        code: "ORGANIZATION_NOT_ACCESSIBLE",
+        message,
+        severity: ErrorSeverity.High,
+      });
+    }
+
     await checkRateLimit(ctx, "write", args.organizationId);
 
-    const now = Date.now();
-    await ctx.db.patch(targetMembership._id, {
-      revokedAt: now,
-      revokedBy: ctx.userId,
-      revocationReason: args.reason,
+    await ctx.runMutation(components.betterAuth.member.removeMember, {
+      fromId: ctx.userId,
+      toId: args.userId,
+      organizationId: args.organizationId,
     });
 
-    await autumn.track(ctx, {
+    await ctx.autumn.track(ctx, {
       entityId: args.organizationId,
       featureId: "members",
       value: -1,
@@ -520,143 +270,132 @@ export const removeMember = protectedMutation({
 
     return {
       success: true,
-      shouldRotateKey: true,
-      message: "Member removed. Consider key rotation for security.",
     };
   },
 });
 
-export const listMembers = protectedQuery({
+export const leaveOrganization = protectedAction({
   args: {
-    organizationId: v.string(),
+    organizationId: v.id("organization"),
   },
-  handler: async (ctx: ProtectedQueryCtx, args: { organizationId: string }) => {
-    await checkOrganizationSuspended(ctx, args.organizationId);
+  handler: async (ctx, args) => {
+    const organization = await ctx.runQuery(
+      components.betterAuth.organization.loadOrganizationById,
+      { organizationId: args.organizationId },
+    );
 
-    const membership = await ctx.db
-      .query("organizationMember")
-      .withIndex("by_org_and_user", (q) =>
-        q.eq("organizationId", args.organizationId).eq("userId", ctx.userId),
-      )
-      .filter((q) => q.eq(q.field("revokedAt"), undefined))
-      .first();
-
-    if (!membership) {
-      throw new Error("You are not a member of this organization");
+    if (!organization) {
+      throw new ConvexError({
+        code: "ORGANIZATION_NOT_FOUND",
+        message: "Organization doesn't exist",
+        severity: ErrorSeverity.High,
+      });
     }
 
-    const members = await ctx.db
-      .query("organizationMember")
-      .withIndex("by_organization", (q) => q.eq("organizationId", args.organizationId))
-      .filter((q) => q.eq(q.field("revokedAt"), undefined))
-      .collect();
+    const { accessible, message } = await isOrganizationAccessible(
+      ctx,
+      organization as BetterAuthDoc<"organization">,
+    );
 
-    return members.map((m) => ({
-      id: m._id,
-      userId: m.userId,
-      role: m.role,
-      keyVersion: m.keyVersion,
-      grantedBy: m.grantedBy,
-      grantedAt: m.grantedAt,
-    }));
+    if (!accessible) {
+      throw new ConvexError({
+        code: "ORGANIZATION_NOT_ACCESSIBLE",
+        message,
+        severity: ErrorSeverity.High,
+      });
+    }
+
+    await checkRateLimit(ctx, "write", args.organizationId);
+
+    await ctx.runMutation(components.betterAuth.member.leaveOrganization, {
+      organizationId: args.organizationId,
+      userId: ctx.userId,
+    });
+
+    await ctx.autumn.track(ctx, {
+      entityId: args.organizationId,
+      featureId: "members",
+      value: -1,
+    });
+
+    return {
+      success: true,
+    };
   },
 });
 
-export const getUserOrganizations = protectedQuery({
-  args: {},
-  handler: async (ctx: ProtectedQueryCtx) => {
-    const membership = await ctx.db
-      .query("organizationMember")
-      .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
-      .filter((q) => q.eq(q.field("revokedAt"), undefined))
-      .collect();
+export const listOrganizationMembers = protectedAction({
+  args: {
+    organizationId: v.string(),
+  },
+  handler: async (ctx: ProtectedActionCtx, args: { organizationId: string }) => {
+    const organization = await ctx.runQuery(
+      components.betterAuth.organization.loadOrganizationById,
+      { organizationId: args.organizationId },
+    );
 
-    const organizations = [];
-
-    for (const m of membership) {
-      const setting = await ctx.db
-        .query("organizationSetting")
-        .withIndex("by_organization", (q) => q.eq("organizationId", m.organizationId))
-        .first();
-
-      if (setting && setting.subscriptionStatus === "active") {
-        organizations.push({
-          organizationId: m.organizationId,
-          role: m.role,
-          wrappedOrgKey: m.wrappedOrgKey,
-          keyVersion: m.keyVersion,
-          grantedAt: m.grantedAt,
-        });
-      }
+    if (!organization) {
+      throw new ConvexError({
+        code: "ORGANIZATION_NOT_FOUND",
+        message: "Organization doesn't exist",
+        severity: ErrorSeverity.High,
+      });
     }
+
+    const { accessible, message } = await isOrganizationAccessible(
+      ctx,
+      organization as BetterAuthDoc<"organization">,
+    );
+
+    if (!accessible) {
+      throw new ConvexError({
+        code: "ORGANIZATION_NOT_ACCESSIBLE",
+        message,
+        severity: ErrorSeverity.High,
+      });
+    }
+
+    const { isOrganizationMember } = await ctx.runQuery(
+      components.betterAuth.member.isOrganizationMember,
+      {
+        userId: ctx.userId,
+        organizationId: args.organizationId,
+      },
+    );
+
+    if (!isOrganizationMember) {
+      throw new ConvexError({
+        code: "INSUFFICIENT_AUTHORIZATION",
+        message: "You are not the member of the organization of the project",
+        severity: ErrorSeverity.High,
+      });
+    }
+
+    const members = await ctx.runQuery(components.betterAuth.member.getOrganizationMembers, {
+      orgId: args.organizationId,
+    });
+
+    return members;
+  },
+});
+
+export const loadOrganizationsByUserId = protectedAction({
+  args: {
+    userId: v.id("user"),
+  },
+  handler: async (ctx: ProtectedActionCtx, args) => {
+    const { organizations } = await ctx.runQuery(
+      components.betterAuth.organization.loadOrganizationsByUserId,
+      {
+        userId: args.userId,
+      },
+    );
 
     return organizations;
   },
 });
 
-export const getOrganizationSettings = protectedQuery({
-  args: {
-    organizationId: v.string(),
-  },
-  handler: async (ctx: ProtectedQueryCtx, args: { organizationId: string }) => {
-    const membership = await ctx.db
-      .query("organizationMember")
-      .withIndex("by_org_and_user", (q) =>
-        q.eq("organizationId", args.organizationId).eq("userId", ctx.userId),
-      )
-      .filter((q) => q.eq(q.field("revokedAt"), undefined))
-      .first();
-
-    if (!membership) {
-      throw new Error("You are not a member of this organization");
-    }
-
-    const settings = await ctx.db
-      .query("organizationSetting")
-      .withIndex("by_organization", (q) => q.eq("organizationId", args.organizationId))
-      .first();
-
-    if (!settings) {
-      throw new Error("Organization settings not found");
-    }
-
-    if (settings.subscriptionStatus === "pending") {
-      const paymentStatus = await getOrganizationPaymentStatus(ctx, args.organizationId);
-      return {
-        organizationId: settings.organizationId,
-        currentKeyVersion: settings.currentKeyVersion,
-        isFreeWithProPlan: settings.isFreeWithProPlan,
-        userRole: membership.role,
-        userWrappedOrgKey: membership.wrappedOrgKey,
-        userKeyVersion: membership.keyVersion,
-        needsKeyRotation: false,
-        paymentStatus: paymentStatus.status,
-        paymentWarning: paymentStatus.warning,
-        minutesRemaining: paymentStatus.minutesRemaining,
-      };
-    }
-
-    await checkOrganizationSuspended(ctx, args.organizationId);
-
-    const paymentStatus = await getOrganizationPaymentStatus(ctx, args.organizationId);
-
-    return {
-      organizationId: settings.organizationId,
-      currentKeyVersion: settings.currentKeyVersion,
-      isFreeWithProPlan: settings.isFreeWithProPlan,
-      userRole: membership.role,
-      userWrappedOrgKey: membership.wrappedOrgKey,
-      userKeyVersion: membership.keyVersion,
-      needsKeyRotation: membership.keyVersion < settings.currentKeyVersion,
-      paymentStatus: paymentStatus.status,
-      paymentWarning: paymentStatus.warning,
-      daysRemaining: paymentStatus.daysRemaining,
-      minutesRemaining: paymentStatus.minutesRemaining,
-    };
-  },
-});
-
-export const rotateOrganizationKeys = protectedMutation({
+export const rotateKeys = protectedAction({
   args: {
     organizationId: v.string(),
     newKeyVersion: v.number(),
@@ -664,352 +403,437 @@ export const rotateOrganizationKeys = protectedMutation({
       v.object({
         secretId: v.id("secret"),
         encryptedValue: v.string(),
-        encryptionKeyVersion: v.number(),
       }),
     ),
-    members: v.array(
-      v.object({
-        userEmail: v.string(),
-        wrappedOrgKey: v.string(),
-      }),
-    ),
-    reason: v.optional(
-      v.union(v.literal("member_removed"), v.literal("scheduled"), v.literal("manual")),
+    wrappedOrgKeys: v.array(v.string()),
+    memberIds: v.array(v.id("member")),
+    reason: v.union(
+      v.literal(RotationReason.Manual),
+      v.literal(RotationReason.MemberRemoved),
+      v.literal(RotationReason.Scheduled),
     ),
   },
   handler: async (
-    ctx: ProtectedMutationCtx,
-    args: {
-      organizationId: string;
-      newKeyVersion: number;
-      secrets: Array<{
-        secretId: Id<"secret">;
-        encryptedValue: string;
-        encryptionKeyVersion: number;
-      }>;
-      members: Array<{ userEmail: string; wrappedOrgKey: string }>;
-      reason?: "member_removed" | "scheduled" | "manual";
-    },
-  ) => {
-    await checkOrganizationSuspended(ctx, args.organizationId);
+    ctx: ProtectedActionCtx,
+    args,
+  ): Promise<{
+    success: boolean;
+    newKeyVersion: number;
+    secretsReEncrypted: number;
+    membersRewrapped: number;
+  }> => {
+    const organization = await ctx.runQuery(
+      components.betterAuth.organization.loadOrganizationById,
+      { organizationId: args.organizationId },
+    );
 
-    const requesterMembership = await ctx.db
-      .query("organizationMember")
-      .withIndex("by_org_and_user", (q) =>
-        q.eq("organizationId", args.organizationId).eq("userId", ctx.userId),
-      )
-      .filter((q) => q.eq(q.field("revokedAt"), undefined))
-      .first();
-
-    if (!requesterMembership || requesterMembership.role !== "owner") {
-      throw new Error("Only organization owners can rotate keys");
+    if (!organization) {
+      throw new ConvexError({
+        code: "ORGANIZATION_NOT_FOUND",
+        message: "Organization doesn't exist",
+        severity: ErrorSeverity.High,
+      });
     }
 
-    const settings = await ctx.db
-      .query("organizationSetting")
-      .withIndex("by_organization", (q) => q.eq("organizationId", args.organizationId))
-      .first();
+    const { accessible, message } = await isOrganizationAccessible(
+      ctx,
+      organization as BetterAuthDoc<"organization">,
+    );
 
-    if (!settings) {
-      throw new Error("Organization settings not found");
+    if (!accessible) {
+      throw new ConvexError({
+        code: "ORGANIZATION_NOT_ACCESSIBLE",
+        message,
+        severity: ErrorSeverity.High,
+      });
     }
 
-    if (args.newKeyVersion !== settings.currentKeyVersion + 1) {
-      throw new Error(
-        `Invalid key version. Expected ${settings.currentKeyVersion + 1}, got ${args.newKeyVersion}`,
-      );
+    const { role: requesterRole } = await ctx.runQuery(components.betterAuth.member.getMemberRole, {
+      organizationId: args.organizationId,
+      userId: ctx.userId,
+    });
+
+    if (!requesterRole || (requesterRole as OrgRole) !== OrgRole.Owner) {
+      throw new ConvexError({
+        code: "INSUFFICIENT_ROLE",
+        message: "Only organization owners can rotate keys",
+        severity: ErrorSeverity.High,
+      });
+    }
+
+    if (args.newKeyVersion !== organization.currentKeyVersion + 1) {
+      throw new ConvexError({
+        code: "WRONG_KEY_VERSION",
+        message: `Invalid key version. Expected ${organization.currentKeyVersion + 1}, got ${args.newKeyVersion}`,
+        severity: ErrorSeverity.High,
+      });
     }
 
     await checkRateLimit(ctx, "keyRotation", args.organizationId);
 
-    const now = Date.now();
+    const { newKeyVersion, membersRewrapped, secretsReEncrypted, success } = await ctx.runMutation(
+      internal.organization._rotateAllKeys,
+      {
+        newKeyVersion: args.newKeyVersion,
+        organizationId: args.organizationId as BetterAuthId<"organization">,
+        secrets: args.secrets,
+        wrappedOrgKeys: args.wrappedOrgKeys,
+        memberIds: args.memberIds,
+        reason: args.reason,
+        userId: ctx.userId,
+      },
+    );
 
-    for (const secretUpdate of args.secrets) {
-      await ctx.db.patch(secretUpdate.secretId, {
-        encryptedValue: secretUpdate.encryptedValue,
-        encryptionKeyVersion: secretUpdate.encryptionKeyVersion,
-        updatedBy: ctx.userId,
-        updatedAt: now,
+    return {
+      success,
+      newKeyVersion,
+      secretsReEncrypted,
+      membersRewrapped,
+    };
+  },
+});
+
+export const _rotateAllKeys = internalMutation({
+  args: {
+    newKeyVersion: v.number(),
+    organizationId: v.id("organization"),
+    secrets: v.array(
+      v.object({
+        secretId: v.id("secret"),
+        encryptedValue: v.string(),
+      }),
+    ),
+    wrappedOrgKeys: v.array(v.string()),
+    memberIds: v.array(v.id("member")),
+    reason: v.union(
+      v.literal(RotationReason.Manual),
+      v.literal(RotationReason.MemberRemoved),
+      v.literal(RotationReason.Scheduled),
+    ),
+    userId: v.id("user"),
+  },
+  returns: v.object({
+    success: v.boolean(),
+    secretsReEncrypted: v.number(),
+    membersRewrapped: v.number(),
+    newKeyVersion: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const projects = await ctx.db
+      .query("project")
+      .withIndex("by_owner", (q) =>
+        q.eq("ownerType", "organization").eq("ownerId", args.organizationId),
+      )
+      .collect();
+
+    if (projects.length === 0) {
+      throw new ConvexError({
+        code: "NO_PROJECTS_FOUND",
+        message: "Organization has no projects",
+        severity: ErrorSeverity.High,
       });
     }
 
-    for (const memberUpdate of args.members) {
-      const targetUser = await ctx.db
-        .query("user")
-        .withIndex("by_email", (q) => q.eq("email", memberUpdate.userEmail))
-        .first();
+    const secretsByProject = await Promise.all(
+      projects.map((project) =>
+        ctx.db
+          .query("secret")
+          .withIndex("by_project", (q) => q.eq("projectId", project._id))
+          .filter((q) => q.eq(q.field("isDeleted"), false))
+          .collect(),
+      ),
+    );
 
-      if (!targetUser) continue;
+    const secrets = secretsByProject.flat();
 
-      const membership = await ctx.db
-        .query("organizationMember")
-        .withIndex("by_org_and_user", (q) =>
-          q.eq("organizationId", args.organizationId).eq("userId", targetUser._id),
-        )
-        .filter((q) => q.eq(q.field("revokedAt"), undefined))
-        .first();
+    if (args.secrets.length !== secrets.length) {
+      throw new ConvexError({
+        code: "SECRETS_ARGUMENT_LENGHT_AND_TOTAL_SECRET_LENGTH_MISMATCHED",
+        message:
+          "You need to provide secrets as matched with the total secrets in the organization",
+        severity: ErrorSeverity.High,
+      });
+    }
 
-      if (membership) {
-        await ctx.db.patch(membership._id, {
-          wrappedOrgKey: memberUpdate.wrappedOrgKey,
-          keyVersion: args.newKeyVersion,
+    const { membersRewrapped } = await ctx.runMutation(
+      components.betterAuth.organization.rotateKeys,
+      {
+        orgId: args.organizationId,
+        memberIds: args.memberIds,
+        wrappedOrgKeys: args.wrappedOrgKeys,
+        newKeyVersion: args.newKeyVersion,
+      },
+    );
+
+    let secretsReEncrypted = 0;
+
+    for (const secret of args.secrets) {
+      try {
+        await ctx.db.patch(secret.secretId, {
+          encryptedValue: secret.encryptedValue,
+          encryptionKeyVersion: args.newKeyVersion,
+          updatedBy: args.userId,
+          updatedAt: Date.now(),
+        });
+
+        secretsReEncrypted += 1;
+      } catch (error) {
+        throw new ConvexError({
+          code: "SERVER_ERROR",
+          message: error instanceof Error ? error.message : String(error),
+          severity: ErrorSeverity.High,
         });
       }
     }
-
-    await ctx.db.patch(settings._id, {
-      currentKeyVersion: args.newKeyVersion,
-      updatedAt: now,
-    });
 
     await ctx.db.insert("keyRotation", {
       organizationId: args.organizationId,
-      oldKeyVersion: settings.currentKeyVersion,
+      oldKeyVersion: args.newKeyVersion - 1,
       newKeyVersion: args.newKeyVersion,
-      secretsReEncrypted: args.secrets.length,
-      membersRewrapped: args.members.length,
+      secretsReEncrypted,
+      membersRewrapped,
       reason: args.reason,
-      rotatedBy: ctx.userId,
-      rotatedAt: now,
+      rotatedBy: args.userId,
+      rotatedAt: Date.now(),
     });
 
     return {
       success: true,
+      secretsReEncrypted,
+      membersRewrapped,
       newKeyVersion: args.newKeyVersion,
-      secretsReEncrypted: args.secrets.length,
-      membersRewrapped: args.members.length,
     };
   },
 });
 
-export const verifyAndActivate = protectedMutation({
-  args: {
-    organizationId: v.string(),
-    sessionId: v.string(),
-  },
-  handler: async (
-    ctx: ProtectedMutationCtx,
-    args: { organizationId: string; sessionId: string },
-  ) => {
-    const proCheck = await autumn.check(ctx, {
-      featureId: "can_create_org",
-    });
-
-    if (!proCheck.data?.allowed) {
-      throw new Error("Pro plan required to activate organizations. Please upgrade your plan.");
-    }
-
-    const orgSetting = await ctx.db
-      .query("organizationSetting")
-      .withIndex("by_organization", (q) => q.eq("organizationId", args.organizationId))
-      .first();
-
-    if (!orgSetting) {
-      throw new Error("Organization not found");
-    }
-
-    if (orgSetting.subscriptionStatus === "active") {
-      return { success: true, alreadyActive: true };
-    }
-
-    if (orgSetting.subscriptionStatus !== "pending") {
-      throw new Error("Organization is not pending payment");
-    }
-
-    const orgSubCheck = await autumn.check(ctx, {
-      entityId: args.organizationId,
-      featureId: "organization_projects",
-    });
-
-    if (!orgSubCheck.data?.allowed) {
-      throw new Error("Payment not confirmed yet. Please wait a moment and try again.");
-    }
-
-    const now = Date.now();
-    await ctx.db.patch(orgSetting._id, {
-      subscriptionStatus: "active",
-      paymentExpiresAt: undefined,
-      updatedAt: now,
-    });
-
-    await autumn.track(ctx, {
-      entityId: args.organizationId,
-      featureId: "members",
-      value: 1,
-    });
-
-    return { success: true, organizationId: args.organizationId };
-  },
-});
-
-export const cleanupAndActivateOrganizations = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    const now = Date.now();
-    let deletedCount = 0;
-    let activatedCount = 0;
-
-    const allPendingOrgs = await ctx.db
-      .query("organizationSetting")
-      .withIndex("by_status", (q) => q.eq("subscriptionStatus", "pending"))
-      .collect();
-
-    for (const org of allPendingOrgs) {
-      if (org.paymentExpiresAt && now > org.paymentExpiresAt) {
-        await ctx.runMutation(components.betterAuth.adapter.deleteOne, {
-          input: {
-            model: "organization",
-            where: [
-              {
-                field: "id",
-                operator: "eq",
-                value: org.organizationId,
-              },
-            ],
-          },
-        });
-
-        const members = await ctx.db
-          .query("organizationMember")
-          .withIndex("by_organization", (q) => q.eq("organizationId", org.organizationId))
-          .collect();
-
-        for (const member of members) {
-          await ctx.db.delete(member._id);
-        }
-
-        await ctx.db.delete(org._id);
-        deletedCount++;
-        continue;
-      }
-
-      const owner = await ctx.db
-        .query("organizationMember")
-        .withIndex("by_organization", (q) => q.eq("organizationId", org.organizationId))
-        .filter((q) => q.eq(q.field("role"), "owner"))
-        .first();
-
-      if (!owner) continue;
-
-      const user = await ctx.db.get(owner.userId);
-      if (!user) continue;
-
-      const localAutumn = initLocalAutumn({
-        customerId: user.authId,
-        customerData: {
-          name: user.name,
-          email: user.email,
-        },
-      });
-
-      const orgSubCheck = await localAutumn.check(ctx, {
-        entityId: org.organizationId,
-        featureId: "organization_projects",
-      });
-
-      if (orgSubCheck.data?.allowed) {
-        await ctx.db.patch(org._id, {
-          subscriptionStatus: "active",
-          paymentExpiresAt: undefined,
-          updatedAt: now,
-        });
-
-        await localAutumn.track(ctx, {
-          entityId: org.organizationId,
-          featureId: "members",
-          value: 1,
-        });
-
-        activatedCount++;
-      }
-    }
-
-    return {
-      success: true,
-      deleted: deletedCount,
-      activated: activatedCount,
-      checked: allPendingOrgs.length,
-    };
-  },
-});
-
-export const checkAllSubscriptionStatus = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    const allOrgs = await ctx.db.query("organizationSetting").collect();
-    const now = Date.now();
-    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-
-    for (const org of allOrgs) {
-      // NOTE: skip free orgs - they remain active indefinitely once created
-      // NOTE: the freeOrganizationUsed flag prevents users from creating multiple free orgs
-      if (org.isFreeWithProPlan) {
-        continue;
-      }
-
-      const ownership = await ctx.db
-        .query("organizationMember")
-        .withIndex("by_organization", (q) => q.eq("organizationId", org.organizationId))
-        .filter((q) => q.eq(q.field("role"), "owner"))
-        .first();
-
-      if (!ownership) {
-        continue;
-      }
-
-      const owner = await ctx.db.get(ownership.userId);
-
-      if (!owner) {
-        continue;
-      }
-
-      const localAutumnInstance = initLocalAutumn({
-        customerId: owner.authId,
-        customerData: {
-          name: owner.name,
-          email: owner.email,
-        },
-      });
-
-      // NOTE: for paid orgs, check subscription status
-      const orgCheck = await localAutumnInstance.check(ctx, {
-        entityId: org.organizationId,
-        featureId: "organization_projects",
-      });
-      const isActive = orgCheck.data?.allowed || false;
-
-      if (isActive) {
-        // NOTE: subscription is active - restore if needed
-        if (org.subscriptionStatus !== "active") {
-          await ctx.db.patch(org._id, {
-            subscriptionStatus: "active",
-            paymentLapsedAt: undefined,
-            suspendedAt: undefined,
-            updatedAt: now,
-          });
-        }
-      } else {
-        // NOTE: subscription is not active - handle grace period and suspension
-        if (org.subscriptionStatus === "active") {
-          // NOTE: payment failed - start 7-day grace period
-          await ctx.db.patch(org._id, {
-            subscriptionStatus: "payment_lapsed",
-            paymentLapsedAt: now,
-            updatedAt: now,
-          });
-        } else if (org.subscriptionStatus === "payment_lapsed") {
-          // NOTE: check if 7 days have passed
-          if (org.paymentLapsedAt && now - org.paymentLapsedAt >= sevenDaysMs) {
-            await ctx.db.patch(org._id, {
-              subscriptionStatus: "suspended",
-              suspendedAt: now,
-              updatedAt: now,
-            });
-          }
-        }
-      }
-    }
-
-    return { success: true, checkedOrgs: allOrgs.length };
-  },
-});
+// export const verifyAndActivate = protectedMutation({
+//   args: {
+//     organizationId: v.string(),
+//     sessionId: v.string(),
+//   },
+//   handler: async (
+//     ctx: ProtectedMutationCtx,
+//     args: { organizationId: string; sessionId: string },
+//   ) => {
+//     const proCheck = await autumn.check(ctx, {
+//       featureId: "can_create_org",
+//     });
+//
+//     if (!proCheck.data?.allowed) {
+//       throw new Error("Pro plan required to activate organizations. Please upgrade your plan.");
+//     }
+//
+//     const orgSetting = await ctx.db
+//       .query("organizationSetting")
+//       .withIndex("by_organization", (q) => q.eq("organizationId", args.organizationId))
+//       .first();
+//
+//     if (!orgSetting) {
+//       throw new Error("Organization not found");
+//     }
+//
+//     if (orgSetting.subscriptionStatus === "active") {
+//       return { success: true, alreadyActive: true };
+//     }
+//
+//     if (orgSetting.subscriptionStatus !== "pending") {
+//       throw new Error("Organization is not pending payment");
+//     }
+//
+//     const orgSubCheck = await autumn.check(ctx, {
+//       entityId: args.organizationId,
+//       featureId: "organization_projects",
+//     });
+//
+//     if (!orgSubCheck.data?.allowed) {
+//       throw new Error("Payment not confirmed yet. Please wait a moment and try again.");
+//     }
+//
+//     const now = Date.now();
+//     await ctx.db.patch(orgSetting._id, {
+//       subscriptionStatus: "active",
+//       paymentExpiresAt: undefined,
+//       updatedAt: now,
+//     });
+//
+//     await autumn.track(ctx, {
+//       entityId: args.organizationId,
+//       featureId: "members",
+//       value: 1,
+//     });
+//
+//     return { success: true, organizationId: args.organizationId };
+//   },
+// });
+//
+// export const cleanupAndActivateOrganizations = internalMutation({
+//   args: {},
+//   handler: async (ctx) => {
+//     const now = Date.now();
+//     let deletedCount = 0;
+//     let activatedCount = 0;
+//
+//     const allPendingOrgs = await ctx.db
+//       .query("organizationSetting")
+//       .withIndex("by_status", (q) => q.eq("subscriptionStatus", "pending"))
+//       .collect();
+//
+//     for (const org of allPendingOrgs) {
+//       if (org.paymentExpiresAt && now > org.paymentExpiresAt) {
+//         await ctx.runMutation(components.betterAuth.adapter.deleteOne, {
+//           input: {
+//             model: "organization",
+//             where: [
+//               {
+//                 field: "id",
+//                 operator: "eq",
+//                 value: org.organizationId,
+//               },
+//             ],
+//           },
+//         });
+//
+//         const members = await ctx.db
+//           .query("organizationMember")
+//           .withIndex("by_organization", (q) => q.eq("organizationId", org.organizationId))
+//           .collect();
+//
+//         for (const member of members) {
+//           await ctx.db.delete(member._id);
+//         }
+//
+//         await ctx.db.delete(org._id);
+//         deletedCount++;
+//         continue;
+//       }
+//
+//       const owner = await ctx.db
+//         .query("organizationMember")
+//         .withIndex("by_organization", (q) => q.eq("organizationId", org.organizationId))
+//         .filter((q) => q.eq(q.field("role"), "owner"))
+//         .first();
+//
+//       if (!owner) continue;
+//
+//       const user = await ctx.db.get(owner.userId);
+//       if (!user) continue;
+//
+//       const localAutumn = initLocalAutumn({
+//         customerId: user.authId,
+//         customerData: {
+//           name: user.name,
+//           email: user.email,
+//         },
+//       });
+//
+//       const orgSubCheck = await localAutumn.check(ctx, {
+//         entityId: org.organizationId,
+//         featureId: "organization_projects",
+//       });
+//
+//       if (orgSubCheck.data?.allowed) {
+//         await ctx.db.patch(org._id, {
+//           subscriptionStatus: "active",
+//           paymentExpiresAt: undefined,
+//           updatedAt: now,
+//         });
+//
+//         await localAutumn.track(ctx, {
+//           entityId: org.organizationId,
+//           featureId: "members",
+//           value: 1,
+//         });
+//
+//         activatedCount++;
+//       }
+//     }
+//
+//     return {
+//       success: true,
+//       deleted: deletedCount,
+//       activated: activatedCount,
+//       checked: allPendingOrgs.length,
+//     };
+//   },
+// });
+//
+// export const checkAllSubscriptionStatus = internalMutation({
+//   args: {},
+//   handler: async (ctx) => {
+//     const allOrgs = await ctx.db.query("organizationSetting").collect();
+//     const now = Date.now();
+//     const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+//
+//     for (const org of allOrgs) {
+//       // NOTE: skip free orgs - they remain active indefinitely once created
+//       // NOTE: the freeOrganizationUsed flag prevents users from creating multiple free orgs
+//       if (org.isFreeWithProPlan) {
+//         continue;
+//       }
+//
+//       const ownership = await ctx.db
+//         .query("organizationMember")
+//         .withIndex("by_organization", (q) => q.eq("organizationId", org.organizationId))
+//         .filter((q) => q.eq(q.field("role"), "owner"))
+//         .first();
+//
+//       if (!ownership) {
+//         continue;
+//       }
+//
+//       const owner = await ctx.db.get(ownership.userId);
+//
+//       if (!owner) {
+//         continue;
+//       }
+//
+//       const localAutumnInstance = initLocalAutumn({
+//         customerId: owner.authId,
+//         customerData: {
+//           name: owner.name,
+//           email: owner.email,
+//         },
+//       });
+//
+//       // NOTE: for paid orgs, check subscription status
+//       const orgCheck = await localAutumnInstance.check(ctx, {
+//         entityId: org.organizationId,
+//         featureId: "organization_projects",
+//       });
+//       const isActive = orgCheck.data?.allowed || false;
+//
+//       if (isActive) {
+//         // NOTE: subscription is active - restore if needed
+//         if (org.subscriptionStatus !== "active") {
+//           await ctx.db.patch(org._id, {
+//             subscriptionStatus: "active",
+//             paymentLapsedAt: undefined,
+//             suspendedAt: undefined,
+//             updatedAt: now,
+//           });
+//         }
+//       } else {
+//         // NOTE: subscription is not active - handle grace period and suspension
+//         if (org.subscriptionStatus === "active") {
+//           // NOTE: payment failed - start 7-day grace period
+//           await ctx.db.patch(org._id, {
+//             subscriptionStatus: "payment_lapsed",
+//             paymentLapsedAt: now,
+//             updatedAt: now,
+//           });
+//         } else if (org.subscriptionStatus === "payment_lapsed") {
+//           // NOTE: check if 7 days have passed
+//           if (org.paymentLapsedAt && now - org.paymentLapsedAt >= sevenDaysMs) {
+//             await ctx.db.patch(org._id, {
+//               subscriptionStatus: "suspended",
+//               suspendedAt: now,
+//               updatedAt: now,
+//             });
+//           }
+//         }
+//       }
+//     }
+//
+//     return { success: true, checkedOrgs: allOrgs.length };
+//   },
+// });

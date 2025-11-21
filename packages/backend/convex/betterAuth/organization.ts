@@ -19,7 +19,7 @@ export const loadOrganizationById = query({
   },
 });
 
-export const getOrganizations = query({
+export const loadOrganizationsByUserId = query({
   args: {
     userId: v.id("user"),
   },
@@ -124,7 +124,7 @@ export const suspendOrganization = mutation({
   }),
   handler: async (ctx, args) => {
     await ctx.db.patch(args.organizationId, {
-      paymentLapsedAt: undefined,
+      paymentLapsedAt: null,
       subscriptionStatus: OrgSubscriptionStatus.Suspended,
       suspendedAt: Date.now(),
     });
@@ -215,11 +215,31 @@ export const createOrganization = mutation({
   returns: v.object({
     success: v.boolean(),
     organizationId: v.id("organization"),
+    subscriptionStatus: v.union(
+      v.literal(OrgSubscriptionStatus.Active),
+      v.literal(OrgSubscriptionStatus.Pending),
+    ),
+    slug: v.string(),
+    paymentExpiresAt: v.optional(v.number()),
   }),
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{
+    success: boolean;
+    organizationId: Id<"organization">;
+    subscriptionStatus: OrgSubscriptionStatus.Active | OrgSubscriptionStatus.Pending;
+    slug: string;
+    paymentExpiresAt: number | undefined;
+  }> => {
     const slug = generateSlug(args.name);
     const now = Date.now();
     const oneDay = 24 * 60 * 60 * 1_000;
+
+    const subscriptionStatus = args.isFreeWithProPlan
+      ? OrgSubscriptionStatus.Active
+      : OrgSubscriptionStatus.Pending;
+    const paymentExpiresAt = args.isFreeWithProPlan ? undefined : now + oneDay;
 
     const organizationId = await ctx.db.insert("organization", {
       name: args.name,
@@ -227,10 +247,8 @@ export const createOrganization = mutation({
       isFreeWithProPlan: args.isFreeWithProPlan,
       currentKeyVersion: 1,
       createdAt: now,
-      subscriptionStatus: args.isFreeWithProPlan
-        ? OrgSubscriptionStatus.Active
-        : OrgSubscriptionStatus.Pending,
-      paymentExpiresAt: args.isFreeWithProPlan ? null : now + oneDay,
+      subscriptionStatus,
+      paymentExpiresAt,
     });
 
     await ctx.db.insert("member", {
@@ -244,53 +262,84 @@ export const createOrganization = mutation({
       isPending: false,
     });
 
-    return { success: true, organizationId };
+    return {
+      success: true,
+      organizationId,
+      slug,
+      subscriptionStatus,
+      paymentExpiresAt,
+    };
   },
 });
 
 export const rotateKeys = mutation({
   args: {
     orgId: v.id("organization"),
+    memberIds: v.array(v.id("member")),
     wrappedOrgKeys: v.array(v.string()),
+    newKeyVersion: v.number(),
   },
   returns: v.object({
     success: v.boolean(),
-    rotatedKeysLength: v.number(),
-    skippedKeysLength: v.number(),
+    membersRewrapped: v.number(),
   }),
   handler: async (ctx, args) => {
-    const members = await ctx.db
-      .query("member")
-      .filter((q) => q.eq(q.field("organizationId"), args.orgId))
-      .collect();
-
-    let rotatedKeysLength = 0;
-    let skippedKeysLength = 0;
-
-    if (members.length === 0) {
-      return { success: true, rotatedKeysLength, skippedKeysLength };
+    if (args.memberIds.length !== args.wrappedOrgKeys.length) {
+      throw new ConvexError({
+        code: "MEMBER_IDS_AND_WRAPPED_ORG_KEYS_MISMATCHED",
+        message: "You provided either wrong set of ids or keys",
+        severity: ErrorSeverity.High,
+      });
     }
 
-    for (const [index, member] of members.entries()) {
+    const members = await ctx.db
+      .query("member")
+      .withIndex("by_organizationId", (q) => q.eq("organizationId", args.orgId))
+      .filter((q) => q.and(q.eq(q.field("isPending"), false), q.eq(q.field("revokedAt"), null)))
+      .collect();
+
+    if (members.length === 0) {
+      throw new ConvexError({
+        code: "NO_MEMBERS",
+        message: "No members found in the organization",
+        severity: ErrorSeverity.Low,
+      });
+    }
+
+    if (members.length !== args.memberIds.length) {
+      throw new ConvexError({
+        code: "MEMBER_LENGTH_AND_MEMBER_IDS_LENGTH_MISMATCHED",
+        message: "You need to provide ids of the entire members in the organization",
+        severity: ErrorSeverity.High,
+      });
+    }
+
+    let membersRewrapped = 0;
+
+    for (const [index, memberId] of args.memberIds.entries()) {
       try {
         const wrappedOrgKey = args.wrappedOrgKeys[index];
-        if (!wrappedOrgKey) {
-          skippedKeysLength += 1;
-          continue;
-        }
 
-        await ctx.db.patch(member._id, {
+        await ctx.db.patch(memberId, {
           wrappedOrgKey,
-          keyVersion: member.keyVersion ? member.keyVersion + 1 : 1,
+          keyVersion: args.newKeyVersion,
         });
 
-        rotatedKeysLength += 1;
-      } catch {
-        skippedKeysLength += 1;
+        membersRewrapped += 1;
+      } catch (error) {
+        throw new ConvexError({
+          code: "SERVER_ERROR",
+          message: error instanceof Error ? error.message : String(error),
+          severity: ErrorSeverity.High,
+        });
       }
     }
 
-    return { success: true, rotatedKeysLength, skippedKeysLength };
+    await ctx.db.patch(args.orgId, {
+      currentKeyVersion: args.newKeyVersion,
+    });
+
+    return { success: true, membersRewrapped };
   },
 });
 
