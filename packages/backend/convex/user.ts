@@ -2,11 +2,14 @@ import { v } from "convex/values";
 import { components } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
 import { protectedAction, protectedQuery } from "./lib/middleware";
+import { checkRateLimit } from "./lib/rateLimit";
 import type { ProtectedActionCtx, ProtectedQueryCtx } from "./lib/types";
 
 export const getProPlan = protectedAction({
   args: {},
   handler: async (ctx: ProtectedActionCtx) => {
+    await checkRateLimit(ctx, "write");
+
     const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
       userId: ctx.userId,
     });

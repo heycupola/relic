@@ -121,6 +121,8 @@ export const completeOrgKeyRewrapRequest = protectedMutation({
     wrappedOrgKey: v.string(),
   },
   handler: async (ctx, args) => {
+    await checkRateLimit(ctx, "write");
+
     const request = await ctx.db.get(args.requestId);
 
     if (!request) {
@@ -178,6 +180,8 @@ export const cancelOrgKeyRewrapRequest = protectedMutation({
     requestId: v.id("orgKeyRewrapRequest"),
   },
   handler: async (ctx, args) => {
+    await checkRateLimit(ctx, "write");
+
     const request = await ctx.db.get(args.requestId);
 
     if (!request) {
