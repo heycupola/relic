@@ -2,11 +2,17 @@ import { ConvexError, v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
 import type { Doc as BetterAuthDoc, Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
-import { OrgRole } from "./betterAuth/lib/types";
-import { assertProPlan, isOrganizationAccessible } from "./lib/access";
-import { protectedAction } from "./lib/middleware";
+import { OrgRole, OrgSubscriptionStatus } from "./betterAuth/lib/types";
+import { isOrganizationAccessible } from "./lib/access";
+import { protectedAction, protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
-import { ErrorSeverity, type ProtectedActionCtx, RotationReason } from "./lib/types";
+import {
+  ErrorSeverity,
+  type ProtectedActionCtx,
+  type ProtectedMutationCtx,
+  type ProtectedQueryCtx,
+  RotationReason,
+} from "./lib/types";
 
 export const createOrganization = protectedAction({
   args: {
@@ -18,7 +24,17 @@ export const createOrganization = protectedAction({
       userId: ctx.userId,
     });
 
-    await assertProPlan(ctx, user as BetterAuthDoc<"user">);
+    const { data, error } = await ctx.autumn.check(ctx, {
+      featureId: "can_create_org",
+    });
+
+    if (!data || error || data.allowed === false) {
+      throw new ConvexError({
+        code: "CANNOT_CREATE_ORG",
+        message: "Unable to create org",
+        severity: ErrorSeverity.Medium,
+      });
+    }
 
     await checkRateLimit(ctx, "write");
 
@@ -143,7 +159,6 @@ export const inviteMember = protectedAction({
     }
 
     const { accessible, message } = await isOrganizationAccessible(
-      ctx,
       organization as BetterAuthDoc<"organization">,
     );
 
@@ -242,7 +257,6 @@ export const removeMember = protectedAction({
     }
 
     const { accessible, message } = await isOrganizationAccessible(
-      ctx,
       organization as BetterAuthDoc<"organization">,
     );
 
@@ -293,7 +307,6 @@ export const leaveOrganization = protectedAction({
     }
 
     const { accessible, message } = await isOrganizationAccessible(
-      ctx,
       organization as BetterAuthDoc<"organization">,
     );
 
@@ -324,11 +337,11 @@ export const leaveOrganization = protectedAction({
   },
 });
 
-export const listOrganizationMembers = protectedAction({
+export const listOrganizationMembers = protectedQuery({
   args: {
     organizationId: v.string(),
   },
-  handler: async (ctx: ProtectedActionCtx, args: { organizationId: string }) => {
+  handler: async (ctx: ProtectedQueryCtx, args: { organizationId: string }) => {
     const organization = await ctx.runQuery(
       components.betterAuth.organization.loadOrganizationById,
       { organizationId: args.organizationId },
@@ -343,7 +356,6 @@ export const listOrganizationMembers = protectedAction({
     }
 
     const { accessible, message } = await isOrganizationAccessible(
-      ctx,
       organization as BetterAuthDoc<"organization">,
     );
 
@@ -379,11 +391,11 @@ export const listOrganizationMembers = protectedAction({
   },
 });
 
-export const loadOrganizationsByUserId = protectedAction({
+export const loadOrganizationsByUserId = protectedQuery({
   args: {
     userId: v.id("user"),
   },
-  handler: async (ctx: ProtectedActionCtx, args) => {
+  handler: async (ctx: ProtectedQueryCtx, args) => {
     const { organizations } = await ctx.runQuery(
       components.betterAuth.organization.loadOrganizationsByUserId,
       {
@@ -395,7 +407,7 @@ export const loadOrganizationsByUserId = protectedAction({
   },
 });
 
-export const rotateKeys = protectedAction({
+export const rotateKeys = protectedMutation({
   args: {
     organizationId: v.string(),
     newKeyVersion: v.number(),
@@ -414,7 +426,7 @@ export const rotateKeys = protectedAction({
     ),
   },
   handler: async (
-    ctx: ProtectedActionCtx,
+    ctx: ProtectedMutationCtx,
     args,
   ): Promise<{
     success: boolean;
@@ -436,7 +448,6 @@ export const rotateKeys = protectedAction({
     }
 
     const { accessible, message } = await isOrganizationAccessible(
-      ctx,
       organization as BetterAuthDoc<"organization">,
     );
 
@@ -606,46 +617,76 @@ export const _rotateAllKeys = internalMutation({
   },
 });
 
-export const verifyAndActivate = protectedAction({
+export const _handleOrganizationActivation = internalMutation({
   args: {
-    organizationId: v.string(),
-    sessionId: v.string(),
+    organizationId: v.id("organization"),
   },
-  handler: async (ctx: ProtectedActionCtx, args) => {
-    const proCheck = await ctx.autumn.check(ctx, {
-      featureId: "can_create_org",
+  handler: async (ctx, args) => {
+    const org = await ctx.runQuery(components.betterAuth.organization.loadOrganizationById, {
+      organizationId: args.organizationId,
     });
 
-    if (!proCheck.data?.allowed) {
-      throw new Error("Pro plan required to activate organizations. Please upgrade your plan.");
-    }
-
-    const organization = await ctx.runQuery(
-      components.betterAuth.organization.loadOrganizationById,
-      { organizationId: args.organizationId },
-    );
-
-    if (!organization) {
+    if (!org) {
       throw new ConvexError({
         code: "ORGANIZATION_NOT_FOUND",
-        message: "Organization doesn't exist",
+        message: "Organization not found",
         severity: ErrorSeverity.High,
       });
     }
 
-    const { accessible, message } = await isOrganizationAccessible(
-      ctx,
-      organization as BetterAuthDoc<"organization">,
-    );
+    if (org.subscriptionStatus === OrgSubscriptionStatus.Active) {
+      return;
+    }
 
-    if (!accessible) {
+    await ctx.runMutation(components.betterAuth.organization.activateOrganization, {
+      organizationId: args.organizationId,
+    });
+  },
+});
+
+export const _handleOrganizationPaymentLapsed = internalMutation({
+  args: {
+    organizationId: v.id("organization"),
+  },
+  handler: async (ctx, args) => {
+    const org = await ctx.runQuery(components.betterAuth.organization.loadOrganizationById, {
+      organizationId: args.organizationId,
+    });
+
+    if (!org) {
       throw new ConvexError({
-        code: "ORGANIZATION_NOT_ACCESSIBLE",
-        message,
+        code: "ORGANIZATION_NOT_FOUND",
+        message: "Organization not found",
         severity: ErrorSeverity.High,
       });
     }
 
-    return { success: true, organizationId: args.organizationId };
+    await ctx.runMutation(components.betterAuth.organization.markOrganizationPaymentLapsed, {
+      organizationId: args.organizationId,
+      paymentLapsedAt: Date.now(),
+    });
+  },
+});
+
+export const _handleOrganizationSuspension = internalMutation({
+  args: {
+    organizationId: v.id("organization"),
+  },
+  handler: async (ctx, args) => {
+    const org = await ctx.runQuery(components.betterAuth.organization.loadOrganizationById, {
+      organizationId: args.organizationId,
+    });
+
+    if (!org) {
+      throw new ConvexError({
+        code: "ORGANIZATION_NOT_FOUND",
+        message: "Organization not found",
+        severity: ErrorSeverity.High,
+      });
+    }
+
+    await ctx.runMutation(components.betterAuth.organization.suspendOrganization, {
+      organizationId: args.organizationId,
+    });
   },
 });
