@@ -1,5 +1,4 @@
 import { ConvexError, v } from "convex/values";
-import { checkRateLimit } from "../lib/rateLimit";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { ErrorSeverity } from "./lib/types";
@@ -34,9 +33,15 @@ export const requestDeviceCode = mutation({
     clientId: v.optional(v.string()),
     scope: v.optional(v.string()),
   },
+  returns: v.object({
+    device_code: v.string(),
+    user_code: v.string(),
+    verification_uri: v.string(),
+    verification_uri_complete: v.string(),
+    expires_in: v.number(),
+    interval: v.number(),
+  }),
   handler: async (ctx, args) => {
-    await checkRateLimit(ctx, "write", "device-auth-request");
-
     const deviceCode = generateSecureDeviceCode();
     const userCode = generateSecureUserCode(8);
     const now = Date.now();
@@ -70,9 +75,12 @@ export const pollDeviceToken = mutation({
   args: {
     device_code: v.string(),
   },
+  returns: v.object({
+    session_token: v.string(),
+    token_type: v.string(),
+    expires_in: v.number(),
+  }),
   handler: async (ctx, args) => {
-    await checkRateLimit(ctx, "write", args.device_code);
-
     const deviceCodeEntry = await ctx.db
       .query("deviceCode")
       .withIndex("by_deviceCode", (q) => q.eq("deviceCode", args.device_code))
@@ -175,6 +183,15 @@ export const getDeviceCodeInfo = query({
   args: {
     user_code: v.string(),
   },
+  returns: v.union(
+    v.null(),
+    v.object({
+      userCode: v.string(),
+      clientId: v.optional(v.string()),
+      scope: v.optional(v.string()),
+      status: v.string(),
+    }),
+  ),
   handler: async (ctx, args) => {
     const deviceCodeEntry = await ctx.db
       .query("deviceCode")
@@ -192,8 +209,8 @@ export const getDeviceCodeInfo = query({
 
     return {
       userCode: deviceCodeEntry.userCode,
-      clientId: deviceCodeEntry.clientId,
-      scope: deviceCodeEntry.scope,
+      clientId: deviceCodeEntry.clientId ?? undefined,
+      scope: deviceCodeEntry.scope ?? undefined,
       status: deviceCodeEntry.status,
     };
   },
@@ -205,6 +222,9 @@ export const approveDeviceCode = mutation({
     user_code: v.string(),
     userId: v.id("user"),
   },
+  returns: v.object({
+    success: v.boolean(),
+  }),
   handler: async (ctx, args) => {
     const deviceCodeEntry = await ctx.db
       .query("deviceCode")
@@ -237,8 +257,6 @@ export const approveDeviceCode = mutation({
       });
     }
 
-    await checkRateLimit(ctx, "write");
-
     await ctx.db.patch(deviceCodeEntry._id, {
       userId: args.userId,
       status: "approved",
@@ -253,6 +271,9 @@ export const denyDeviceCode = mutation({
   args: {
     user_code: v.string(),
   },
+  returns: v.object({
+    success: v.boolean(),
+  }),
   handler: async (ctx, args: { user_code: string }) => {
     const deviceCodeEntry = await ctx.db
       .query("deviceCode")
@@ -276,8 +297,6 @@ export const denyDeviceCode = mutation({
         severity: ErrorSeverity.High,
       });
     }
-
-    await checkRateLimit(ctx, "write");
 
     await ctx.db.patch(deviceCodeEntry._id, {
       status: "denied",
