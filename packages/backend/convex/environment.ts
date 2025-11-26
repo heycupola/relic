@@ -6,14 +6,14 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
 import { assertProjectAccess, Sector } from "./lib/access";
 import { generateSlug } from "./lib/helpers";
-import { protectedAction } from "./lib/middleware";
+import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
-import { ErrorSeverity, type ProtectedActionCtx } from "./lib/types";
+import { ErrorSeverity, type ProtectedMutationCtx, type ProtectedQueryCtx } from "./lib/types";
 import schema from "./schema";
 
 const MAX_ENV_COUNT = 32;
 
-export const createEnvironment = protectedAction({
+export const createEnvironment = protectedMutation({
   args: {
     projectId: v.id("project"),
     name: v.string(),
@@ -22,7 +22,7 @@ export const createEnvironment = protectedAction({
     color: v.optional(v.string()),
   },
   handler: async (
-    ctx: ProtectedActionCtx,
+    ctx: ProtectedMutationCtx,
     args: {
       projectId: Id<"project">;
       name: string;
@@ -77,7 +77,7 @@ export const createEnvironment = protectedAction({
   },
 });
 
-export const updateEnvironment = protectedAction({
+export const updateEnvironment = protectedMutation({
   args: {
     environmentId: v.id("environment"),
     name: v.optional(v.string()),
@@ -86,7 +86,7 @@ export const updateEnvironment = protectedAction({
     // sortOrder: v.optional(v.number()),
   },
   handler: async (
-    ctx: ProtectedActionCtx,
+    ctx: ProtectedMutationCtx,
     args: {
       environmentId: Id<"environment">;
       name?: string;
@@ -119,11 +119,11 @@ export const updateEnvironment = protectedAction({
   },
 });
 
-export const deleteEnvironment = protectedAction({
+export const deleteEnvironment = protectedMutation({
   args: {
     environmentId: v.id("environment"),
   },
-  handler: async (ctx: ProtectedActionCtx, args: { environmentId: Id<"environment"> }) => {
+  handler: async (ctx: ProtectedMutationCtx, args: { environmentId: Id<"environment"> }) => {
     const environment = await ctx.runQuery(internal.environment._loadEnvironmentById, {
       environmentId: args.environmentId,
     });
@@ -168,11 +168,11 @@ export const deleteEnvironment = protectedAction({
   },
 });
 
-export const getEnvironmentData = protectedAction({
+export const getEnvironmentData = protectedQuery({
   args: {
     environmentId: v.id("environment"),
   },
-  handler: async (ctx: ProtectedActionCtx, args) => {
+  handler: async (ctx: ProtectedQueryCtx, args) => {
     const environment: Doc<"environment"> = await ctx.runQuery(
       internal.environment._loadEnvironmentById,
       {

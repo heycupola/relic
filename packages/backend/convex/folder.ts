@@ -5,12 +5,12 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { assertProjectAccess, Sector } from "./lib/access";
 import { generateSlug } from "./lib/helpers";
-import { protectedAction } from "./lib/middleware";
+import { protectedMutation } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
-import { ErrorSeverity, type ProtectedActionCtx } from "./lib/types";
+import { ErrorSeverity, type ProtectedMutationCtx } from "./lib/types";
 import schema from "./schema";
 
-export const createFolder = protectedAction({
+export const createFolder = protectedMutation({
   args: {
     environmentId: v.id("environment"),
     name: v.string(),
@@ -18,7 +18,7 @@ export const createFolder = protectedAction({
   },
   returns: v.object({ success: v.boolean(), folderId: v.id("folder"), path: v.string() }),
   handler: async (
-    ctx: ProtectedActionCtx,
+    ctx: ProtectedMutationCtx,
     args,
   ): Promise<{ success: boolean; folderId: Id<"folder">; path: string }> => {
     const environment: Doc<"environment"> = await ctx.runQuery(
@@ -64,12 +64,12 @@ export const createFolder = protectedAction({
   },
 });
 
-export const updateFolder = protectedAction({
+export const updateFolder = protectedMutation({
   args: {
     folderId: v.id("folder"),
     name: v.optional(v.string()),
   },
-  handler: async (ctx: ProtectedActionCtx, args) => {
+  handler: async (ctx: ProtectedMutationCtx, args) => {
     const folder = await ctx.runQuery(internal.folder._loadFolderId, {
       folderId: args.folderId,
     });
@@ -108,11 +108,11 @@ export const updateFolder = protectedAction({
   },
 });
 
-export const deleteFolder = protectedAction({
+export const deleteFolder = protectedMutation({
   args: {
     folderId: v.id("folder"),
   },
-  handler: async (ctx: ProtectedActionCtx, args) => {
+  handler: async (ctx: ProtectedMutationCtx, args) => {
     const folder = await ctx.runQuery(internal.folder._loadFolderId, {
       folderId: args.folderId,
     });

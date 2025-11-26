@@ -42,3 +42,9 @@ export enum RotationReason {
   Scheduled = "scheduled",
   Manual = "manual",
 }
+
+export enum SecretPrimitiveType {
+  String = "string",
+  Number = "number",
+  Boolean = "boolean",
+}
