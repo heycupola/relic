@@ -51,7 +51,7 @@ export default defineSchema({
     folderId: v.optional(v.id("folder")),
     key: v.string(),
     encryptedValue: v.string(),
-    primitiveType: v.union(v.literal("string"), v.literal("int64"), v.literal("boolean")),
+    primitiveType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
     description: v.optional(v.string()),
     encryptionKeyVersion: v.number(),
     tags: v.optional(v.array(v.string())),
@@ -69,6 +69,9 @@ export default defineSchema({
     .index("by_updated_by", ["updatedBy"]),
   actionLog: defineTable({
     projectId: v.id("project"),
+    projectName: v.string(),
+    environmentId: v.id("environment"),
+    environmentName: v.string(),
     userId: v.id("user"),
     action: v.union(
       v.literal("secret.created"),
@@ -81,8 +84,11 @@ export default defineSchema({
     ),
     metadata: v.optional(
       v.object({
-        keyPath: v.optional(v.string()), // -> with folder: folder/ENV_NAME - without folder: ENV_NAME
-        folderName: v.optional(v.string()), // -> if the folder is specifically exported, user this field as well
+        secretId: v.optional(v.id("secret")),
+        key: v.optional(v.string()),
+        newKey: v.optional(v.string()),
+        folderId: v.optional(v.id("folder")),
+        folderName: v.optional(v.string()),
         affectedValueCount: v.optional(v.number()),
         deleteCount: v.optional(v.number()),
         exportCount: v.optional(v.number()),
@@ -92,6 +98,7 @@ export default defineSchema({
     timestamp: v.number(),
   })
     .index("by_project", ["projectId", "timestamp"])
+    .index("by_environment", ["environmentId", "timestamp"])
     .index("by_user", ["userId", "timestamp"]),
   keyRotation: defineTable({
     organizationId: v.string(),
@@ -106,4 +113,15 @@ export default defineSchema({
     .index("by_organization", ["organizationId"])
     .index("by_timestamp", ["rotatedAt"])
     .index("by_rotated_by", ["rotatedBy"]),
+  orgKeyRewrapRequest: defineTable({
+    receiverId: v.id("user"),
+    requesterId: v.id("user"),
+    orgMemberId: v.id("member"),
+    organizationId: v.id("organization"),
+    status: v.union(v.literal("pending"), v.literal("canceled"), v.literal("completed")),
+    requestedAt: v.number(),
+  })
+    .index("by_requester", ["requesterId", "status"])
+    .index("by_receiver", ["receiverId", "status"])
+    .index("by_org_and_requester", ["organizationId", "requesterId", "status"]),
 });
