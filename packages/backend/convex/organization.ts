@@ -342,6 +342,8 @@ export const listOrganizationMembers = protectedQuery({
     organizationId: v.string(),
   },
   handler: async (ctx: ProtectedQueryCtx, args: { organizationId: string }) => {
+    await checkRateLimit(ctx, "read");
+
     const organization = await ctx.runQuery(
       components.betterAuth.organization.loadOrganizationById,
       { organizationId: args.organizationId },

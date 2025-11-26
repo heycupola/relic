@@ -6,6 +6,7 @@ import type { Doc } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { assertProjectAccess } from "./lib/access";
 import { protectedAction } from "./lib/middleware";
+import { checkRateLimit } from "./lib/rateLimit";
 import type { ProtectedActionCtx } from "./lib/types";
 
 export const _logSecretAction = internalMutation({
@@ -99,6 +100,8 @@ export const loadActionLogsByProject = protectedAction({
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx: ProtectedActionCtx, args): Promise<PaginationResult<Doc<"actionLog">>> => {
+    await checkRateLimit(ctx, "read");
+
     const project = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: args.projectId,
     });
@@ -118,6 +121,8 @@ export const loadActionLogsByEnvironment = protectedAction({
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx: ProtectedActionCtx, args): Promise<PaginationResult<Doc<"actionLog">>> => {
+    await checkRateLimit(ctx, "read");
+
     const environment = await ctx.runQuery(internal.environment._loadEnvironmentById, {
       environmentId: args.environmentId,
     });
