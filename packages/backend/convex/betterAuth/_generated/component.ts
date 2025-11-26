@@ -31,14 +31,18 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           input:
             | {
                 data: {
+                  accessRestrictedEmailSent?: null | boolean;
                   createdAt: number;
                   email: string;
                   emailVerified: boolean;
                   encryptedPrivateKey?: null | string;
                   freeOrganizationUsed: boolean;
+                  gracePeriodEmailSent?: null | boolean;
                   hasPro: boolean;
                   image?: null | string;
+                  keysUpdatedAt?: null | number;
                   name: string;
+                  needsEncryptionForPersonalProjectSecrets?: null | boolean;
                   planDowngradedAt?: null | number;
                   publicKey?: null | string;
                   salt?: null | string;
@@ -117,11 +121,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                   logo?: null | string;
                   metadata?: null | string;
                   name: string;
+                  ownerId: string;
                   paymentExpiresAt?: null | number;
                   paymentLapsedAt?: null | number;
+                  paymentLapsedEmailSent?: null | boolean;
                   slug?: null | string;
                   subscriptionStatus: string;
                   suspendedAt?: null | number;
+                  suspendedEmailSent?: null | boolean;
                 };
                 model: "organization";
               }
@@ -178,9 +185,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "freeOrganizationUsed"
                     | "hasPro"
                     | "planDowngradedAt"
+                    | "gracePeriodEmailSent"
+                    | "accessRestrictedEmailSent"
                     | "publicKey"
                     | "encryptedPrivateKey"
                     | "salt"
+                    | "keysUpdatedAt"
+                    | "needsEncryptionForPersonalProjectSecrets"
                     | "id";
                   operator?:
                     | "lt"
@@ -375,12 +386,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "logo"
                     | "createdAt"
                     | "metadata"
+                    | "ownerId"
                     | "isFreeWithProPlan"
                     | "currentKeyVersion"
                     | "subscriptionStatus"
                     | "paymentExpiresAt"
                     | "paymentLapsedAt"
+                    | "paymentLapsedEmailSent"
                     | "suspendedAt"
+                    | "suspendedEmailSent"
                     | "id";
                   operator?:
                     | "lt"
@@ -504,9 +518,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "freeOrganizationUsed"
                     | "hasPro"
                     | "planDowngradedAt"
+                    | "gracePeriodEmailSent"
+                    | "accessRestrictedEmailSent"
                     | "publicKey"
                     | "encryptedPrivateKey"
                     | "salt"
+                    | "keysUpdatedAt"
+                    | "needsEncryptionForPersonalProjectSecrets"
                     | "id";
                   operator?:
                     | "lt"
@@ -701,12 +719,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "logo"
                     | "createdAt"
                     | "metadata"
+                    | "ownerId"
                     | "isFreeWithProPlan"
                     | "currentKeyVersion"
                     | "subscriptionStatus"
                     | "paymentExpiresAt"
                     | "paymentLapsedAt"
+                    | "paymentLapsedEmailSent"
                     | "suspendedAt"
+                    | "suspendedEmailSent"
                     | "id";
                   operator?:
                     | "lt"
@@ -902,14 +923,18 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             | {
                 model: "user";
                 update: {
+                  accessRestrictedEmailSent?: null | boolean;
                   createdAt?: number;
                   email?: string;
                   emailVerified?: boolean;
                   encryptedPrivateKey?: null | string;
                   freeOrganizationUsed?: boolean;
+                  gracePeriodEmailSent?: null | boolean;
                   hasPro?: boolean;
                   image?: null | string;
+                  keysUpdatedAt?: null | number;
                   name?: string;
+                  needsEncryptionForPersonalProjectSecrets?: null | boolean;
                   planDowngradedAt?: null | number;
                   publicKey?: null | string;
                   salt?: null | string;
@@ -929,9 +954,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "freeOrganizationUsed"
                     | "hasPro"
                     | "planDowngradedAt"
+                    | "gracePeriodEmailSent"
+                    | "accessRestrictedEmailSent"
                     | "publicKey"
                     | "encryptedPrivateKey"
                     | "salt"
+                    | "keysUpdatedAt"
+                    | "needsEncryptionForPersonalProjectSecrets"
                     | "id";
                   operator?:
                     | "lt"
@@ -1172,11 +1201,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                   logo?: null | string;
                   metadata?: null | string;
                   name?: string;
+                  ownerId?: string;
                   paymentExpiresAt?: null | number;
                   paymentLapsedAt?: null | number;
+                  paymentLapsedEmailSent?: null | boolean;
                   slug?: null | string;
                   subscriptionStatus?: string;
                   suspendedAt?: null | number;
+                  suspendedEmailSent?: null | boolean;
                 };
                 where?: Array<{
                   connector?: "AND" | "OR";
@@ -1186,12 +1218,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "logo"
                     | "createdAt"
                     | "metadata"
+                    | "ownerId"
                     | "isFreeWithProPlan"
                     | "currentKeyVersion"
                     | "subscriptionStatus"
                     | "paymentExpiresAt"
                     | "paymentLapsedAt"
+                    | "paymentLapsedEmailSent"
                     | "suspendedAt"
+                    | "suspendedEmailSent"
                     | "id";
                   operator?:
                     | "lt"
@@ -1324,14 +1359,18 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             | {
                 model: "user";
                 update: {
+                  accessRestrictedEmailSent?: null | boolean;
                   createdAt?: number;
                   email?: string;
                   emailVerified?: boolean;
                   encryptedPrivateKey?: null | string;
                   freeOrganizationUsed?: boolean;
+                  gracePeriodEmailSent?: null | boolean;
                   hasPro?: boolean;
                   image?: null | string;
+                  keysUpdatedAt?: null | number;
                   name?: string;
+                  needsEncryptionForPersonalProjectSecrets?: null | boolean;
                   planDowngradedAt?: null | number;
                   publicKey?: null | string;
                   salt?: null | string;
@@ -1351,9 +1390,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "freeOrganizationUsed"
                     | "hasPro"
                     | "planDowngradedAt"
+                    | "gracePeriodEmailSent"
+                    | "accessRestrictedEmailSent"
                     | "publicKey"
                     | "encryptedPrivateKey"
                     | "salt"
+                    | "keysUpdatedAt"
+                    | "needsEncryptionForPersonalProjectSecrets"
                     | "id";
                   operator?:
                     | "lt"
@@ -1594,11 +1637,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                   logo?: null | string;
                   metadata?: null | string;
                   name?: string;
+                  ownerId?: string;
                   paymentExpiresAt?: null | number;
                   paymentLapsedAt?: null | number;
+                  paymentLapsedEmailSent?: null | boolean;
                   slug?: null | string;
                   subscriptionStatus?: string;
                   suspendedAt?: null | number;
+                  suspendedEmailSent?: null | boolean;
                 };
                 where?: Array<{
                   connector?: "AND" | "OR";
@@ -1608,12 +1654,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "logo"
                     | "createdAt"
                     | "metadata"
+                    | "ownerId"
                     | "isFreeWithProPlan"
                     | "currentKeyVersion"
                     | "subscriptionStatus"
                     | "paymentExpiresAt"
                     | "paymentLapsedAt"
+                    | "paymentLapsedEmailSent"
                     | "suspendedAt"
+                    | "suspendedEmailSent"
                     | "id";
                   operator?:
                     | "lt"
@@ -1846,17 +1895,17 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         { success: boolean },
         Name
       >;
-      removeUser: FunctionReference<
+      removeMember: FunctionReference<
         "mutation",
         "internal",
         { fromId: string; organizationId: string; toId: string },
         { success: boolean },
         Name
       >;
-      updateMemberKey: FunctionReference<
+      setMemberKey: FunctionReference<
         "mutation",
         "internal",
-        { orgId: string; userId: string; wrappedOrgKey: string },
+        { memberId: string; newKeyVersion: number; wrappedOrgKey: string },
         { success: boolean },
         Name
       >;
@@ -1890,7 +1939,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           ownerId: string;
           wrappedOrgKey: string;
         },
-        { organizationId: string; success: boolean },
+        {
+          organizationId: string;
+          paymentExpiresAt?: number;
+          slug: string;
+          subscriptionStatus: "active" | "pending";
+          success: boolean;
+        },
         Name
       >;
       deleteOrganization: FunctionReference<
@@ -1898,31 +1953,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "internal",
         { callerId: string; organizationId: string },
         { success: boolean },
-        Name
-      >;
-      getOrganizations: FunctionReference<
-        "query",
-        "internal",
-        { userId: string },
-        {
-          organizations: null | Array<{
-            _creationTime: number;
-            _id: string;
-            createdAt: number;
-            currentKeyVersion: number;
-            isFreeWithProPlan: boolean;
-            logo?: null | string;
-            metadata?: null | string;
-            name: string;
-            paymentExpiresAt?: null | number;
-            paymentLapsedAt?: null | number;
-            slug?: null | string;
-            subscriptionStatus: string;
-            suspendedAt?: null | number;
-          }>;
-          success: boolean;
-          totalOrganizations: number;
-        },
         Name
       >;
       loadOrganizationById: FunctionReference<
@@ -1938,11 +1968,57 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           logo?: null | string;
           metadata?: null | string;
           name: string;
+          ownerId: string;
           paymentExpiresAt?: null | number;
           paymentLapsedAt?: null | number;
+          paymentLapsedEmailSent?: null | boolean;
           slug?: null | string;
           subscriptionStatus: string;
           suspendedAt?: null | number;
+          suspendedEmailSent?: null | boolean;
+        },
+        Name
+      >;
+      loadOrganizationsByUserId: FunctionReference<
+        "query",
+        "internal",
+        { userId: string },
+        {
+          memberships: null | Array<{
+            _creationTime: number;
+            _id: string;
+            createdAt: number;
+            grantedBy: string;
+            isPending: boolean;
+            keyVersion?: null | number;
+            organizationId: string;
+            revocationReason?: null | string;
+            revokedAt?: null | number;
+            revokedBy?: null | string;
+            role: string;
+            userId: string;
+            wrappedOrgKey?: null | string;
+          }>;
+          organizations: null | Array<{
+            _creationTime: number;
+            _id: string;
+            createdAt: number;
+            currentKeyVersion: number;
+            isFreeWithProPlan: boolean;
+            logo?: null | string;
+            metadata?: null | string;
+            name: string;
+            ownerId: string;
+            paymentExpiresAt?: null | number;
+            paymentLapsedAt?: null | number;
+            paymentLapsedEmailSent?: null | boolean;
+            slug?: null | string;
+            subscriptionStatus: string;
+            suspendedAt?: null | number;
+            suspendedEmailSent?: null | boolean;
+          }>;
+          success: boolean;
+          totalOrganizations: number;
         },
         Name
       >;
@@ -1956,12 +2032,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       rotateKeys: FunctionReference<
         "mutation",
         "internal",
-        { orgId: string; wrappedOrgKeys: Array<string> },
         {
-          rotatedKeysLength: number;
-          skippedKeysLength: number;
-          success: boolean;
+          memberIds: Array<string>;
+          newKeyVersion: number;
+          orgId: string;
+          wrappedOrgKeys: Array<string>;
         },
+        { membersRewrapped: number; success: boolean },
         Name
       >;
       suspendOrganization: FunctionReference<
@@ -1980,6 +2057,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     user: {
+      clearNeedsEncryptionForPersonalProjectSecrets: FunctionReference<
+        "mutation",
+        "internal",
+        { userId: string },
+        any,
+        Name
+      >;
       downgradeToFree: FunctionReference<
         "mutation",
         "internal",
@@ -1989,14 +2073,18 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           user: {
             _creationTime: number;
             _id: string;
+            accessRestrictedEmailSent?: null | boolean;
             createdAt: number;
             email: string;
             emailVerified: boolean;
             encryptedPrivateKey?: null | string;
             freeOrganizationUsed: boolean;
+            gracePeriodEmailSent?: null | boolean;
             hasPro: boolean;
             image?: null | string;
+            keysUpdatedAt?: null | number;
             name: string;
+            needsEncryptionForPersonalProjectSecrets?: null | boolean;
             planDowngradedAt?: null | number;
             publicKey?: null | string;
             salt?: null | string;
@@ -2013,14 +2101,18 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         {
           _creationTime: number;
           _id: string;
+          accessRestrictedEmailSent?: null | boolean;
           createdAt: number;
           email: string;
           emailVerified: boolean;
           encryptedPrivateKey?: null | string;
           freeOrganizationUsed: boolean;
+          gracePeriodEmailSent?: null | boolean;
           hasPro: boolean;
           image?: null | string;
+          keysUpdatedAt?: null | number;
           name: string;
+          needsEncryptionForPersonalProjectSecrets?: null | boolean;
           planDowngradedAt?: null | number;
           publicKey?: null | string;
           salt?: null | string;
@@ -2029,11 +2121,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         },
         Name
       >;
-      setKeys: FunctionReference<
+      setKeysAndSalt: FunctionReference<
         "mutation",
         "internal",
         {
           encryptedPrivateKey: string;
+          needsEncryptionForPersonalProjectSecrets?: null | boolean;
           publicKey: string;
           salt: string;
           userId: string;
@@ -2050,14 +2143,18 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           user: {
             _creationTime: number;
             _id: string;
+            accessRestrictedEmailSent?: null | boolean;
             createdAt: number;
             email: string;
             emailVerified: boolean;
             encryptedPrivateKey?: null | string;
             freeOrganizationUsed: boolean;
+            gracePeriodEmailSent?: null | boolean;
             hasPro: boolean;
             image?: null | string;
+            keysUpdatedAt?: null | number;
             name: string;
+            needsEncryptionForPersonalProjectSecrets?: null | boolean;
             planDowngradedAt?: null | number;
             publicKey?: null | string;
             salt?: null | string;

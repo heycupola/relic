@@ -1,17 +1,9 @@
 import { ConvexError, v } from "convex/values";
 import { doc } from "convex-helpers/validators";
-import { initAutumn } from "../autumn";
 import { generateSlug } from "../lib/helpers";
 import { ErrorSeverity } from "../lib/types";
-import { api, internal } from "./_generated/api";
-import type { Doc, Id } from "./_generated/dataModel";
-import {
-  internalAction,
-  internalMutation,
-  internalQuery,
-  mutation,
-  query,
-} from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { OrgEmailType, OrgRole, OrgSubscriptionStatus } from "./lib/types";
 import schema from "./schema";
 
@@ -35,6 +27,7 @@ export const loadOrganizationsByUserId = query({
     success: v.boolean(),
     totalOrganizations: v.number(),
     organizations: v.union(v.null(), v.array(doc(schema, "organization"))),
+    memberships: v.union(v.null(), v.array(doc(schema, "member"))),
   }),
   handler: async (ctx, args) => {
     const memberships = await ctx.db
@@ -48,19 +41,27 @@ export const loadOrganizationsByUserId = query({
         success: true,
         totalOrganizations: 0,
         organizations: null,
+        memberships: null,
       };
     }
 
-    const orgs = await Promise.all(
-      memberships.map((membership) => ctx.db.get(membership.organizationId as Id<"organization">)),
+    const orgsWithMemberships = await Promise.all(
+      memberships.map(async (membership) => {
+        const org = await ctx.db.get(membership.organizationId as Id<"organization">);
+        return { org, membership };
+      }),
     );
 
-    const validOrgs = orgs.filter((org) => org !== null);
+    const valid = orgsWithMemberships.filter(
+      (item): item is { org: NonNullable<typeof item.org>; membership: typeof item.membership } =>
+        item.org !== null,
+    );
 
     return {
       success: true,
-      totalOrganizations: validOrgs.length,
-      organizations: validOrgs,
+      totalOrganizations: valid.length,
+      organizations: valid.map(({ org }) => org),
+      memberships: valid.map(({ membership }) => membership),
     };
   },
 });
@@ -90,7 +91,48 @@ export const activateOrganization = mutation({
     await ctx.db.patch(args.organizationId, {
       subscriptionStatus: OrgSubscriptionStatus.Active,
       paymentExpiresAt: null,
+      paymentLapsedAt: null,
+      paymentLapsedEmailSent: null,
       suspendedAt: null,
+      suspendedEmailSent: null,
+    });
+
+    return { success: true };
+  },
+});
+
+export const markOrganizationPaymentLapsed = mutation({
+  args: {
+    organizationId: v.id("organization"),
+    paymentLapsedAt: v.number(),
+  },
+  returns: v.object({
+    success: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.organizationId, {
+      subscriptionStatus: OrgSubscriptionStatus.PaymentLapsed,
+      paymentLapsedAt: args.paymentLapsedAt,
+      paymentLapsedEmailSent: undefined,
+    });
+
+    return { success: true };
+  },
+});
+
+export const suspendOrganization = mutation({
+  args: {
+    organizationId: v.id("organization"),
+  },
+  returns: v.object({
+    success: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.organizationId, {
+      subscriptionStatus: OrgSubscriptionStatus.Suspended,
+      suspendedAt: Date.now(),
+      paymentLapsedAt: null,
+      suspendedEmailSent: undefined,
     });
 
     return { success: true };
@@ -118,42 +160,6 @@ export const wipeOrganization = mutation({
         await ctx.db.delete(member._id);
       }
     }
-
-    return { success: true };
-  },
-});
-
-export const suspendOrganization = mutation({
-  args: {
-    organizationId: v.id("organization"),
-  },
-  returns: v.object({
-    success: v.boolean(),
-  }),
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.organizationId, {
-      paymentLapsedAt: null,
-      subscriptionStatus: OrgSubscriptionStatus.Suspended,
-      suspendedAt: Date.now(),
-    });
-
-    return { success: true };
-  },
-});
-
-export const markOrganizationPaymentLapsed = mutation({
-  args: {
-    organizationId: v.id("organization"),
-    paymentLapsedAt: v.number(),
-  },
-  returns: v.object({
-    success: v.boolean(),
-  }),
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.organizationId, {
-      paymentLapsedAt: args.paymentLapsedAt,
-      subscriptionStatus: OrgSubscriptionStatus.PaymentLapsed,
-    });
 
     return { success: true };
   },
@@ -440,108 +446,5 @@ export const _loadOrganizations = internalQuery({
       .collect();
 
     return [...activeOrgs, ...lapsedOrgs].flat();
-  },
-});
-
-export const _checkOrganizationSubscriptions = internalAction({
-  handler: async (ctx, _args) => {
-    const now = Date.now();
-    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-
-    const orgsToCheck: Doc<"organization">[] = await ctx.runQuery(
-      internal.organization._loadOrganizations,
-    );
-
-    let emailsSent = 0;
-    let statusTransitions = 0;
-
-    for (const org of orgsToCheck) {
-      if (org.isFreeWithProPlan) {
-        continue;
-      }
-
-      const owner = await ctx.runQuery(internal.user._loadUserById_unchecked, {
-        userId: org.ownerId as Id<"user">,
-      });
-
-      if (!owner) {
-        console.error(`Owner not found for org ${org._id}`);
-        continue;
-      }
-
-      const autumn = initAutumn({
-        customerId: owner._id,
-        customerData: {
-          email: owner.email,
-          name: owner.name,
-        },
-      });
-
-      const orgCheck = await autumn.check(ctx, {
-        entityId: org._id,
-        featureId: "organization_projects",
-      });
-
-      const isActive = orgCheck.data?.allowed || false;
-
-      if (isActive) {
-        if (org.subscriptionStatus !== OrgSubscriptionStatus.Active) {
-          await ctx.runMutation(api.organization.activateOrganization, {
-            organizationId: org._id,
-          });
-          statusTransitions += 1;
-          console.log(`Restored org ${org._id} to Active`);
-        }
-      } else {
-        if (org.subscriptionStatus === OrgSubscriptionStatus.Active) {
-          await ctx.runMutation(api.organization.markOrganizationPaymentLapsed, {
-            organizationId: org._id,
-            paymentLapsedAt: now,
-          });
-          statusTransitions += 1;
-          console.log(`Transitioned org ${org._id} to PaymentLapsed`);
-        }
-
-        if (
-          org.subscriptionStatus === OrgSubscriptionStatus.PaymentLapsed &&
-          !org.paymentLapsedEmailSent
-        ) {
-          await ctx.runMutation(internal.organization._markEmailSent, {
-            organizationId: org._id,
-            emailType: OrgEmailType.PaymentLapsed,
-          });
-          emailsSent += 1;
-          console.log(`Payment lapsed email queued for org ${org._id}`);
-        }
-
-        if (org.subscriptionStatus === OrgSubscriptionStatus.PaymentLapsed && org.paymentLapsedAt) {
-          const timeElapsed = now - org.paymentLapsedAt;
-
-          if (timeElapsed >= sevenDaysMs) {
-            await ctx.runMutation(api.organization.suspendOrganization, {
-              organizationId: org._id,
-            });
-            statusTransitions += 1;
-            console.log(`Suspended org ${org._id}`);
-
-            if (!org.suspendedEmailSent) {
-              await ctx.runMutation(internal.organization._markEmailSent, {
-                organizationId: org._id,
-                emailType: OrgEmailType.Suspended,
-              });
-              emailsSent += 1;
-              console.log(`Suspension email queued for org ${org._id}`);
-            }
-          }
-        }
-      }
-    }
-
-    return {
-      success: true,
-      checkedOrgs: orgsToCheck.length,
-      statusTransitions,
-      emailsSent,
-    };
   },
 });

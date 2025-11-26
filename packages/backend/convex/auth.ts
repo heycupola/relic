@@ -50,6 +50,16 @@ export const createAuth = (
           input: true,
           required: false,
         },
+        gracePeriodEmailSent: {
+          type: "boolean",
+          input: true,
+          required: false,
+        },
+        accessRestrictedEmailSent: {
+          type: "boolean",
+          input: true,
+          required: false,
+        },
         publicKey: {
           type: "string",
           input: true,
@@ -62,6 +72,16 @@ export const createAuth = (
         },
         salt: {
           type: "string",
+          input: true,
+          required: false,
+        },
+        keysUpdatedAt: {
+          type: "date",
+          input: true,
+          required: false,
+        },
+        needsEncryptionForPersonalProjectSecrets: {
+          type: "boolean",
           input: true,
           required: false,
         },
@@ -98,6 +118,11 @@ export const createAuth = (
           organization: {
             modelName: "organization",
             additionalFields: {
+              ownerId: {
+                type: "string",
+                input: true,
+                required: true,
+              },
               isFreeWithProPlan: {
                 type: "boolean",
                 input: true,
@@ -124,8 +149,18 @@ export const createAuth = (
                 input: true,
                 required: false,
               },
+              paymentLapsedEmailSent: {
+                type: "boolean",
+                input: true,
+                required: false,
+              },
               suspendedAt: {
                 type: "number",
+                input: true,
+                required: false,
+              },
+              suspendedEmailSent: {
+                type: "boolean",
                 input: true,
                 required: false,
               },

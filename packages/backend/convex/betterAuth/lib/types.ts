@@ -30,6 +30,11 @@ export enum OrgEmailType {
   Suspended = "suspended",
 }
 
+export enum UserEmailType {
+  GracePeriod = "grace_period",
+  AccessRestricted = "access_restricted",
+}
+
 export enum MembershipRevocationReason {
   Removed = "removed",
   Left = "left",

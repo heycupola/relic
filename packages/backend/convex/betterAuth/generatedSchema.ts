@@ -17,9 +17,13 @@ export const tables = {
     freeOrganizationUsed: v.boolean(),
     hasPro: v.boolean(),
     planDowngradedAt: v.optional(v.union(v.null(), v.number())),
+    gracePeriodEmailSent: v.optional(v.union(v.null(), v.boolean())),
+    accessRestrictedEmailSent: v.optional(v.union(v.null(), v.boolean())),
     publicKey: v.optional(v.union(v.null(), v.string())),
     encryptedPrivateKey: v.optional(v.union(v.null(), v.string())),
     salt: v.optional(v.union(v.null(), v.string())),
+    keysUpdatedAt: v.optional(v.union(v.null(), v.number())),
+    needsEncryptionForPersonalProjectSecrets: v.optional(v.union(v.null(), v.boolean())),
   })
     .index("email_name", ["email", "name"])
     .index("name", ["name"])
