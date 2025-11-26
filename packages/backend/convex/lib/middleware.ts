@@ -22,7 +22,11 @@ export const protectedQuery = customQuery(query, {
     const identity = await ctx.auth.getUserIdentity();
 
     if (!identity) {
-      throw new Error("Unauthorized - Please sign in");
+      throw new ConvexError({
+        code: "USER_NOT_FOUND",
+        message: "Please sign in",
+        severity: ErrorSeverity.Low,
+      });
     }
 
     return {
