@@ -12,6 +12,7 @@ import type * as actionLog from "../actionLog.js";
 import type * as auth from "../auth.js";
 import type * as autumn from "../autumn.js";
 import type * as crons from "../crons.js";
+import type * as deviceAuth from "../deviceAuth.js";
 import type * as environment from "../environment.js";
 import type * as folder from "../folder.js";
 import type * as http from "../http.js";
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   autumn: typeof autumn;
   crons: typeof crons;
+  deviceAuth: typeof deviceAuth;
   environment: typeof environment;
   folder: typeof folder;
   http: typeof http;
@@ -1841,31 +1843,43 @@ export declare const components: {
         "mutation",
         "internal",
         { userId: string; user_code: string },
-        any
+        { success: boolean }
       >;
       denyDeviceCode: FunctionReference<
         "mutation",
         "internal",
         { user_code: string },
-        any
+        { success: boolean }
       >;
       getDeviceCodeInfo: FunctionReference<
         "query",
         "internal",
         { user_code: string },
-        any
+        null | {
+          clientId?: string;
+          scope?: string;
+          status: string;
+          userCode: string;
+        }
       >;
       pollDeviceToken: FunctionReference<
         "mutation",
         "internal",
         { device_code: string },
-        any
+        { expires_in: number; session_token: string; token_type: string }
       >;
       requestDeviceCode: FunctionReference<
         "mutation",
         "internal",
         { clientId?: string; scope?: string },
-        any
+        {
+          device_code: string;
+          expires_in: number;
+          interval: number;
+          user_code: string;
+          verification_uri: string;
+          verification_uri_complete: string;
+        }
       >;
     };
     invitation: {

@@ -1785,35 +1785,47 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "mutation",
         "internal",
         { userId: string; user_code: string },
-        any,
+        { success: boolean },
         Name
       >;
       denyDeviceCode: FunctionReference<
         "mutation",
         "internal",
         { user_code: string },
-        any,
+        { success: boolean },
         Name
       >;
       getDeviceCodeInfo: FunctionReference<
         "query",
         "internal",
         { user_code: string },
-        any,
+        null | {
+          clientId?: string;
+          scope?: string;
+          status: string;
+          userCode: string;
+        },
         Name
       >;
       pollDeviceToken: FunctionReference<
         "mutation",
         "internal",
         { device_code: string },
-        any,
+        { expires_in: number; session_token: string; token_type: string },
         Name
       >;
       requestDeviceCode: FunctionReference<
         "mutation",
         "internal",
         { clientId?: string; scope?: string },
-        any,
+        {
+          device_code: string;
+          expires_in: number;
+          interval: number;
+          user_code: string;
+          verification_uri: string;
+          verification_uri_complete: string;
+        },
         Name
       >;
     };
