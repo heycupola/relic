@@ -10,7 +10,8 @@
     "test": "vitest",
     "test:once": "vitest run",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
-    "test:coverage": "vitest run --coverage --coverage.reporter=text"
+    "test:coverage": "vitest run --coverage --coverage.reporter=text",
+    "betterAuth:generate-schema": "cd ./convex/betterAuth && bun x @better-auth/cli generate -y --output generatedSchema.ts"
   },
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",

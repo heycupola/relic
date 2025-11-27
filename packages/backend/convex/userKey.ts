@@ -1,4 +1,4 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { components } from "./_generated/api";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
 import { createError, ErrorCode, notFoundError, permissionError } from "./lib/errors";

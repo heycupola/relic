@@ -1,4 +1,4 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { doc } from "convex-helpers/validators";
 import { components, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
