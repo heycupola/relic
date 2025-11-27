@@ -1,10 +1,10 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { components } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
 import { deviceAuthError } from "./lib/errors";
 import { protectedMutation } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
-import { ErrorSeverity, type ProtectedMutationCtx } from "./lib/types";
+import type { ProtectedMutationCtx } from "./lib/types";
 
 export const requestDeviceCode = mutation({
   args: {

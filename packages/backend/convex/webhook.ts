@@ -2,7 +2,7 @@ import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import type { Id } from "./betterAuth/_generated/dataModel";
 
-const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET!;
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 
 async function verifyStripeSignature(
   payload: string,
@@ -24,8 +24,8 @@ async function verifyStripeSignature(
 
   for (const part of parts) {
     const [k, value] = part.split("=");
-    if (k === "t") timestamp = value!;
-    if (k === "v1") sig = value!;
+    if (k === "t" && value) timestamp = value;
+    if (k === "v1" && value) sig = value;
   }
 
   if (!timestamp || !sig) return false;
@@ -71,6 +71,11 @@ export const stripe = httpAction(async (ctx, request) => {
     return new Response("Missing signature", { status: 400 });
   }
 
+  if (!STRIPE_WEBHOOK_SECRET) {
+    console.error("STRIPE_WEBHOOK_SECRET is not configured");
+    return new Response("Server configuration error", { status: 500 });
+  }
+
   const isValid = await verifyStripeSignature(payload, signature, STRIPE_WEBHOOK_SECRET);
 
   if (!isValid) {
@@ -99,7 +104,16 @@ export const stripe = httpAction(async (ctx, request) => {
   return new Response("OK", { status: 200 });
 });
 
-async function handleWebhookEvent(ctx: { runMutation: any; scheduler: any }, event: StripeEvent) {
+type WebhookContext = {
+  // biome-ignore lint/suspicious/noExplicitAny: Convex HTTP action context requires generic mutation types
+  runMutation: (mutation: any, args: any) => Promise<any>;
+  scheduler: {
+    // biome-ignore lint/suspicious/noExplicitAny: Convex scheduler requires generic mutation types
+    runAfter: (delayMs: number, mutation: any, args: any) => Promise<void>;
+  };
+};
+
+async function handleWebhookEvent(ctx: WebhookContext, event: StripeEvent) {
   const { type, data } = event;
   const { metadata, status, items } = data.object;
 
@@ -152,7 +166,7 @@ async function handleWebhookEvent(ctx: { runMutation: any; scheduler: any }, eve
 }
 
 async function handleUserSubscriptionChange(
-  ctx: { runMutation: any },
+  ctx: Pick<WebhookContext, "runMutation">,
   userId: Id<"user">,
   isActive: boolean,
   priceId?: string,
@@ -169,7 +183,7 @@ async function handleUserSubscriptionChange(
 }
 
 async function handleOrganizationSubscriptionChange(
-  ctx: { runMutation: any; scheduler: any },
+  ctx: WebhookContext,
   organizationId: Id<"organization">,
   isActive: boolean,
   priceId?: string,

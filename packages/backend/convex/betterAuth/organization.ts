@@ -184,7 +184,15 @@ export const deleteOrganization = mutation({
         severity: ErrorSeverity.Medium,
       });
     } else if (members.length === 1) {
-      const member = members[0]!;
+      const member = members[0];
+
+      if (!member) {
+        throw createError({
+          code: ErrorCode.INVALID_RESOURCE_STATE,
+          message: "Member data is invalid",
+          severity: ErrorSeverity.Medium,
+        });
+      }
 
       if (member.userId !== args.callerId) {
         throw permissionError("delete this organization (not a member)", ErrorSeverity.High);
@@ -201,8 +209,17 @@ export const deleteOrganization = mutation({
       });
     }
 
+    const firstMember = members[0];
+    if (!firstMember) {
+      throw createError({
+        code: ErrorCode.INVALID_RESOURCE_STATE,
+        message: "Member data is invalid",
+        severity: ErrorSeverity.Medium,
+      });
+    }
+
     await ctx.db.delete(args.organizationId);
-    await ctx.db.delete(members[0]!._id);
+    await ctx.db.delete(firstMember._id);
 
     return { success: true };
   },

@@ -1,7 +1,6 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { doc } from "convex-helpers/validators";
 import { notFoundError } from "../lib/errors";
-import { ErrorSeverity } from "../lib/types";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { UserEmailType } from "./lib/types";

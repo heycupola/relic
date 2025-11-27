@@ -1,4 +1,4 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { doc } from "convex-helpers/validators";
 import { createError, ErrorCode, notFoundError, permissionError } from "../lib/errors";
 import { ErrorSeverity } from "../lib/types";

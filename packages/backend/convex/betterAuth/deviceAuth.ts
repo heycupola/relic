@@ -1,8 +1,7 @@
-import { ConvexError, v } from "convex/values";
-import { createError, deviceAuthError, ErrorCode, notFoundError } from "../lib/errors";
+import { v } from "convex/values";
+import { deviceAuthError, notFoundError } from "../lib/errors";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query } from "./_generated/server";
-import { ErrorSeverity } from "./lib/types";
 
 function generateSecureDeviceCode(): string {
   const bytes = new Uint8Array(32);

@@ -1,5 +1,4 @@
 import type { Autumn } from "@useautumn/convex";
-import { ConvexError } from "convex/values";
 import { customAction, customMutation, customQuery } from "convex-helpers/server/customFunctions";
 import type { ActionCtx, QueryCtx } from "../_generated/server";
 import { action, mutation, query } from "../_generated/server";

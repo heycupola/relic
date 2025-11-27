@@ -1,6 +1,5 @@
 import type { RunMutationCtx } from "@convex-dev/rate-limiter";
 import type { GenericActionCtx, GenericMutationCtx, GenericQueryCtx } from "convex/server";
-import { ConvexError } from "convex/values";
 import type { DataModel } from "../_generated/dataModel";
 import { rateLimiter } from "../rateLimiter";
 import { createError, ErrorCode } from "./errors";
