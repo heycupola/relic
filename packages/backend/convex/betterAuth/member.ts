@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { doc } from "convex-helpers/validators";
+import { createError, ErrorCode, notFoundError, permissionError } from "../lib/errors";
 import { ErrorSeverity } from "../lib/types";
 import { mutation, query } from "./_generated/server";
 import { MembershipRevocationReason, OrgRole } from "./lib/types";
@@ -74,16 +75,12 @@ export const removeMember = mutation({
     const organization = await ctx.db.get(args.organizationId);
 
     if (!organization) {
-      throw new ConvexError({
-        code: "ORGANIZATION_NOT_FOUND",
-        message: "Unable to find organization",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("organization");
     }
 
     if (args.fromId === args.toId) {
-      throw new ConvexError({
-        code: "WRONG_ACTION",
+      throw createError({
+        code: ErrorCode.INVALID_OPERATION,
         message: "You cannot remove yourself",
         severity: ErrorSeverity.High,
       });
@@ -107,27 +104,15 @@ export const removeMember = mutation({
     ]);
 
     if (!fromMember || !toMember) {
-      throw new ConvexError({
-        code: "WRONG_MEMBERS",
-        message: "One or both members are wrong",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("member");
     }
 
     if (toMember.role === OrgRole.Owner) {
-      throw new ConvexError({
-        code: "INSUFFICIENT_AUTHORIZATION",
-        message: "Owners cannot be removed",
-        severity: ErrorSeverity.High,
-      });
+      throw permissionError("remove the owner", ErrorSeverity.High);
     }
 
     if (fromMember.role !== OrgRole.Owner && fromMember.role !== OrgRole.Admin) {
-      throw new ConvexError({
-        code: "INSUFFICIENT_AUTHORIZATION",
-        message: "Only owner and admins can remove a user",
-        severity: ErrorSeverity.High,
-      });
+      throw permissionError("remove members from this organization", ErrorSeverity.High);
     }
 
     await ctx.db.patch(toMember._id, {
@@ -158,19 +143,11 @@ export const leaveOrganization = mutation({
       .first();
 
     if (!member) {
-      throw new ConvexError({
-        code: "MEMBER_NOT_FOUND",
-        message: "Member not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("member");
     }
 
     if (member.role === OrgRole.Owner) {
-      throw new ConvexError({
-        code: "FORBIDDEN_ACTION",
-        message: "Owners cannot leave organizations unless they are deleting it",
-        severity: ErrorSeverity.High,
-      });
+      throw permissionError("leave as owner (delete organization instead)", ErrorSeverity.High);
     }
 
     await ctx.db.patch(member._id, {
@@ -204,19 +181,11 @@ export const updateMemberRole = mutation({
       .first();
 
     if (!updaterMembership || updaterMembership.revokedAt || updaterMembership.isPending) {
-      throw new ConvexError({
-        code: "NO_MEMBERSHIP",
-        message: "Membership not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("membership");
     }
 
     if (updaterMembership.role !== OrgRole.Owner && updaterMembership.role !== OrgRole.Admin) {
-      throw new ConvexError({
-        code: "INSUFFICIENT_AUTHORIZATION",
-        message: "You're not authorized to make this action",
-        severity: ErrorSeverity.High,
-      });
+      throw permissionError("update member roles", ErrorSeverity.High);
     }
 
     const updateeMembership = await ctx.db
@@ -227,11 +196,7 @@ export const updateMemberRole = mutation({
       .first();
 
     if (!updateeMembership || updateeMembership.revokedAt || updateeMembership.isPending) {
-      throw new ConvexError({
-        code: "MEMBER_NOT_FOUND",
-        message: "Member not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("member");
     }
 
     await ctx.db.patch(updateeMembership._id, {
@@ -253,11 +218,7 @@ export const setMemberKey = mutation({
     const member = await ctx.db.get(args.memberId);
 
     if (!member || member.revokedAt) {
-      throw new ConvexError({
-        code: "MEMBER_NOT_FOUND",
-        message: "Member not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("member");
     }
 
     await ctx.db.patch(member._id, {

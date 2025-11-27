@@ -5,6 +5,7 @@ import type { ActionCtx, QueryCtx } from "../_generated/server";
 import { action, mutation, query } from "../_generated/server";
 import { initAutumn } from "../autumn";
 import type { Id as BetterAuthId } from "../betterAuth/_generated/dataModel";
+import { createError, ErrorCode } from "./errors";
 import { ErrorSeverity } from "./types";
 
 export const protectedQuery = customQuery(query, {
@@ -22,8 +23,8 @@ export const protectedQuery = customQuery(query, {
     const identity = await ctx.auth.getUserIdentity();
 
     if (!identity) {
-      throw new ConvexError({
-        code: "USER_NOT_FOUND",
+      throw createError({
+        code: ErrorCode.UNAUTHORIZED,
         message: "Please sign in",
         severity: ErrorSeverity.Low,
       });
@@ -54,8 +55,8 @@ export const protectedMutation = customMutation(mutation, {
     const identity = await ctx.auth.getUserIdentity();
 
     if (!identity) {
-      throw new ConvexError({
-        code: "USER_NOT_FOUND",
+      throw createError({
+        code: ErrorCode.UNAUTHORIZED,
         message: "Please sign in",
         severity: ErrorSeverity.Low,
       });
@@ -87,8 +88,8 @@ export const protectedAction = customAction(action, {
     const identity = await ctx.auth.getUserIdentity();
 
     if (!identity) {
-      throw new ConvexError({
-        code: "USER_NOT_FOUND",
+      throw createError({
+        code: ErrorCode.UNAUTHORIZED,
         message: "Please sign in",
         severity: ErrorSeverity.Low,
       });

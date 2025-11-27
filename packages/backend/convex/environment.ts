@@ -5,6 +5,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
 import { assertProjectAccess, Sector } from "./lib/access";
+import { alreadyExistsError, createError, ErrorCode, notFoundError } from "./lib/errors";
 import { generateSlug } from "./lib/helpers";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
@@ -45,11 +46,7 @@ export const createEnvironment = protectedMutation({
     );
 
     if (existingEnv) {
-      throw new ConvexError({
-        code: "ENVIRONMENT_ALREADY_EXISTS",
-        message: "Environment already exists",
-        severity: ErrorSeverity.High,
-      });
+      throw alreadyExistsError("environment");
     }
 
     const projectEnvironments = await ctx.runQuery(internal.environment._getProjectEnvironments, {
@@ -57,8 +54,8 @@ export const createEnvironment = protectedMutation({
     });
 
     if (projectEnvironments.length >= MAX_ENV_COUNT) {
-      throw new ConvexError({
-        code: "ENVIRONMENT_LIMIT_REACHED",
+      throw createError({
+        code: ErrorCode.ENVIRONMENT_LIMIT_REACHED,
         message: `You've reached the maximum number of environments (${MAX_ENV_COUNT}) for this project`,
         severity: ErrorSeverity.High,
       });
@@ -141,8 +138,8 @@ export const deleteEnvironment = protectedMutation({
     });
 
     if (secrets.length > 0) {
-      throw new ConvexError({
-        code: "SECRETS_FOUND",
+      throw createError({
+        code: ErrorCode.CANNOT_DELETE_NON_EMPTY,
         message: "Cannot delete environment with active secrets. Please delete all secrets first.",
         severity: ErrorSeverity.High,
       });
@@ -153,8 +150,8 @@ export const deleteEnvironment = protectedMutation({
     });
 
     if (folders.length > 0) {
-      throw new ConvexError({
-        code: "FOLDERS_FOUND",
+      throw createError({
+        code: ErrorCode.CANNOT_DELETE_NON_EMPTY,
         message: "Cannot delete environment with active folders. Please delete all folders first.",
         severity: ErrorSeverity.High,
       });
@@ -281,11 +278,7 @@ export const _loadEnvironmentById = internalQuery({
     const environment = await ctx.db.get(args.environmentId);
 
     if (!environment) {
-      throw new ConvexError({
-        code: "ENVIRONMENT_NOT_FOUND",
-        message: "Environment was not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("environment");
     }
 
     return environment;

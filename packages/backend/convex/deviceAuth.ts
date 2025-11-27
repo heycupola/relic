@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
-import { components, internal } from "./_generated/api";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { components } from "./_generated/api";
+import { mutation, query } from "./_generated/server";
+import { deviceAuthError } from "./lib/errors";
 import { protectedMutation } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
 import { ErrorSeverity, type ProtectedMutationCtx } from "./lib/types";
@@ -70,11 +71,7 @@ export const getDeviceCodeInfo = query({
     });
 
     if (!deviceCodeEntry) {
-      throw new ConvexError({
-        code: "DEVICE_CODE_NOT_FOUND",
-        message: "Device code was not found",
-        severity: ErrorSeverity.Medium,
-      });
+      throw deviceAuthError("not_found");
     }
 
     return {

@@ -4,6 +4,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { assertProjectAccess, Sector } from "./lib/access";
+import { alreadyExistsError, createError, ErrorCode, notFoundError } from "./lib/errors";
 import { generateSlug } from "./lib/helpers";
 import { protectedMutation } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
@@ -43,11 +44,7 @@ export const createFolder = protectedMutation({
     });
 
     if (existingFolder) {
-      throw new ConvexError({
-        code: "DUPLICATE_FOLDER_NAME",
-        message: "A folder with this name already exists in this environment",
-        severity: ErrorSeverity.High,
-      });
+      throw alreadyExistsError("folder");
     }
 
     const { folderId, path }: { folderId: Id<"folder">; path: string } = await ctx.runMutation(
@@ -130,8 +127,8 @@ export const deleteFolder = protectedMutation({
     });
 
     if (secrets.length > 0) {
-      throw new ConvexError({
-        code: "FOLDER_NOT_EMPTY",
+      throw createError({
+        code: ErrorCode.CANNOT_DELETE_NON_EMPTY,
         message: "Cannot delete folder that contains secrets. Please remove all secrets first",
         severity: ErrorSeverity.High,
       });
@@ -157,11 +154,7 @@ export const _loadFolderId = internalQuery({
       .first();
 
     if (!folder) {
-      throw new ConvexError({
-        code: "FOLDER_NOT_FOUND",
-        message: "The requested folder does not exist",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("folder");
     }
 
     return folder;

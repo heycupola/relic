@@ -5,6 +5,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
 import { assertProjectAccess, Sector } from "./lib/access";
+import { createError, ErrorCode, notFoundError } from "./lib/errors";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
 import {
@@ -100,11 +101,7 @@ export const getSecret = protectedQuery({
     const secretInstance = secret as Doc<"secret"> | null;
 
     if (!secretInstance) {
-      throw new ConvexError({
-        code: "SECRET_NOT_FOUND",
-        message: "Secret has not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("secret");
     }
 
     const project = await ctx.runQuery(internal.project._loadProjectById, {
@@ -157,16 +154,12 @@ export const updateSecret = protectedMutation({
     });
 
     if (!secret) {
-      throw new ConvexError({
-        code: "SECRET_NOT_FOUND",
-        message: "Secret has not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("secret");
     }
 
     if (secret.isDeleted) {
-      throw new ConvexError({
-        code: "CANNOT_UPDATE_DELETED_SECRET",
+      throw createError({
+        code: ErrorCode.INVALID_RESOURCE_STATE,
         message: "Cannot update a deleted secret. Restore it first",
         severity: ErrorSeverity.Low,
       });
@@ -232,16 +225,12 @@ export const deleteSecret = protectedMutation({
     });
 
     if (!secret) {
-      throw new ConvexError({
-        code: "SECRET_NOT_FOUND",
-        message: "Secret has not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("secret");
     }
 
     if (secret.isDeleted) {
-      throw new ConvexError({
-        code: "CANNOT_UPDATE_DELETED_SECRET",
+      throw createError({
+        code: ErrorCode.INVALID_RESOURCE_STATE,
         message: "Cannot update a deleted secret. Restore it first",
         severity: ErrorSeverity.Low,
       });
@@ -299,17 +288,18 @@ export const reEncryptSecretsForPersonalProjectsBulk = protectedMutation({
   },
   handler: async (ctx, args) => {
     if (args.secretIds.length !== args.encryptedValues.length) {
-      throw new ConvexError({
-        code: "ARRAY_LENGTHS_MISMATCHED",
+      throw createError({
+        code: ErrorCode.ARRAY_LENGTH_MISMATCH,
         message: "secret id length and encrypted values length was not matched",
         severity: ErrorSeverity.Medium,
       });
     }
 
     if (args.secretIds.length === 0 || args.encryptedValues.length === 0) {
-      throw new ConvexError({
-        code: "EMPTY_ARGS",
+      throw createError({
+        code: ErrorCode.INVALID_ARGUMENTS,
         message: "secret ids or encryptedValues cannot be empty",
+        severity: ErrorSeverity.Medium,
       });
     }
 
@@ -357,11 +347,7 @@ export const _loadSecretByKeyAndEnvironmentIdAndFolderId = internalQuery({
       .first();
 
     if (!secret) {
-      throw new ConvexError({
-        code: "SECRET_NOT_FOUND",
-        message: "Secret not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("secret");
     }
 
     return secret;

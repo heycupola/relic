@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { doc } from "convex-helpers/validators";
+import { createError, ErrorCode, notFoundError, permissionError } from "../lib/errors";
 import { generateSlug } from "../lib/helpers";
 import { ErrorSeverity } from "../lib/types";
 import type { Id } from "./_generated/dataModel";
@@ -77,11 +78,7 @@ export const activateOrganization = mutation({
     const org = await ctx.db.get(args.organizationId);
 
     if (!org) {
-      throw new ConvexError({
-        code: "ORGANIZATION_NOT_FOUND",
-        message: "Organization not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("organization");
     }
 
     if (org.subscriptionStatus === OrgSubscriptionStatus.Active) {
@@ -181,8 +178,8 @@ export const deleteOrganization = mutation({
       .collect();
 
     if (members.length === 0) {
-      throw new ConvexError({
-        code: "MEMBERS_NOT_FOUND",
+      throw createError({
+        code: ErrorCode.INVALID_RESOURCE_STATE,
         message: "No member data has tracked",
         severity: ErrorSeverity.Medium,
       });
@@ -190,23 +187,15 @@ export const deleteOrganization = mutation({
       const member = members[0]!;
 
       if (member.userId !== args.callerId) {
-        throw new ConvexError({
-          code: "WRONG_ORGANIZATION",
-          message: "You're not a member of this organization",
-          severity: ErrorSeverity.High,
-        });
+        throw permissionError("delete this organization (not a member)", ErrorSeverity.High);
       }
 
       if (member.role !== OrgRole.Owner) {
-        throw new ConvexError({
-          code: "INSUFFICIENT_AUTHORIZATION",
-          message: "Only owner can delete the organization",
-          severity: ErrorSeverity.High,
-        });
+        throw permissionError("delete this organization", ErrorSeverity.High);
       }
     } else if (members.length > 1) {
-      throw new ConvexError({
-        code: "ORGANIZATION_HAS_MEMBER",
+      throw createError({
+        code: ErrorCode.CANNOT_DELETE_NON_EMPTY,
         message: "Please remove members before deleting organization",
         severity: ErrorSeverity.Low,
       });
@@ -300,9 +289,9 @@ export const rotateKeys = mutation({
   }),
   handler: async (ctx, args) => {
     if (args.memberIds.length !== args.wrappedOrgKeys.length) {
-      throw new ConvexError({
-        code: "MEMBER_IDS_AND_WRAPPED_ORG_KEYS_MISMATCHED",
-        message: "You provided either wrong set of ids or keys",
+      throw createError({
+        code: ErrorCode.ARRAY_LENGTH_MISMATCH,
+        message: "Member IDs and wrapped keys array length mismatch",
         severity: ErrorSeverity.High,
       });
     }
@@ -314,17 +303,17 @@ export const rotateKeys = mutation({
       .collect();
 
     if (members.length === 0) {
-      throw new ConvexError({
-        code: "NO_MEMBERS",
+      throw createError({
+        code: ErrorCode.INVALID_RESOURCE_STATE,
         message: "No members found in the organization",
         severity: ErrorSeverity.Low,
       });
     }
 
     if (members.length !== args.memberIds.length) {
-      throw new ConvexError({
-        code: "MEMBER_LENGTH_AND_MEMBER_IDS_LENGTH_MISMATCHED",
-        message: "You need to provide ids of the entire members in the organization",
+      throw createError({
+        code: ErrorCode.ARRAY_LENGTH_MISMATCH,
+        message: "You need to provide ids of all members in the organization",
         severity: ErrorSeverity.High,
       });
     }

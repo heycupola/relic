@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { createError, deviceAuthError, ErrorCode, notFoundError } from "../lib/errors";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { ErrorSeverity } from "./lib/types";
@@ -87,11 +88,7 @@ export const pollDeviceToken = mutation({
       .first();
 
     if (!deviceCodeEntry) {
-      throw new ConvexError({
-        code: "INVALID_GRANT",
-        message: "Invalid device code",
-        severity: ErrorSeverity.High,
-      });
+      throw deviceAuthError("not_found");
     }
 
     const now = Date.now();
@@ -99,11 +96,7 @@ export const pollDeviceToken = mutation({
     if (now > deviceCodeEntry.expiresAt) {
       await ctx.db.delete(deviceCodeEntry._id);
 
-      throw new ConvexError({
-        code: "EXPIRED_TOKEN",
-        message: "Token has expired",
-        severity: ErrorSeverity.High,
-      });
+      throw deviceAuthError("expired");
     }
 
     if (deviceCodeEntry.lastPolledAt) {
@@ -111,11 +104,7 @@ export const pollDeviceToken = mutation({
       const pollingInterval = deviceCodeEntry.pollingInterval || 5000;
 
       if (timeSinceLastPoll < pollingInterval) {
-        throw new ConvexError({
-          code: "SLOW_DOWN",
-          message: "Polling too frequently. Please slow down.",
-          severity: ErrorSeverity.Medium,
-        });
+        throw deviceAuthError("polling_too_fast");
       }
     }
 
@@ -124,38 +113,22 @@ export const pollDeviceToken = mutation({
     });
 
     if (deviceCodeEntry.status === "pending") {
-      throw new ConvexError({
-        code: "AUTHORIZATION_PENDING",
-        message: "Authorization is pending",
-        severity: ErrorSeverity.High,
-      });
+      throw deviceAuthError("pending");
     }
 
     if (deviceCodeEntry.status === "denied") {
       await ctx.db.delete(deviceCodeEntry._id);
-      throw new ConvexError({
-        code: "ACCESS_DENIED",
-        message: "Access denied",
-        severity: ErrorSeverity.High,
-      });
+      throw deviceAuthError("denied");
     }
 
     if (!deviceCodeEntry.userId) {
-      throw new ConvexError({
-        code: "INVALID_GRANT",
-        message: "Invalid grant",
-        severity: ErrorSeverity.High,
-      });
+      throw deviceAuthError("not_found");
     }
 
     const user = await ctx.db.get(deviceCodeEntry.userId as Id<"user">);
 
     if (!user) {
-      throw new ConvexError({
-        code: "INVALID_USER",
-        message: "Invalid grant",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("user");
     }
 
     await ctx.db.delete(deviceCodeEntry._id);
@@ -232,29 +205,17 @@ export const approveDeviceCode = mutation({
       .first();
 
     if (!deviceCodeEntry) {
-      throw new ConvexError({
-        code: "INVALID_USER_CODE",
-        message: "Invalid user code",
-        severity: ErrorSeverity.High,
-      });
+      throw deviceAuthError("not_found");
     }
 
     const now = Date.now();
     if (now > deviceCodeEntry.expiresAt) {
       await ctx.db.delete(deviceCodeEntry._id);
-      throw new ConvexError({
-        code: "CODE_EXPIRED",
-        message: "Device code has expired",
-        severity: ErrorSeverity.High,
-      });
+      throw deviceAuthError("expired");
     }
 
     if (deviceCodeEntry.status !== "pending") {
-      throw new ConvexError({
-        code: "CODE_ALREADY_PROCESSED",
-        message: "Device code has already been processed",
-        severity: ErrorSeverity.High,
-      });
+      throw deviceAuthError("already_used");
     }
 
     await ctx.db.patch(deviceCodeEntry._id, {
@@ -281,21 +242,13 @@ export const denyDeviceCode = mutation({
       .first();
 
     if (!deviceCodeEntry) {
-      throw new ConvexError({
-        code: "INVALID_USER_CODE",
-        message: "Invalid user code",
-        severity: ErrorSeverity.High,
-      });
+      throw deviceAuthError("not_found");
     }
 
     const now = Date.now();
     if (now > deviceCodeEntry.expiresAt) {
       await ctx.db.delete(deviceCodeEntry._id);
-      throw new ConvexError({
-        code: "CODE_EXPIRED",
-        message: "Device code has expired",
-        severity: ErrorSeverity.High,
-      });
+      throw deviceAuthError("expired");
     }
 
     await ctx.db.patch(deviceCodeEntry._id, {

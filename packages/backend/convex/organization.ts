@@ -4,6 +4,13 @@ import { internalMutation } from "./_generated/server";
 import type { Doc as BetterAuthDoc, Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
 import { OrgRole, OrgSubscriptionStatus } from "./betterAuth/lib/types";
 import { isOrganizationAccessible } from "./lib/access";
+import {
+  createError,
+  ErrorCode,
+  limitReachedError,
+  notFoundError,
+  permissionError,
+} from "./lib/errors";
 import { protectedAction, protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
 import {
@@ -29,8 +36,8 @@ export const createOrganization = protectedAction({
     });
 
     if (!data || error || data.allowed === false) {
-      throw new ConvexError({
-        code: "CANNOT_CREATE_ORG",
+      throw createError({
+        code: ErrorCode.PAYMENT_REQUIRED,
         message: "Unable to create org",
         severity: ErrorSeverity.Medium,
       });
@@ -107,10 +114,10 @@ export const createOrganization = protectedAction({
       });
 
       if (checkoutResult.error || !checkoutResult.data) {
-        throw new ConvexError({
-          code: "CHECKOUT_FAILED",
+        throw createError({
+          code: ErrorCode.EXTERNAL_SERVICE_ERROR,
           message: `Failed to create checkout session: ${checkoutResult.error?.message || "Unknown error"}`,
-          severity: "high" as const,
+          severity: ErrorSeverity.High,
         });
       }
 
@@ -151,11 +158,7 @@ export const inviteMember = protectedAction({
     );
 
     if (!organization) {
-      throw new ConvexError({
-        code: "ORGANIZATION_NOT_FOUND",
-        message: "Organization doesn't exist",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("organization");
     }
 
     const { accessible, message } = await isOrganizationAccessible(
@@ -163,9 +166,9 @@ export const inviteMember = protectedAction({
     );
 
     if (!accessible) {
-      throw new ConvexError({
-        code: "ORGANIZATION_NOT_ACCESSIBLE",
-        message,
+      throw createError({
+        code: ErrorCode.ORGANIZATION_INACCESSIBLE,
+        message: message ?? undefined,
         severity: ErrorSeverity.High,
       });
     }
@@ -176,8 +179,8 @@ export const inviteMember = protectedAction({
     });
 
     if (error || !data) {
-      throw new ConvexError({
-        code: "MEMBER_DATA_INACCESSIBLE",
+      throw createError({
+        code: ErrorCode.EXTERNAL_SERVICE_ERROR,
         message: "Unable to access member data",
         severity: ErrorSeverity.High,
       });
@@ -187,19 +190,15 @@ export const inviteMember = protectedAction({
     const currentUsage = data.usage;
 
     if (limit === undefined || currentUsage === undefined) {
-      throw new ConvexError({
-        code: "NO_MEMBER_DATA_FOUND",
+      throw createError({
+        code: ErrorCode.SERVER_ERROR,
         message: "Members were not found",
         severity: ErrorSeverity.High,
       });
     }
 
     if (currentUsage >= limit) {
-      throw new ConvexError({
-        code: "MEMBER_LIMIT_REACHED",
-        message: `Organization member limit reached (${currentUsage}/${limit}). Please add more seats.`,
-        severity: ErrorSeverity.High,
-      });
+      throw limitReachedError("members", currentUsage, limit, ErrorSeverity.High);
     }
 
     await checkRateLimit(ctx, "write", args.organizationId);
@@ -210,11 +209,7 @@ export const inviteMember = protectedAction({
     });
 
     if (!role) {
-      throw new ConvexError({
-        code: "INVITER_HAS_NO_ROLE",
-        message: "You are not part of this organization",
-        severity: ErrorSeverity.High,
-      });
+      throw permissionError("invite members to this organization", ErrorSeverity.High);
     }
 
     // NOTE: Permission validation (owner/admin only) is handled by Better-Auth's inviteMember
@@ -249,11 +244,7 @@ export const removeMember = protectedAction({
     );
 
     if (!organization) {
-      throw new ConvexError({
-        code: "ORGANIZATION_NOT_FOUND",
-        message: "Organization doesn't exist",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("organization");
     }
 
     const { accessible, message } = await isOrganizationAccessible(
@@ -261,9 +252,9 @@ export const removeMember = protectedAction({
     );
 
     if (!accessible) {
-      throw new ConvexError({
-        code: "ORGANIZATION_NOT_ACCESSIBLE",
-        message,
+      throw createError({
+        code: ErrorCode.ORGANIZATION_INACCESSIBLE,
+        message: message ?? undefined,
         severity: ErrorSeverity.High,
       });
     }
@@ -299,11 +290,7 @@ export const leaveOrganization = protectedAction({
     );
 
     if (!organization) {
-      throw new ConvexError({
-        code: "ORGANIZATION_NOT_FOUND",
-        message: "Organization doesn't exist",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("organization");
     }
 
     const { accessible, message } = await isOrganizationAccessible(
@@ -311,9 +298,9 @@ export const leaveOrganization = protectedAction({
     );
 
     if (!accessible) {
-      throw new ConvexError({
-        code: "ORGANIZATION_NOT_ACCESSIBLE",
-        message,
+      throw createError({
+        code: ErrorCode.ORGANIZATION_INACCESSIBLE,
+        message: message ?? undefined,
         severity: ErrorSeverity.High,
       });
     }
@@ -350,11 +337,7 @@ export const listOrganizationMembers = protectedQuery({
     );
 
     if (!organization) {
-      throw new ConvexError({
-        code: "ORGANIZATION_NOT_FOUND",
-        message: "Organization doesn't exist",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("organization");
     }
 
     const { accessible, message } = await isOrganizationAccessible(
@@ -362,9 +345,9 @@ export const listOrganizationMembers = protectedQuery({
     );
 
     if (!accessible) {
-      throw new ConvexError({
-        code: "ORGANIZATION_NOT_ACCESSIBLE",
-        message,
+      throw createError({
+        code: ErrorCode.ORGANIZATION_INACCESSIBLE,
+        message: message ?? undefined,
         severity: ErrorSeverity.High,
       });
     }
@@ -378,11 +361,7 @@ export const listOrganizationMembers = protectedQuery({
     );
 
     if (!isOrganizationMember) {
-      throw new ConvexError({
-        code: "INSUFFICIENT_AUTHORIZATION",
-        message: "You are not the member of the organization of the project",
-        severity: ErrorSeverity.High,
-      });
+      throw permissionError("view organization members", ErrorSeverity.High);
     }
 
     const members = await ctx.runQuery(components.betterAuth.member.getOrganizationMembers, {
@@ -442,11 +421,7 @@ export const rotateKeys = protectedMutation({
     );
 
     if (!organization) {
-      throw new ConvexError({
-        code: "ORGANIZATION_NOT_FOUND",
-        message: "Organization doesn't exist",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("organization");
     }
 
     const { accessible, message } = await isOrganizationAccessible(
@@ -454,9 +429,9 @@ export const rotateKeys = protectedMutation({
     );
 
     if (!accessible) {
-      throw new ConvexError({
-        code: "ORGANIZATION_NOT_ACCESSIBLE",
-        message,
+      throw createError({
+        code: ErrorCode.ORGANIZATION_INACCESSIBLE,
+        message: message ?? undefined,
         severity: ErrorSeverity.High,
       });
     }
@@ -467,16 +442,16 @@ export const rotateKeys = protectedMutation({
     });
 
     if (!requesterRole || (requesterRole as OrgRole) !== OrgRole.Owner) {
-      throw new ConvexError({
-        code: "INSUFFICIENT_ROLE",
+      throw createError({
+        code: ErrorCode.INSUFFICIENT_ROLE,
         message: "Only organization owners can rotate keys",
         severity: ErrorSeverity.High,
       });
     }
 
     if (args.newKeyVersion !== organization.currentKeyVersion + 1) {
-      throw new ConvexError({
-        code: "WRONG_KEY_VERSION",
+      throw createError({
+        code: ErrorCode.INVALID_ARGUMENTS,
         message: `Invalid key version. Expected ${organization.currentKeyVersion + 1}, got ${args.newKeyVersion}`,
         severity: ErrorSeverity.High,
       });
@@ -540,8 +515,8 @@ export const _rotateAllKeys = internalMutation({
       .collect();
 
     if (projects.length === 0) {
-      throw new ConvexError({
-        code: "NO_PROJECTS_FOUND",
+      throw createError({
+        code: ErrorCode.INVALID_RESOURCE_STATE,
         message: "Organization has no projects",
         severity: ErrorSeverity.High,
       });
@@ -560,8 +535,8 @@ export const _rotateAllKeys = internalMutation({
     const secrets = secretsByProject.flat();
 
     if (args.secrets.length !== secrets.length) {
-      throw new ConvexError({
-        code: "SECRETS_ARGUMENT_LENGHT_AND_TOTAL_SECRET_LENGTH_MISMATCHED",
+      throw createError({
+        code: ErrorCode.ARRAY_LENGTH_MISMATCH,
         message:
           "You need to provide secrets as matched with the total secrets in the organization",
         severity: ErrorSeverity.High,
@@ -591,8 +566,8 @@ export const _rotateAllKeys = internalMutation({
 
         secretsReEncrypted += 1;
       } catch (error) {
-        throw new ConvexError({
-          code: "SERVER_ERROR",
+        throw createError({
+          code: ErrorCode.SERVER_ERROR,
           message: error instanceof Error ? error.message : String(error),
           severity: ErrorSeverity.High,
         });
@@ -629,11 +604,7 @@ export const _handleOrganizationActivation = internalMutation({
     });
 
     if (!org) {
-      throw new ConvexError({
-        code: "ORGANIZATION_NOT_FOUND",
-        message: "Organization not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("organization");
     }
 
     if (org.subscriptionStatus === OrgSubscriptionStatus.Active) {
@@ -656,11 +627,7 @@ export const _handleOrganizationPaymentLapsed = internalMutation({
     });
 
     if (!org) {
-      throw new ConvexError({
-        code: "ORGANIZATION_NOT_FOUND",
-        message: "Organization not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("organization");
     }
 
     await ctx.runMutation(components.betterAuth.organization.markOrganizationPaymentLapsed, {
@@ -680,11 +647,7 @@ export const _handleOrganizationSuspension = internalMutation({
     });
 
     if (!org) {
-      throw new ConvexError({
-        code: "ORGANIZATION_NOT_FOUND",
-        message: "Organization not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("organization");
     }
 
     await ctx.runMutation(components.betterAuth.organization.suspendOrganization, {

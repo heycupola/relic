@@ -3,6 +3,7 @@ import { components, internal } from "../_generated/api";
 import type { Doc } from "../_generated/dataModel";
 import type { Doc as BetterAuthDoc, Id as BetterAuthId } from "../betterAuth/_generated/dataModel";
 import { OrgRole, OrgSubscriptionStatus } from "../betterAuth/lib/types";
+import { createError, ErrorCode, notFoundError, permissionError } from "./errors";
 import type { ProtectedActionCtx, ProtectedMutationCtx, ProtectedQueryCtx } from "./types";
 import { ErrorSeverity, ProjectOwner } from "./types";
 
@@ -55,8 +56,8 @@ export function assertPermission(sector: Sector, role: OrgRole, permissions: Acc
   const missingPermissions = permissions.filter((p) => !rolePermissions.includes(p));
 
   if (missingPermissions.length > 0) {
-    throw new ConvexError({
-      code: "INSUFFICIENT_AUTHORIZATION",
+    throw createError({
+      code: ErrorCode.INSUFFICIENT_PERMISSION,
       message: `Role ${role} does not have permissions: ${missingPermissions.join(
         ", ",
       )} in sector ${sector}`,
@@ -249,11 +250,7 @@ export async function syncUserPlanStatus(
   });
 
   if (!user) {
-    throw new ConvexError({
-      code: "USER_NOT_FOUND",
-      message: "User not found",
-      severity: ErrorSeverity.High,
-    });
+    throw notFoundError("user");
   }
 
   const projects = await ctx.runQuery(internal.project._loadProjects, {
@@ -332,19 +329,15 @@ export const assertProjectAccess = async (
   switch (project.ownerType) {
     case ProjectOwner.User: {
       if (ctx.userId !== project.ownerId) {
-        throw new ConvexError({
-          code: "INSUFFICIENT_AUTHORIZATION",
-          message: "You are not the owner of the project",
-          severity: ErrorSeverity.High,
-        });
+        throw permissionError("access this project", ErrorSeverity.High);
       }
 
       const { accessible, reason } = await isProjectAccessible(ctx, project);
 
       if (!accessible) {
-        throw new ConvexError({
-          code: "ORGANIZATION_INACCESSIBLE",
-          message: reason,
+        throw createError({
+          code: ErrorCode.ORGANIZATION_INACCESSIBLE,
+          message: reason || "This organization is not accessible",
           severity: ErrorSeverity.High,
         });
       }
@@ -389,16 +382,12 @@ export const assertOrganizationPermissions = async (
   );
 
   if (!isOrganizationMember) {
-    throw new ConvexError({
-      code: "INSUFFICIENT_AUTHORIZATION",
-      message: "You are not the member of the organization of the project",
-      severity: ErrorSeverity.High,
-    });
+    throw permissionError("access this organization", ErrorSeverity.High);
   }
 
   if ((sector && !permissions) || (!sector && permissions)) {
-    throw new ConvexError({
-      code: "INVALID_ARGUMENTS",
+    throw createError({
+      code: ErrorCode.INVALID_ARGUMENTS,
       message: "sector and permissions must be provided together",
       severity: ErrorSeverity.High,
     });
@@ -408,8 +397,8 @@ export const assertOrganizationPermissions = async (
     if (role) {
       assertPermission(sector, role as OrgRole, permissions);
     } else {
-      throw new ConvexError({
-        code: "MEMBER_ROLE_MISSING",
+      throw createError({
+        code: ErrorCode.INVALID_RESOURCE_STATE,
         message: "The member's role is missing",
         severity: ErrorSeverity.High,
       });

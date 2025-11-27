@@ -39,6 +39,7 @@ export enum ErrorCode {
 
   // Validation Errors
   INVALID_ARGUMENTS = "INVALID_ARGUMENTS",
+  INVALID_OPERATION = "INVALID_OPERATION",
   ARRAY_LENGTH_MISMATCH = "ARRAY_LENGTH_MISMATCH",
   INVALID_RESOURCE_STATE = "INVALID_RESOURCE_STATE",
 
@@ -98,6 +99,7 @@ const ERROR_MESSAGES: Record<ErrorCode, string> = {
 
   // Validation
   [ErrorCode.INVALID_ARGUMENTS]: "Invalid arguments provided",
+  [ErrorCode.INVALID_OPERATION]: "Invalid operation",
   [ErrorCode.ARRAY_LENGTH_MISMATCH]: "Array lengths do not match",
   [ErrorCode.INVALID_RESOURCE_STATE]: "Resource is in an invalid state",
 
@@ -123,16 +125,16 @@ export interface ErrorOptions {
   code: ErrorCode;
   message?: string;
   severity?: ErrorSeverity;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 // Main error factory
-export function createError(options: ErrorOptions): ConvexError {
+export function createError(options: ErrorOptions): never {
   const { code, message, severity = ErrorSeverity.Medium, metadata } = options;
 
   const errorMessage = message || ERROR_MESSAGES[code];
 
-  return new ConvexError({
+  throw new ConvexError({
     code,
     message: errorMessage,
     severity,
@@ -151,10 +153,11 @@ export function notFoundError(
     | "folder"
     | "secret"
     | "member"
+    | "membership"
     | "invitation"
     | "request",
   severity: ErrorSeverity = ErrorSeverity.High,
-): ConvexError {
+): never {
   const codeMap = {
     user: ErrorCode.USER_NOT_FOUND,
     organization: ErrorCode.ORGANIZATION_NOT_FOUND,
@@ -163,11 +166,12 @@ export function notFoundError(
     folder: ErrorCode.FOLDER_NOT_FOUND,
     secret: ErrorCode.SECRET_NOT_FOUND,
     member: ErrorCode.MEMBER_NOT_FOUND,
+    membership: ErrorCode.MEMBER_NOT_FOUND,
     invitation: ErrorCode.INVITATION_NOT_FOUND,
     request: ErrorCode.REQUEST_NOT_FOUND,
   };
 
-  return createError({
+  createError({
     code: codeMap[resource],
     severity,
   });
@@ -176,8 +180,8 @@ export function notFoundError(
 export function permissionError(
   action?: string,
   severity: ErrorSeverity = ErrorSeverity.High,
-): ConvexError {
-  return createError({
+): never {
+  createError({
     code: ErrorCode.INSUFFICIENT_PERMISSION,
     message: action ? `You don't have permission to ${action}` : undefined,
     severity,
@@ -189,7 +193,7 @@ export function limitReachedError(
   currentUsage?: number,
   limit?: number,
   severity: ErrorSeverity = ErrorSeverity.Medium,
-): ConvexError {
+): never {
   const codeMap = {
     personal_projects: ErrorCode.PERSONAL_PROJECTS_LIMIT_REACHED,
     organization_projects: ErrorCode.ORGANIZATION_PROJECTS_LIMIT_REACHED,
@@ -203,7 +207,7 @@ export function limitReachedError(
     message = `Limit reached. You have ${currentUsage} ${resource.replace("_", " ")}${plural} out of ${limit} allowed. Upgrade your plan for more`;
   }
 
-  return createError({
+  createError({
     code: codeMap[resource],
     message,
     severity,
@@ -213,8 +217,8 @@ export function limitReachedError(
 export function alreadyExistsError(
   resource: string,
   severity: ErrorSeverity = ErrorSeverity.Low,
-): ConvexError {
-  return createError({
+): never {
+  createError({
     code: ErrorCode.RESOURCE_ALREADY_EXISTS,
     message: `A ${resource} with this identifier already exists`,
     severity,
@@ -224,7 +228,7 @@ export function alreadyExistsError(
 export function deviceAuthError(
   type: "not_found" | "expired" | "already_used" | "pending" | "denied" | "polling_too_fast",
   severity: ErrorSeverity = ErrorSeverity.Medium,
-): ConvexError {
+): never {
   const codeMap = {
     not_found: ErrorCode.DEVICE_CODE_NOT_FOUND,
     expired: ErrorCode.DEVICE_CODE_EXPIRED,
@@ -234,7 +238,7 @@ export function deviceAuthError(
     polling_too_fast: ErrorCode.POLLING_TOO_FAST,
   };
 
-  return createError({
+  createError({
     code: codeMap[type],
     severity,
   });

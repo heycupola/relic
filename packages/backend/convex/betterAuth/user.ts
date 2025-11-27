@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { doc } from "convex-helpers/validators";
+import { notFoundError } from "../lib/errors";
 import { ErrorSeverity } from "../lib/types";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
@@ -13,11 +14,7 @@ export const loadUserById = query({
     const user = await ctx.db.get(args.userId);
 
     if (!user) {
-      throw new ConvexError({
-        code: "USER_NOT_FOUND",
-        message: "User not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("user");
     }
 
     return user;
@@ -43,11 +40,7 @@ export const useFreeOrg = mutation({
     const user = await ctx.db.get(args.userId);
 
     if (!user) {
-      throw new ConvexError({
-        code: "USER_NOT_FOUND",
-        message: "User not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("user");
     }
 
     await ctx.db.patch(args.userId, { freeOrganizationUsed: true, updatedAt: Date.now() });
@@ -68,11 +61,7 @@ export const upgradeToPro = mutation({
     const user = await ctx.db.get(args.userId);
 
     if (!user) {
-      throw new ConvexError({
-        code: "USER_NOT_FOUND",
-        message: "User not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("user");
     }
 
     await ctx.db.patch(args.userId, {
@@ -102,11 +91,7 @@ export const downgradeToFree = mutation({
     const user = await ctx.db.get(args.userId);
 
     if (!user) {
-      throw new ConvexError({
-        code: "USER_NOT_FOUND",
-        message: "User not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("user");
     }
 
     const now = Date.now();

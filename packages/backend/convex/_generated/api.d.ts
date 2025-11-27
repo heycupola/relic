@@ -17,6 +17,7 @@ import type * as environment from "../environment.js";
 import type * as folder from "../folder.js";
 import type * as http from "../http.js";
 import type * as lib_access from "../lib/access.js";
+import type * as lib_errors from "../lib/errors.js";
 import type * as lib_helpers from "../lib/helpers.js";
 import type * as lib_middleware from "../lib/middleware.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
@@ -46,6 +47,7 @@ declare const fullApi: ApiFromModules<{
   folder: typeof folder;
   http: typeof http;
   "lib/access": typeof lib_access;
+  "lib/errors": typeof lib_errors;
   "lib/helpers": typeof lib_helpers;
   "lib/middleware": typeof lib_middleware;
   "lib/rateLimit": typeof lib_rateLimit;

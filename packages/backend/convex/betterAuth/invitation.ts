@@ -1,4 +1,11 @@
 import { ConvexError, v } from "convex/values";
+import {
+  alreadyExistsError,
+  createError,
+  ErrorCode,
+  notFoundError,
+  permissionError,
+} from "../lib/errors";
 import { ErrorSeverity } from "../lib/types.ts";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
@@ -29,11 +36,7 @@ export const inviteMember = mutation({
       .first();
 
     if (!organization) {
-      throw new ConvexError({
-        code: "ORGANIZATION_NOT_FOUND",
-        message: "Organization not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("organization");
     }
 
     const invitee = await ctx.db
@@ -42,16 +45,12 @@ export const inviteMember = mutation({
       .first();
 
     if (!invitee) {
-      throw new ConvexError({
-        code: "INVITEE_NOT_FOUND",
-        message: "Invitee not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("user");
     }
 
     if (args.inviterId === invitee._id) {
-      throw new ConvexError({
-        code: "CANNOT_INVITE_YOURSELF",
+      throw createError({
+        code: ErrorCode.INVALID_OPERATION,
         message: "You cannot invite yourself",
         severity: ErrorSeverity.High,
       });
@@ -65,11 +64,7 @@ export const inviteMember = mutation({
       .first();
 
     if (member && member.isPending === false && member.revokedAt === null) {
-      throw new ConvexError({
-        code: "INVITEE_ALREADY_MEMBER",
-        message: "Invitee is already an active member of the organization",
-        severity: ErrorSeverity.High,
-      });
+      throw alreadyExistsError("member");
     }
 
     const now = Date.now();
@@ -86,8 +81,8 @@ export const inviteMember = mutation({
       .first();
 
     if (existingPendingInvitation && existingPendingInvitation.expiresAt > now) {
-      throw new ConvexError({
-        code: "INVITATION_ALREADY_PENDING",
+      throw createError({
+        code: ErrorCode.INVITATION_ALREADY_PENDING,
         message: "This user already has a pending invitation",
         severity: ErrorSeverity.High,
       });
@@ -100,11 +95,7 @@ export const inviteMember = mutation({
     }
 
     if (args.inviterRole === OrgRole.Viewer || args.inviterRole === OrgRole.Member) {
-      throw new ConvexError({
-        code: "INSUFFICIENT_ROLE",
-        message: "Only owners, and admins can invite members",
-        severity: ErrorSeverity.High,
-      });
+      throw permissionError("invite members to this organization", ErrorSeverity.High);
     }
 
     await ctx.db.insert("invitation", {
@@ -154,24 +145,20 @@ export const acceptOrCancelInvitation = mutation({
     const invitation = await ctx.db.get(args.invitationId);
 
     if (!invitation) {
-      throw new ConvexError({
-        code: "INVITATION_NOT_FOUND",
-        message: "Invitation not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("invitation");
     }
 
     if (invitation.email !== args.inviteeEmail) {
-      throw new ConvexError({
-        code: "WRONG_INVITEE",
+      throw createError({
+        code: ErrorCode.INVALID_ARGUMENTS,
         message: "Wrong invitee email",
         severity: ErrorSeverity.High,
       });
     }
 
     if (invitation.status !== InvitationStatus.Pending) {
-      throw new ConvexError({
-        code: "INVALID_INVITATION",
+      throw createError({
+        code: ErrorCode.INVALID_RESOURCE_STATE,
         message: "Invalid invitation",
         severity: ErrorSeverity.High,
       });
@@ -180,11 +167,7 @@ export const acceptOrCancelInvitation = mutation({
     const organization = await ctx.db.get(invitation.organizationId as Id<"organization">);
 
     if (!organization) {
-      throw new ConvexError({
-        code: "INVALID_ORGANIZATION",
-        message: "Invalid organization",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("organization");
     }
 
     const now = Date.now();
@@ -214,11 +197,7 @@ export const acceptOrCancelInvitation = mutation({
         .first();
 
       if (!member) {
-        throw new ConvexError({
-          code: "UNABLE_TO_MATCH_MEMBER",
-          message: "Member wasn't matched",
-          severity: ErrorSeverity.High,
-        });
+        throw notFoundError("member");
       }
       await ctx.db.patch(member._id, {
         isPending: false,

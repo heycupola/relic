@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { components } from "./_generated/api";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
+import { createError, ErrorCode, notFoundError, permissionError } from "./lib/errors";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
 import { ErrorSeverity, type ProtectedMutationCtx, type ProtectedQueryCtx } from "./lib/types";
@@ -126,19 +127,11 @@ export const completeOrgKeyRewrapRequest = protectedMutation({
     const request = await ctx.db.get(args.requestId);
 
     if (!request) {
-      throw new ConvexError({
-        code: "REQUEST_NOT_FOUND",
-        message: "Unable to find the request",
-        severity: ErrorSeverity.Low,
-      });
+      throw notFoundError("request");
     }
 
     if (request.receiverId !== ctx.userId) {
-      throw new ConvexError({
-        code: "WRONG_RECEIVER",
-        message: "You're not the request receiver",
-        severity: ErrorSeverity.Low,
-      });
+      throw permissionError("complete this request", ErrorSeverity.Low);
     }
 
     const org = await ctx.runQuery(components.betterAuth.organization.loadOrganizationById, {
@@ -146,19 +139,11 @@ export const completeOrgKeyRewrapRequest = protectedMutation({
     });
 
     if (!org) {
-      throw new ConvexError({
-        code: "ORG_NOT_FOUND",
-        message: "Organization not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("organization");
     }
 
     if (org.ownerId !== ctx.userId) {
-      throw new ConvexError({
-        code: "NOT_ORG_OWNER",
-        message: "Only organization owner can complete rewrap requests",
-        severity: ErrorSeverity.High,
-      });
+      throw permissionError("complete rewrap requests for this organization", ErrorSeverity.High);
     }
 
     await ctx.runMutation(components.betterAuth.member.setMemberKey, {
@@ -185,27 +170,19 @@ export const cancelOrgKeyRewrapRequest = protectedMutation({
     const request = await ctx.db.get(args.requestId);
 
     if (!request) {
-      throw new ConvexError({
-        code: "REQUEST_NOT_FOUND",
-        message: "Unable to find the request",
-        severity: ErrorSeverity.Low,
-      });
+      throw notFoundError("request");
     }
 
     if (request.status !== OrgRewrapRequestStatus.Pending) {
-      throw new ConvexError({
-        code: "UNABLE_TO_CANCEL",
+      throw createError({
+        code: ErrorCode.INVALID_RESOURCE_STATE,
         message: "The request has either accepted or canceled before",
         severity: ErrorSeverity.Low,
       });
     }
 
     if (request.receiverId !== ctx.userId) {
-      throw new ConvexError({
-        code: "UNAUTHORIZED",
-        message: "Only receiver can cancel",
-        severity: ErrorSeverity.High,
-      });
+      throw permissionError("cancel this request", ErrorSeverity.High);
     }
 
     await ctx.db.patch(request._id, {

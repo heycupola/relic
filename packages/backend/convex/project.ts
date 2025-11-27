@@ -11,6 +11,13 @@ import {
   isOrganizationAccessible,
   Sector,
 } from "./lib/access";
+import {
+  alreadyExistsError,
+  createError,
+  ErrorCode,
+  limitReachedError,
+  notFoundError,
+} from "./lib/errors";
 import { generateSlug } from "./lib/helpers";
 import { protectedAction, protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
@@ -34,8 +41,8 @@ export const createPersonalProject = protectedAction({
     });
 
     if (error || !data) {
-      throw new ConvexError({
-        code: "PRO_PLAN_INFO_IS_NOT_REACHABLE",
+      throw createError({
+        code: ErrorCode.EXTERNAL_SERVICE_ERROR,
         message: "Pro plan info isn't reachable",
         severity: ErrorSeverity.High,
       });
@@ -44,11 +51,12 @@ export const createPersonalProject = protectedAction({
     if (!data.allowed) {
       const currentUsage = data.usage || 0;
 
-      throw new ConvexError({
-        code: "PERSONAL_PROJECTS_LIMIT_REACHED",
-        message: `Project limit reached. You currently have ${currentUsage} project${currentUsage !== 1 ? "s" : ""}. Purchase additional projects or upgrade your plan`,
-        severity: ErrorSeverity.High,
-      });
+      throw limitReachedError(
+        "personal_projects",
+        currentUsage,
+        data.included_usage,
+        ErrorSeverity.High,
+      );
     }
 
     await checkRateLimit(ctx, "write");
@@ -86,11 +94,7 @@ export const createOrganizationProject = protectedAction({
     );
 
     if (!organization) {
-      throw new ConvexError({
-        code: "ORGANIZATION_NOT_FOUND",
-        message: "Organization was not found with the given organization id",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("organization");
     }
 
     const { accessible } = await isOrganizationAccessible(
@@ -98,8 +102,8 @@ export const createOrganizationProject = protectedAction({
     );
 
     if (!accessible) {
-      throw new ConvexError({
-        code: "ORGANIZATION_IS_NOT_ACCESSIBLE",
+      throw createError({
+        code: ErrorCode.ORGANIZATION_INACCESSIBLE,
         message: "The organization you want to create a project in is not available",
         severity: ErrorSeverity.High,
       });
@@ -118,8 +122,8 @@ export const createOrganizationProject = protectedAction({
     });
 
     if (error || !data) {
-      throw new ConvexError({
-        code: "ORGANIZATION_PROJECTS_NOT_REACHABLE",
+      throw createError({
+        code: ErrorCode.EXTERNAL_SERVICE_ERROR,
         message: "Organization projects are not reachable",
         severity: ErrorSeverity.High,
       });
@@ -128,11 +132,12 @@ export const createOrganizationProject = protectedAction({
     if (!data.allowed) {
       const currentUsage = data.usage || 0;
 
-      throw new ConvexError({
-        code: "ORGANIZATION_PROJECTS_LIMIT_REACHED",
-        message: `Organization project limit reached. You currently have ${currentUsage} project${currentUsage !== 1 ? "s" : ""}. Purchase additional projects or upgrade your plan`,
-        severity: ErrorSeverity.High,
-      });
+      throw limitReachedError(
+        "organization_projects",
+        currentUsage,
+        data.included_usage,
+        ErrorSeverity.High,
+      );
     }
 
     await checkRateLimit(ctx, "write");
@@ -205,11 +210,7 @@ export const listOrganizationProjects = protectedQuery({
     );
 
     if (!organization) {
-      throw new ConvexError({
-        code: "ORGANIZATION_NOT_FOUND",
-        message: "Organization was not found with the given organization id",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("organization");
     }
 
     const { accessible } = await isOrganizationAccessible(
@@ -217,8 +218,8 @@ export const listOrganizationProjects = protectedQuery({
     );
 
     if (!accessible) {
-      throw new ConvexError({
-        code: "ORGANIZATION_IS_NOT_ACCESSIBLE",
+      throw createError({
+        code: ErrorCode.ORGANIZATION_INACCESSIBLE,
         message: "The organization you want to create a project in is not available",
         severity: ErrorSeverity.High,
       });
@@ -355,19 +356,20 @@ export const unarchiveProject = protectedAction({
       });
 
       if (error || !data) {
-        throw new ConvexError({
-          code: "PERSONAL_PROJECTS_DATA_INACCESSIBLE",
+        throw createError({
+          code: ErrorCode.EXTERNAL_SERVICE_ERROR,
           message: "Personal projects are inaccessible",
           severity: ErrorSeverity.High,
         });
       }
 
       if (!data.allowed) {
-        throw new ConvexError({
-          code: "PERSONAL_PROJECTS_LIMIT_REACHED",
-          message: "Personal projects limit has reached",
-          severity: ErrorSeverity.High,
-        });
+        throw limitReachedError(
+          "personal_projects",
+          data.usage,
+          data.included_usage,
+          ErrorSeverity.High,
+        );
       }
 
       await ctx.autumn.track(ctx, {
@@ -381,19 +383,20 @@ export const unarchiveProject = protectedAction({
       });
 
       if (error || !data) {
-        throw new ConvexError({
-          code: "ORGANIZATION_PROJECTS_DATA_INACCESSIBLE",
+        throw createError({
+          code: ErrorCode.EXTERNAL_SERVICE_ERROR,
           message: "Organization projects are inaccessible",
           severity: ErrorSeverity.High,
         });
       }
 
       if (!data.allowed) {
-        throw new ConvexError({
-          code: "ORGANIZATION_PROJECTS_LIMIT_REACHED",
-          message: "Organization projects limit has reached",
-          severity: ErrorSeverity.High,
-        });
+        throw limitReachedError(
+          "organization_projects",
+          data.usage,
+          data.included_usage,
+          ErrorSeverity.High,
+        );
       }
 
       await ctx.autumn.track(ctx, {
@@ -416,11 +419,7 @@ export const _loadProjectById = internalQuery({
     const project = await ctx.db.get(args.projectId);
 
     if (!project) {
-      throw new ConvexError({
-        code: "PROJECT_NOT_FOUND",
-        message: "Project not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("project");
     }
 
     return project;
@@ -484,11 +483,7 @@ export const _insertProject = internalMutation({
       .collect();
 
     if (existingProjects.length > 0) {
-      throw new ConvexError({
-        code: "PROJECT_WITH_THE_SAME_SLUG_ALREADY_EXISTED",
-        message: "A project with this slug already exists",
-        severity: ErrorSeverity.Medium,
-      });
+      throw alreadyExistsError("project", ErrorSeverity.Medium);
     }
 
     const projectId = await ctx.db.insert("project", {
