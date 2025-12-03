@@ -4,7 +4,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
-import { assertProjectAccess, Sector } from "./lib/access";
+import { assertProjectAccess } from "./lib/access";
 import { alreadyExistsError, createError, ErrorCode, notFoundError } from "./lib/errors";
 import { generateSlug } from "./lib/helpers";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
@@ -36,7 +36,7 @@ export const createEnvironment = protectedMutation({
       projectId: args.projectId,
     });
 
-    await assertProjectAccess(ctx, project, Sector.Environment, ["create"]);
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
@@ -100,7 +100,7 @@ export const updateEnvironment = protectedMutation({
       projectId: environment.projectId,
     });
 
-    await assertProjectAccess(ctx, project, Sector.Environment, ["update"]);
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
@@ -129,7 +129,7 @@ export const deleteEnvironment = protectedMutation({
       projectId: environment.projectId,
     });
 
-    await assertProjectAccess(ctx, project, Sector.Environment, ["delete"]);
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "delete");
 
@@ -181,7 +181,7 @@ export const getEnvironmentData = protectedQuery({
       projectId: environment.projectId,
     });
 
-    await assertProjectAccess(ctx, project, Sector.Environment, ["read"]);
+    await assertProjectAccess(ctx, project);
 
     const secrets: Doc<"secret">[] = await ctx.runQuery(
       internal.secret._loadSecretsByEnvironmentId,

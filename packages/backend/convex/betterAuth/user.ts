@@ -20,34 +20,6 @@ export const loadUserById = query({
   },
 });
 
-export const _loadUserById_unchecked = internalQuery({
-  args: { userId: v.id("user") },
-  returns: v.union(v.null(), doc(schema, "user")),
-  handler: async (ctx: QueryCtx, args) => {
-    return await ctx.db.get(args.userId);
-  },
-});
-
-export const useFreeOrg = mutation({
-  args: {
-    userId: v.id("user"),
-  },
-  returns: v.object({
-    success: v.boolean(),
-  }),
-  handler: async (ctx: MutationCtx, args) => {
-    const user = await ctx.db.get(args.userId);
-
-    if (!user) {
-      throw notFoundError("user");
-    }
-
-    await ctx.db.patch(args.userId, { freeOrganizationUsed: true, updatedAt: Date.now() });
-
-    return { success: true };
-  },
-});
-
 export const upgradeToPro = mutation({
   args: {
     userId: v.id("user"),
@@ -116,7 +88,7 @@ export const setKeysAndSalt = mutation({
     publicKey: v.string(),
     encryptedPrivateKey: v.string(),
     salt: v.string(),
-    needsEncryptionForPersonalProjectSecrets: v.optional(v.union(v.null(), v.boolean())),
+    needReEncryption: v.optional(v.union(v.null(), v.boolean())),
   },
   returns: v.object({
     success: v.boolean(),
@@ -128,19 +100,27 @@ export const setKeysAndSalt = mutation({
       updatedAt: Date.now(),
       keysUpdatedAt: Date.now(),
       salt: args.salt,
-      needsEncryptionForPersonalProjectSecrets: args.needsEncryptionForPersonalProjectSecrets,
+      needsReEncryption: args.needReEncryption,
     });
 
     return { success: true };
   },
 });
 
-export const clearNeedsEncryptionForPersonalProjectSecrets = mutation({
+export const completeReEncription = mutation({
   args: {
     userId: v.id("user"),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.userId, { needsEncryptionForPersonalProjectSecrets: undefined });
+    await ctx.db.patch(args.userId, { needsReEncryption: undefined });
+  },
+});
+
+export const _loadUserById = internalQuery({
+  args: { userId: v.id("user") },
+  returns: v.union(v.null(), doc(schema, "user")),
+  handler: async (ctx: QueryCtx, args) => {
+    return await ctx.db.get(args.userId);
   },
 });
 

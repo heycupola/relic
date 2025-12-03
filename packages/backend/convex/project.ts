@@ -1,16 +1,9 @@
 import { v } from "convex/values";
 import { doc } from "convex-helpers/validators";
-import { components, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
-import type { Doc as BetterAuthDoc, Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
-import {
-  assertOrganizationPermissions,
-  assertProjectAccess,
-  getUserProjectsWithRestrictions,
-  isOrganizationAccessible,
-  Sector,
-} from "./lib/access";
+import { assertProjectAccess, getUserProjectsWithRestrictions } from "./lib/access";
 import {
   alreadyExistsError,
   createError,
@@ -23,14 +16,13 @@ import { protectedAction, protectedMutation, protectedQuery } from "./lib/middle
 import { checkRateLimit } from "./lib/rateLimit";
 import {
   ErrorSeverity,
-  ProjectOwner,
   type ProtectedActionCtx,
   type ProtectedMutationCtx,
   type ProtectedQueryCtx,
 } from "./lib/types";
 import schema from "./schema";
 
-export const createPersonalProject = protectedAction({
+export const createProject = protectedAction({
   args: {
     name: v.string(),
     // description: v.optional(v.string()),
@@ -65,93 +57,10 @@ export const createPersonalProject = protectedAction({
       name: args.name,
       createdBy: ctx.userId,
       ownerId: ctx.userId,
-      ownerType: ProjectOwner.User,
     });
 
     await ctx.autumn.track(ctx, {
       featureId: "personal_projects",
-      value: 1,
-    });
-
-    const pId: Id<"project"> = projectId;
-
-    return { success: true, projectId: pId };
-  },
-});
-
-export const createOrganizationProject = protectedAction({
-  args: {
-    organizationId: v.id("organization"),
-    name: v.string(),
-    // description: v.optional(v.string()),
-  },
-  handler: async (ctx: ProtectedActionCtx, args) => {
-    const organization = await ctx.runQuery(
-      components.betterAuth.organization.loadOrganizationById,
-      {
-        organizationId: args.organizationId,
-      },
-    );
-
-    if (!organization) {
-      throw notFoundError("organization");
-    }
-
-    const { accessible } = await isOrganizationAccessible(
-      organization as BetterAuthDoc<"organization">,
-    );
-
-    if (!accessible) {
-      throw createError({
-        code: ErrorCode.ORGANIZATION_INACCESSIBLE,
-        message: "The organization you want to create a project in is not available",
-        severity: ErrorSeverity.High,
-      });
-    }
-
-    await assertOrganizationPermissions(
-      ctx,
-      organization._id as BetterAuthId<"organization">,
-      Sector.Project,
-      ["create"],
-    );
-
-    const { data, error } = await ctx.autumn.check(ctx, {
-      entityId: args.organizationId,
-      featureId: "organization_projects",
-    });
-
-    if (error || !data) {
-      throw createError({
-        code: ErrorCode.EXTERNAL_SERVICE_ERROR,
-        message: "Organization projects are not reachable",
-        severity: ErrorSeverity.High,
-      });
-    }
-
-    if (!data.allowed) {
-      const currentUsage = data.usage || 0;
-
-      throw limitReachedError(
-        "organization_projects",
-        currentUsage,
-        data.included_usage,
-        ErrorSeverity.High,
-      );
-    }
-
-    await checkRateLimit(ctx, "write");
-
-    const { projectId } = await ctx.runMutation(internal.project._insertProject, {
-      name: args.name,
-      createdBy: ctx.userId,
-      ownerId: args.organizationId,
-      ownerType: ProjectOwner.Organization,
-    });
-
-    await ctx.autumn.track(ctx, {
-      entityId: args.organizationId,
-      featureId: "organization_projects",
       value: 1,
     });
 
@@ -197,56 +106,6 @@ export const listUserProjects = protectedQuery({
   },
 });
 
-export const listOrganizationProjects = protectedQuery({
-  args: {
-    organizationId: v.string(),
-  },
-  handler: async (ctx: ProtectedQueryCtx, args: { organizationId: string }) => {
-    const organization = await ctx.runQuery(
-      components.betterAuth.organization.loadOrganizationById,
-      {
-        organizationId: args.organizationId,
-      },
-    );
-
-    if (!organization) {
-      throw notFoundError("organization");
-    }
-
-    const { accessible } = await isOrganizationAccessible(
-      organization as BetterAuthDoc<"organization">,
-    );
-
-    if (!accessible) {
-      throw createError({
-        code: ErrorCode.ORGANIZATION_INACCESSIBLE,
-        message: "The organization you want to create a project in is not available",
-        severity: ErrorSeverity.High,
-      });
-    }
-
-    await assertOrganizationPermissions(
-      ctx,
-      organization._id as BetterAuthId<"organization">,
-      Sector.Project,
-      ["read"],
-    );
-
-    const projects: Doc<"project">[] = await ctx.runQuery(internal.project._loadProjectsByOrgId, {
-      organizationId: args.organizationId as BetterAuthId<"organization">,
-    });
-
-    return projects.map((p) => ({
-      id: p._id,
-      name: p.name,
-      slug: p.slug,
-      description: p.description,
-      createdAt: p.createdAt,
-      updatedAt: p.updatedAt,
-    }));
-  },
-});
-
 export const getProject = protectedQuery({
   args: {
     projectId: v.id("project"),
@@ -256,17 +115,15 @@ export const getProject = protectedQuery({
       projectId: args.projectId,
     });
 
-    await assertProjectAccess(ctx, project, Sector.Project, ["read"]);
+    await assertProjectAccess(ctx, project);
 
     return {
       id: project._id,
       name: project.name,
       slug: project.slug,
       description: project.description,
-      ownerType: project.ownerType,
       ownerId: project.ownerId,
       isArchived: project.isArchived,
-      createdBy: project.createdBy,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
     };
@@ -284,7 +141,7 @@ export const updateProject = protectedMutation({
       projectId: args.projectId,
     });
 
-    await assertProjectAccess(ctx, project, Sector.Project, ["update"]);
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
@@ -308,7 +165,7 @@ export const archiveProject = protectedAction({
       projectId: args.projectId,
     });
 
-    await assertProjectAccess(ctx, project, Sector.Project, ["delete"]);
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
@@ -316,18 +173,10 @@ export const archiveProject = protectedAction({
       projectId: args.projectId,
     });
 
-    if (project.ownerType === "user") {
-      await ctx.autumn.track(ctx, {
-        featureId: "personal_projects",
-        value: -1,
-      });
-    } else {
-      await ctx.autumn.track(ctx, {
-        entityId: project.ownerId,
-        featureId: "organization_projects",
-        value: -1,
-      });
-    }
+    await ctx.autumn.track(ctx, {
+      featureId: "personal_projects",
+      value: -1,
+    });
 
     return { success: true };
   },
@@ -342,7 +191,7 @@ export const unarchiveProject = protectedAction({
       projectId: args.projectId,
     });
 
-    await assertProjectAccess(ctx, project, Sector.Project, ["create"]);
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
@@ -350,61 +199,31 @@ export const unarchiveProject = protectedAction({
       projectId: args.projectId,
     });
 
-    if (project.ownerType === "user") {
-      const { data, error } = await ctx.autumn.check(ctx, {
-        featureId: "personal_projects",
-      });
+    const { data, error } = await ctx.autumn.check(ctx, {
+      featureId: "personal_projects",
+    });
 
-      if (error || !data) {
-        throw createError({
-          code: ErrorCode.EXTERNAL_SERVICE_ERROR,
-          message: "Personal projects are inaccessible",
-          severity: ErrorSeverity.High,
-        });
-      }
-
-      if (!data.allowed) {
-        throw limitReachedError(
-          "personal_projects",
-          data.usage,
-          data.included_usage,
-          ErrorSeverity.High,
-        );
-      }
-
-      await ctx.autumn.track(ctx, {
-        featureId: "personal_projects",
-        value: 1,
-      });
-    } else {
-      const { data, error } = await ctx.autumn.check(ctx, {
-        entityId: project.ownerId,
-        featureId: "organization_projects",
-      });
-
-      if (error || !data) {
-        throw createError({
-          code: ErrorCode.EXTERNAL_SERVICE_ERROR,
-          message: "Organization projects are inaccessible",
-          severity: ErrorSeverity.High,
-        });
-      }
-
-      if (!data.allowed) {
-        throw limitReachedError(
-          "organization_projects",
-          data.usage,
-          data.included_usage,
-          ErrorSeverity.High,
-        );
-      }
-
-      await ctx.autumn.track(ctx, {
-        entityId: project.ownerId,
-        featureId: "organization_projects",
-        value: 1,
+    if (error || !data) {
+      throw createError({
+        code: ErrorCode.EXTERNAL_SERVICE_ERROR,
+        message: "Personal projects are inaccessible",
+        severity: ErrorSeverity.High,
       });
     }
+
+    if (!data.allowed) {
+      throw limitReachedError(
+        "personal_projects",
+        data.usage,
+        data.included_usage,
+        ErrorSeverity.High,
+      );
+    }
+
+    await ctx.autumn.track(ctx, {
+      featureId: "personal_projects",
+      value: 1,
+    });
 
     return { success: true };
   },
@@ -428,15 +247,13 @@ export const _loadProjectById = internalQuery({
 
 export const _loadProjects = internalQuery({
   args: {
-    userId: v.id("user"),
+    ownerId: v.id("user"),
   },
   returns: v.array(doc(schema, "project")),
   handler: async (ctx, args) => {
     const projects = await ctx.db
       .query("project")
-      .withIndex("by_owner", (q) =>
-        q.eq("ownerType", ProjectOwner.User).eq("ownerId", args.userId.toString()),
-      )
+      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId.toString()))
       .filter((q) => q.eq(q.field("isArchived"), false))
       .collect();
 
@@ -444,28 +261,11 @@ export const _loadProjects = internalQuery({
   },
 });
 
-export const _loadProjectsByOrgId = internalQuery({
-  args: {
-    organizationId: v.id("organization"),
-  },
-  returns: v.array(doc(schema, "project")),
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("project")
-      .withIndex("by_owner", (q) =>
-        q.eq("ownerType", ProjectOwner.Organization).eq("ownerId", args.organizationId.toString()),
-      )
-      .filter((q) => q.eq(q.field("isArchived"), false))
-      .collect();
-  },
-});
-
 export const _insertProject = internalMutation({
   args: {
     name: v.string(),
     // description: v.optional(v.string()),
-    ownerType: v.union(v.literal(ProjectOwner.User), v.literal(ProjectOwner.Organization)),
-    ownerId: v.union(v.id("user"), v.id("organization")),
+    ownerId: v.id("user"),
     createdBy: v.id("user"),
   },
   returns: v.object({ success: v.boolean(), projectId: v.id("project") }),
@@ -475,9 +275,7 @@ export const _insertProject = internalMutation({
 
     const existingProjects = await ctx.db
       .query("project")
-      .withIndex("by_owner", (q) =>
-        q.eq("ownerType", args.ownerType).eq("ownerId", args.ownerId.toString()),
-      )
+      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId.toString()))
       .filter((q) => q.eq(q.field("isArchived"), false))
       .filter((q) => q.eq(q.field("slug"), slug))
       .collect();
@@ -490,10 +288,8 @@ export const _insertProject = internalMutation({
       name: args.name,
       slug,
       // description: args.description,
-      ownerType: args.ownerType,
       ownerId: args.ownerId.toString(),
       isArchived: false,
-      createdBy: args.createdBy,
       createdAt: now,
       updatedAt: now,
     });

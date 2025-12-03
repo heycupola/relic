@@ -24,25 +24,6 @@ export enum ErrorSeverity {
   Low = "low",
 }
 
-export enum ProjectOwner {
-  User = "user",
-  Organization = "organization",
-}
-
-export enum ResourceType {
-  Organization = "organization",
-  Project = "project",
-  Environment = "environment",
-  Folder = "folder",
-  Secret = "secret",
-}
-
-export enum RotationReason {
-  MemberRemoved = "member_removed",
-  Scheduled = "scheduled",
-  Manual = "manual",
-}
-
 export enum SecretPrimitiveType {
   String = "string",
   Number = "number",

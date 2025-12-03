@@ -13,10 +13,7 @@ import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as deviceAuth from "../deviceAuth.js";
 import type * as generatedSchema from "../generatedSchema.js";
-import type * as invitation from "../invitation.js";
 import type * as lib_types from "../lib/types.js";
-import type * as member from "../member.js";
-import type * as organization from "../organization.js";
 import type * as user from "../user.js";
 
 import type {
@@ -32,10 +29,7 @@ const fullApi: ApiFromModules<{
   crons: typeof crons;
   deviceAuth: typeof deviceAuth;
   generatedSchema: typeof generatedSchema;
-  invitation: typeof invitation;
   "lib/types": typeof lib_types;
-  member: typeof member;
-  organization: typeof organization;
   user: typeof user;
 }> = anyApi as any;
 

@@ -48,8 +48,6 @@ type StripeEvent = {
       customer?: string;
       metadata?: {
         userId?: string;
-        organizationId?: string;
-        organizationName?: string;
       };
       status?: string;
       items?: {
@@ -117,8 +115,8 @@ async function handleWebhookEvent(ctx: WebhookContext, event: StripeEvent) {
   const { type, data } = event;
   const { metadata, status, items } = data.object;
 
-  if (!metadata || (!metadata.userId && !metadata.organizationId)) {
-    console.log("[Stripe Webhook] No userId or organizationId in metadata, skipping");
+  if (!metadata || !metadata.userId) {
+    console.log("[Stripe Webhook] No userId in metadata, skipping");
     return;
   }
 
@@ -128,30 +126,12 @@ async function handleWebhookEvent(ctx: WebhookContext, event: StripeEvent) {
       const isActive = status === "active";
       const priceId = items?.data[0]?.price?.id || items?.data[0]?.plan?.id;
 
-      if (metadata.organizationId) {
-        await handleOrganizationSubscriptionChange(
-          ctx,
-          metadata.organizationId as Id<"organization">,
-          isActive,
-          priceId,
-        );
-      } else if (metadata.userId) {
-        await handleUserSubscriptionChange(ctx, metadata.userId as Id<"user">, isActive, priceId);
-      }
+      await handleUserSubscriptionChange(ctx, metadata.userId as Id<"user">, isActive, priceId);
       break;
     }
 
     case "customer.subscription.deleted": {
-      if (metadata.organizationId) {
-        await handleOrganizationSubscriptionChange(
-          ctx,
-          metadata.organizationId as Id<"organization">,
-          false,
-          undefined,
-        );
-      } else if (metadata.userId) {
-        await handleUserSubscriptionChange(ctx, metadata.userId as Id<"user">, false, undefined);
-      }
+      await handleUserSubscriptionChange(ctx, metadata.userId as Id<"user">, false, undefined);
       break;
     }
 
@@ -179,31 +159,5 @@ async function handleUserSubscriptionChange(
   } else {
     console.log(`[User Webhook] Downgrading user ${userId} to Free`);
     await ctx.runMutation(internal.user._handlePlanDowngrade, { userId });
-  }
-}
-
-async function handleOrganizationSubscriptionChange(
-  ctx: WebhookContext,
-  organizationId: Id<"organization">,
-  isActive: boolean,
-  priceId?: string,
-) {
-  const isOrgPlan = priceId === process.env.STRIPE_ORG_PRICE_ID;
-
-  if (isActive && isOrgPlan) {
-    console.log(`[Org Webhook] Activating organization ${organizationId}`);
-    await ctx.runMutation(internal.organization._handleOrganizationActivation, {
-      organizationId,
-    });
-  } else {
-    console.log(`[Org Webhook] Payment lapsed for organization ${organizationId}`);
-    await ctx.runMutation(internal.organization._handleOrganizationPaymentLapsed, {
-      organizationId,
-    });
-
-    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-    await ctx.scheduler.runAfter(sevenDaysMs, internal.organization._handleOrganizationSuspension, {
-      organizationId,
-    });
   }
 }

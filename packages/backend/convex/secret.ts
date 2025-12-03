@@ -4,7 +4,7 @@ import { components, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
-import { assertProjectAccess, Sector } from "./lib/access";
+import { assertProjectAccess } from "./lib/access";
 import { createError, ErrorCode, notFoundError } from "./lib/errors";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
@@ -38,7 +38,7 @@ export const createSecret = protectedMutation({
       projectId: environment.projectId,
     });
 
-    await assertProjectAccess(ctx, project, Sector.Secret, ["create"]);
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
@@ -108,7 +108,7 @@ export const getSecret = protectedQuery({
       projectId: secretInstance.projectId,
     });
 
-    await assertProjectAccess(ctx, project, Sector.Project, ["read"]);
+    await assertProjectAccess(ctx, project);
 
     // TODO: add actionLog here
 
@@ -169,7 +169,7 @@ export const updateSecret = protectedMutation({
       projectId: secret.projectId,
     });
 
-    await assertProjectAccess(ctx, project, Sector.Project, ["update"]);
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
@@ -240,7 +240,7 @@ export const deleteSecret = protectedMutation({
       projectId: secret.projectId,
     });
 
-    await assertProjectAccess(ctx, project, Sector.Project, ["delete"]);
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "delete");
 
@@ -303,14 +303,11 @@ export const reEncryptSecretsForPersonalProjectsBulk = protectedMutation({
       });
     }
 
-    const { totalEncrypted } = await ctx.runMutation(
-      internal.secret._reEncryptSecretsBulk_personalProjects,
-      {
-        encryptedValues: args.encryptedValues,
-        secretIds: args.secretIds,
-        userId: ctx.userId,
-      },
-    );
+    const { totalEncrypted } = await ctx.runMutation(internal.secret._reEncryptSecretBulk, {
+      encryptedValues: args.encryptedValues,
+      secretIds: args.secretIds,
+      userId: ctx.userId,
+    });
 
     const te: number = totalEncrypted;
 
@@ -475,7 +472,7 @@ export const _updateSecret = internalMutation({
   },
 });
 
-export const _reEncryptSecretsBulk_personalProjects = internalMutation({
+export const _reEncryptSecretBulk = internalMutation({
   args: {
     userId: v.id("user"),
     secretIds: v.array(v.id("secret")),
@@ -537,12 +534,6 @@ export const _reEncryptSecretsBulk_personalProjects = internalMutation({
       const project = projectMap.get(item.secret.projectId);
       if (!project) {
         console.error(`Project ${item.secret.projectId} not found`);
-        continue;
-      }
-      if (project.ownerType !== "user") {
-        console.error(
-          `Secret ${item.secretId} is from an organization project, not a personal project`,
-        );
         continue;
       }
       finalValidSecrets.push(item);

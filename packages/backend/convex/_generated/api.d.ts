@@ -22,7 +22,6 @@ import type * as lib_helpers from "../lib/helpers.js";
 import type * as lib_middleware from "../lib/middleware.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
 import type * as lib_types from "../lib/types.js";
-import type * as organization from "../organization.js";
 import type * as project from "../project.js";
 import type * as rateLimiter from "../rateLimiter.js";
 import type * as secret from "../secret.js";
@@ -52,7 +51,6 @@ declare const fullApi: ApiFromModules<{
   "lib/middleware": typeof lib_middleware;
   "lib/rateLimit": typeof lib_rateLimit;
   "lib/types": typeof lib_types;
-  organization: typeof organization;
   project: typeof project;
   rateLimiter: typeof rateLimiter;
   secret: typeof secret;
@@ -103,13 +101,12 @@ export declare const components: {
                   email: string;
                   emailVerified: boolean;
                   encryptedPrivateKey?: null | string;
-                  freeOrganizationUsed: boolean;
                   gracePeriodEmailSent?: null | boolean;
                   hasPro: boolean;
                   image?: null | string;
                   keysUpdatedAt?: null | number;
                   name: string;
-                  needsEncryptionForPersonalProjectSecrets?: null | boolean;
+                  needsReEncryption?: null | boolean;
                   planDowngradedAt?: null | number;
                   publicKey?: null | string;
                   salt?: null | string;
@@ -120,7 +117,6 @@ export declare const components: {
               }
             | {
                 data: {
-                  activeOrganizationId?: null | string;
                   createdAt: number;
                   expiresAt: number;
                   ipAddress?: null | string;
@@ -179,52 +175,6 @@ export declare const components: {
                   userId?: null | string;
                 };
                 model: "deviceCode";
-              }
-            | {
-                data: {
-                  createdAt: number;
-                  currentKeyVersion: number;
-                  isFreeWithProPlan: boolean;
-                  logo?: null | string;
-                  metadata?: null | string;
-                  name: string;
-                  ownerId: string;
-                  paymentExpiresAt?: null | number;
-                  paymentLapsedAt?: null | number;
-                  paymentLapsedEmailSent?: null | boolean;
-                  slug?: null | string;
-                  subscriptionStatus: string;
-                  suspendedAt?: null | number;
-                  suspendedEmailSent?: null | boolean;
-                };
-                model: "organization";
-              }
-            | {
-                data: {
-                  createdAt: number;
-                  grantedBy: string;
-                  isPending: boolean;
-                  keyVersion?: null | number;
-                  organizationId: string;
-                  revocationReason?: null | string;
-                  revokedAt?: null | number;
-                  revokedBy?: null | string;
-                  role: string;
-                  userId: string;
-                  wrappedOrgKey?: null | string;
-                };
-                model: "member";
-              }
-            | {
-                data: {
-                  email: string;
-                  expiresAt: number;
-                  inviterId: string;
-                  organizationId: string;
-                  role: string;
-                  status: string;
-                };
-                model: "invitation";
               };
           onCreateHandle?: string;
           select?: Array<string>;
@@ -248,7 +198,6 @@ export declare const components: {
                     | "createdAt"
                     | "updatedAt"
                     | "userId"
-                    | "freeOrganizationUsed"
                     | "hasPro"
                     | "planDowngradedAt"
                     | "gracePeriodEmailSent"
@@ -257,7 +206,7 @@ export declare const components: {
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
-                    | "needsEncryptionForPersonalProjectSecrets"
+                    | "needsReEncryption"
                     | "id";
                   operator?:
                     | "lt"
@@ -291,7 +240,6 @@ export declare const components: {
                     | "ipAddress"
                     | "userAgent"
                     | "userId"
-                    | "activeOrganizationId"
                     | "id";
                   operator?:
                     | "lt"
@@ -421,115 +369,6 @@ export declare const components: {
                     | "pollingInterval"
                     | "clientId"
                     | "scope"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "organization";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "name"
-                    | "slug"
-                    | "logo"
-                    | "createdAt"
-                    | "metadata"
-                    | "ownerId"
-                    | "isFreeWithProPlan"
-                    | "currentKeyVersion"
-                    | "subscriptionStatus"
-                    | "paymentExpiresAt"
-                    | "paymentLapsedAt"
-                    | "paymentLapsedEmailSent"
-                    | "suspendedAt"
-                    | "suspendedEmailSent"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "member";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "organizationId"
-                    | "userId"
-                    | "role"
-                    | "createdAt"
-                    | "wrappedOrgKey"
-                    | "keyVersion"
-                    | "grantedBy"
-                    | "revokedAt"
-                    | "revokedBy"
-                    | "revocationReason"
-                    | "isPending"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "invitation";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "organizationId"
-                    | "email"
-                    | "role"
-                    | "status"
-                    | "expiresAt"
-                    | "inviterId"
                     | "id";
                   operator?:
                     | "lt"
@@ -580,7 +419,6 @@ export declare const components: {
                     | "createdAt"
                     | "updatedAt"
                     | "userId"
-                    | "freeOrganizationUsed"
                     | "hasPro"
                     | "planDowngradedAt"
                     | "gracePeriodEmailSent"
@@ -589,7 +427,7 @@ export declare const components: {
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
-                    | "needsEncryptionForPersonalProjectSecrets"
+                    | "needsReEncryption"
                     | "id";
                   operator?:
                     | "lt"
@@ -623,7 +461,6 @@ export declare const components: {
                     | "ipAddress"
                     | "userAgent"
                     | "userId"
-                    | "activeOrganizationId"
                     | "id";
                   operator?:
                     | "lt"
@@ -773,115 +610,6 @@ export declare const components: {
                     | Array<number>
                     | null;
                 }>;
-              }
-            | {
-                model: "organization";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "name"
-                    | "slug"
-                    | "logo"
-                    | "createdAt"
-                    | "metadata"
-                    | "ownerId"
-                    | "isFreeWithProPlan"
-                    | "currentKeyVersion"
-                    | "subscriptionStatus"
-                    | "paymentExpiresAt"
-                    | "paymentLapsedAt"
-                    | "paymentLapsedEmailSent"
-                    | "suspendedAt"
-                    | "suspendedEmailSent"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "member";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "organizationId"
-                    | "userId"
-                    | "role"
-                    | "createdAt"
-                    | "wrappedOrgKey"
-                    | "keyVersion"
-                    | "grantedBy"
-                    | "revokedAt"
-                    | "revokedBy"
-                    | "revocationReason"
-                    | "isPending"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "invitation";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "organizationId"
-                    | "email"
-                    | "role"
-                    | "status"
-                    | "expiresAt"
-                    | "inviterId"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
               };
           onDeleteHandle?: string;
         },
@@ -898,10 +626,7 @@ export declare const components: {
             | "account"
             | "verification"
             | "jwks"
-            | "deviceCode"
-            | "organization"
-            | "member"
-            | "invitation";
+            | "deviceCode";
           offset?: number;
           paginationOpts: {
             cursor: string | null;
@@ -947,10 +672,7 @@ export declare const components: {
             | "account"
             | "verification"
             | "jwks"
-            | "deviceCode"
-            | "organization"
-            | "member"
-            | "invitation";
+            | "deviceCode";
           select?: Array<string>;
           where?: Array<{
             connector?: "AND" | "OR";
@@ -990,13 +712,12 @@ export declare const components: {
                   email?: string;
                   emailVerified?: boolean;
                   encryptedPrivateKey?: null | string;
-                  freeOrganizationUsed?: boolean;
                   gracePeriodEmailSent?: null | boolean;
                   hasPro?: boolean;
                   image?: null | string;
                   keysUpdatedAt?: null | number;
                   name?: string;
-                  needsEncryptionForPersonalProjectSecrets?: null | boolean;
+                  needsReEncryption?: null | boolean;
                   planDowngradedAt?: null | number;
                   publicKey?: null | string;
                   salt?: null | string;
@@ -1013,7 +734,6 @@ export declare const components: {
                     | "createdAt"
                     | "updatedAt"
                     | "userId"
-                    | "freeOrganizationUsed"
                     | "hasPro"
                     | "planDowngradedAt"
                     | "gracePeriodEmailSent"
@@ -1022,7 +742,7 @@ export declare const components: {
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
-                    | "needsEncryptionForPersonalProjectSecrets"
+                    | "needsReEncryption"
                     | "id";
                   operator?:
                     | "lt"
@@ -1047,7 +767,6 @@ export declare const components: {
             | {
                 model: "session";
                 update: {
-                  activeOrganizationId?: null | string;
                   createdAt?: number;
                   expiresAt?: number;
                   ipAddress?: null | string;
@@ -1066,7 +785,6 @@ export declare const components: {
                     | "ipAddress"
                     | "userAgent"
                     | "userId"
-                    | "activeOrganizationId"
                     | "id";
                   operator?:
                     | "lt"
@@ -1233,152 +951,6 @@ export declare const components: {
                     | "pollingInterval"
                     | "clientId"
                     | "scope"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "organization";
-                update: {
-                  createdAt?: number;
-                  currentKeyVersion?: number;
-                  isFreeWithProPlan?: boolean;
-                  logo?: null | string;
-                  metadata?: null | string;
-                  name?: string;
-                  ownerId?: string;
-                  paymentExpiresAt?: null | number;
-                  paymentLapsedAt?: null | number;
-                  paymentLapsedEmailSent?: null | boolean;
-                  slug?: null | string;
-                  subscriptionStatus?: string;
-                  suspendedAt?: null | number;
-                  suspendedEmailSent?: null | boolean;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "name"
-                    | "slug"
-                    | "logo"
-                    | "createdAt"
-                    | "metadata"
-                    | "ownerId"
-                    | "isFreeWithProPlan"
-                    | "currentKeyVersion"
-                    | "subscriptionStatus"
-                    | "paymentExpiresAt"
-                    | "paymentLapsedAt"
-                    | "paymentLapsedEmailSent"
-                    | "suspendedAt"
-                    | "suspendedEmailSent"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "member";
-                update: {
-                  createdAt?: number;
-                  grantedBy?: string;
-                  isPending?: boolean;
-                  keyVersion?: null | number;
-                  organizationId?: string;
-                  revocationReason?: null | string;
-                  revokedAt?: null | number;
-                  revokedBy?: null | string;
-                  role?: string;
-                  userId?: string;
-                  wrappedOrgKey?: null | string;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "organizationId"
-                    | "userId"
-                    | "role"
-                    | "createdAt"
-                    | "wrappedOrgKey"
-                    | "keyVersion"
-                    | "grantedBy"
-                    | "revokedAt"
-                    | "revokedBy"
-                    | "revocationReason"
-                    | "isPending"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "invitation";
-                update: {
-                  email?: string;
-                  expiresAt?: number;
-                  inviterId?: string;
-                  organizationId?: string;
-                  role?: string;
-                  status?: string;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "organizationId"
-                    | "email"
-                    | "role"
-                    | "status"
-                    | "expiresAt"
-                    | "inviterId"
                     | "id";
                   operator?:
                     | "lt"
@@ -1425,13 +997,12 @@ export declare const components: {
                   email?: string;
                   emailVerified?: boolean;
                   encryptedPrivateKey?: null | string;
-                  freeOrganizationUsed?: boolean;
                   gracePeriodEmailSent?: null | boolean;
                   hasPro?: boolean;
                   image?: null | string;
                   keysUpdatedAt?: null | number;
                   name?: string;
-                  needsEncryptionForPersonalProjectSecrets?: null | boolean;
+                  needsReEncryption?: null | boolean;
                   planDowngradedAt?: null | number;
                   publicKey?: null | string;
                   salt?: null | string;
@@ -1448,7 +1019,6 @@ export declare const components: {
                     | "createdAt"
                     | "updatedAt"
                     | "userId"
-                    | "freeOrganizationUsed"
                     | "hasPro"
                     | "planDowngradedAt"
                     | "gracePeriodEmailSent"
@@ -1457,7 +1027,7 @@ export declare const components: {
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
-                    | "needsEncryptionForPersonalProjectSecrets"
+                    | "needsReEncryption"
                     | "id";
                   operator?:
                     | "lt"
@@ -1482,7 +1052,6 @@ export declare const components: {
             | {
                 model: "session";
                 update: {
-                  activeOrganizationId?: null | string;
                   createdAt?: number;
                   expiresAt?: number;
                   ipAddress?: null | string;
@@ -1501,7 +1070,6 @@ export declare const components: {
                     | "ipAddress"
                     | "userAgent"
                     | "userId"
-                    | "activeOrganizationId"
                     | "id";
                   operator?:
                     | "lt"
@@ -1668,152 +1236,6 @@ export declare const components: {
                     | "pollingInterval"
                     | "clientId"
                     | "scope"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "organization";
-                update: {
-                  createdAt?: number;
-                  currentKeyVersion?: number;
-                  isFreeWithProPlan?: boolean;
-                  logo?: null | string;
-                  metadata?: null | string;
-                  name?: string;
-                  ownerId?: string;
-                  paymentExpiresAt?: null | number;
-                  paymentLapsedAt?: null | number;
-                  paymentLapsedEmailSent?: null | boolean;
-                  slug?: null | string;
-                  subscriptionStatus?: string;
-                  suspendedAt?: null | number;
-                  suspendedEmailSent?: null | boolean;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "name"
-                    | "slug"
-                    | "logo"
-                    | "createdAt"
-                    | "metadata"
-                    | "ownerId"
-                    | "isFreeWithProPlan"
-                    | "currentKeyVersion"
-                    | "subscriptionStatus"
-                    | "paymentExpiresAt"
-                    | "paymentLapsedAt"
-                    | "paymentLapsedEmailSent"
-                    | "suspendedAt"
-                    | "suspendedEmailSent"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "member";
-                update: {
-                  createdAt?: number;
-                  grantedBy?: string;
-                  isPending?: boolean;
-                  keyVersion?: null | number;
-                  organizationId?: string;
-                  revocationReason?: null | string;
-                  revokedAt?: null | number;
-                  revokedBy?: null | string;
-                  role?: string;
-                  userId?: string;
-                  wrappedOrgKey?: null | string;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "organizationId"
-                    | "userId"
-                    | "role"
-                    | "createdAt"
-                    | "wrappedOrgKey"
-                    | "keyVersion"
-                    | "grantedBy"
-                    | "revokedAt"
-                    | "revokedBy"
-                    | "revocationReason"
-                    | "isPending"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "invitation";
-                update: {
-                  email?: string;
-                  expiresAt?: number;
-                  inviterId?: string;
-                  organizationId?: string;
-                  role?: string;
-                  status?: string;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "organizationId"
-                    | "email"
-                    | "role"
-                    | "status"
-                    | "expiresAt"
-                    | "inviterId"
                     | "id";
                   operator?:
                     | "lt"
@@ -1884,229 +1306,8 @@ export declare const components: {
         }
       >;
     };
-    invitation: {
-      acceptOrCancelInvitation: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          accepting: boolean;
-          invitationId: string;
-          inviteeEmail: string;
-          inviteeId: string;
-        },
-        { expired: boolean; success: boolean }
-      >;
-      inviteMember: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          email: string;
-          inviterId: string;
-          inviterRole: "owner" | "admin" | "member" | "viewer";
-          organizationId: string;
-          role: "admin" | "member" | "viewer";
-          wrappedOrgKey: string;
-        },
-        { success: boolean }
-      >;
-    };
-    member: {
-      getMemberRole: FunctionReference<
-        "query",
-        "internal",
-        { organizationId: string; userId: string },
-        {
-          role: null | "owner" | "admin" | "member" | "viewer";
-          success: boolean;
-        }
-      >;
-      getOrganizationMembers: FunctionReference<
-        "query",
-        "internal",
-        { orgId: string },
-        Array<{
-          _creationTime: number;
-          _id: string;
-          createdAt: number;
-          grantedBy: string;
-          isPending: boolean;
-          keyVersion?: null | number;
-          organizationId: string;
-          revocationReason?: null | string;
-          revokedAt?: null | number;
-          revokedBy?: null | string;
-          role: string;
-          userId: string;
-          wrappedOrgKey?: null | string;
-        }>
-      >;
-      isOrganizationMember: FunctionReference<
-        "query",
-        "internal",
-        { organizationId: string; userId: string },
-        {
-          isOrganizationMember: boolean;
-          role?: "owner" | "admin" | "member" | "viewer";
-          success: boolean;
-        }
-      >;
-      leaveOrganization: FunctionReference<
-        "mutation",
-        "internal",
-        { organizationId: string; userId: string },
-        { success: boolean }
-      >;
-      removeMember: FunctionReference<
-        "mutation",
-        "internal",
-        { fromId: string; organizationId: string; toId: string },
-        { success: boolean }
-      >;
-      setMemberKey: FunctionReference<
-        "mutation",
-        "internal",
-        { memberId: string; newKeyVersion: number; wrappedOrgKey: string },
-        { success: boolean }
-      >;
-      updateMemberRole: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          newRole: "admin" | "viewer" | "member";
-          orgId: string;
-          updateeId: string;
-          updaterId: string;
-        },
-        { success: boolean }
-      >;
-    };
-    organization: {
-      activateOrganization: FunctionReference<
-        "mutation",
-        "internal",
-        { organizationId: string },
-        { success: boolean }
-      >;
-      createOrganization: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          isFreeWithProPlan: boolean;
-          name: string;
-          ownerId: string;
-          wrappedOrgKey: string;
-        },
-        {
-          organizationId: string;
-          paymentExpiresAt?: number;
-          slug: string;
-          subscriptionStatus: "active" | "pending";
-          success: boolean;
-        }
-      >;
-      deleteOrganization: FunctionReference<
-        "mutation",
-        "internal",
-        { callerId: string; organizationId: string },
-        { success: boolean }
-      >;
-      loadOrganizationById: FunctionReference<
-        "query",
-        "internal",
-        { organizationId: string },
-        null | {
-          _creationTime: number;
-          _id: string;
-          createdAt: number;
-          currentKeyVersion: number;
-          isFreeWithProPlan: boolean;
-          logo?: null | string;
-          metadata?: null | string;
-          name: string;
-          ownerId: string;
-          paymentExpiresAt?: null | number;
-          paymentLapsedAt?: null | number;
-          paymentLapsedEmailSent?: null | boolean;
-          slug?: null | string;
-          subscriptionStatus: string;
-          suspendedAt?: null | number;
-          suspendedEmailSent?: null | boolean;
-        }
-      >;
-      loadOrganizationsByUserId: FunctionReference<
-        "query",
-        "internal",
-        { userId: string },
-        {
-          memberships: null | Array<{
-            _creationTime: number;
-            _id: string;
-            createdAt: number;
-            grantedBy: string;
-            isPending: boolean;
-            keyVersion?: null | number;
-            organizationId: string;
-            revocationReason?: null | string;
-            revokedAt?: null | number;
-            revokedBy?: null | string;
-            role: string;
-            userId: string;
-            wrappedOrgKey?: null | string;
-          }>;
-          organizations: null | Array<{
-            _creationTime: number;
-            _id: string;
-            createdAt: number;
-            currentKeyVersion: number;
-            isFreeWithProPlan: boolean;
-            logo?: null | string;
-            metadata?: null | string;
-            name: string;
-            ownerId: string;
-            paymentExpiresAt?: null | number;
-            paymentLapsedAt?: null | number;
-            paymentLapsedEmailSent?: null | boolean;
-            slug?: null | string;
-            subscriptionStatus: string;
-            suspendedAt?: null | number;
-            suspendedEmailSent?: null | boolean;
-          }>;
-          success: boolean;
-          totalOrganizations: number;
-        }
-      >;
-      markOrganizationPaymentLapsed: FunctionReference<
-        "mutation",
-        "internal",
-        { organizationId: string; paymentLapsedAt: number },
-        { success: boolean }
-      >;
-      rotateKeys: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          memberIds: Array<string>;
-          newKeyVersion: number;
-          orgId: string;
-          wrappedOrgKeys: Array<string>;
-        },
-        { membersRewrapped: number; success: boolean }
-      >;
-      suspendOrganization: FunctionReference<
-        "mutation",
-        "internal",
-        { organizationId: string },
-        { success: boolean }
-      >;
-      wipeOrganization: FunctionReference<
-        "mutation",
-        "internal",
-        { organizationId: string },
-        { success: boolean }
-      >;
-    };
     user: {
-      clearNeedsEncryptionForPersonalProjectSecrets: FunctionReference<
+      completeReEncription: FunctionReference<
         "mutation",
         "internal",
         { userId: string },
@@ -2126,13 +1327,12 @@ export declare const components: {
             email: string;
             emailVerified: boolean;
             encryptedPrivateKey?: null | string;
-            freeOrganizationUsed: boolean;
             gracePeriodEmailSent?: null | boolean;
             hasPro: boolean;
             image?: null | string;
             keysUpdatedAt?: null | number;
             name: string;
-            needsEncryptionForPersonalProjectSecrets?: null | boolean;
+            needsReEncryption?: null | boolean;
             planDowngradedAt?: null | number;
             publicKey?: null | string;
             salt?: null | string;
@@ -2153,13 +1353,12 @@ export declare const components: {
           email: string;
           emailVerified: boolean;
           encryptedPrivateKey?: null | string;
-          freeOrganizationUsed: boolean;
           gracePeriodEmailSent?: null | boolean;
           hasPro: boolean;
           image?: null | string;
           keysUpdatedAt?: null | number;
           name: string;
-          needsEncryptionForPersonalProjectSecrets?: null | boolean;
+          needsReEncryption?: null | boolean;
           planDowngradedAt?: null | number;
           publicKey?: null | string;
           salt?: null | string;
@@ -2172,7 +1371,7 @@ export declare const components: {
         "internal",
         {
           encryptedPrivateKey: string;
-          needsEncryptionForPersonalProjectSecrets?: null | boolean;
+          needReEncryption?: null | boolean;
           publicKey: string;
           salt: string;
           userId: string;
@@ -2193,13 +1392,12 @@ export declare const components: {
             email: string;
             emailVerified: boolean;
             encryptedPrivateKey?: null | string;
-            freeOrganizationUsed: boolean;
             gracePeriodEmailSent?: null | boolean;
             hasPro: boolean;
             image?: null | string;
             keysUpdatedAt?: null | number;
             name: string;
-            needsEncryptionForPersonalProjectSecrets?: null | boolean;
+            needsReEncryption?: null | boolean;
             planDowngradedAt?: null | number;
             publicKey?: null | string;
             salt?: null | string;
@@ -2207,12 +1405,6 @@ export declare const components: {
             userId?: null | string;
           };
         }
-      >;
-      useFreeOrg: FunctionReference<
-        "mutation",
-        "internal",
-        { userId: string },
-        { success: boolean }
       >;
     };
   };

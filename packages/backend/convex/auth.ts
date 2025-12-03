@@ -1,11 +1,9 @@
 import { type AuthFunctions, createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
 import { betterAuth } from "better-auth";
-import { deviceAuthorization, organization } from "better-auth/plugins";
+import { deviceAuthorization } from "better-auth/plugins";
 import { components, internal } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
-import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
-import { OrgRole } from "./betterAuth/lib/types";
 import authSchema from "./betterAuth/schema";
 
 const siteUrl = process.env.SITE_URL || "";
@@ -18,8 +16,7 @@ export const authComponent = createClient<DataModel, typeof authSchema>(componen
   },
   authFunctions,
   triggers: {
-    invitation: {},
-    organization: {},
+    user: {},
   },
 }) as ReturnType<typeof createClient<DataModel>>;
 
@@ -33,12 +30,6 @@ export const createAuth = (
     user: {
       modelName: "user",
       additionalFields: {
-        freeOrganizationUsed: {
-          type: "boolean",
-          input: true,
-          required: true,
-          defaultValue: false,
-        },
         hasPro: {
           type: "boolean",
           input: true,
@@ -80,7 +71,7 @@ export const createAuth = (
           input: true,
           required: false,
         },
-        needsEncryptionForPersonalProjectSecrets: {
+        needsReEncryption: {
           type: "boolean",
           input: true,
           required: false,
@@ -102,121 +93,6 @@ export const createAuth = (
         clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
       },
     },
-    plugins: [
-      convex(),
-      deviceAuthorization(),
-      organization({
-        allowUserToCreateOrganization: async (user) => {
-          const existingUser = await ctx.runQuery(components.betterAuth.user.loadUserById, {
-            userId: user.id as BetterAuthId<"user">,
-          });
-
-          return existingUser.hasPro;
-        },
-        creatorRole: OrgRole.Owner,
-        schema: {
-          organization: {
-            modelName: "organization",
-            additionalFields: {
-              ownerId: {
-                type: "string",
-                input: true,
-                required: true,
-              },
-              isFreeWithProPlan: {
-                type: "boolean",
-                input: true,
-                required: true,
-              },
-              currentKeyVersion: {
-                type: "number",
-                input: true,
-                required: true,
-                defaultValue: 1,
-              },
-              subscriptionStatus: {
-                type: "string", // active, pending, payment_lapsed, suspended
-                input: true,
-                required: true,
-              },
-              paymentExpiresAt: {
-                type: "number",
-                input: true,
-                required: false,
-              },
-              paymentLapsedAt: {
-                type: "number",
-                input: true,
-                required: false,
-              },
-              paymentLapsedEmailSent: {
-                type: "boolean",
-                input: true,
-                required: false,
-              },
-              suspendedAt: {
-                type: "number",
-                input: true,
-                required: false,
-              },
-              suspendedEmailSent: {
-                type: "boolean",
-                input: true,
-                required: false,
-              },
-            },
-          },
-          invitation: {
-            additionalFields: {
-              role: {
-                type: "string",
-                input: true,
-                required: true,
-              },
-            },
-          },
-          member: {
-            modelName: "member",
-            additionalFields: {
-              wrappedOrgKey: {
-                type: "string",
-                input: true,
-                required: false,
-              },
-              keyVersion: {
-                type: "number",
-                input: true,
-                required: false,
-              },
-              grantedBy: {
-                type: "string",
-                input: true,
-                required: true,
-              },
-              revokedAt: {
-                type: "number",
-                input: true,
-                required: false,
-              },
-              revokedBy: {
-                type: "string",
-                input: true,
-                required: false,
-              },
-              revocationReason: {
-                type: "string",
-                input: true,
-                required: false,
-              },
-              isPending: {
-                type: "boolean",
-                input: true,
-                required: true,
-              },
-            },
-          },
-        },
-      }),
-    ],
+    plugins: [convex(), deviceAuthorization()],
   });
 };

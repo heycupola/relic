@@ -6,15 +6,11 @@ export default defineSchema({
     name: v.string(),
     slug: v.string(),
     description: v.optional(v.string()),
-    ownerType: v.union(v.literal("user"), v.literal("organization")),
     ownerId: v.string(),
     isArchived: v.boolean(),
-    createdBy: v.id("user"),
     createdAt: v.number(),
     updatedAt: v.number(),
-  })
-    .index("by_owner", ["ownerType", "ownerId"])
-    .index("by_creator", ["createdBy"]),
+  }).index("by_owner", ["ownerId"]),
   environment: defineTable({
     projectId: v.id("project"),
     name: v.string(),
@@ -100,28 +96,4 @@ export default defineSchema({
     .index("by_project", ["projectId", "timestamp"])
     .index("by_environment", ["environmentId", "timestamp"])
     .index("by_user", ["userId", "timestamp"]),
-  keyRotation: defineTable({
-    organizationId: v.string(),
-    oldKeyVersion: v.number(),
-    newKeyVersion: v.number(),
-    secretsReEncrypted: v.number(),
-    membersRewrapped: v.number(),
-    reason: v.optional(v.string()),
-    rotatedBy: v.id("user"),
-    rotatedAt: v.number(),
-  })
-    .index("by_organization", ["organizationId"])
-    .index("by_timestamp", ["rotatedAt"])
-    .index("by_rotated_by", ["rotatedBy"]),
-  orgKeyRewrapRequest: defineTable({
-    receiverId: v.id("user"),
-    requesterId: v.id("user"),
-    orgMemberId: v.id("member"),
-    organizationId: v.id("organization"),
-    status: v.union(v.literal("pending"), v.literal("canceled"), v.literal("completed")),
-    requestedAt: v.number(),
-  })
-    .index("by_requester", ["requesterId", "status"])
-    .index("by_receiver", ["receiverId", "status"])
-    .index("by_org_and_requester", ["organizationId", "requesterId", "status"]),
 });
