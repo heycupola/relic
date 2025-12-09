@@ -15,6 +15,7 @@ export enum ErrorCode {
   FOLDER_NOT_FOUND = "FOLDER_NOT_FOUND",
   SECRET_NOT_FOUND = "SECRET_NOT_FOUND",
   REQUEST_NOT_FOUND = "REQUEST_NOT_FOUND",
+  SHARE_NOT_FOUND = "SHARE_NOT_FOUND",
 
   // Resource State Issues
   PROJECT_INACCESSIBLE = "PROJECT_INACCESSIBLE",
@@ -68,6 +69,7 @@ const ERROR_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCode.FOLDER_NOT_FOUND]: "Folder not found",
   [ErrorCode.SECRET_NOT_FOUND]: "Secret not found",
   [ErrorCode.REQUEST_NOT_FOUND]: "Request not found",
+  [ErrorCode.SHARE_NOT_FOUND]: "Project share not found",
 
   // Resource State
   [ErrorCode.PROJECT_INACCESSIBLE]: "This project is not accessible",
@@ -131,7 +133,7 @@ export function createError(options: ErrorOptions): never {
 // Helper functions for common error patterns
 
 export function notFoundError(
-  resource: "user" | "project" | "environment" | "folder" | "secret" | "request",
+  resource: "user" | "project" | "environment" | "folder" | "secret" | "request" | "share",
   severity: ErrorSeverity = ErrorSeverity.High,
 ): never {
   const codeMap = {
@@ -141,6 +143,7 @@ export function notFoundError(
     folder: ErrorCode.FOLDER_NOT_FOUND,
     secret: ErrorCode.SECRET_NOT_FOUND,
     request: ErrorCode.REQUEST_NOT_FOUND,
+    share: ErrorCode.SHARE_NOT_FOUND,
   };
 
   createError({
