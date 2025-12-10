@@ -20,6 +20,19 @@ export const loadUserById = query({
   },
 });
 
+export const loadUserByEmail = query({
+  args: { email: v.string() },
+  returns: v.union(doc(schema, "user"), v.null()),
+  handler: async (ctx: QueryCtx, args) => {
+    const user = await ctx.db
+      .query("user")
+      .withIndex("by_email", (q) => q.eq("email", args.email))
+      .first();
+
+    return user || null;
+  },
+});
+
 export const upgradeToPro = mutation({
   args: {
     userId: v.id("user"),
@@ -88,7 +101,6 @@ export const setKeysAndSalt = mutation({
     publicKey: v.string(),
     encryptedPrivateKey: v.string(),
     salt: v.string(),
-    needReEncryption: v.optional(v.union(v.null(), v.boolean())),
   },
   returns: v.object({
     success: v.boolean(),
@@ -100,19 +112,9 @@ export const setKeysAndSalt = mutation({
       updatedAt: Date.now(),
       keysUpdatedAt: Date.now(),
       salt: args.salt,
-      needsReEncryption: args.needReEncryption,
     });
 
     return { success: true };
-  },
-});
-
-export const completeReEncription = mutation({
-  args: {
-    userId: v.id("user"),
-  },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.userId, { needsReEncryption: undefined });
   },
 });
 
