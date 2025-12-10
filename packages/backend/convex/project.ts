@@ -26,6 +26,7 @@ export const createProject = protectedAction({
   args: {
     name: v.string(),
     // description: v.optional(v.string()),
+    encryptedProjectKey: v.string(),
   },
   handler: async (ctx: ProtectedActionCtx, args) => {
     const { data, error } = await ctx.autumn.check(ctx, {
@@ -57,6 +58,7 @@ export const createProject = protectedAction({
       name: args.name,
       createdBy: ctx.userId,
       ownerId: ctx.userId,
+      encryptedProjectKey: args.encryptedProjectKey,
     });
 
     await ctx.autumn.track(ctx, {
@@ -266,6 +268,7 @@ export const _insertProject = internalMutation({
     name: v.string(),
     // description: v.optional(v.string()),
     ownerId: v.id("user"),
+    encryptedProjectKey: v.string(),
     createdBy: v.id("user"),
   },
   returns: v.object({ success: v.boolean(), projectId: v.id("project") }),
@@ -289,6 +292,8 @@ export const _insertProject = internalMutation({
       slug,
       // description: args.description,
       ownerId: args.ownerId.toString(),
+      encryptedProjectKey: args.encryptedProjectKey,
+      keyVersion: 1,
       isArchived: false,
       createdAt: now,
       updatedAt: now,
@@ -351,6 +356,26 @@ export const _unarchiveProject = internalMutation({
   }),
   handler: async (ctx, args) => {
     await ctx.db.patch(args.projectId, { isArchived: false, updatedAt: Date.now() });
+
+    return { success: true };
+  },
+});
+
+export const _rotateProjectKey = internalMutation({
+  args: {
+    projectId: v.id("project"),
+    newEncryptedProjectKey: v.string(),
+    newKeyVersion: v.number(),
+  },
+  returns: v.object({
+    success: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.projectId, {
+      encryptedProjectKey: args.newEncryptedProjectKey,
+      keyVersion: args.newKeyVersion,
+      updatedAt: Date.now(),
+    });
 
     return { success: true };
   },
