@@ -1,0 +1,772 @@
+===========================================
+RELIC BACKEND - FUNCTION REFERENCE
+===========================================
+
+This file lists all exported functions from both the BetterAuth component
+and the main App component, with their signatures and parameters.
+
+===========================================
+BETTERAUTH COMPONENT FUNCTIONS
+===========================================
+
+--- betterAuth/user.ts ---
+
+1. loadUserById (query)
+   args: {
+     userId: v.id("user")
+   }
+   returns: doc(schema, "user")
+
+2. loadUserByEmail (query)
+   args: {
+     email: v.string()
+   }
+   returns: v.union(doc(schema, "user"), v.null())
+
+3. upgradeToPro (mutation)
+   args: {
+     userId: v.id("user")
+   }
+   returns: v.object({
+     success: v.boolean(),
+     user: doc(schema, "user")
+   })
+
+4. downgradeToFree (mutation)
+   args: {
+     userId: v.id("user")
+   }
+   returns: v.object({
+     success: v.boolean(),
+     user: doc(schema, "user")
+   })
+
+5. setKeysAndSalt (mutation)
+   args: {
+     userId: v.id("user"),
+     publicKey: v.string(),
+     encryptedPrivateKey: v.string(),
+     salt: v.string()
+   }
+   returns: v.object({
+     success: v.boolean()
+   })
+
+6. _loadUserById (internalQuery)
+   args: {
+     userId: v.id("user")
+   }
+   returns: v.union(v.null(), doc(schema, "user"))
+
+7. _markEmailSent (internalMutation)
+   args: {
+     userId: v.id("user"),
+     emailType: v.union(
+       v.literal(UserEmailType.AccessRestricted),
+       v.literal(UserEmailType.GracePeriod)
+     )
+   }
+   returns: v.object({ success: v.boolean() })
+
+--- betterAuth/deviceAuth.ts ---
+
+8. requestDeviceCode (mutation)
+   args: {
+     clientId: v.optional(v.string()),
+     scope: v.optional(v.string())
+   }
+   returns: v.object({
+     device_code: v.string(),
+     user_code: v.string(),
+     verification_uri: v.string(),
+     expires_in: v.number(),
+     interval: v.number()
+   })
+
+9. pollDeviceToken (mutation)
+   args: {
+     device_code: v.string()
+   }
+   returns: v.union(
+     v.object({
+       status: v.literal("pending"),
+       error: v.string()
+     }),
+     v.object({
+       status: v.literal("slow_down"),
+       error: v.string()
+     }),
+     v.object({
+       status: v.literal("denied"),
+       error: v.string()
+     }),
+     v.object({
+       status: v.literal("expired"),
+       error: v.string()
+     }),
+     v.object({
+       status: v.literal("success"),
+       session_token: v.string()
+     })
+   )
+
+10. getDeviceCodeInfo (query)
+    args: {
+      user_code: v.string()
+    }
+    returns: v.union(
+      v.object({
+        found: v.literal(false)
+      }),
+      v.object({
+        found: v.literal(true),
+        status: v.string(),
+        expiresAt: v.number(),
+        clientId: v.optional(v.string())
+      })
+    )
+
+11. approveDeviceCode (mutation)
+    args: {
+      user_code: v.string(),
+      userId: v.id("user")
+    }
+    returns: v.object({
+      success: v.boolean()
+    })
+
+12. denyDeviceCode (mutation)
+    args: {
+      user_code: v.string()
+    }
+    returns: v.object({
+      success: v.boolean()
+    })
+
+13. _cleanupExpiredDeviceCodes (internalMutation)
+    args: {}
+    returns: v.object({
+      success: v.boolean(),
+      deletedCount: v.number()
+    })
+
+
+===========================================
+APP COMPONENT FUNCTIONS
+===========================================
+
+--- actionLog.ts ---
+
+1. _insertActionLog (internalMutation)
+   args: {
+     projectId: v.id("project"),
+     userId: v.id("user"),
+     action: v.union(
+       v.literal("secret.created"),
+       v.literal("secret.updated"),
+       v.literal("secret.deleted"),
+       v.literal("secret.exported"),
+       v.literal("secrets.bulk.updated"),
+       v.literal("secrets.bulk_deleted"),
+       v.literal("secrets.bulk_exported"),
+       v.literal("share.added"),
+       v.literal("share.revoked"),
+       v.literal("keys.rotated")
+     ),
+     environmentId: v.optional(v.id("environment")),
+     environmentName: v.optional(v.string()),
+     metadata: v.optional(v.object({
+       folderId: v.optional(v.id("folder")),
+       folderName: v.optional(v.string()),
+       secretId: v.optional(v.id("secret")),
+       key: v.optional(v.string()),
+       newKey: v.optional(v.string()),
+       exportFormat: v.optional(v.union(v.literal("relic"), v.literal("env"), v.literal("json"))),
+       exportCount: v.optional(v.number()),
+       affectedValueCount: v.optional(v.number()),
+       deleteCount: v.optional(v.number()),
+       sharedUserId: v.optional(v.string()),
+       sharedUserEmail: v.optional(v.string()),
+       oldKeyVersion: v.optional(v.number()),
+       newKeyVersion: v.optional(v.number())
+     }))
+   }
+   returns: v.object({ success: v.boolean() })
+
+2. _logSecretAction (internalMutation)
+   args: {
+     projectId: v.id("project"),
+     projectName: v.string(),
+     environmentId: v.id("environment"),
+     environmentName: v.string(),
+     folderId: v.optional(v.id("folder")),
+     folderName: v.optional(v.string()),
+     secretId: v.optional(v.id("secret")),
+     key: v.optional(v.string()),
+     newKey: v.optional(v.string()),
+     userId: v.id("user"),
+     secretAction: v.union(...),
+     exportFormat: v.optional(v.union(v.literal("relic"), v.literal("env"), v.literal("json"))),
+     exportCount: v.optional(v.number()),
+     affectedValueCount: v.optional(v.number()),
+     deleteCount: v.optional(v.number())
+   }
+   returns: v.object({ success: v.boolean() })
+
+3. _loadActionLogsByProject (internalQuery)
+   args: {
+     projectId: v.id("project"),
+     paginationOpts: paginationOptsValidator
+   }
+
+4. _loadActionLogsByEnvironment (internalQuery)
+   args: {
+     environmentId: v.id("environment"),
+     paginationOpts: paginationOptsValidator
+   }
+
+5. loadActionLogsByProject (protectedAction)
+   args: {
+     projectId: v.id("project"),
+     paginationOpts: paginationOptsValidator
+   }
+
+6. loadActionLogsByEnvironment (protectedAction)
+   args: {
+     environmentId: v.id("environment"),
+     paginationOpts: paginationOptsValidator
+   }
+
+--- deviceAuth.ts ---
+
+7. requestDeviceCode (mutation)
+   args: {
+     clientId: v.optional(v.string()),
+     scope: v.optional(v.string())
+   }
+
+8. pollDeviceToken (mutation)
+   args: {
+     device_code: v.string()
+   }
+
+9. getDeviceCodeInfo (query)
+   args: {
+     user_code: v.string()
+   }
+
+10. approveDeviceCode (protectedMutation)
+    args: {
+      user_code: v.string()
+    }
+
+11. denyDeviceCode (protectedMutation)
+    args: {
+      user_code: v.string()
+    }
+
+--- environment.ts ---
+
+12. createEnvironment (protectedMutation)
+    args: {
+      projectId: v.id("project"),
+      name: v.string(),
+      encryptedSecrets: v.optional(v.array(v.object({
+        key: v.string(),
+        encryptedValue: v.string(),
+        encryptionKeyVersion: v.number(),
+        primitiveType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean"))
+      })))
+    }
+
+13. updateEnvironment (protectedMutation)
+    args: {
+      environmentId: v.id("environment"),
+      name: v.string()
+    }
+
+14. deleteEnvironment (protectedMutation)
+    args: {
+      environmentId: v.id("environment")
+    }
+
+15. getEnvironmentData (protectedQuery)
+    args: {
+      projectId: v.id("project"),
+      environmentId: v.id("environment")
+    }
+
+16. _loadEnvironmentById (internalQuery)
+    args: {
+      environmentId: v.id("environment")
+    }
+    returns: doc(schema, "environment")
+
+17. _loadEnvironmentByProjectIdAndSlug (internalQuery)
+    args: {
+      projectId: v.id("project"),
+      slug: v.string()
+    }
+    returns: v.union(doc(schema, "environment"), v.null())
+
+18. _getProjectEnvironments (internalQuery)
+    args: {
+      projectId: v.id("project")
+    }
+    returns: v.array(doc(schema, "environment"))
+
+19. _insertEnvironment (internalMutation)
+    args: {
+      projectId: v.id("project"),
+      name: v.string(),
+      createdBy: v.id("user")
+    }
+    returns: v.object({
+      success: v.boolean(),
+      environment: doc(schema, "environment")
+    })
+
+20. _updateEnvironment (internalMutation)
+    args: {
+      environmentId: v.id("environment"),
+      name: v.string()
+    }
+    returns: v.object({
+      success: v.boolean()
+    })
+
+21. _deleteEnvironmentById (internalMutation)
+    args: {
+      environmentId: v.id("environment")
+    }
+    returns: v.object({
+      success: v.boolean()
+    })
+
+--- folder.ts ---
+
+22. createFolder (protectedMutation)
+    args: {
+      environmentId: v.id("environment"),
+      name: v.string()
+    }
+
+23. updateFolder (protectedMutation)
+    args: {
+      folderId: v.id("folder"),
+      name: v.string()
+    }
+
+24. deleteFolder (protectedMutation)
+    args: {
+      folderId: v.id("folder")
+    }
+
+25. _loadFolderId (internalQuery)
+    args: {
+      folderId: v.id("folder")
+    }
+    returns: doc(schema, "folder")
+
+26. _loadFolderBySlug (internalQuery)
+    args: {
+      environmentId: v.id("environment"),
+      slug: v.string()
+    }
+    returns: v.union(doc(schema, "folder"), v.null())
+
+27. _loadFoldersByEnvironmentId (internalQuery)
+    args: {
+      environmentId: v.id("environment")
+    }
+    returns: v.array(doc(schema, "folder"))
+
+28. _insertFolder (internalMutation)
+    args: {
+      environmentId: v.id("environment"),
+      name: v.string(),
+      createdBy: v.id("user")
+    }
+    returns: v.object({
+      success: v.boolean(),
+      folder: doc(schema, "folder")
+    })
+
+29. _updateFolder (internalMutation)
+    args: {
+      folderId: v.id("folder"),
+      name: v.string()
+    }
+    returns: v.object({
+      success: v.boolean()
+    })
+
+30. _deleteFolder (internalMutation)
+    args: {
+      folderId: v.id("folder")
+    }
+    returns: v.object({
+      success: v.boolean()
+    })
+
+--- project.ts ---
+
+31. createProject (protectedAction)
+    args: {
+      name: v.string(),
+      encryptedProjectKey: v.string()
+    }
+
+32. listUserProjects (protectedQuery)
+    args: {}
+
+33. getProject (protectedQuery)
+    args: {
+      projectId: v.id("project")
+    }
+
+34. updateProject (protectedMutation)
+    args: {
+      projectId: v.id("project"),
+      name: v.optional(v.string())
+    }
+
+35. archiveProject (protectedAction)
+    args: {
+      projectId: v.id("project")
+    }
+
+36. unarchiveProject (protectedAction)
+    args: {
+      projectId: v.id("project")
+    }
+
+37. _loadProjectById (internalQuery)
+    args: {
+      projectId: v.id("project")
+    }
+    returns: doc(schema, "project")
+
+38. _loadProjects (internalQuery)
+    args: {
+      ownerId: v.id("user")
+    }
+    returns: v.array(doc(schema, "project"))
+
+39. _insertProject (internalMutation)
+    args: {
+      name: v.string(),
+      ownerId: v.id("user"),
+      encryptedProjectKey: v.string(),
+      createdBy: v.id("user")
+    }
+    returns: v.object({
+      success: v.boolean(),
+      projectId: v.id("project")
+    })
+
+40. _updateProject (internalMutation)
+    args: {
+      projectId: v.id("project"),
+      updates: v.object({
+        name: v.optional(v.string())
+      })
+    }
+    returns: v.object({
+      success: v.boolean()
+    })
+
+41. _archiveProject (internalMutation)
+    args: {
+      projectId: v.id("project")
+    }
+    returns: v.object({
+      success: v.boolean()
+    })
+
+42. _unarchiveProject (internalMutation)
+    args: {
+      projectId: v.id("project")
+    }
+    returns: v.object({
+      success: v.boolean()
+    })
+
+43. _rotateProjectKey (internalMutation)
+    args: {
+      projectId: v.id("project"),
+      newEncryptedProjectKey: v.string(),
+      newKeyVersion: v.number()
+    }
+    returns: v.object({
+      success: v.boolean()
+    })
+
+--- projectShare.ts ---
+
+44. shareProject (protectedMutation)
+    args: {
+      projectId: v.id("project"),
+      userEmail: v.string(),
+      encryptedProjectKey: v.string()
+    }
+    returns: v.object({
+      success: v.boolean(),
+      shareId: v.id("projectShare")
+    })
+
+45. revokeShare (protectedMutation)
+    args: {
+      shareId: v.id("projectShare"),
+      newEncryptedProjectKey: v.string(),
+      newKeyVersion: v.number(),
+      rewrappedShares: v.array(v.object({
+        shareId: v.id("projectShare"),
+        newEncryptedProjectKey: v.string()
+      }))
+    }
+
+46. listProjectShares (protectedQuery)
+    args: {
+      projectId: v.id("project")
+    }
+
+47. listSharedWithMe (protectedQuery)
+    args: {}
+
+48. getProjectShare (protectedQuery)
+    args: {
+      projectId: v.id("project")
+    }
+
+49. _loadShareById (internalQuery)
+    args: {
+      shareId: v.id("projectShare")
+    }
+    returns: doc(schema, "projectShare")
+
+50. _loadActiveSharesByProject (internalQuery)
+    args: {
+      projectId: v.id("project")
+    }
+    returns: v.array(doc(schema, "projectShare"))
+
+51. _loadActiveSharesByUser (internalQuery)
+    args: {
+      userId: v.id("user")
+    }
+    returns: v.array(doc(schema, "projectShare"))
+
+52. _loadActiveShareByProjectAndUser (internalQuery)
+    args: {
+      projectId: v.id("project"),
+      userId: v.id("user")
+    }
+    returns: v.union(doc(schema, "projectShare"), v.null())
+
+53. _insertProjectShare (internalMutation)
+    args: {
+      projectId: v.id("project"),
+      userId: v.id("user"),
+      encryptedProjectKey: v.string(),
+      sharedBy: v.id("user")
+    }
+    returns: v.object({
+      success: v.boolean(),
+      shareId: v.id("projectShare")
+    })
+
+54. _revokeProjectShare (internalMutation)
+    args: {
+      shareId: v.id("projectShare")
+    }
+    returns: v.object({
+      success: v.boolean()
+    })
+
+55. _insertKeyRotation (internalMutation)
+    args: {
+      projectId: v.id("project"),
+      oldKeyVersion: v.number(),
+      newKeyVersion: v.number(),
+      rotatedBy: v.id("user"),
+      reason: v.optional(v.string()),
+      secretsReEncrypted: v.number(),
+      sharesUpdated: v.number()
+    }
+    returns: v.object({
+      success: v.boolean(),
+      rotationId: v.id("keyRotation")
+    })
+
+--- secret.ts ---
+
+56. createSecret (protectedMutation)
+    args: {
+      environmentId: v.id("environment"),
+      folderId: v.optional(v.id("folder")),
+      key: v.string(),
+      encryptedValue: v.string(),
+      encryptionKeyVersion: v.number(),
+      primitiveType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean"))
+    }
+
+57. getSecret (protectedQuery)
+    args: {
+      secretId: v.id("secret")
+    }
+
+58. updateSecret (protectedMutation)
+    args: {
+      secretId: v.id("secret"),
+      key: v.optional(v.string()),
+      encryptedValue: v.optional(v.string()),
+      encryptionKeyVersion: v.optional(v.number()),
+      primitiveType: v.optional(v.union(v.literal("string"), v.literal("number"), v.literal("boolean")))
+    }
+
+59. deleteSecret (protectedMutation)
+    args: {
+      secretId: v.id("secret")
+    }
+
+60. reEncryptSecretsBulk (protectedMutation)
+    args: {
+      updates: v.array(v.object({
+        secretId: v.id("secret"),
+        encryptedValue: v.string(),
+        encryptionKeyVersion: v.number()
+      }))
+    }
+
+61. _loadSecretById (internalQuery)
+    args: {
+      secretId: v.id("secret")
+    }
+    returns: doc(schema, "secret")
+
+62. _loadSecretByKeyAndEnvironmentIdAndFolderId (internalQuery)
+    args: {
+      key: v.string(),
+      environmentId: v.id("environment"),
+      folderId: v.optional(v.id("folder"))
+    }
+    returns: v.union(doc(schema, "secret"), v.null())
+
+63. _loadSecretsByEnvironmentId (internalQuery)
+    args: {
+      environmentId: v.id("environment")
+    }
+    returns: v.array(doc(schema, "secret"))
+
+64. _loadSecretsByFolderId (internalQuery)
+    args: {
+      folderId: v.id("folder")
+    }
+    returns: v.array(doc(schema, "secret"))
+
+65. _insertSecret (internalMutation)
+    args: {
+      environmentId: v.id("environment"),
+      folderId: v.optional(v.id("folder")),
+      key: v.string(),
+      encryptedValue: v.string(),
+      encryptionKeyVersion: v.number(),
+      primitiveType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
+      createdBy: v.id("user")
+    }
+    returns: v.object({
+      success: v.boolean(),
+      secret: doc(schema, "secret")
+    })
+
+66. _updateSecret (internalMutation)
+    args: {
+      secretId: v.id("secret"),
+      key: v.optional(v.string()),
+      encryptedValue: v.optional(v.string()),
+      encryptionKeyVersion: v.optional(v.number()),
+      primitiveType: v.optional(v.union(...))
+    }
+    returns: v.object({
+      success: v.boolean()
+    })
+
+67. _reEncryptSecretsBulk (internalMutation)
+    args: {
+      updates: v.array(v.object({
+        secretId: v.id("secret"),
+        encryptedValue: v.string(),
+        encryptionKeyVersion: v.number()
+      }))
+    }
+    returns: v.object({
+      success: v.boolean(),
+      updatedCount: v.number()
+    })
+
+--- user.ts ---
+
+68. getProPlan (protectedAction)
+    args: {}
+
+69. checkProPlan (protectedAction)
+    args: {}
+
+70. getCurrentUser (protectedQuery)
+    args: {}
+
+71. _handlePlanUpgrade (internalMutation)
+    args: {
+      userId: v.id("user")
+    }
+
+72. _handlePlanDowngrade (internalMutation)
+    args: {
+      userId: v.id("user")
+    }
+
+--- userKey.ts ---
+
+73. storeUserKeys (protectedMutation)
+    args: {
+      publicKey: v.string(),
+      encryptedPrivateKey: v.string(),
+      salt: v.string()
+    }
+
+74. updatePassword (protectedMutation)
+    args: {
+      newEncryptedPrivateKey: v.string(),
+      newSalt: v.string()
+    }
+
+75. rotateUserKeys (protectedMutation)
+    args: {
+      newPublicKey: v.string(),
+      newEncryptedPrivateKey: v.string(),
+      newSalt: v.string(),
+      rewrappedShares: v.array(v.object({
+        shareId: v.id("projectShare"),
+        newEncryptedProjectKey: v.string()
+      })),
+      rewrappedOwnedProjects: v.array(v.object({
+        projectId: v.id("project"),
+        newEncryptedProjectKey: v.string()
+      }))
+    }
+
+76. hasUserKeys (protectedQuery)
+    args: {}
+
+===========================================
+NOTES
+===========================================
+
+- Functions prefixed with _ are internal functions
+- protectedQuery/protectedMutation/protectedAction require authentication
+- BetterAuth component functions are accessed via: components.betterAuth.<module>.<function>
+- App component functions are accessed via: internal.<module>.<function> (for internal)
+  or directly as exported functions (for public)
+
+===========================================
