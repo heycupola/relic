@@ -99,6 +99,8 @@ export async function isProjectAccessible(
   ctx: ProtectedQueryCtx | ProtectedMutationCtx | ProtectedActionCtx,
   project: Doc<"project">,
 ): Promise<ProjectAccessResult> {
+  // NOTE: check if there is a valid projectAccess available
+
   if (project.isArchived) {
     return {
       accessible: false,

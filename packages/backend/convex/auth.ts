@@ -71,11 +71,6 @@ export const createAuth = (
           input: true,
           required: false,
         },
-        needsReEncryption: {
-          type: "boolean",
-          input: true,
-          required: false,
-        },
       },
     },
     logger: {
