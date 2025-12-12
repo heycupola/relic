@@ -1,62 +1,131 @@
 import { v } from "convex/values";
+import { components } from "./_generated/api";
+import { createError, ErrorCode, permissionError } from "./lib/errors";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
-import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
+import { ErrorSeverity, type ProtectedMutationCtx, type ProtectedQueryCtx } from "./lib/types";
 
-export const storeUserKey = protectedMutation({
+export const storeUserKeys = protectedMutation({
   args: {
     publicKey: v.string(),
     encryptedPrivateKey: v.string(),
     salt: v.string(),
   },
-  handler: async (
-    ctx: ProtectedMutationCtx,
-    args: { publicKey: string; encryptedPrivateKey: string; salt: string },
-  ) => {
-    const existingKey = await ctx.db
-      .query("userKey")
-      .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
-      .first();
-
-    if (existingKey) {
-      throw new Error("User keys already exist. Use updateUserKey to rotate keys.");
-    }
-
+  handler: async (ctx: ProtectedMutationCtx, args) => {
     await checkRateLimit(ctx, "write");
 
-    const now = Date.now();
-    const userKeyId = await ctx.db.insert("userKey", {
+    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: ctx.userId,
+    });
+
+    if (user.publicKey || user.encryptedPrivateKey) {
+      throw createError({
+        code: ErrorCode.INVALID_OPERATION,
+        message: "User already has keys. Use updatePassword or rotateUserKeys instead.",
+        severity: ErrorSeverity.Medium,
+      });
+    }
+
+    await ctx.runMutation(components.betterAuth.user.setKeysAndSalt, {
       userId: ctx.userId,
       publicKey: args.publicKey,
       encryptedPrivateKey: args.encryptedPrivateKey,
       salt: args.salt,
-      createdAt: now,
-      updatedAt: now,
     });
 
-    return { success: true, userKeyId };
+    return { success: true };
   },
 });
 
-export const getUserKey = protectedQuery({
-  args: {},
-  handler: async (ctx: ProtectedQueryCtx) => {
-    const userKey = await ctx.db
-      .query("userKey")
-      .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
-      .first();
+export const updatePassword = protectedMutation({
+  args: {
+    newEncryptedPrivateKey: v.string(),
+    newSalt: v.string(),
+  },
+  handler: async (ctx: ProtectedMutationCtx, args) => {
+    await checkRateLimit(ctx, "write");
 
-    if (!userKey) {
-      return null;
+    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: ctx.userId,
+    });
+
+    if (!user.publicKey) {
+      throw createError({
+        code: ErrorCode.INVALID_OPERATION,
+        message: "User has no keys yet. Use storeUserKeys instead.",
+        severity: ErrorSeverity.Medium,
+      });
+    }
+
+    await ctx.runMutation(components.betterAuth.user.setKeysAndSalt, {
+      userId: ctx.userId,
+      publicKey: user.publicKey,
+      encryptedPrivateKey: args.newEncryptedPrivateKey,
+      salt: args.newSalt,
+    });
+
+    return { success: true };
+  },
+});
+
+export const rotateUserKeys = protectedMutation({
+  args: {
+    newPublicKey: v.string(),
+    newEncryptedPrivateKey: v.string(),
+    newSalt: v.string(),
+    rewrappedShares: v.array(
+      v.object({
+        shareId: v.id("projectShare"),
+        newEncryptedProjectKey: v.string(),
+      }),
+    ),
+    rewrappedOwnedProjects: v.array(
+      v.object({
+        projectId: v.id("project"),
+        newEncryptedProjectKey: v.string(),
+      }),
+    ),
+  },
+  handler: async (ctx: ProtectedMutationCtx, args) => {
+    await checkRateLimit(ctx, "write");
+
+    await ctx.runMutation(components.betterAuth.user.setKeysAndSalt, {
+      userId: ctx.userId,
+      publicKey: args.newPublicKey,
+      encryptedPrivateKey: args.newEncryptedPrivateKey,
+      salt: args.newSalt,
+    });
+
+    for (const rewrapped of args.rewrappedShares) {
+      const share = await ctx.db.get(rewrapped.shareId);
+
+      if (!share || share.userId !== ctx.userId) {
+        throw permissionError("update this share");
+      }
+
+      await ctx.db.patch(rewrapped.shareId, {
+        encryptedProjectKey: rewrapped.newEncryptedProjectKey,
+        updatedAt: Date.now(),
+      });
+    }
+
+    for (const rewrapped of args.rewrappedOwnedProjects) {
+      const project = await ctx.db.get(rewrapped.projectId);
+
+      if (!project || project.ownerId !== ctx.userId) {
+        throw permissionError("update this project");
+      }
+
+      await ctx.db.patch(rewrapped.projectId, {
+        encryptedProjectKey: rewrapped.newEncryptedProjectKey,
+        updatedAt: Date.now(),
+      });
     }
 
     return {
-      id: userKey._id,
-      publicKey: userKey.publicKey,
-      encryptedPrivateKey: userKey.encryptedPrivateKey,
-      salt: userKey.salt,
-      createdAt: userKey.createdAt,
-      updatedAt: userKey.updatedAt,
+      success: true,
+      sharesUpdated: args.rewrappedShares.length,
+      ownedProjectsUpdated: args.rewrappedOwnedProjects.length,
     };
   },
 });
@@ -64,43 +133,10 @@ export const getUserKey = protectedQuery({
 export const hasUserKeys = protectedQuery({
   args: {},
   handler: async (ctx: ProtectedQueryCtx) => {
-    const userKey = await ctx.db
-      .query("userKey")
-      .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
-      .first();
-
-    return { hasKeys: !!userKey };
-  },
-});
-
-export const updateUserKey = protectedMutation({
-  args: {
-    publicKey: v.string(),
-    encryptedPrivateKey: v.string(),
-    salt: v.string(),
-  },
-  handler: async (
-    ctx: ProtectedMutationCtx,
-    args: { publicKey: string; encryptedPrivateKey: string; salt: string },
-  ) => {
-    const existingKey = await ctx.db
-      .query("userKey")
-      .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
-      .first();
-
-    if (!existingKey) {
-      throw new Error("No existing keys found. Use storeUserKey first.");
-    }
-
-    await checkRateLimit(ctx, "write");
-
-    await ctx.db.patch(existingKey._id, {
-      publicKey: args.publicKey,
-      encryptedPrivateKey: args.encryptedPrivateKey,
-      salt: args.salt,
-      updatedAt: Date.now(),
+    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: ctx.userId,
     });
 
-    return { success: true };
+    return { hasKeys: user.publicKey !== undefined && user.encryptedPrivateKey !== undefined };
   },
 });

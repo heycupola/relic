@@ -31,13 +31,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           input:
             | {
                 data: {
+                  accessRestrictedEmailSent?: null | boolean;
                   createdAt: number;
                   email: string;
                   emailVerified: boolean;
                   encryptedPrivateKey?: null | string;
-                  freeOrganizationUsed: boolean;
+                  gracePeriodEmailSent?: null | boolean;
                   hasPro: boolean;
                   image?: null | string;
+                  keysUpdatedAt?: null | number;
                   name: string;
                   planDowngradedAt?: null | number;
                   publicKey?: null | string;
@@ -49,7 +51,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               }
             | {
                 data: {
-                  activeOrganizationId?: null | string;
                   createdAt: number;
                   expiresAt: number;
                   ipAddress?: null | string;
@@ -108,49 +109,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                   userId?: null | string;
                 };
                 model: "deviceCode";
-              }
-            | {
-                data: {
-                  createdAt: number;
-                  currentKeyVersion: number;
-                  isFreeWithProPlan: boolean;
-                  logo?: null | string;
-                  metadata?: null | string;
-                  name: string;
-                  paymentExpiresAt?: null | number;
-                  paymentLapsedAt?: null | number;
-                  slug?: null | string;
-                  subscriptionStatus: string;
-                  suspendedAt?: null | number;
-                };
-                model: "organization";
-              }
-            | {
-                data: {
-                  createdAt: number;
-                  grantedBy: string;
-                  isPending: boolean;
-                  keyVersion?: null | number;
-                  organizationId: string;
-                  revocationReason?: null | string;
-                  revokedAt?: null | number;
-                  revokedBy?: null | string;
-                  role: string;
-                  userId: string;
-                  wrappedOrgKey?: null | string;
-                };
-                model: "member";
-              }
-            | {
-                data: {
-                  email: string;
-                  expiresAt: number;
-                  inviterId: string;
-                  organizationId: string;
-                  role: string;
-                  status: string;
-                };
-                model: "invitation";
               };
           onCreateHandle?: string;
           select?: Array<string>;
@@ -175,12 +133,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "createdAt"
                     | "updatedAt"
                     | "userId"
-                    | "freeOrganizationUsed"
                     | "hasPro"
                     | "planDowngradedAt"
+                    | "gracePeriodEmailSent"
+                    | "accessRestrictedEmailSent"
                     | "publicKey"
                     | "encryptedPrivateKey"
                     | "salt"
+                    | "keysUpdatedAt"
                     | "id";
                   operator?:
                     | "lt"
@@ -214,7 +174,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "ipAddress"
                     | "userAgent"
                     | "userId"
-                    | "activeOrganizationId"
                     | "id";
                   operator?:
                     | "lt"
@@ -344,112 +303,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "pollingInterval"
                     | "clientId"
                     | "scope"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "organization";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "name"
-                    | "slug"
-                    | "logo"
-                    | "createdAt"
-                    | "metadata"
-                    | "isFreeWithProPlan"
-                    | "currentKeyVersion"
-                    | "subscriptionStatus"
-                    | "paymentExpiresAt"
-                    | "paymentLapsedAt"
-                    | "suspendedAt"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "member";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "organizationId"
-                    | "userId"
-                    | "role"
-                    | "createdAt"
-                    | "wrappedOrgKey"
-                    | "keyVersion"
-                    | "grantedBy"
-                    | "revokedAt"
-                    | "revokedBy"
-                    | "revocationReason"
-                    | "isPending"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "invitation";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "organizationId"
-                    | "email"
-                    | "role"
-                    | "status"
-                    | "expiresAt"
-                    | "inviterId"
                     | "id";
                   operator?:
                     | "lt"
@@ -501,12 +354,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "createdAt"
                     | "updatedAt"
                     | "userId"
-                    | "freeOrganizationUsed"
                     | "hasPro"
                     | "planDowngradedAt"
+                    | "gracePeriodEmailSent"
+                    | "accessRestrictedEmailSent"
                     | "publicKey"
                     | "encryptedPrivateKey"
                     | "salt"
+                    | "keysUpdatedAt"
                     | "id";
                   operator?:
                     | "lt"
@@ -540,7 +395,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "ipAddress"
                     | "userAgent"
                     | "userId"
-                    | "activeOrganizationId"
                     | "id";
                   operator?:
                     | "lt"
@@ -690,112 +544,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | Array<number>
                     | null;
                 }>;
-              }
-            | {
-                model: "organization";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "name"
-                    | "slug"
-                    | "logo"
-                    | "createdAt"
-                    | "metadata"
-                    | "isFreeWithProPlan"
-                    | "currentKeyVersion"
-                    | "subscriptionStatus"
-                    | "paymentExpiresAt"
-                    | "paymentLapsedAt"
-                    | "suspendedAt"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "member";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "organizationId"
-                    | "userId"
-                    | "role"
-                    | "createdAt"
-                    | "wrappedOrgKey"
-                    | "keyVersion"
-                    | "grantedBy"
-                    | "revokedAt"
-                    | "revokedBy"
-                    | "revocationReason"
-                    | "isPending"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "invitation";
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "organizationId"
-                    | "email"
-                    | "role"
-                    | "status"
-                    | "expiresAt"
-                    | "inviterId"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
               };
           onDeleteHandle?: string;
         },
@@ -813,10 +561,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             | "account"
             | "verification"
             | "jwks"
-            | "deviceCode"
-            | "organization"
-            | "member"
-            | "invitation";
+            | "deviceCode";
           offset?: number;
           paginationOpts: {
             cursor: string | null;
@@ -863,10 +608,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             | "account"
             | "verification"
             | "jwks"
-            | "deviceCode"
-            | "organization"
-            | "member"
-            | "invitation";
+            | "deviceCode";
           select?: Array<string>;
           where?: Array<{
             connector?: "AND" | "OR";
@@ -902,13 +644,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             | {
                 model: "user";
                 update: {
+                  accessRestrictedEmailSent?: null | boolean;
                   createdAt?: number;
                   email?: string;
                   emailVerified?: boolean;
                   encryptedPrivateKey?: null | string;
-                  freeOrganizationUsed?: boolean;
+                  gracePeriodEmailSent?: null | boolean;
                   hasPro?: boolean;
                   image?: null | string;
+                  keysUpdatedAt?: null | number;
                   name?: string;
                   planDowngradedAt?: null | number;
                   publicKey?: null | string;
@@ -926,12 +670,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "createdAt"
                     | "updatedAt"
                     | "userId"
-                    | "freeOrganizationUsed"
                     | "hasPro"
                     | "planDowngradedAt"
+                    | "gracePeriodEmailSent"
+                    | "accessRestrictedEmailSent"
                     | "publicKey"
                     | "encryptedPrivateKey"
                     | "salt"
+                    | "keysUpdatedAt"
                     | "id";
                   operator?:
                     | "lt"
@@ -956,7 +702,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             | {
                 model: "session";
                 update: {
-                  activeOrganizationId?: null | string;
                   createdAt?: number;
                   expiresAt?: number;
                   ipAddress?: null | string;
@@ -975,7 +720,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "ipAddress"
                     | "userAgent"
                     | "userId"
-                    | "activeOrganizationId"
                     | "id";
                   operator?:
                     | "lt"
@@ -1142,146 +886,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "pollingInterval"
                     | "clientId"
                     | "scope"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "organization";
-                update: {
-                  createdAt?: number;
-                  currentKeyVersion?: number;
-                  isFreeWithProPlan?: boolean;
-                  logo?: null | string;
-                  metadata?: null | string;
-                  name?: string;
-                  paymentExpiresAt?: null | number;
-                  paymentLapsedAt?: null | number;
-                  slug?: null | string;
-                  subscriptionStatus?: string;
-                  suspendedAt?: null | number;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "name"
-                    | "slug"
-                    | "logo"
-                    | "createdAt"
-                    | "metadata"
-                    | "isFreeWithProPlan"
-                    | "currentKeyVersion"
-                    | "subscriptionStatus"
-                    | "paymentExpiresAt"
-                    | "paymentLapsedAt"
-                    | "suspendedAt"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "member";
-                update: {
-                  createdAt?: number;
-                  grantedBy?: string;
-                  isPending?: boolean;
-                  keyVersion?: null | number;
-                  organizationId?: string;
-                  revocationReason?: null | string;
-                  revokedAt?: null | number;
-                  revokedBy?: null | string;
-                  role?: string;
-                  userId?: string;
-                  wrappedOrgKey?: null | string;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "organizationId"
-                    | "userId"
-                    | "role"
-                    | "createdAt"
-                    | "wrappedOrgKey"
-                    | "keyVersion"
-                    | "grantedBy"
-                    | "revokedAt"
-                    | "revokedBy"
-                    | "revocationReason"
-                    | "isPending"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "invitation";
-                update: {
-                  email?: string;
-                  expiresAt?: number;
-                  inviterId?: string;
-                  organizationId?: string;
-                  role?: string;
-                  status?: string;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "organizationId"
-                    | "email"
-                    | "role"
-                    | "status"
-                    | "expiresAt"
-                    | "inviterId"
                     | "id";
                   operator?:
                     | "lt"
@@ -1324,13 +928,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             | {
                 model: "user";
                 update: {
+                  accessRestrictedEmailSent?: null | boolean;
                   createdAt?: number;
                   email?: string;
                   emailVerified?: boolean;
                   encryptedPrivateKey?: null | string;
-                  freeOrganizationUsed?: boolean;
+                  gracePeriodEmailSent?: null | boolean;
                   hasPro?: boolean;
                   image?: null | string;
+                  keysUpdatedAt?: null | number;
                   name?: string;
                   planDowngradedAt?: null | number;
                   publicKey?: null | string;
@@ -1348,12 +954,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "createdAt"
                     | "updatedAt"
                     | "userId"
-                    | "freeOrganizationUsed"
                     | "hasPro"
                     | "planDowngradedAt"
+                    | "gracePeriodEmailSent"
+                    | "accessRestrictedEmailSent"
                     | "publicKey"
                     | "encryptedPrivateKey"
                     | "salt"
+                    | "keysUpdatedAt"
                     | "id";
                   operator?:
                     | "lt"
@@ -1378,7 +986,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             | {
                 model: "session";
                 update: {
-                  activeOrganizationId?: null | string;
                   createdAt?: number;
                   expiresAt?: number;
                   ipAddress?: null | string;
@@ -1397,7 +1004,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "ipAddress"
                     | "userAgent"
                     | "userId"
-                    | "activeOrganizationId"
                     | "id";
                   operator?:
                     | "lt"
@@ -1584,146 +1190,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | Array<number>
                     | null;
                 }>;
-              }
-            | {
-                model: "organization";
-                update: {
-                  createdAt?: number;
-                  currentKeyVersion?: number;
-                  isFreeWithProPlan?: boolean;
-                  logo?: null | string;
-                  metadata?: null | string;
-                  name?: string;
-                  paymentExpiresAt?: null | number;
-                  paymentLapsedAt?: null | number;
-                  slug?: null | string;
-                  subscriptionStatus?: string;
-                  suspendedAt?: null | number;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "name"
-                    | "slug"
-                    | "logo"
-                    | "createdAt"
-                    | "metadata"
-                    | "isFreeWithProPlan"
-                    | "currentKeyVersion"
-                    | "subscriptionStatus"
-                    | "paymentExpiresAt"
-                    | "paymentLapsedAt"
-                    | "suspendedAt"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "member";
-                update: {
-                  createdAt?: number;
-                  grantedBy?: string;
-                  isPending?: boolean;
-                  keyVersion?: null | number;
-                  organizationId?: string;
-                  revocationReason?: null | string;
-                  revokedAt?: null | number;
-                  revokedBy?: null | string;
-                  role?: string;
-                  userId?: string;
-                  wrappedOrgKey?: null | string;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "organizationId"
-                    | "userId"
-                    | "role"
-                    | "createdAt"
-                    | "wrappedOrgKey"
-                    | "keyVersion"
-                    | "grantedBy"
-                    | "revokedAt"
-                    | "revokedBy"
-                    | "revocationReason"
-                    | "isPending"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
-              }
-            | {
-                model: "invitation";
-                update: {
-                  email?: string;
-                  expiresAt?: number;
-                  inviterId?: string;
-                  organizationId?: string;
-                  role?: string;
-                  status?: string;
-                };
-                where?: Array<{
-                  connector?: "AND" | "OR";
-                  field:
-                    | "organizationId"
-                    | "email"
-                    | "role"
-                    | "status"
-                    | "expiresAt"
-                    | "inviterId"
-                    | "id";
-                  operator?:
-                    | "lt"
-                    | "lte"
-                    | "gt"
-                    | "gte"
-                    | "eq"
-                    | "in"
-                    | "ne"
-                    | "contains"
-                    | "starts_with"
-                    | "ends_with";
-                  value:
-                    | string
-                    | number
-                    | boolean
-                    | Array<string>
-                    | Array<number>
-                    | null;
-                }>;
               };
           onUpdateHandle?: string;
         },
@@ -1736,246 +1202,47 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "mutation",
         "internal",
         { userId: string; user_code: string },
-        any,
+        { success: boolean },
         Name
       >;
       denyDeviceCode: FunctionReference<
         "mutation",
         "internal",
         { user_code: string },
-        any,
+        { success: boolean },
         Name
       >;
       getDeviceCodeInfo: FunctionReference<
         "query",
         "internal",
         { user_code: string },
-        any,
+        null | {
+          clientId?: string;
+          scope?: string;
+          status: string;
+          userCode: string;
+        },
         Name
       >;
       pollDeviceToken: FunctionReference<
         "mutation",
         "internal",
         { device_code: string },
-        any,
+        { expires_in: number; session_token: string; token_type: string },
         Name
       >;
       requestDeviceCode: FunctionReference<
         "mutation",
         "internal",
         { clientId?: string; scope?: string },
-        any,
-        Name
-      >;
-    };
-    invitation: {
-      acceptOrCancelInvitation: FunctionReference<
-        "mutation",
-        "internal",
         {
-          accepting: boolean;
-          invitationId: string;
-          inviteeEmail: string;
-          inviteeId: string;
+          device_code: string;
+          expires_in: number;
+          interval: number;
+          user_code: string;
+          verification_uri: string;
+          verification_uri_complete: string;
         },
-        { expired: boolean; success: boolean },
-        Name
-      >;
-      inviteMember: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          email: string;
-          inviterId: string;
-          inviterRole: "owner" | "admin" | "member" | "viewer";
-          organizationId: string;
-          role: "admin" | "member" | "viewer";
-          wrappedOrgKey: string;
-        },
-        { success: boolean },
-        Name
-      >;
-    };
-    member: {
-      getMemberRole: FunctionReference<
-        "query",
-        "internal",
-        { organizationId: string; userId: string },
-        {
-          role: null | "owner" | "admin" | "member" | "viewer";
-          success: boolean;
-        },
-        Name
-      >;
-      getOrganizationMembers: FunctionReference<
-        "query",
-        "internal",
-        { orgId: string },
-        Array<{
-          _creationTime: number;
-          _id: string;
-          createdAt: number;
-          grantedBy: string;
-          isPending: boolean;
-          keyVersion?: null | number;
-          organizationId: string;
-          revocationReason?: null | string;
-          revokedAt?: null | number;
-          revokedBy?: null | string;
-          role: string;
-          userId: string;
-          wrappedOrgKey?: null | string;
-        }>,
-        Name
-      >;
-      isOrganizationMember: FunctionReference<
-        "query",
-        "internal",
-        { organizationId: string; userId: string },
-        {
-          isOrganizationMember: boolean;
-          role?: "owner" | "admin" | "member" | "viewer";
-          success: boolean;
-        },
-        Name
-      >;
-      leaveOrganization: FunctionReference<
-        "mutation",
-        "internal",
-        { organizationId: string; userId: string },
-        { success: boolean },
-        Name
-      >;
-      removeUser: FunctionReference<
-        "mutation",
-        "internal",
-        { fromId: string; organizationId: string; toId: string },
-        { success: boolean },
-        Name
-      >;
-      updateMemberKey: FunctionReference<
-        "mutation",
-        "internal",
-        { orgId: string; userId: string; wrappedOrgKey: string },
-        { success: boolean },
-        Name
-      >;
-      updateMemberRole: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          newRole: "admin" | "viewer" | "member";
-          orgId: string;
-          updateeId: string;
-          updaterId: string;
-        },
-        { success: boolean },
-        Name
-      >;
-    };
-    organization: {
-      activateOrganization: FunctionReference<
-        "mutation",
-        "internal",
-        { organizationId: string },
-        { success: boolean },
-        Name
-      >;
-      createOrganization: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          isFreeWithProPlan: boolean;
-          name: string;
-          ownerId: string;
-          wrappedOrgKey: string;
-        },
-        { organizationId: string; success: boolean },
-        Name
-      >;
-      deleteOrganization: FunctionReference<
-        "mutation",
-        "internal",
-        { callerId: string; organizationId: string },
-        { success: boolean },
-        Name
-      >;
-      getOrganizations: FunctionReference<
-        "query",
-        "internal",
-        { userId: string },
-        {
-          organizations: null | Array<{
-            _creationTime: number;
-            _id: string;
-            createdAt: number;
-            currentKeyVersion: number;
-            isFreeWithProPlan: boolean;
-            logo?: null | string;
-            metadata?: null | string;
-            name: string;
-            paymentExpiresAt?: null | number;
-            paymentLapsedAt?: null | number;
-            slug?: null | string;
-            subscriptionStatus: string;
-            suspendedAt?: null | number;
-          }>;
-          success: boolean;
-          totalOrganizations: number;
-        },
-        Name
-      >;
-      loadOrganizationById: FunctionReference<
-        "query",
-        "internal",
-        { organizationId: string },
-        null | {
-          _creationTime: number;
-          _id: string;
-          createdAt: number;
-          currentKeyVersion: number;
-          isFreeWithProPlan: boolean;
-          logo?: null | string;
-          metadata?: null | string;
-          name: string;
-          paymentExpiresAt?: null | number;
-          paymentLapsedAt?: null | number;
-          slug?: null | string;
-          subscriptionStatus: string;
-          suspendedAt?: null | number;
-        },
-        Name
-      >;
-      markOrganizationPaymentLapsed: FunctionReference<
-        "mutation",
-        "internal",
-        { organizationId: string; paymentLapsedAt: number },
-        { success: boolean },
-        Name
-      >;
-      rotateKeys: FunctionReference<
-        "mutation",
-        "internal",
-        { orgId: string; wrappedOrgKeys: Array<string> },
-        {
-          rotatedKeysLength: number;
-          skippedKeysLength: number;
-          success: boolean;
-        },
-        Name
-      >;
-      suspendOrganization: FunctionReference<
-        "mutation",
-        "internal",
-        { organizationId: string },
-        { success: boolean },
-        Name
-      >;
-      wipeOrganization: FunctionReference<
-        "mutation",
-        "internal",
-        { organizationId: string },
-        { success: boolean },
         Name
       >;
     };
@@ -1989,13 +1256,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           user: {
             _creationTime: number;
             _id: string;
+            accessRestrictedEmailSent?: null | boolean;
             createdAt: number;
             email: string;
             emailVerified: boolean;
             encryptedPrivateKey?: null | string;
-            freeOrganizationUsed: boolean;
+            gracePeriodEmailSent?: null | boolean;
             hasPro: boolean;
             image?: null | string;
+            keysUpdatedAt?: null | number;
             name: string;
             planDowngradedAt?: null | number;
             publicKey?: null | string;
@@ -2006,6 +1275,31 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         },
         Name
       >;
+      loadUserByEmail: FunctionReference<
+        "query",
+        "internal",
+        { email: string },
+        {
+          _creationTime: number;
+          _id: string;
+          accessRestrictedEmailSent?: null | boolean;
+          createdAt: number;
+          email: string;
+          emailVerified: boolean;
+          encryptedPrivateKey?: null | string;
+          gracePeriodEmailSent?: null | boolean;
+          hasPro: boolean;
+          image?: null | string;
+          keysUpdatedAt?: null | number;
+          name: string;
+          planDowngradedAt?: null | number;
+          publicKey?: null | string;
+          salt?: null | string;
+          updatedAt: number;
+          userId?: null | string;
+        } | null,
+        Name
+      >;
       loadUserById: FunctionReference<
         "query",
         "internal",
@@ -2013,13 +1307,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         {
           _creationTime: number;
           _id: string;
+          accessRestrictedEmailSent?: null | boolean;
           createdAt: number;
           email: string;
           emailVerified: boolean;
           encryptedPrivateKey?: null | string;
-          freeOrganizationUsed: boolean;
+          gracePeriodEmailSent?: null | boolean;
           hasPro: boolean;
           image?: null | string;
+          keysUpdatedAt?: null | number;
           name: string;
           planDowngradedAt?: null | number;
           publicKey?: null | string;
@@ -2029,7 +1325,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         },
         Name
       >;
-      setKeys: FunctionReference<
+      setKeysAndSalt: FunctionReference<
         "mutation",
         "internal",
         {
@@ -2050,13 +1346,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           user: {
             _creationTime: number;
             _id: string;
+            accessRestrictedEmailSent?: null | boolean;
             createdAt: number;
             email: string;
             emailVerified: boolean;
             encryptedPrivateKey?: null | string;
-            freeOrganizationUsed: boolean;
+            gracePeriodEmailSent?: null | boolean;
             hasPro: boolean;
             image?: null | string;
+            keysUpdatedAt?: null | number;
             name: string;
             planDowngradedAt?: null | number;
             publicKey?: null | string;
@@ -2065,13 +1363,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             userId?: null | string;
           };
         },
-        Name
-      >;
-      useFreeOrg: FunctionReference<
-        "mutation",
-        "internal",
-        { userId: string },
-        { success: boolean },
         Name
       >;
     };

@@ -1,188 +1,63 @@
-import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
-import { canAdminProject, canWriteProject, hasProjectAccess } from "./lib/access";
-import { protectedMutation, protectedQuery } from "./lib/middleware";
-import { checkProjectIdOrganizationSuspended } from "./lib/organizationAccess";
-import { isProjectAccessible } from "./lib/projectAccess";
+import { ConvexError, v } from "convex/values";
+import { doc } from "convex-helpers/validators";
+import { internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
+import { internalMutation, internalQuery } from "./_generated/server";
+import { assertProjectAccess } from "./lib/access";
+import { alreadyExistsError, createError, ErrorCode, notFoundError } from "./lib/errors";
+import { generateSlug } from "./lib/helpers";
+import { protectedMutation } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
-import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
+import { ErrorSeverity, type ProtectedMutationCtx } from "./lib/types";
+import schema from "./schema";
 
 export const createFolder = protectedMutation({
   args: {
     environmentId: v.id("environment"),
     name: v.string(),
-    slug: v.string(),
     description: v.optional(v.string()),
   },
+  returns: v.object({ success: v.boolean(), folderId: v.id("folder"), path: v.string() }),
   handler: async (
     ctx: ProtectedMutationCtx,
-    args: { environmentId: Id<"environment">; name: string; slug: string; description?: string },
-  ) => {
-    const environment = await ctx.db.get(args.environmentId);
+    args,
+  ): Promise<{ success: boolean; folderId: Id<"folder">; path: string }> => {
+    const environment: Doc<"environment"> = await ctx.runQuery(
+      internal.environment._loadEnvironmentById,
+      {
+        environmentId: args.environmentId,
+      },
+    );
 
-    if (!environment) {
-      throw new Error("Environment not found");
-    }
+    const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
+      projectId: environment.projectId,
+    });
 
-    const project = await ctx.db.get(environment.projectId);
-
-    if (!project) {
-      throw new Error("Project not found");
-    }
-
-    if (project.isArchived) {
-      throw new Error("This project is archived. Unarchive it to access its data.");
-    }
-
-    await checkProjectIdOrganizationSuspended(ctx, environment.projectId);
-
-    // NOTE: check if project is restricted for personal projects
-    const accessCheck = await isProjectAccessible(ctx, environment.projectId);
-
-    if (!accessCheck.accessible) {
-      throw new Error(
-        "This project is restricted. Upgrade your plan or archive other projects to access it.",
-      );
-    }
-
-    if (!(await canWriteProject(ctx, project))) {
-      throw new Error("You do not have access to this environment");
-    }
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
-    const path = `/${args.slug}`;
-
-    const existingFolder = await ctx.db
-      .query("folder")
-      .withIndex("by_environment", (q) => q.eq("environmentId", args.environmentId))
-      .filter((q) => q.eq(q.field("slug"), args.slug))
-      .first();
-
-    if (existingFolder) {
-      throw new Error("A folder with this slug already exists in this environment");
-    }
-
-    const now = Date.now();
-    const folderId = await ctx.db.insert("folder", {
+    const slug = generateSlug(args.name);
+    const existingFolder = await ctx.runQuery(internal.folder._loadFolderBySlug, {
       environmentId: args.environmentId,
-      projectId: environment.projectId,
-      name: args.name,
-      slug: args.slug,
-      path,
-      description: args.description,
-      parentFolderId: undefined,
-      createdBy: ctx.userId,
-      createdAt: now,
-      updatedAt: now,
+      slug,
     });
 
+    if (existingFolder) {
+      throw alreadyExistsError("folder");
+    }
+
+    const { folderId, path }: { folderId: Id<"folder">; path: string } = await ctx.runMutation(
+      internal.folder._insertFolder,
+      {
+        createdBy: ctx.userId,
+        environmentId: environment._id,
+        name: args.name,
+        projectId: project._id,
+      },
+    );
+
     return { success: true, folderId, path };
-  },
-});
-
-export const listFolders = protectedQuery({
-  args: {
-    environmentId: v.id("environment"),
-  },
-  handler: async (ctx: ProtectedQueryCtx, args: { environmentId: Id<"environment"> }) => {
-    const environment = await ctx.db.get(args.environmentId);
-
-    if (!environment) {
-      throw new Error("Environment not found");
-    }
-
-    const project = await ctx.db.get(environment.projectId);
-
-    if (!project) {
-      throw new Error("Project not found");
-    }
-
-    if (project.isArchived) {
-      throw new Error("This project is archived. Unarchive it to access its data.");
-    }
-
-    await checkProjectIdOrganizationSuspended(ctx, environment.projectId);
-
-    // NOTE: check if project is restricted for personal projects
-    const accessCheck = await isProjectAccessible(ctx, environment.projectId);
-
-    if (!accessCheck.accessible) {
-      throw new Error(
-        "This project is restricted. Upgrade your plan or archive other projects to access it.",
-      );
-    }
-
-    if (!(await hasProjectAccess(ctx, project))) {
-      throw new Error("You do not have access to this environment");
-    }
-
-    const folders = await ctx.db
-      .query("folder")
-      .withIndex("by_environment", (q) => q.eq("environmentId", args.environmentId))
-      .collect();
-
-    return folders.map((folder) => ({
-      id: folder._id,
-      name: folder.name,
-      slug: folder.slug,
-      path: folder.path,
-      description: folder.description,
-      createdAt: folder.createdAt,
-      updatedAt: folder.updatedAt,
-    }));
-  },
-});
-
-export const getFolder = protectedQuery({
-  args: {
-    folderId: v.id("folder"),
-  },
-  handler: async (ctx: ProtectedQueryCtx, args: { folderId: Id<"folder"> }) => {
-    const folder = await ctx.db.get(args.folderId);
-
-    if (!folder) {
-      throw new Error("Folder not found");
-    }
-
-    const project = await ctx.db.get(folder.projectId);
-
-    if (!project) {
-      throw new Error("Project not found");
-    }
-
-    if (project.isArchived) {
-      throw new Error("This project is archived. Unarchive it to access its data.");
-    }
-
-    await checkProjectIdOrganizationSuspended(ctx, folder.projectId);
-
-    // NOTE: check if project is restricted for personal projects
-    const accessCheck = await isProjectAccessible(ctx, folder.projectId);
-
-    if (!accessCheck.accessible) {
-      throw new Error(
-        "This project is restricted. Upgrade your plan or archive other projects to access it.",
-      );
-    }
-
-    if (!(await hasProjectAccess(ctx, project))) {
-      throw new Error("You do not have access to this folder");
-    }
-
-    return {
-      id: folder._id,
-      environmentId: folder.environmentId,
-      projectId: folder.projectId,
-      name: folder.name,
-      slug: folder.slug,
-      path: folder.path,
-      description: folder.description,
-      parentFolderId: folder.parentFolderId,
-      createdBy: folder.createdBy,
-      createdAt: folder.createdAt,
-      updatedAt: folder.updatedAt,
-    };
   },
 });
 
@@ -190,54 +65,41 @@ export const updateFolder = protectedMutation({
   args: {
     folderId: v.id("folder"),
     name: v.optional(v.string()),
-    description: v.optional(v.string()),
   },
-  handler: async (
-    ctx: ProtectedMutationCtx,
-    args: { folderId: Id<"folder">; name?: string; description?: string },
-  ) => {
-    const folder = await ctx.db.get(args.folderId);
+  handler: async (ctx: ProtectedMutationCtx, args) => {
+    const folder = await ctx.runQuery(internal.folder._loadFolderId, {
+      folderId: args.folderId,
+    });
 
-    if (!folder) {
-      throw new Error("Folder not found");
+    const project = await ctx.runQuery(internal.project._loadProjectById, {
+      projectId: folder.projectId,
+    });
+
+    if (args.name) {
+      const existingFolder = await ctx.runQuery(internal.folder._loadFolderBySlug, {
+        environmentId: folder.environmentId,
+        slug: generateSlug(args.name),
+      });
+
+      if (existingFolder && existingFolder._id !== args.folderId) {
+        throw new ConvexError({
+          code: "DUPLICATE_FOLDER_NAME",
+          message: "A folder with this name already exists in this environment",
+          severity: ErrorSeverity.High,
+        });
+      }
     }
 
-    const project = await ctx.db.get(folder.projectId);
-
-    if (!project) {
-      throw new Error("Project not found");
-    }
-
-    if (project.isArchived) {
-      throw new Error("This project is archived. Unarchive it to access its data.");
-    }
-
-    await checkProjectIdOrganizationSuspended(ctx, folder.projectId);
-
-    // NOTE: check if project is restricted for personal projects
-    const accessCheck = await isProjectAccessible(ctx, folder.projectId);
-
-    if (!accessCheck.accessible) {
-      throw new Error(
-        "This project is restricted. Upgrade your plan or archive other projects to access it.",
-      );
-    }
-
-    if (!(await canWriteProject(ctx, project))) {
-      throw new Error("You do not have permission to update this folder");
-    }
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
-    const updates: {
-      updatedAt: number;
-      name?: string;
-      description?: string;
-    } = { updatedAt: Date.now() };
-    if (args.name !== undefined) updates.name = args.name;
-    if (args.description !== undefined) updates.description = args.description;
-
-    await ctx.db.patch(args.folderId, updates);
+    await ctx.runMutation(internal.folder._updateFolder, {
+      folderId: args.folderId,
+      updates: {
+        name: args.name,
+      },
+    });
 
     return { success: true };
   },
@@ -247,41 +109,160 @@ export const deleteFolder = protectedMutation({
   args: {
     folderId: v.id("folder"),
   },
-  handler: async (ctx: ProtectedMutationCtx, args: { folderId: Id<"folder"> }) => {
-    const folder = await ctx.db.get(args.folderId);
+  handler: async (ctx: ProtectedMutationCtx, args) => {
+    const folder = await ctx.runQuery(internal.folder._loadFolderId, {
+      folderId: args.folderId,
+    });
 
-    if (!folder) {
-      throw new Error("Folder not found");
-    }
+    const project = await ctx.runQuery(internal.project._loadProjectById, {
+      projectId: folder.projectId,
+    });
 
-    const project = await ctx.db.get(folder.projectId);
-
-    if (!project) {
-      throw new Error("Project not found");
-    }
-
-    if (project.isArchived) {
-      throw new Error("This project is archived. Unarchive it to access its data.");
-    }
-
-    await checkProjectIdOrganizationSuspended(ctx, folder.projectId);
-
-    if (!(await canAdminProject(ctx, project))) {
-      throw new Error("You do not have permission to delete this folder");
-    }
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "delete");
 
-    const secrets = await ctx.db
-      .query("secret")
-      .withIndex("by_folder", (q) => q.eq("folderId", args.folderId))
-      .filter((q) => q.eq(q.field("isDeleted"), false))
-      .first();
+    const secrets = await ctx.runQuery(internal.secret._loadSecretsByFolderId, {
+      folderId: args.folderId,
+    });
 
-    if (secrets) {
-      throw new Error("Cannot delete folder with secrets. Please delete or move secrets first.");
+    if (secrets.length > 0) {
+      throw createError({
+        code: ErrorCode.CANNOT_DELETE_NON_EMPTY,
+        message: "Cannot delete folder that contains secrets. Please remove all secrets first",
+        severity: ErrorSeverity.High,
+      });
     }
 
+    await ctx.runMutation(internal.folder._deleteFolder, {
+      folderId: args.folderId,
+    });
+
+    return { success: true };
+  },
+});
+
+export const _loadFolderId = internalQuery({
+  args: {
+    folderId: v.id("folder"),
+  },
+  returns: doc(schema, "folder"),
+  handler: async (ctx, args) => {
+    const folder = await ctx.db
+      .query("folder")
+      .withIndex("by_id", (q) => q.eq("_id", args.folderId))
+      .first();
+
+    if (!folder) {
+      throw notFoundError("folder");
+    }
+
+    return folder;
+  },
+});
+
+export const _loadFolderBySlug = internalQuery({
+  args: {
+    environmentId: v.id("environment"),
+    slug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const folder = await ctx.db
+      .query("folder")
+      .withIndex("by_environment_and_slug", (q) =>
+        q.eq("environmentId", args.environmentId).eq("slug", args.slug),
+      )
+      .filter((q) => q.eq(q.field("slug"), args.slug))
+      .first();
+
+    return folder;
+  },
+});
+
+export const _loadFoldersByEnvironmentId = internalQuery({
+  args: {
+    environmentId: v.id("environment"),
+  },
+  returns: v.array(doc(schema, "folder")),
+  handler: async (ctx, args) => {
+    const folders = await ctx.db
+      .query("folder")
+      .withIndex("by_environment", (q) => q.eq("environmentId", args.environmentId))
+      .collect();
+
+    return folders;
+  },
+});
+
+export const _insertFolder = internalMutation({
+  args: {
+    createdBy: v.id("user"),
+    environmentId: v.id("environment"),
+    projectId: v.id("project"),
+    name: v.string(),
+    // description: v.optional(v.string()),
+    // parentFolderId: v.optional(v.id("folder")),
+  },
+  returns: v.object({ success: v.boolean(), folderId: v.id("folder"), path: v.string() }),
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ success: boolean; folderId: Id<"folder">; path: string }> => {
+    const slug = generateSlug(args.name);
+    const now = Date.now();
+
+    const path = `/${slug}`;
+
+    const folderId = await ctx.db.insert("folder", {
+      environmentId: args.environmentId,
+      projectId: args.projectId,
+      name: args.name,
+      slug,
+      path,
+      // description: args.description,
+      // parentFolderId: args.parentFolderId,
+      createdBy: args.createdBy,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return { success: true, folderId, path };
+  },
+});
+
+export const _updateFolder = internalMutation({
+  args: {
+    folderId: v.id("folder"),
+    updates: v.object({
+      name: v.optional(v.string()),
+      // description: v.optional(v.string()),
+    }),
+  },
+  returns: v.object({ success: v.boolean() }),
+  handler: async (ctx, args) => {
+    const updates: {
+      updatedAt: number;
+      name?: string;
+      slug?: string;
+      description?: string;
+    } = { updatedAt: Date.now() };
+    if (args.updates.name !== undefined) {
+      updates.name = args.updates.name;
+      updates.slug = generateSlug(args.updates.name);
+    }
+
+    await ctx.db.patch(args.folderId, updates);
+
+    return { success: true };
+  },
+});
+
+export const _deleteFolder = internalMutation({
+  args: {
+    folderId: v.id("folder"),
+  },
+  returns: v.object({ success: v.boolean() }),
+  handler: async (ctx, args) => {
     await ctx.db.delete(args.folderId);
 
     return { success: true };

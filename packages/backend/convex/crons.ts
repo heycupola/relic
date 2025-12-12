@@ -1,30 +1,5 @@
 import { cronJobs } from "convex/server";
-import { internal } from "./_generated/api";
 
 const crons = cronJobs();
-
-crons.daily(
-  "check-subscription-status",
-  { hourUTC: 2, minuteUTC: 0 },
-  internal.organization.checkAllSubscriptionStatus,
-);
-
-crons.daily(
-  "check-user-plan-status",
-  { hourUTC: 3, minuteUTC: 0 },
-  internal.user.checkAllUserPlanStatus,
-);
-
-crons.hourly(
-  "cleanup-expired-device-codes",
-  { minuteUTC: 0 },
-  internal.deviceAuth.cleanupExpiredDeviceCodes,
-);
-
-crons.interval(
-  "cleanup-and-activate-organizations",
-  { minutes: 15 },
-  internal.organization.cleanupAndActivateOrganizations,
-);
 
 export default crons;

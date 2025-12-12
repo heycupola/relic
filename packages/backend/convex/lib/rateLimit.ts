@@ -1,8 +1,8 @@
 import type { RunMutationCtx } from "@convex-dev/rate-limiter";
 import type { GenericActionCtx, GenericMutationCtx, GenericQueryCtx } from "convex/server";
-import { ConvexError } from "convex/values";
 import type { DataModel } from "../_generated/dataModel";
 import { rateLimiter } from "../rateLimiter";
+import { createError, ErrorCode } from "./errors";
 import type { ProtectedActionCtx, ProtectedMutationCtx, ProtectedQueryCtx } from "./types";
 
 type OperationType = "read" | "write" | "delete" | "bulk" | "keyRotation";
@@ -65,8 +65,8 @@ export async function checkRateLimit(
   const rateLimitKey = key || (ctx as ProtectedMutationCtx | ProtectedQueryCtx).userId;
 
   if (!rateLimitKey) {
-    throw new ConvexError({
-      code: "RATE_LIMIT_ERROR",
+    throw createError({
+      code: ErrorCode.SERVER_ERROR,
       message: "Rate limit key is required",
     });
   }
@@ -78,12 +78,14 @@ export async function checkRateLimit(
   if (!status.ok) {
     const seconds = Math.ceil(status.retryAfter / 1000);
 
-    throw new ConvexError({
-      code: "RATE_LIMIT_EXCEEDED",
-      type,
-      retryAfter: status.retryAfter,
-      retryAfterSeconds: seconds,
+    throw createError({
+      code: ErrorCode.RATE_LIMIT_EXCEEDED,
       message: `Too many requests. Please wait ${seconds} second${seconds > 1 ? "s" : ""}.`,
+      metadata: {
+        type,
+        retryAfter: status.retryAfter,
+        retryAfterSeconds: seconds,
+      },
     });
   }
 }

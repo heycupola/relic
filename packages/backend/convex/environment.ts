@@ -1,19 +1,20 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { doc } from "convex-helpers/validators";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
-import { assertProjectAccess, Sector } from "./lib/access";
+import { assertProjectAccess } from "./lib/access";
+import { alreadyExistsError, createError, ErrorCode, notFoundError } from "./lib/errors";
 import { generateSlug } from "./lib/helpers";
-import { protectedAction } from "./lib/middleware";
+import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
-import { ErrorSeverity, type ProtectedActionCtx } from "./lib/types";
+import { ErrorSeverity, type ProtectedMutationCtx, type ProtectedQueryCtx } from "./lib/types";
 import schema from "./schema";
 
 const MAX_ENV_COUNT = 32;
 
-export const createEnvironment = protectedAction({
+export const createEnvironment = protectedMutation({
   args: {
     projectId: v.id("project"),
     name: v.string(),
@@ -22,7 +23,7 @@ export const createEnvironment = protectedAction({
     color: v.optional(v.string()),
   },
   handler: async (
-    ctx: ProtectedActionCtx,
+    ctx: ProtectedMutationCtx,
     args: {
       projectId: Id<"project">;
       name: string;
@@ -35,7 +36,7 @@ export const createEnvironment = protectedAction({
       projectId: args.projectId,
     });
 
-    await assertProjectAccess(ctx, project, Sector.Environment, ["create"]);
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
@@ -45,11 +46,7 @@ export const createEnvironment = protectedAction({
     );
 
     if (existingEnv) {
-      throw new ConvexError({
-        code: "ENVIRONMENT_ALREADY_EXISTS",
-        message: "Environment already exists",
-        severity: ErrorSeverity.High,
-      });
+      throw alreadyExistsError("environment");
     }
 
     const projectEnvironments = await ctx.runQuery(internal.environment._getProjectEnvironments, {
@@ -57,8 +54,8 @@ export const createEnvironment = protectedAction({
     });
 
     if (projectEnvironments.length >= MAX_ENV_COUNT) {
-      throw new ConvexError({
-        code: "ENVIRONMENT_LIMIT_REACHED",
+      throw createError({
+        code: ErrorCode.ENVIRONMENT_LIMIT_REACHED,
         message: `You've reached the maximum number of environments (${MAX_ENV_COUNT}) for this project`,
         severity: ErrorSeverity.High,
       });
@@ -77,7 +74,7 @@ export const createEnvironment = protectedAction({
   },
 });
 
-export const updateEnvironment = protectedAction({
+export const updateEnvironment = protectedMutation({
   args: {
     environmentId: v.id("environment"),
     name: v.optional(v.string()),
@@ -86,7 +83,7 @@ export const updateEnvironment = protectedAction({
     // sortOrder: v.optional(v.number()),
   },
   handler: async (
-    ctx: ProtectedActionCtx,
+    ctx: ProtectedMutationCtx,
     args: {
       environmentId: Id<"environment">;
       name?: string;
@@ -103,7 +100,7 @@ export const updateEnvironment = protectedAction({
       projectId: environment.projectId,
     });
 
-    await assertProjectAccess(ctx, project, Sector.Environment, ["update"]);
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
@@ -119,11 +116,11 @@ export const updateEnvironment = protectedAction({
   },
 });
 
-export const deleteEnvironment = protectedAction({
+export const deleteEnvironment = protectedMutation({
   args: {
     environmentId: v.id("environment"),
   },
-  handler: async (ctx: ProtectedActionCtx, args: { environmentId: Id<"environment"> }) => {
+  handler: async (ctx: ProtectedMutationCtx, args: { environmentId: Id<"environment"> }) => {
     const environment = await ctx.runQuery(internal.environment._loadEnvironmentById, {
       environmentId: args.environmentId,
     });
@@ -132,7 +129,7 @@ export const deleteEnvironment = protectedAction({
       projectId: environment.projectId,
     });
 
-    await assertProjectAccess(ctx, project, Sector.Environment, ["delete"]);
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "delete");
 
@@ -141,8 +138,8 @@ export const deleteEnvironment = protectedAction({
     });
 
     if (secrets.length > 0) {
-      throw new ConvexError({
-        code: "SECRETS_FOUND",
+      throw createError({
+        code: ErrorCode.CANNOT_DELETE_NON_EMPTY,
         message: "Cannot delete environment with active secrets. Please delete all secrets first.",
         severity: ErrorSeverity.High,
       });
@@ -153,8 +150,8 @@ export const deleteEnvironment = protectedAction({
     });
 
     if (folders.length > 0) {
-      throw new ConvexError({
-        code: "FOLDERS_FOUND",
+      throw createError({
+        code: ErrorCode.CANNOT_DELETE_NON_EMPTY,
         message: "Cannot delete environment with active folders. Please delete all folders first.",
         severity: ErrorSeverity.High,
       });
@@ -168,11 +165,11 @@ export const deleteEnvironment = protectedAction({
   },
 });
 
-export const getEnvironmentData = protectedAction({
+export const getEnvironmentData = protectedQuery({
   args: {
     environmentId: v.id("environment"),
   },
-  handler: async (ctx: ProtectedActionCtx, args) => {
+  handler: async (ctx: ProtectedQueryCtx, args) => {
     const environment: Doc<"environment"> = await ctx.runQuery(
       internal.environment._loadEnvironmentById,
       {
@@ -184,7 +181,7 @@ export const getEnvironmentData = protectedAction({
       projectId: environment.projectId,
     });
 
-    await assertProjectAccess(ctx, project, Sector.Environment, ["read"]);
+    await assertProjectAccess(ctx, project);
 
     const secrets: Doc<"secret">[] = await ctx.runQuery(
       internal.secret._loadSecretsByEnvironmentId,
@@ -281,11 +278,7 @@ export const _loadEnvironmentById = internalQuery({
     const environment = await ctx.db.get(args.environmentId);
 
     if (!environment) {
-      throw new ConvexError({
-        code: "ENVIRONMENT_NOT_FOUND",
-        message: "Environment was not found",
-        severity: ErrorSeverity.High,
-      });
+      throw notFoundError("environment");
     }
 
     return environment;

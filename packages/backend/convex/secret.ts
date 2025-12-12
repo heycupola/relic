@@ -1,11 +1,22 @@
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
-import { canWriteProject, hasProjectAccess } from "./lib/access";
+import { doc } from "convex-helpers/validators";
+import { internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
+import { internalMutation, internalQuery } from "./_generated/server";
+import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
+import { assertProjectAccess } from "./lib/access";
+import { createError, ErrorCode, notFoundError } from "./lib/errors";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
-import { checkProjectIdOrganizationSuspended } from "./lib/organizationAccess";
-import { isProjectAccessible } from "./lib/projectAccess";
 import { checkRateLimit } from "./lib/rateLimit";
-import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
+import {
+  ErrorSeverity,
+  type ProtectedMutationCtx,
+  type ProtectedQueryCtx,
+  SecretPrimitiveType,
+} from "./lib/types";
+import schema from "./schema";
+
+// INFO: should i add a secret limit in an environment
 
 export const createSecret = protectedMutation({
   args: {
@@ -13,188 +24,68 @@ export const createSecret = protectedMutation({
     folderId: v.optional(v.id("folder")),
     key: v.string(),
     encryptedValue: v.string(),
-    primitiveType: v.union(v.literal("string"), v.literal("int64"), v.literal("boolean")),
-    description: v.optional(v.string()),
+    primitiveType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
+    // description: v.optional(v.string()),
     encryptionKeyVersion: v.number(),
-    tags: v.optional(v.array(v.string())),
+    // tags: v.optional(v.array(v.string())),
   },
-  handler: async (
-    ctx: ProtectedMutationCtx,
-    args: {
-      environmentId: Id<"environment">;
-      folderId?: Id<"folder">;
-      key: string;
-      encryptedValue: string;
-      primitiveType: "string" | "int64" | "boolean";
-      description?: string;
-      encryptionKeyVersion: number;
-      tags?: string[];
-    },
-  ) => {
-    const environment = await ctx.db.get(args.environmentId);
+  handler: async (ctx: ProtectedMutationCtx, args) => {
+    const environment = await ctx.runQuery(internal.environment._loadEnvironmentById, {
+      environmentId: args.environmentId,
+    });
 
-    if (!environment) {
-      throw new Error("Environment not found");
-    }
+    const project = await ctx.runQuery(internal.project._loadProjectById, {
+      projectId: environment.projectId,
+    });
 
-    const project = await ctx.db.get(environment.projectId);
-
-    if (!project) {
-      throw new Error("Project not found");
-    }
-
-    if (project.isArchived) {
-      throw new Error("This project is archived. Unarchive it to access its data.");
-    }
-
-    await checkProjectIdOrganizationSuspended(ctx, environment.projectId);
-
-    // NOTE: check if project is restricted for personal projects
-    const accessCheck = await isProjectAccessible(ctx, environment.projectId);
-
-    if (!accessCheck.accessible) {
-      throw new Error(
-        "This project is restricted. Upgrade your plan or archive other projects to access it.",
-      );
-    }
-
-    if (!(await canWriteProject(ctx, project))) {
-      throw new Error("You do not have permission to create secrets");
-    }
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
+    let folder: Doc<"folder"> | undefined;
+
     if (args.folderId) {
-      const folder = await ctx.db.get(args.folderId);
-      if (!folder) {
-        throw new Error("Folder not found");
-      }
-      if (folder.environmentId !== args.environmentId) {
-        throw new Error("Folder does not belong to this environment");
-      }
+      // NOTE: loads and checks the folder's existence
+      folder = await ctx.runQuery(internal.folder._loadFolderId, {
+        folderId: args.folderId,
+      });
     }
 
-    const existingSecret = await ctx.db
-      .query("secret")
-      .withIndex("by_env_and_key", (q) =>
-        q.eq("environmentId", args.environmentId).eq("key", args.key),
-      )
-      .filter((q) =>
-        q.and(q.eq(q.field("isDeleted"), false), q.eq(q.field("folderId"), args.folderId)),
-      )
-      .first();
-
-    if (existingSecret) {
-      const location = args.folderId ? "this folder" : "this environment's root";
-      throw new Error(`Cannot restore: a secret with this key already exists in ${location}`);
-    }
-
-    const now = Date.now();
-    const secretId = await ctx.db.insert("secret", {
-      projectId: environment.projectId,
+    // NOTE: loads the secret and checks the its existence to prevent duplications
+    await ctx.runQuery(internal.secret._loadSecretByKeyAndEnvironmentIdAndFolderId, {
       environmentId: args.environmentId,
       folderId: args.folderId,
       key: args.key,
-      encryptedValue: args.encryptedValue,
-      description: args.description,
-      encryptionKeyVersion: args.encryptionKeyVersion,
-      primitiveType: args.primitiveType,
-      tags: args.tags,
-      isDeleted: false,
-      createdBy: ctx.userId,
-      createdAt: now,
-      updatedBy: ctx.userId,
-      updatedAt: now,
     });
 
-    await ctx.db.insert("secretHistory", {
-      secretId,
-      projectId: environment.projectId,
+    // create secret
+    const { secretId } = await ctx.runMutation(internal.secret._insertSecret, {
+      createdBy: ctx.userId,
+      encryptedValue: args.encryptedValue,
+      encryptionKeyVersion: args.encryptionKeyVersion,
       environmentId: args.environmentId,
       key: args.key,
-      encryptedValue: args.encryptedValue,
       primitiveType: args.primitiveType,
-      description: args.description,
-      encryptionKeyVersion: args.encryptionKeyVersion,
-      action: "created",
-      changedBy: ctx.userId,
-      changedAt: now,
+      projectId: project._id,
+      folderId: args.folderId,
     });
 
-    return { success: true, secretId };
-  },
-});
+    await ctx.runMutation(internal.actionLog._logSecretAction, {
+      environmentId: environment._id,
+      environmentName: environment.name,
+      key: args.key,
+      projectId: project._id,
+      projectName: project.name,
+      secretAction: "secret.created",
+      secretId,
+      userId: ctx.userId,
+      folderId: args.folderId,
+      folderName: folder?.name,
+    });
 
-export const listSecrets = protectedQuery({
-  args: {
-    environmentId: v.id("environment"),
-    folderId: v.optional(v.id("folder")),
-    includeDeleted: v.optional(v.boolean()),
-  },
-  handler: async (
-    ctx: ProtectedQueryCtx,
-    args: { environmentId: Id<"environment">; folderId?: Id<"folder">; includeDeleted?: boolean },
-  ) => {
-    const environment = await ctx.db.get(args.environmentId);
+    const sId: Id<"secret"> = secretId;
 
-    if (!environment) {
-      throw new Error("Environment not found");
-    }
-
-    const project = await ctx.db.get(environment.projectId);
-
-    if (!project) {
-      throw new Error("Project not found");
-    }
-
-    if (project.isArchived) {
-      throw new Error("This project is archived. Unarchive it to access its data.");
-    }
-
-    await checkProjectIdOrganizationSuspended(ctx, environment.projectId);
-
-    // NOTE: check if project is restricted for personal projects
-    const accessCheck = await isProjectAccessible(ctx, environment.projectId);
-
-    if (!accessCheck.accessible) {
-      throw new Error(
-        "This project is restricted. Upgrade your plan or archive other projects to access it.",
-      );
-    }
-
-    if (!(await hasProjectAccess(ctx, project))) {
-      throw new Error("You do not have access to this environment");
-    }
-
-    const includeDeleted = args.includeDeleted || false;
-
-    const allSecrets = await (async () => {
-      if (args.folderId !== undefined) {
-        return ctx.db
-          .query("secret")
-          .withIndex("by_folder", (q) => q.eq("folderId", args.folderId))
-          .collect();
-      }
-      return ctx.db
-        .query("secret")
-        .withIndex("by_environment", (q) => q.eq("environmentId", args.environmentId))
-        .filter((q) => q.eq(q.field("folderId"), undefined))
-        .collect();
-    })();
-
-    const secrets = includeDeleted ? allSecrets : allSecrets.filter((s) => !s.isDeleted);
-
-    return secrets.map((s) => ({
-      id: s._id,
-      key: s.key,
-      description: s.description,
-      tags: s.tags,
-      isDeleted: s.isDeleted,
-      createdBy: s.createdBy,
-      createdAt: s.createdAt,
-      updatedBy: s.updatedBy,
-      updatedAt: s.updatedAt,
-    }));
+    return { success: true, secretId: sId };
   },
 });
 
@@ -203,53 +94,40 @@ export const getSecret = protectedQuery({
     secretId: v.id("secret"),
   },
   handler: async (ctx: ProtectedQueryCtx, args: { secretId: Id<"secret"> }) => {
-    const secret = await ctx.db.get(args.secretId);
+    const secret = await ctx.runQuery(internal.secret._loadSecretById, {
+      secretId: args.secretId,
+    });
 
-    if (!secret) {
-      throw new Error("Secret not found");
+    const secretInstance = secret as Doc<"secret"> | null;
+
+    if (!secretInstance) {
+      throw notFoundError("secret");
     }
 
-    const project = await ctx.db.get(secret.projectId);
+    const project = await ctx.runQuery(internal.project._loadProjectById, {
+      projectId: secretInstance.projectId,
+    });
 
-    if (!project) {
-      throw new Error("Project not found");
-    }
+    await assertProjectAccess(ctx, project);
 
-    if (project.isArchived) {
-      throw new Error("This project is archived. Unarchive it to access its data.");
-    }
-
-    await checkProjectIdOrganizationSuspended(ctx, secret.projectId);
-
-    // NOTE: check if project is restricted for personal projects
-    const accessCheck = await isProjectAccessible(ctx, secret.projectId);
-
-    if (!accessCheck.accessible) {
-      throw new Error(
-        "This project is restricted. Upgrade your plan or archive other projects to access it.",
-      );
-    }
-
-    if (!(await hasProjectAccess(ctx, project))) {
-      throw new Error("You do not have access to this secret");
-    }
+    // TODO: add actionLog here
 
     return {
-      id: secret._id,
-      projectId: secret.projectId,
-      environmentId: secret.environmentId,
-      folderId: secret.folderId,
-      key: secret.key,
-      encryptedValue: secret.encryptedValue,
-      primitiveType: secret.primitiveType,
-      description: secret.description,
-      encryptionKeyVersion: secret.encryptionKeyVersion,
-      tags: secret.tags,
-      isDeleted: secret.isDeleted,
-      createdBy: secret.createdBy,
-      createdAt: secret.createdAt,
-      updatedBy: secret.updatedBy,
-      updatedAt: secret.updatedAt,
+      id: secretInstance._id,
+      projectId: secretInstance.projectId,
+      environmentId: secretInstance.environmentId,
+      folderId: secretInstance.folderId,
+      key: secretInstance.key,
+      encryptedValue: secretInstance.encryptedValue,
+      primitiveType: secretInstance.primitiveType,
+      description: secretInstance.description,
+      encryptionKeyVersion: secretInstance.encryptionKeyVersion,
+      tags: secretInstance.tags,
+      isDeleted: secretInstance.isDeleted,
+      createdBy: secretInstance.createdBy,
+      createdAt: secretInstance.createdAt,
+      updatedBy: secretInstance.updatedBy,
+      updatedAt: secretInstance.updatedAt,
     };
   },
 });
@@ -257,91 +135,80 @@ export const getSecret = protectedQuery({
 export const updateSecret = protectedMutation({
   args: {
     secretId: v.id("secret"),
-    encryptedValue: v.optional(v.string()),
-    description: v.optional(v.string()),
-    encryptionKeyVersion: v.optional(v.number()),
-    tags: v.optional(v.array(v.string())),
+    updates: v.object({
+      key: v.optional(v.string()),
+      encryptedValue: v.optional(v.string()),
+      encryptionKeyVersion: v.optional(v.number()),
+      primitiveType: v.union(
+        v.literal(SecretPrimitiveType.String),
+        v.literal(SecretPrimitiveType.Number),
+        v.literal(SecretPrimitiveType.Boolean),
+      ),
+    }),
+    // description: v.optional(v.string()),
+    // tags: v.optional(v.array(v.string())),
   },
-  handler: async (
-    ctx: ProtectedMutationCtx,
-    args: {
-      secretId: Id<"secret">;
-      encryptedValue?: string;
-      description?: string;
-      encryptionKeyVersion?: number;
-      tags?: string[];
-    },
-  ) => {
-    const secret = await ctx.db.get(args.secretId);
+  handler: async (ctx: ProtectedMutationCtx, args) => {
+    const secret = await ctx.runQuery(internal.secret._loadSecretById, {
+      secretId: args.secretId,
+    });
 
     if (!secret) {
-      throw new Error("Secret not found");
+      throw notFoundError("secret");
     }
 
     if (secret.isDeleted) {
-      throw new Error("Cannot update a deleted secret. Restore it first");
+      throw createError({
+        code: ErrorCode.INVALID_RESOURCE_STATE,
+        message: "Cannot update a deleted secret. Restore it first",
+        severity: ErrorSeverity.Low,
+      });
     }
 
-    const project = await ctx.db.get(secret.projectId);
+    const project = await ctx.runQuery(internal.project._loadProjectById, {
+      projectId: secret.projectId,
+    });
 
-    if (!project) {
-      throw new Error("Project not found");
-    }
-
-    if (project.isArchived) {
-      throw new Error("This project is archived. Unarchive it to access its data.");
-    }
-
-    await checkProjectIdOrganizationSuspended(ctx, secret.projectId);
-
-    // NOTE: check if project is restricted for personal projects
-    const accessCheck = await isProjectAccessible(ctx, secret.projectId);
-
-    if (!accessCheck.accessible) {
-      throw new Error(
-        "This project is restricted. Upgrade your plan or archive other projects to access it.",
-      );
-    }
-
-    if (!(await canWriteProject(ctx, project))) {
-      throw new Error("You do not have permission to update this secret");
-    }
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
-    const now = Date.now();
-    const updates: {
-      updatedBy: Id<"user">;
-      updatedAt: number;
-      encryptedValue?: string;
-      description?: string;
-      encryptionKeyVersion?: number;
-      tags?: string[];
-    } = {
-      updatedBy: ctx.userId,
-      updatedAt: now,
-    };
-
-    if (args.encryptedValue !== undefined) updates.encryptedValue = args.encryptedValue;
-    if (args.description !== undefined) updates.description = args.description;
-    if (args.encryptionKeyVersion !== undefined)
-      updates.encryptionKeyVersion = args.encryptionKeyVersion;
-    if (args.tags !== undefined) updates.tags = args.tags;
-
-    await ctx.db.patch(args.secretId, updates);
-
-    await ctx.db.insert("secretHistory", {
+    // update secret here
+    await ctx.runMutation(internal.secret._updateSecret, {
       secretId: args.secretId,
-      projectId: secret.projectId,
+      updates: {
+        updatedBy: ctx.userId,
+        key: args.updates.key,
+        encryptedValue: args.updates.encryptedValue,
+        encryptionKeyVersion: args.updates.encryptionKeyVersion,
+        primitiveType: args.updates.primitiveType,
+      },
+    });
+
+    let folder: Doc<"folder"> | undefined;
+
+    if (secret.folderId) {
+      folder = await ctx.runQuery(internal.folder._loadFolderId, {
+        folderId: secret.folderId,
+      });
+    }
+
+    const environment = await ctx.runQuery(internal.environment._loadEnvironmentById, {
       environmentId: secret.environmentId,
+    });
+
+    await ctx.runMutation(internal.actionLog._logSecretAction, {
+      environmentId: environment._id,
+      environmentName: environment.name,
       key: secret.key,
-      encryptedValue: args.encryptedValue || secret.encryptedValue,
-      primitiveType: secret.primitiveType,
-      description: args.description !== undefined ? args.description : secret.description,
-      encryptionKeyVersion: args.encryptionKeyVersion || secret.encryptionKeyVersion,
-      action: "updated",
-      changedBy: ctx.userId,
-      changedAt: now,
+      newKey: args.updates.key,
+      projectId: project._id,
+      projectName: project.name,
+      secretAction: "secret.updated",
+      secretId: args.secretId,
+      userId: ctx.userId,
+      folderId: secret.folderId,
+      folderName: folder?.name,
     });
 
     return { success: true };
@@ -352,203 +219,349 @@ export const deleteSecret = protectedMutation({
   args: {
     secretId: v.id("secret"),
   },
-  handler: async (ctx: ProtectedMutationCtx, args: { secretId: Id<"secret"> }) => {
-    const secret = await ctx.db.get(args.secretId);
+  handler: async (ctx: ProtectedMutationCtx, args) => {
+    const secret = await ctx.runQuery(internal.secret._loadSecretById, {
+      secretId: args.secretId,
+    });
 
     if (!secret) {
-      throw new Error("Secret not found");
+      throw notFoundError("secret");
     }
 
     if (secret.isDeleted) {
-      throw new Error("Secret is already deleted");
+      throw createError({
+        code: ErrorCode.INVALID_RESOURCE_STATE,
+        message: "Cannot update a deleted secret. Restore it first",
+        severity: ErrorSeverity.Low,
+      });
     }
 
-    const project = await ctx.db.get(secret.projectId);
+    const project = await ctx.runQuery(internal.project._loadProjectById, {
+      projectId: secret.projectId,
+    });
 
-    if (!project) {
-      throw new Error("Project not found");
-    }
-
-    if (project.isArchived) {
-      throw new Error("This project is archived. Unarchive it to access its data.");
-    }
-
-    await checkProjectIdOrganizationSuspended(ctx, secret.projectId);
-
-    // NOTE: check if project is restricted for personal projects
-    const accessCheck = await isProjectAccessible(ctx, secret.projectId);
-
-    if (!accessCheck.accessible) {
-      throw new Error(
-        "This project is restricted. Upgrade your plan or archive other projects to access it.",
-      );
-    }
-
-    if (!(await canWriteProject(ctx, project))) {
-      throw new Error("You do not have permission to delete this secret");
-    }
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "delete");
 
-    const now = Date.now();
-    await ctx.db.patch(args.secretId, {
-      isDeleted: true,
-      updatedBy: ctx.userId,
-      updatedAt: now,
+    await ctx.runMutation(internal.secret._updateSecret, {
+      secretId: args.secretId,
+      updates: {
+        isDeleted: true,
+        updatedBy: ctx.userId,
+      },
     });
 
-    await ctx.db.insert("secretHistory", {
-      secretId: args.secretId,
-      projectId: secret.projectId,
+    let folder: Doc<"folder"> | undefined;
+
+    if (secret.folderId) {
+      folder = await ctx.runQuery(internal.folder._loadFolderId, {
+        folderId: secret.folderId,
+      });
+    }
+
+    const environment = await ctx.runQuery(internal.environment._loadEnvironmentById, {
       environmentId: secret.environmentId,
+    });
+
+    await ctx.runMutation(internal.actionLog._logSecretAction, {
+      environmentId: secret.environmentId,
+      environmentName: environment.name,
       key: secret.key,
-      encryptedValue: secret.encryptedValue,
-      primitiveType: secret.primitiveType,
-      description: secret.description,
-      encryptionKeyVersion: secret.encryptionKeyVersion,
-      action: "deleted",
-      changedBy: ctx.userId,
-      changedAt: now,
+      projectId: project._id,
+      projectName: project.name,
+      secretAction: "secret.deleted",
+      secretId: args.secretId,
+      userId: ctx.userId,
+      folderId: secret.folderId,
+      folderName: folder?.name,
     });
 
     return { success: true };
   },
 });
 
-export const restoreSecret = protectedMutation({
+export const reEncryptSecretsBulk = protectedMutation({
+  args: {
+    secretIds: v.array(v.id("secret")),
+    encryptedValues: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.secretIds.length !== args.encryptedValues.length) {
+      throw createError({
+        code: ErrorCode.ARRAY_LENGTH_MISMATCH,
+        message: "secret id length and encrypted values length was not matched",
+        severity: ErrorSeverity.Medium,
+      });
+    }
+
+    if (args.secretIds.length === 0 || args.encryptedValues.length === 0) {
+      throw createError({
+        code: ErrorCode.INVALID_ARGUMENTS,
+        message: "secret ids or encryptedValues cannot be empty",
+        severity: ErrorSeverity.Medium,
+      });
+    }
+
+    const { totalEncrypted } = await ctx.runMutation(internal.secret._reEncryptSecretsBulk, {
+      encryptedValues: args.encryptedValues,
+      secretIds: args.secretIds,
+      userId: ctx.userId,
+    });
+
+    const te: number = totalEncrypted;
+
+    return { success: true, totalEncrypted: te };
+  },
+});
+
+export const _loadSecretById = internalQuery({
   args: {
     secretId: v.id("secret"),
   },
-  handler: async (ctx: ProtectedMutationCtx, args: { secretId: Id<"secret"> }) => {
-    const secret = await ctx.db.get(args.secretId);
+  returns: v.union(v.null(), doc(schema, "secret")),
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.secretId);
+  },
+});
 
-    if (!secret) {
-      throw new Error("Secret not found");
-    }
-
-    if (!secret.isDeleted) {
-      throw new Error("Secret is not deleted");
-    }
-
-    const project = await ctx.db.get(secret.projectId);
-
-    if (!project) {
-      throw new Error("Project not found");
-    }
-
-    if (project.isArchived) {
-      throw new Error("This project is archived. Unarchive it to access its data.");
-    }
-
-    await checkProjectIdOrganizationSuspended(ctx, secret.projectId);
-
-    // NOTE: check if project is restricted for personal projects
-    const accessCheck = await isProjectAccessible(ctx, secret.projectId);
-
-    if (!accessCheck.accessible) {
-      throw new Error(
-        "This project is restricted. Upgrade your plan or archive other projects to access it.",
-      );
-    }
-
-    if (!(await canWriteProject(ctx, project))) {
-      throw new Error("You do not have permission to restore this secret");
-    }
-
-    await checkRateLimit(ctx, "write");
-
-    const existingSecret = await ctx.db
+export const _loadSecretByKeyAndEnvironmentIdAndFolderId = internalQuery({
+  args: {
+    key: v.string(),
+    environmentId: v.id("environment"),
+    folderId: v.optional(v.id("folder")),
+  },
+  returns: doc(schema, "secret"),
+  handler: async (ctx, args) => {
+    const secret = await ctx.db
       .query("secret")
       .withIndex("by_env_and_key", (q) =>
-        q.eq("environmentId", secret.environmentId).eq("key", secret.key),
+        q.eq("environmentId", args.environmentId).eq("key", args.key),
       )
       .filter((q) =>
-        q.and(q.eq(q.field("isDeleted"), false), q.eq(q.field("folderId"), secret.folderId)),
+        q.and(q.eq(q.field("isDeleted"), false), q.eq(q.field("folderId"), args.folderId)),
       )
       .first();
 
-    if (existingSecret) {
-      const location = secret.folderId ? "this folder" : "this environment's root";
-      throw new Error(`Cannot restore: a secret with this key already exists in ${location}`);
+    if (!secret) {
+      throw notFoundError("secret");
     }
 
+    return secret;
+  },
+});
+
+export const _loadSecretsByEnvironmentId = internalQuery({
+  args: {
+    environmentId: v.id("environment"),
+  },
+  returns: v.array(doc(schema, "secret")),
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("secret")
+      .withIndex("by_environment", (q) => q.eq("environmentId", args.environmentId))
+      .filter((q) => q.eq(q.field("isDeleted"), false))
+      .collect();
+  },
+});
+
+export const _loadSecretsByFolderId = internalQuery({
+  args: {
+    folderId: v.id("folder"),
+  },
+  returns: v.array(doc(schema, "secret")),
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("secret")
+      .withIndex("by_folder", (q) => q.eq("folderId", args.folderId))
+      .filter((q) => q.eq(q.field("isDeleted"), false))
+      .collect();
+  },
+});
+
+export const _insertSecret = internalMutation({
+  args: {
+    projectId: v.id("project"),
+    environmentId: v.id("environment"),
+    folderId: v.optional(v.id("folder")),
+    key: v.string(),
+    encryptedValue: v.string(),
+    // description: v.string(),
+    encryptionKeyVersion: v.number(),
+    primitiveType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
+    // tags: v.array(v.string()),
+    createdBy: v.id("user"),
+  },
+  returns: v.object({ success: v.boolean(), secretId: v.id("secret") }),
+  handler: async (ctx, args) => {
     const now = Date.now();
-    await ctx.db.patch(args.secretId, {
+
+    const secretId = await ctx.db.insert("secret", {
+      projectId: args.projectId,
+      environmentId: args.environmentId,
+      folderId: args.folderId,
+      key: args.key,
+      encryptedValue: args.encryptedValue,
+      // description: args.description,
+      encryptionKeyVersion: args.encryptionKeyVersion,
+      primitiveType: args.primitiveType,
+      // tags: args.tags,
       isDeleted: false,
-      updatedBy: ctx.userId,
+      createdBy: args.createdBy,
+      createdAt: now,
+      updatedBy: args.createdBy,
       updatedAt: now,
     });
 
-    await ctx.db.insert("secretHistory", {
-      secretId: args.secretId,
-      projectId: secret.projectId,
-      environmentId: secret.environmentId,
-      key: secret.key,
-      encryptedValue: secret.encryptedValue,
-      primitiveType: secret.primitiveType,
-      description: secret.description,
-      encryptionKeyVersion: secret.encryptionKeyVersion,
-      action: "restored",
-      changedBy: ctx.userId,
-      changedAt: now,
-    });
+    return { success: true, secretId };
+  },
+});
+
+export const _updateSecret = internalMutation({
+  args: {
+    secretId: v.id("secret"),
+    updates: v.object({
+      updatedBy: v.id("user"),
+      key: v.optional(v.string()),
+      encryptedValue: v.optional(v.string()),
+      encryptionKeyVersion: v.optional(v.number()),
+      primitiveType: v.optional(
+        v.union(
+          v.literal(SecretPrimitiveType.String),
+          v.literal(SecretPrimitiveType.Number),
+          v.literal(SecretPrimitiveType.Boolean),
+        ),
+      ),
+      isDeleted: v.optional(v.boolean()),
+      // description: v.optional(v.string()),
+      // tags: v.optional(v.array(v.string())),
+    }),
+  },
+  returns: v.object({ success: v.boolean() }),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const updates: {
+      updatedBy: BetterAuthId<"user">;
+      updatedAt: number;
+      key?: string;
+      encryptedValue?: string;
+      encryptionKeyVersion?: number;
+      primitiveType?: SecretPrimitiveType;
+      isDeleted?: boolean;
+      // description?: string;
+      // tags?: string[];
+    } = {
+      updatedBy: args.updates.updatedBy,
+      updatedAt: now,
+    };
+
+    if (args.updates.key !== undefined) updates.key = args.updates.key;
+    if (args.updates.encryptedValue !== undefined)
+      updates.encryptedValue = args.updates.encryptedValue;
+    if (args.updates.encryptionKeyVersion !== undefined)
+      updates.encryptionKeyVersion = args.updates.encryptionKeyVersion;
+    if (args.updates.primitiveType !== undefined)
+      updates.primitiveType = args.updates.primitiveType;
+    if (args.updates.isDeleted !== undefined) updates.isDeleted = args.updates.isDeleted;
+    // if (args.updates.description !== undefined) updates.description = args.updates.description;
+    // if (args.updates.tags !== undefined) updates.tags = args.updates.tags;
+
+    await ctx.db.patch(args.secretId, updates);
 
     return { success: true };
   },
 });
 
-export const listSecretHistory = protectedQuery({
+export const _reEncryptSecretsBulk = internalMutation({
   args: {
-    secretId: v.id("secret"),
+    userId: v.id("user"),
+    secretIds: v.array(v.id("secret")),
+    encryptedValues: v.array(v.string()),
   },
-  handler: async (ctx: ProtectedQueryCtx, args: { secretId: Id<"secret"> }) => {
-    const secret = await ctx.db.get(args.secretId);
+  handler: async (ctx, args) => {
+    const secretsData = await Promise.all(
+      args.secretIds.map(async (secretId, index) => ({
+        secretId,
+        index,
+        secret: await ctx.db.get(secretId),
+      })),
+    );
 
-    if (!secret) {
-      throw new Error("Secret not found");
+    const validSecretsData: Array<{
+      secretId: Id<"secret">;
+      index: number;
+      secret: Doc<"secret">;
+    }> = [];
+
+    for (const item of secretsData) {
+      if (!item.secret) {
+        console.error(`Secret ${item.secretId} not found`);
+        continue;
+      }
+      if (item.secret.createdBy !== args.userId) {
+        console.error(`Secret ${item.secretId} doesn't belong to user ${args.userId}`);
+        continue;
+      }
+      validSecretsData.push({
+        secretId: item.secretId,
+        index: item.index,
+        secret: item.secret,
+      });
     }
 
-    const project = await ctx.db.get(secret.projectId);
+    const uniqueProjectIds = [...new Set(validSecretsData.map(({ secret }) => secret.projectId))];
+    const projectsData = await Promise.all(
+      uniqueProjectIds.map(async (projectId) => ({
+        projectId,
+        project: await ctx.db.get(projectId),
+      })),
+    );
 
-    if (!project) {
-      throw new Error("Project not found");
+    const projectMap = new Map<Id<"project">, Doc<"project">>();
+    for (const { project } of projectsData) {
+      if (project) {
+        projectMap.set(project._id, project);
+      }
     }
 
-    if (project.isArchived) {
-      throw new Error("This project is archived. Unarchive it to access its data.");
+    const finalValidSecrets: Array<{
+      secretId: Id<"secret">;
+      index: number;
+      secret: Doc<"secret">;
+    }> = [];
+
+    for (const item of validSecretsData) {
+      const project = projectMap.get(item.secret.projectId);
+      if (!project) {
+        console.error(`Project ${item.secret.projectId} not found`);
+        continue;
+      }
+      finalValidSecrets.push(item);
     }
 
-    await checkProjectIdOrganizationSuspended(ctx, secret.projectId);
-
-    // NOTE: check if project is restricted for personal projects
-    const accessCheck = await isProjectAccessible(ctx, secret.projectId);
-
-    if (!accessCheck.accessible) {
-      throw new Error(
-        "This project is restricted. Upgrade your plan or archive other projects to access it.",
-      );
+    if (finalValidSecrets.length === 0) {
+      return { success: false, totalEncrypted: 0 };
     }
 
-    if (!(await hasProjectAccess(ctx, project))) {
-      throw new Error("You do not have access to this secret");
+    let totalEncrypted = 0;
+    for (const { secret, index } of finalValidSecrets) {
+      const encryptedValue = args.encryptedValues[index];
+      if (!encryptedValue) {
+        console.error(`No encrypted value found at index ${index}`);
+        continue;
+      }
+
+      await ctx.db.patch(secret._id, {
+        encryptedValue,
+        updatedAt: Date.now(),
+        updatedBy: args.userId,
+        // NOTE: encryptionKeyVersion stays the same cuz this is master key change,
+        // not key rotation
+        encryptionKeyVersion: secret.encryptionKeyVersion,
+      });
+      totalEncrypted += 1;
     }
 
-    const history = await ctx.db
-      .query("secretHistory")
-      .withIndex("by_secret", (q) => q.eq("secretId", args.secretId))
-      .order("desc")
-      .take(100);
-
-    return history.map((h) => ({
-      id: h._id,
-      key: h.key,
-      encryptedValue: h.encryptedValue,
-      primitiveType: h.primitiveType,
-      description: h.description,
-      encryptionKeyVersion: h.encryptionKeyVersion,
-      action: h.action,
-      changedBy: h.changedBy,
-      changedAt: h.changedAt,
-    }));
+    return { success: true, totalEncrypted };
   },
 });

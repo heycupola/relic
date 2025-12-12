@@ -1,30 +1,25 @@
-import { ConvexError, v } from "convex/values";
-import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery } from "./_generated/server";
-import { initLocalAutumn } from "./autumn";
+import { v } from "convex/values";
+import { components } from "./_generated/api";
+import { internalMutation } from "./_generated/server";
 import { protectedAction, protectedQuery } from "./lib/middleware";
-import type { ProtectedQueryCtx } from "./lib/types";
+import { checkRateLimit } from "./lib/rateLimit";
+import type { ProtectedActionCtx, ProtectedQueryCtx } from "./lib/types";
 
 export const getProPlan = protectedAction({
   args: {},
-  handler: async (ctx) => {
-    const user = await ctx.runQuery(internal.user.getUserById, { userId: ctx.userId });
+  handler: async (ctx: ProtectedActionCtx) => {
+    await checkRateLimit(ctx, "write");
 
-    const localAutumnInstance = initLocalAutumn({
-      customerId: user.authId,
-      customerData: {
-        name: user.name || undefined,
-        email: user.email,
-      },
+    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: ctx.userId,
     });
 
-    const hasPro = await localAutumnInstance.check(ctx, {
+    const hasPro = await ctx.autumn.check(ctx, {
       featureId: "can_create_org",
     });
 
     if (!hasPro.data?.allowed) {
-      const checkoutResult = await localAutumnInstance.checkout(ctx, {
+      const checkoutResult = await ctx.autumn.checkout(ctx, {
         productId: "pro",
         successUrl: `${process.env.SITE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
         customerData: {
@@ -67,18 +62,8 @@ export const getProPlan = protectedAction({
 
 export const checkProPlan = protectedAction({
   args: {},
-  handler: async (ctx) => {
-    const user = await ctx.runQuery(internal.user.getUserById, { userId: ctx.userId });
-
-    const localAutumnInstance = initLocalAutumn({
-      customerId: user.authId,
-      customerData: {
-        name: user.name,
-        email: user.email,
-      },
-    });
-
-    const hasPro = await localAutumnInstance.check(ctx, {
+  handler: async (ctx: ProtectedActionCtx) => {
+    const hasPro = await ctx.autumn.check(ctx, {
       featureId: "can_create_org",
     });
 
@@ -86,219 +71,43 @@ export const checkProPlan = protectedAction({
   },
 });
 
-export const checkProPlanPayment = protectedAction({
-  args: {
-    sessionId: v.string(),
-  },
-  handler: async (
-    ctx,
-    args,
-  ): Promise<{
-    success: boolean;
-    hasProPlan: boolean;
-    paymentStatus: "none" | "open" | "complete" | "expired";
-  }> => {
-    const user = await ctx.runQuery(internal.user.getUserById, { userId: ctx.userId });
-
-    const localAutumnInstance = initLocalAutumn({
-      customerId: user.authId,
-      customerData: {
-        name: user.name || undefined,
-        email: user.email,
-      },
-    });
-
-    const hasPro = await localAutumnInstance.check(ctx, {
-      featureId: "can_create_org",
-    });
-
-    if (hasPro.data?.allowed) {
-      return {
-        success: true,
-        hasProPlan: true,
-        paymentStatus: "complete" as const,
-      };
-    }
-
-    try {
-      const response = await fetch(
-        `https://api.stripe.com/v1/checkout/sessions/${args.sessionId}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`,
-          },
-        },
-      );
-
-      if (!response.ok) {
-        return {
-          success: true,
-          hasProPlan: false,
-          paymentStatus: "none" as const,
-        };
-      }
-
-      const stripeSession = (await response.json()) as {
-        status: "open" | "complete" | "expired";
-      };
-
-      const status =
-        stripeSession.status === "open"
-          ? "open"
-          : stripeSession.status === "complete"
-            ? "complete"
-            : "expired";
-
-      return {
-        success: true,
-        hasProPlan: false,
-        paymentStatus: status,
-      };
-    } catch (_e) {
-      return {
-        success: true,
-        hasProPlan: false,
-        paymentStatus: "none" as const,
-      };
-    }
-  },
-});
-
-export const getUserByAuthId = internalQuery({
-  args: { authId: v.string() },
-  handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("user")
-      .withIndex("by_auth_id", (q) => q.eq("authId", args.authId))
-      .first();
-
-    if (!user) {
-      throw new ConvexError({
-        code: "USER_NOT_FOUND",
-        message: "User not found",
-        severity: "high" as const,
-      });
-    }
-
-    return user;
-  },
-});
-
-export const getUserById = internalQuery({
-  args: { userId: v.id("user") },
-  handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-
-    if (!user) {
-      throw new ConvexError({
-        code: "USER_NOT_FOUND",
-        message: "User not found",
-        severity: "high" as const,
-      });
-    }
-
-    return user;
-  },
-});
-
-export const updateUser = internalMutation({
-  args: {
-    userId: v.string(),
-    updates: v.object({
-      email: v.optional(v.string()),
-      name: v.optional(v.string()),
-      updatedAt: v.number(),
-    }),
-  },
-  handler: async (
-    ctx,
-    args: { userId: Id<"user">; updates: { email?: string; name?: string; updatedAt: number } },
-  ) => {
-    await ctx.db.patch(args.userId, args.updates);
-  },
-});
-
 export const getCurrentUser = protectedQuery({
   args: {},
   handler: async (ctx: ProtectedQueryCtx) => {
-    const user = await ctx.db.get(ctx.userId);
+    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: ctx.userId,
+    });
 
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-    return {
-      id: user._id,
-      authId: user.authId,
-      email: user.email,
-      name: user.name,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
+    return user;
   },
 });
 
-export const checkAllUserPlanStatus = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    const allUsers = await ctx.db.query("user").collect();
-    const now = Date.now();
-    let usersChecked = 0;
-    let downgrades = 0;
-    let upgrades = 0;
+export const _handlePlanUpgrade = internalMutation({
+  args: {
+    userId: v.id("user"),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: args.userId,
+    });
 
-    for (const user of allUsers) {
-      const localAutumnInstance = initLocalAutumn({
-        customerId: user._id,
-        customerData: {
-          name: user.name,
-          email: user.email,
-        },
-      });
+    await ctx.runMutation(components.betterAuth.user.upgradeToPro, {
+      userId: user._id,
+    });
+  },
+});
 
-      // NOTE: check current plan limit
-      const { data } = await localAutumnInstance.check(ctx, {
-        featureId: "personal_projects",
-      });
+export const _handlePlanDowngrade = internalMutation({
+  args: {
+    userId: v.id("user"),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: args.userId,
+    });
 
-      const currentLimit = data?.included_usage || 2;
-
-      // NOTE: get user's non-archived projects
-      const projects = await ctx.db
-        .query("project")
-        .withIndex("by_owner", (q) => q.eq("ownerType", "user").eq("ownerId", user._id))
-        .filter((q) => q.eq(q.field("isArchived"), false))
-        .collect();
-
-      const projectCount = projects.length;
-
-      // NOTE: upgrade detection - user upgraded, clear downgrade flag
-      if (user.planDowngradedAt && projectCount <= currentLimit) {
-        await ctx.db.patch(user._id, {
-          planDowngradedAt: undefined,
-          updatedAt: now,
-        });
-        upgrades++;
-      }
-
-      // NOTE: downgrade detection - user downgraded, set downgrade flag
-      if (!user.planDowngradedAt && projectCount > currentLimit) {
-        await ctx.db.patch(user._id, {
-          planDowngradedAt: now,
-          updatedAt: now,
-        });
-        downgrades++;
-      }
-
-      usersChecked++;
-    }
-
-    return {
-      success: true,
-      usersChecked,
-      downgrades,
-      upgrades,
-    };
+    await ctx.runMutation(components.betterAuth.user.downgradeToFree, {
+      userId: user._id,
+    });
   },
 });

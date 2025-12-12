@@ -26,15 +26,8 @@ bun run dev
 - RSA key pairs stored encrypted (zero-knowledge)
 - Private keys encrypted with user password (never sent to server)
 
-**Organizations**
-- Role-based access: owner, admin, member, viewer
-- Free org included with Pro plan (max 1 per user)
-- Paid orgs via Autumn subscription
-- Encryption key rotation on member removal
-
 **Projects**
 - Personal projects (owned by user)
-- Organization projects (shared with team)
 - Archived project support with unarchive capability
 
 **Environments → Folders → Secrets**
@@ -46,11 +39,10 @@ bun run dev
 ### Security Features
 
 - Zero-knowledge encryption (client-side only)
-- Organization suspension checks
 - Project access restrictions with 7-day grace period
 - Archived project access control
 - Request-level caching for performance
-- Role-based permission checks
+- User ownership permission checks
 - Comprehensive audit logging
 
 ## Key Features Implemented
@@ -63,12 +55,7 @@ bun run dev
 - Restriction system with 7-day grace period
 - Newest projects remain accessible after downgrade
 - Request-level cache for optimal performance
-
-**Organizations**
-- Free org with Pro plan (transferable, max 1 per user)
-- Paid orgs: 10 projects, 5 members included
-- Subscription status: active → payment_lapsed (7 days) → suspended
-- Daily cron jobs sync subscription and plan status
+- Daily cron jobs sync plan status
 
 ### Access Control Layers
 
@@ -76,23 +63,8 @@ All handlers enforce security in this order:
 
 1. **Resource exists** - Check if project/env/secret exists
 2. **Project archived** - Prevent access to archived projects
-3. **Organization suspended** - Block suspended org access
-4. **Project restricted** - Check personal plan limits
-5. **Permission check** - Verify user role permissions
-
-### Organization Management
-
-**Member Removal**
-- Owner can remove anyone
-- Admins can remove each other + members (not owner)
-- Members/viewers can only remove themselves
-- Owner leaving requires ownership transfer
-- Free org transfer validates new owner doesn't already own one
-
-**Ownership Transfer**
-- Free orgs remain free (like GitHub/Vercel)
-- Paid orgs transfer billing responsibility
-- Validates new owner has available free org slot
+3. **Project restricted** - Check personal plan limits
+4. **Permission check** - Verify user ownership
 
 ### Project Lifecycle
 
@@ -112,15 +84,13 @@ All handlers enforce security in this order:
 ```
 convex/
 ├── schema.ts                    # Database schema
-├── crons.ts                     # Daily subscription/plan checks
+├── crons.ts                     # Daily plan checks
 ├── lib/
 │   ├── middleware.ts            # Auth middleware
 │   ├── access.ts                # Permission helpers
-│   ├── organizationAccess.ts    # Org suspension checks
 │   ├── projectAccess.ts         # Plan restriction + caching
 │   └── types.ts                 # Shared TypeScript types
 ├── user.ts                      # User CRUD + plan sync
-├── organization.ts              # Org management + transfers
 ├── project.ts                   # Project CRUD + archive
 ├── environment.ts               # Environment CRUD
 ├── folder.ts                    # Folder CRUD
@@ -144,29 +114,14 @@ convex/
 - `storeUserKey({ publicKey, encryptedPrivateKey, salt })` - Store user's encryption keys (one-time)
 - `updateUserKey({ publicKey, encryptedPrivateKey, salt })` - Rotate user's encryption keys
 
-### Organizations (organization.ts)
-
-**Queries:**
-- `listMembers({ organizationId })` - List organization members
-- `getUserOrganizations()` - Get user's organization memberships
-- `getOrganizationSettings({ organizationId })` - Get organization settings
-
-**Mutations:**
-- `initializeOrganization({ organizationId, wrapperOrgKey })` - Create organization
-- `addMember({ organizationId, userEmail, role, wrappedOrgKey })` - Add member to organization
-- `removeMember({ organizationId, userId, reason, newOwnerUserId? })` - Remove member or transfer ownership
-- `rotateOrganizationKeys({ organizationId, newKeyVersion, secrets, members, reason? })` - Rotate encryption keys
-
 ### Projects (project.ts)
 
 **Queries:**
 - `listUserProjects()` - List personal projects with restriction status
-- `listOrganizationProjects({ organizationId })` - List organization projects
 - `getProject({ projectId })` - Get project details
 
 **Mutations:**
 - `createPersonalProject({ name, slug, description? })` - Create personal project
-- `createOrganizationProject({ organizationId, name, slug, description? })` - Create organization project
 - `updateProject({ projectId, name?, description? })` - Update project details
 - `archiveProject({ projectId })` - Archive project (frees quota)
 - `unarchiveProject({ projectId })` - Unarchive project (checks quota)
@@ -214,7 +169,7 @@ convex/
 - `getResourceAccessLogs({ resourceType, resourceId, limit? })` - Get logs for specific resource
 - `getUserAccessLogs({ limit? })` - Get current user's access logs
 
-**Total:** 41 client-callable functions (18 queries, 23 mutations)
+**Total:** 30 client-callable functions (14 queries, 16 mutations)
 
 ## Development Guidelines
 
@@ -228,9 +183,8 @@ const result = await someFunction();
 Always check in this order:
 1. Resource exists
 2. Project not archived
-3. Organization not suspended
-4. Project not restricted
-5. User has permission
+3. Project not restricted
+4. User has ownership permission
 
 ### Error Messages
 ```typescript
@@ -261,11 +215,6 @@ handler: async (ctx, args) => {
 - Simple implementation without external dependencies
 
 ## Cron Jobs
-
-**Daily 02:00 UTC** - `checkAllSubscriptionStatus`
-- Syncs organization subscription status
-- Handles grace period (7 days)
-- Suspends orgs with lapsed payments
 
 **Daily 03:00 UTC** - `checkAllUserPlanStatus`
 - Detects plan upgrades/downgrades
