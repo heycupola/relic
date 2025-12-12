@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { doc } from "convex-helpers/validators";
-import { components, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
@@ -281,7 +281,7 @@ export const deleteSecret = protectedMutation({
   },
 });
 
-export const reEncryptSecretsForPersonalProjectsBulk = protectedMutation({
+export const reEncryptSecretsBulk = protectedMutation({
   args: {
     secretIds: v.array(v.id("secret")),
     encryptedValues: v.array(v.string()),
@@ -303,7 +303,7 @@ export const reEncryptSecretsForPersonalProjectsBulk = protectedMutation({
       });
     }
 
-    const { totalEncrypted } = await ctx.runMutation(internal.secret._reEncryptSecretBulk, {
+    const { totalEncrypted } = await ctx.runMutation(internal.secret._reEncryptSecretsBulk, {
       encryptedValues: args.encryptedValues,
       secretIds: args.secretIds,
       userId: ctx.userId,
@@ -472,7 +472,7 @@ export const _updateSecret = internalMutation({
   },
 });
 
-export const _reEncryptSecretBulk = internalMutation({
+export const _reEncryptSecretsBulk = internalMutation({
   args: {
     userId: v.id("user"),
     secretIds: v.array(v.id("secret")),
@@ -561,13 +561,6 @@ export const _reEncryptSecretBulk = internalMutation({
       });
       totalEncrypted += 1;
     }
-
-    await ctx.runMutation(
-      components.betterAuth.user.clearNeedsEncryptionForPersonalProjectSecrets,
-      {
-        userId: args.userId,
-      },
-    );
 
     return { success: true, totalEncrypted };
   },
