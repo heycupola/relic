@@ -22,7 +22,6 @@ export const tables = {
     encryptedPrivateKey: v.optional(v.union(v.null(), v.string())),
     salt: v.optional(v.union(v.null(), v.string())),
     keysUpdatedAt: v.optional(v.union(v.null(), v.number())),
-    needsReEncryption: v.optional(v.union(v.null(), v.boolean())),
   })
     .index("email_name", ["email", "name"])
     .index("name", ["name"])

@@ -41,7 +41,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                   image?: null | string;
                   keysUpdatedAt?: null | number;
                   name: string;
-                  needsReEncryption?: null | boolean;
                   planDowngradedAt?: null | number;
                   publicKey?: null | string;
                   salt?: null | string;
@@ -142,7 +141,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
-                    | "needsReEncryption"
                     | "id";
                   operator?:
                     | "lt"
@@ -364,7 +362,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
-                    | "needsReEncryption"
                     | "id";
                   operator?:
                     | "lt"
@@ -657,7 +654,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                   image?: null | string;
                   keysUpdatedAt?: null | number;
                   name?: string;
-                  needsReEncryption?: null | boolean;
                   planDowngradedAt?: null | number;
                   publicKey?: null | string;
                   salt?: null | string;
@@ -682,7 +678,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
-                    | "needsReEncryption"
                     | "id";
                   operator?:
                     | "lt"
@@ -943,7 +938,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                   image?: null | string;
                   keysUpdatedAt?: null | number;
                   name?: string;
-                  needsReEncryption?: null | boolean;
                   planDowngradedAt?: null | number;
                   publicKey?: null | string;
                   salt?: null | string;
@@ -968,7 +962,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
-                    | "needsReEncryption"
                     | "id";
                   operator?:
                     | "lt"
@@ -1254,13 +1247,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     user: {
-      completeReEncription: FunctionReference<
-        "mutation",
-        "internal",
-        { userId: string },
-        any,
-        Name
-      >;
       downgradeToFree: FunctionReference<
         "mutation",
         "internal",
@@ -1280,7 +1266,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             image?: null | string;
             keysUpdatedAt?: null | number;
             name: string;
-            needsReEncryption?: null | boolean;
             planDowngradedAt?: null | number;
             publicKey?: null | string;
             salt?: null | string;
@@ -1288,6 +1273,31 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             userId?: null | string;
           };
         },
+        Name
+      >;
+      loadUserByEmail: FunctionReference<
+        "query",
+        "internal",
+        { email: string },
+        {
+          _creationTime: number;
+          _id: string;
+          accessRestrictedEmailSent?: null | boolean;
+          createdAt: number;
+          email: string;
+          emailVerified: boolean;
+          encryptedPrivateKey?: null | string;
+          gracePeriodEmailSent?: null | boolean;
+          hasPro: boolean;
+          image?: null | string;
+          keysUpdatedAt?: null | number;
+          name: string;
+          planDowngradedAt?: null | number;
+          publicKey?: null | string;
+          salt?: null | string;
+          updatedAt: number;
+          userId?: null | string;
+        } | null,
         Name
       >;
       loadUserById: FunctionReference<
@@ -1307,7 +1317,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           image?: null | string;
           keysUpdatedAt?: null | number;
           name: string;
-          needsReEncryption?: null | boolean;
           planDowngradedAt?: null | number;
           publicKey?: null | string;
           salt?: null | string;
@@ -1321,7 +1330,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "internal",
         {
           encryptedPrivateKey: string;
-          needReEncryption?: null | boolean;
           publicKey: string;
           salt: string;
           userId: string;
@@ -1348,7 +1356,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             image?: null | string;
             keysUpdatedAt?: null | number;
             name: string;
-            needsReEncryption?: null | boolean;
             planDowngradedAt?: null | number;
             publicKey?: null | string;
             salt?: null | string;

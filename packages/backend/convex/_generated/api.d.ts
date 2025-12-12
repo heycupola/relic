@@ -23,6 +23,7 @@ import type * as lib_middleware from "../lib/middleware.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
 import type * as lib_types from "../lib/types.js";
 import type * as project from "../project.js";
+import type * as projectShare from "../projectShare.js";
 import type * as rateLimiter from "../rateLimiter.js";
 import type * as secret from "../secret.js";
 import type * as test_helpers_setup from "../test/helpers/setup.js";
@@ -52,6 +53,7 @@ declare const fullApi: ApiFromModules<{
   "lib/rateLimit": typeof lib_rateLimit;
   "lib/types": typeof lib_types;
   project: typeof project;
+  projectShare: typeof projectShare;
   rateLimiter: typeof rateLimiter;
   secret: typeof secret;
   "test/helpers/setup": typeof test_helpers_setup;
@@ -106,7 +108,6 @@ export declare const components: {
                   image?: null | string;
                   keysUpdatedAt?: null | number;
                   name: string;
-                  needsReEncryption?: null | boolean;
                   planDowngradedAt?: null | number;
                   publicKey?: null | string;
                   salt?: null | string;
@@ -206,7 +207,6 @@ export declare const components: {
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
-                    | "needsReEncryption"
                     | "id";
                   operator?:
                     | "lt"
@@ -427,7 +427,6 @@ export declare const components: {
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
-                    | "needsReEncryption"
                     | "id";
                   operator?:
                     | "lt"
@@ -717,7 +716,6 @@ export declare const components: {
                   image?: null | string;
                   keysUpdatedAt?: null | number;
                   name?: string;
-                  needsReEncryption?: null | boolean;
                   planDowngradedAt?: null | number;
                   publicKey?: null | string;
                   salt?: null | string;
@@ -742,7 +740,6 @@ export declare const components: {
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
-                    | "needsReEncryption"
                     | "id";
                   operator?:
                     | "lt"
@@ -1002,7 +999,6 @@ export declare const components: {
                   image?: null | string;
                   keysUpdatedAt?: null | number;
                   name?: string;
-                  needsReEncryption?: null | boolean;
                   planDowngradedAt?: null | number;
                   publicKey?: null | string;
                   salt?: null | string;
@@ -1027,7 +1023,6 @@ export declare const components: {
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
-                    | "needsReEncryption"
                     | "id";
                   operator?:
                     | "lt"
@@ -1307,12 +1302,6 @@ export declare const components: {
       >;
     };
     user: {
-      completeReEncription: FunctionReference<
-        "mutation",
-        "internal",
-        { userId: string },
-        any
-      >;
       downgradeToFree: FunctionReference<
         "mutation",
         "internal",
@@ -1332,7 +1321,6 @@ export declare const components: {
             image?: null | string;
             keysUpdatedAt?: null | number;
             name: string;
-            needsReEncryption?: null | boolean;
             planDowngradedAt?: null | number;
             publicKey?: null | string;
             salt?: null | string;
@@ -1340,6 +1328,30 @@ export declare const components: {
             userId?: null | string;
           };
         }
+      >;
+      loadUserByEmail: FunctionReference<
+        "query",
+        "internal",
+        { email: string },
+        {
+          _creationTime: number;
+          _id: string;
+          accessRestrictedEmailSent?: null | boolean;
+          createdAt: number;
+          email: string;
+          emailVerified: boolean;
+          encryptedPrivateKey?: null | string;
+          gracePeriodEmailSent?: null | boolean;
+          hasPro: boolean;
+          image?: null | string;
+          keysUpdatedAt?: null | number;
+          name: string;
+          planDowngradedAt?: null | number;
+          publicKey?: null | string;
+          salt?: null | string;
+          updatedAt: number;
+          userId?: null | string;
+        } | null
       >;
       loadUserById: FunctionReference<
         "query",
@@ -1358,7 +1370,6 @@ export declare const components: {
           image?: null | string;
           keysUpdatedAt?: null | number;
           name: string;
-          needsReEncryption?: null | boolean;
           planDowngradedAt?: null | number;
           publicKey?: null | string;
           salt?: null | string;
@@ -1371,7 +1382,6 @@ export declare const components: {
         "internal",
         {
           encryptedPrivateKey: string;
-          needReEncryption?: null | boolean;
           publicKey: string;
           salt: string;
           userId: string;
@@ -1397,7 +1407,6 @@ export declare const components: {
             image?: null | string;
             keysUpdatedAt?: null | number;
             name: string;
-            needsReEncryption?: null | boolean;
             planDowngradedAt?: null | number;
             publicKey?: null | string;
             salt?: null | string;
