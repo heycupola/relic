@@ -31,7 +31,6 @@ This project uses **Convex**, not a traditional backend framework:
 - All encryption happens client-side
 - Server only stores encrypted blobs
 - Private keys encrypted with user passwords (never sent to server)
-- Organization keys wrapped with RSA public keys
 - Backend has NO ability to decrypt secrets
 
 **Never use JSDoc-style or emoji comments**
@@ -43,21 +42,13 @@ All tables defined in `convex/schema.ts`:
 **Core Tables:**
 - `user` - Users (managed by Better Auth component)
 - `userKey` - RSA key pairs (encrypted private keys, public keys, salt)
-- `project` - Personal or organization projects
+- `project` - Personal projects
 - `environment` - Deployment environments (dev/staging/prod)
 - `folder` - Secret organization within environments
 - `secret` - Encrypted secrets (zero-knowledge)
 
-**Organization Tables:**
-- `organization` - Organizations (Better Auth component)
-- `member` - Organization members (Better Auth component)
-- `invitation` - Pending invitations (Better Auth component)
-- `organizationSetting` - Billing and subscription config
-- `orgKeyRewrapRequest` - Pending key rewrap requests after member joins
-
 **Audit & Security:**
 - `actionLog` - Audit trail for all secret operations
-- `keyRotation` - Organization encryption key rotation history
 
 **Device Auth:**
 - `deviceCode` - OAuth2 device flow codes for CLI authentication
@@ -82,9 +73,8 @@ await assertProjectAccess(ctx, project, Sector.Secret, ["create"]);
 **What it checks:**
 1. ✅ Resource exists
 2. ✅ Not archived
-3. ✅ Organization not suspended
-4. ✅ Project not restricted (for personal projects)
-5. ✅ User has correct role/permission for the action
+3. ✅ Project not restricted
+4. ✅ User has correct permission for the action
 
 **Available Sectors:**
 ```typescript
@@ -93,8 +83,6 @@ enum Sector {
   Environment = "environment",
   Folder = "folder",
   Secret = "secret",
-  Organization = "organization",
-  Member = "member",
 }
 ```
 
@@ -113,9 +101,8 @@ Manual checks in order:
 
 1. Resource exists check
 2. Archive check
-3. Organization suspension check
-4. Project restriction check
-5. Permission check
+3. Project restriction check
+4. Permission check
 
 **Gradually migrate to `assertProjectAccess` pattern.**
 
@@ -145,7 +132,7 @@ throw notFoundError("secret"); // ✅ Consistent message
 
 **notFoundError:**
 ```typescript
-notFoundError("user" | "organization" | "project" | "environment" | "folder" | "secret" | "member" | "invitation" | "request")
+notFoundError("user" | "project" | "environment" | "folder" | "secret" | "request")
 ```
 
 **permissionError:**
@@ -157,9 +144,7 @@ permissionError()                   // Generic permission denied
 **limitReachedError:**
 ```typescript
 limitReachedError("personal_projects", currentCount, limit)
-limitReachedError("organization_projects", currentCount, limit)
 limitReachedError("environments", currentCount, limit)
-limitReachedError("members", currentCount, limit)
 ```
 
 **deviceAuthError:**
@@ -212,9 +197,6 @@ await checkRateLimit(ctx, "write");
 // Delete operations
 await checkRateLimit(ctx, "delete");
 
-// Key rotation (stricter)
-await checkRateLimit(ctx, "keyRotation", organizationId);
-
 // Custom identifier (for per-resource limits)
 await checkRateLimit(ctx, "write", args.device_code);
 ```
@@ -226,10 +208,10 @@ await checkRateLimit(ctx, "write", args.device_code);
 ```typescript
 // ✅ CORRECT
 await checkRateLimit(ctx, "write");
-await ctx.runMutation(components.betterAuth.member.addMember, {...});
+await ctx.runMutation(internal.project._insert, {...});
 
 // ❌ WRONG - Operation happens before rate check
-await ctx.runMutation(components.betterAuth.member.addMember, {...});
+await ctx.runMutation(internal.project._insert, {...});
 await checkRateLimit(ctx, "write");
 ```
 
@@ -238,7 +220,6 @@ await checkRateLimit(ctx, "write");
 - **read** - Queries (higher limit)
 - **write** - Mutations (standard limit)
 - **delete** - Deletions (same as write)
-- **keyRotation** - Key rotation (strictest, security-sensitive)
 
 Rate limits use token bucket algorithm with per-user and per-resource tracking.
 
@@ -248,12 +229,6 @@ Rate limits use token bucket algorithm with per-user and per-resource tracking.
 
 **User-level features:**
 - `personal_projects` - Free: 2, Pro: 10
-- `can_create_org` - Pro only
-- `free_org` - One free org with Pro plan
-
-**Organization-level features:**
-- `organization_projects` - 10 per org subscription
-- `members` - 5 included, can purchase more
 
 ### Usage Tracking Pattern
 
@@ -271,13 +246,6 @@ await ctx.autumn.track(ctx, {
   featureId: "personal_projects",
   value: -1,
 });
-
-// Organization resources (use entityId)
-await ctx.autumn.track(ctx, {
-  entityId: organizationId,
-  featureId: "members",
-  value: 1,
-});
 ```
 
 ### Checking Limits
@@ -291,12 +259,6 @@ const { data, error } = await ctx.autumn.check(ctx, {
 if (!data.allowed) {
   throw limitReachedError("personal_projects", data.current, data.limit);
 }
-
-// Organization features
-const { data, error } = await ctx.autumn.check(ctx, {
-  entityId: organizationId,
-  featureId: "organization_projects",
-});
 ```
 
 ### Checkout Flow
@@ -337,25 +299,6 @@ return checkoutResult.data?.url; // Stripe checkout URL
 - `lib/access.ts` - `isProjectAccessible()` enforces restrictions
 - Cron job (`user.checkAllUserPlanStatus`) runs daily at 03:00 UTC
 
-### Organization Suspension
-
-**Subscription Status:**
-- `active` - All good
-- `payment_lapsed` - 7-day grace period started
-- `suspended` - Access blocked
-
-**Flow:**
-1. Payment fails → Stripe webhook triggers → status becomes `payment_lapsed`
-2. Scheduler queued for 7 days later
-3. After 7 days → status becomes `suspended`
-4. All org operations blocked when suspended
-5. Payment restored → Stripe webhook → instant reactivation
-
-**Implementation:**
-- `webhook.ts` - Stripe webhook handler
-- `lib/organizationAccess.ts` - Suspension checks
-- Cron job (`organization.checkAllSubscriptionStatus`) runs daily at 02:00 UTC (backup)
-- Free orgs never get suspended
 
 ### Stripe Webhook Integration
 
@@ -375,22 +318,12 @@ const isValid = await verifyStripeSignature(payload, signature, secret);
 // 2. Parse event
 const event = JSON.parse(payload);
 
-// 3. Handle based on metadata
+// 3. Handle user subscription events
 if (metadata.userId) {
   // User subscription (Pro plan)
   await internal.user._handlePlanUpgrade({ userId });
   // or
   await internal.user._handlePlanDowngrade({ userId });
-}
-
-if (metadata.organizationId) {
-  // Organization subscription
-  await internal.organization._handleOrganizationActivation({ organizationId });
-  // or
-  await internal.organization._handleOrganizationPaymentLapsed({ organizationId });
-  // Schedule suspension check 7 days later
-  await ctx.scheduler.runAfter(7 * 24 * 60 * 60 * 1000,
-    internal.organization._handleOrganizationSuspension, { organizationId });
 }
 ```
 
@@ -428,30 +361,6 @@ if (metadata.organizationId) {
 - `betterAuth/deviceAuth.ts` - Component-level logic
 - Cleanup cron runs hourly to remove expired codes
 
-### Organization Key Rewrapping
-
-**Why:** When a new member joins an org, they need the org encryption key wrapped with their public key.
-
-**Flow:**
-1. Admin invites new member
-2. New member accepts invitation
-3. System creates `orgKeyRewrapRequest` (status: pending)
-4. Org owner receives notification
-5. Owner's client:
-   - Decrypts org key with their private key
-   - Re-encrypts org key with new member's public key
-   - Calls `completeOrgKeyRewrapRequest({ requestId, wrappedOrgKey })`
-6. System updates member record with wrapped key
-7. New member can now decrypt org secrets
-
-**Tables:**
-- `orgKeyRewrapRequest` - Pending requests
-- Indexed by `receiverId`, `requesterId`, `organizationId`
-
-**Endpoints:**
-- `loadPendingOrgKeyRewrapRequests` - Get pending requests (for owner)
-- `completeOrgKeyRewrapRequest` - Provide wrapped key (owner only, rate limited)
-- `cancelOrgKeyRewrapRequest` - Cancel request (receiver only, rate limited)
 
 ### Archive/Unarchive Projects
 
@@ -480,27 +389,10 @@ import { components } from "./_generated/api";
 const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
   userId: ctx.userId
 });
-
-// Create organization
-const org = await ctx.runMutation(components.betterAuth.organization.createOrganization, {
-  name: "My Org",
-  ownerId: ctx.userId,
-  slug: "my-org"
-});
-
-// Add member
-await ctx.runMutation(components.betterAuth.member.addMember, {
-  organizationId: org._id,
-  userId: inviteeId,
-  role: "member"
-});
 ```
 
 **Key Components:**
 - `user.ts` - User management, plan upgrades/downgrades
-- `organization.ts` - Org CRUD
-- `member.ts` - Membership management
-- `invitation.ts` - Invitation flow
 - `deviceAuth.ts` - Device flow logic
 
 **App-level wrappers** (in root `convex/` dir) add:
@@ -557,11 +449,6 @@ await ctx.runQuery(internal.actionLog._loadActionLogsByEnvironment, {
 
 Defined in `convex/crons.ts`:
 
-**02:00 UTC** - `organization.checkAllSubscriptionStatus`
-- Checks all paid organizations
-- Updates subscription status from Stripe
-- Handles grace period → suspension transition (backup)
-
 **03:00 UTC** - `user.checkAllUserPlanStatus`
 - Checks all users
 - Detects plan upgrades/downgrades via Autumn
@@ -595,8 +482,7 @@ export const createSomething = protectedMutation({
 
     // 4. Check Autumn limits (if applicable)
     const { data } = await ctx.autumn.check(ctx, {
-      featureId: "environments",
-      entityId: project.ownerType === "organization" ? project.ownerId : undefined
+      featureId: "environments"
     });
 
     if (!data.allowed) {
@@ -622,8 +508,7 @@ export const createSomething = protectedMutation({
     // 7. Track usage (if applicable)
     await ctx.autumn.track(ctx, {
       featureId: "environments",
-      value: 1,
-      entityId: project.ownerType === "organization" ? project.ownerId : undefined
+      value: 1
     });
 
     return { success: true, environment };
@@ -740,7 +625,6 @@ BETTER_AUTH_SECRET=your-secret-key
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 STRIPE_PRO_PRICE_ID=price_...
-STRIPE_ORG_PRICE_ID=price_...
 
 # Autumn
 AUTUMN_SECRET_KEY=your-autumn-key

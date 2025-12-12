@@ -6,15 +6,29 @@ export default defineSchema({
     name: v.string(),
     slug: v.string(),
     description: v.optional(v.string()),
-    ownerType: v.union(v.literal("user"), v.literal("organization")),
     ownerId: v.string(),
+    encryptedProjectKey: v.string(),
+    keyVersion: v.number(),
     isArchived: v.boolean(),
-    createdBy: v.id("user"),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_owner", ["ownerType", "ownerId"])
-    .index("by_creator", ["createdBy"]),
+    .index("by_owner", ["ownerId"])
+    .index("by_owner_slug", ["ownerId", "slug"]),
+  projectShare: defineTable({
+    projectId: v.id("project"),
+    userId: v.string(),
+    encryptedProjectKey: v.string(),
+    sharedBy: v.string(),
+    sharedAt: v.number(),
+    revokedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_user", ["userId"])
+    .index("by_project_user", ["projectId", "userId"])
+    .index("by_project_active", ["projectId", "revokedAt"]),
   environment: defineTable({
     projectId: v.id("project"),
     name: v.string(),
@@ -22,7 +36,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     color: v.optional(v.string()),
     sortOrder: v.number(),
-    createdBy: v.id("user"),
+    createdBy: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -67,11 +81,21 @@ export default defineSchema({
     .index("by_env_and_key", ["environmentId", "key"])
     .index("by_created_by", ["createdBy"])
     .index("by_updated_by", ["updatedBy"]),
+  keyRotation: defineTable({
+    projectId: v.id("project"),
+    oldKeyVersion: v.number(),
+    newKeyVersion: v.number(),
+    rotatedBy: v.string(),
+    reason: v.optional(v.string()),
+    secretsReEncrypted: v.number(),
+    sharesUpdated: v.number(),
+    createdAt: v.number(),
+  }).index("by_project", ["projectId"]),
   actionLog: defineTable({
     projectId: v.id("project"),
     projectName: v.string(),
-    environmentId: v.id("environment"),
-    environmentName: v.string(),
+    environmentId: v.optional(v.id("environment")),
+    environmentName: v.optional(v.string()),
     userId: v.id("user"),
     action: v.union(
       v.literal("secret.created"),
@@ -81,6 +105,9 @@ export default defineSchema({
       v.literal("secrets.bulk.updated"),
       v.literal("secrets.bulk_deleted"),
       v.literal("secrets.bulk_exported"),
+      v.literal("share.added"),
+      v.literal("share.revoked"),
+      v.literal("keys.rotated"),
     ),
     metadata: v.optional(
       v.object({
@@ -93,6 +120,10 @@ export default defineSchema({
         deleteCount: v.optional(v.number()),
         exportCount: v.optional(v.number()),
         exportFormat: v.optional(v.union(v.literal("relic"), v.literal("env"), v.literal("json"))),
+        sharedUserId: v.optional(v.string()),
+        sharedUserEmail: v.optional(v.string()),
+        oldKeyVersion: v.optional(v.number()),
+        newKeyVersion: v.optional(v.number()),
       }),
     ),
     timestamp: v.number(),
@@ -100,28 +131,4 @@ export default defineSchema({
     .index("by_project", ["projectId", "timestamp"])
     .index("by_environment", ["environmentId", "timestamp"])
     .index("by_user", ["userId", "timestamp"]),
-  keyRotation: defineTable({
-    organizationId: v.string(),
-    oldKeyVersion: v.number(),
-    newKeyVersion: v.number(),
-    secretsReEncrypted: v.number(),
-    membersRewrapped: v.number(),
-    reason: v.optional(v.string()),
-    rotatedBy: v.id("user"),
-    rotatedAt: v.number(),
-  })
-    .index("by_organization", ["organizationId"])
-    .index("by_timestamp", ["rotatedAt"])
-    .index("by_rotated_by", ["rotatedBy"]),
-  orgKeyRewrapRequest: defineTable({
-    receiverId: v.id("user"),
-    requesterId: v.id("user"),
-    orgMemberId: v.id("member"),
-    organizationId: v.id("organization"),
-    status: v.union(v.literal("pending"), v.literal("canceled"), v.literal("completed")),
-    requestedAt: v.number(),
-  })
-    .index("by_requester", ["requesterId", "status"])
-    .index("by_receiver", ["receiverId", "status"])
-    .index("by_org_and_requester", ["organizationId", "requesterId", "status"]),
 });

@@ -14,7 +14,6 @@ export const tables = {
     createdAt: v.number(),
     updatedAt: v.number(),
     userId: v.optional(v.union(v.null(), v.string())),
-    freeOrganizationUsed: v.boolean(),
     hasPro: v.boolean(),
     planDowngradedAt: v.optional(v.union(v.null(), v.number())),
     gracePeriodEmailSent: v.optional(v.union(v.null(), v.boolean())),
@@ -23,7 +22,6 @@ export const tables = {
     encryptedPrivateKey: v.optional(v.union(v.null(), v.string())),
     salt: v.optional(v.union(v.null(), v.string())),
     keysUpdatedAt: v.optional(v.union(v.null(), v.number())),
-    needsEncryptionForPersonalProjectSecrets: v.optional(v.union(v.null(), v.boolean())),
   })
     .index("email_name", ["email", "name"])
     .index("name", ["name"])
@@ -36,7 +34,6 @@ export const tables = {
     ipAddress: v.optional(v.union(v.null(), v.string())),
     userAgent: v.optional(v.union(v.null(), v.string())),
     userId: v.string(),
-    activeOrganizationId: v.optional(v.union(v.null(), v.string())),
   })
     .index("expiresAt", ["expiresAt"])
     .index("expiresAt_userId", ["expiresAt", "userId"])
@@ -85,52 +82,6 @@ export const tables = {
     clientId: v.optional(v.union(v.null(), v.string())),
     scope: v.optional(v.union(v.null(), v.string())),
   }),
-  organization: defineTable({
-    name: v.string(),
-    slug: v.optional(v.union(v.null(), v.string())),
-    logo: v.optional(v.union(v.null(), v.string())),
-    createdAt: v.number(),
-    metadata: v.optional(v.union(v.null(), v.string())),
-    ownerId: v.string(),
-    isFreeWithProPlan: v.boolean(),
-    currentKeyVersion: v.number(),
-    subscriptionStatus: v.string(),
-    paymentExpiresAt: v.optional(v.union(v.null(), v.number())),
-    paymentLapsedAt: v.optional(v.union(v.null(), v.number())),
-    paymentLapsedEmailSent: v.optional(v.union(v.null(), v.boolean())),
-    suspendedAt: v.optional(v.union(v.null(), v.number())),
-    suspendedEmailSent: v.optional(v.union(v.null(), v.boolean())),
-  })
-    .index("name", ["name"])
-    .index("slug", ["slug"]),
-  member: defineTable({
-    organizationId: v.string(),
-    userId: v.string(),
-    role: v.string(),
-    createdAt: v.number(),
-    wrappedOrgKey: v.optional(v.union(v.null(), v.string())),
-    keyVersion: v.optional(v.union(v.null(), v.number())),
-    grantedBy: v.string(),
-    revokedAt: v.optional(v.union(v.null(), v.number())),
-    revokedBy: v.optional(v.union(v.null(), v.string())),
-    revocationReason: v.optional(v.union(v.null(), v.string())),
-    isPending: v.boolean(),
-  })
-    .index("organizationId_userId", ["organizationId", "userId"])
-    .index("userId", ["userId"])
-    .index("role", ["role"]),
-  invitation: defineTable({
-    organizationId: v.string(),
-    email: v.string(),
-    role: v.string(),
-    status: v.string(),
-    expiresAt: v.number(),
-    inviterId: v.string(),
-  })
-    .index("email_organizationId_status", ["email", "organizationId", "status"])
-    .index("organizationId_status", ["organizationId", "status"])
-    .index("status", ["status"])
-    .index("inviterId", ["inviterId"]),
 };
 
 const schema = defineSchema(tables);

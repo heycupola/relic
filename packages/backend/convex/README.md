@@ -7,7 +7,6 @@ Zero-knowledge secret management backend built with Convex.
 - [Authentication](#authentication)
 - [User Management](#user-management)
 - [Projects](#projects)
-- [Organizations](#organizations)
 - [Environments](#environments)
 - [Folders](#folders)
 - [Secrets](#secrets)
@@ -119,31 +118,6 @@ Create a new personal project.
 
 ---
 
-### `createOrganizationProject`
-**Type:** `protectedAction`
-
-Create a project within an organization.
-
-**Args:**
-```typescript
-{
-  organizationId: Id<"organization">,
-  name: string
-}
-```
-
-**Returns:**
-```typescript
-{
-  success: boolean,
-  project: { /* Project object */ }
-}
-```
-
-**Rate Limited:** Yes (write)
-
----
-
 ### `listUserProjects`
 **Type:** `protectedQuery`
 
@@ -162,28 +136,6 @@ List all personal projects for the current user.
     restricted: boolean,
     // ...
   }>,
-  canCreateMore: boolean
-}
-```
-
----
-
-### `listOrganizationProjects`
-**Type:** `protectedQuery`
-
-List all projects for a specific organization.
-
-**Args:**
-```typescript
-{
-  organizationId: Id<"organization">
-}
-```
-
-**Returns:**
-```typescript
-{
-  projects: Array</* Project objects */>,
   canCreateMore: boolean
 }
 ```
@@ -273,173 +225,6 @@ Unarchive a project (only owner).
 ```
 
 **Rate Limited:** Yes (write)
-
----
-
-## Organizations
-
-### `createOrganization`
-**Type:** `protectedAction`
-
-Create a new organization (requires Pro plan or uses free org quota).
-
-**Args:**
-```typescript
-{
-  name: string
-}
-```
-
-**Returns:**
-```typescript
-{
-  success: boolean,
-  organization: {
-    _id: Id<"organization">,
-    name: string,
-    slug: string,
-    ownerId: Id<"user">,
-    // ...
-  },
-  orgMember: {
-    /* Member object */
-  }
-}
-```
-
-**Rate Limited:** Yes (write)
-
----
-
-### `inviteMember`
-**Type:** `protectedAction`
-
-Invite a user to an organization.
-
-**Args:**
-```typescript
-{
-  organizationId: Id<"organization">,
-  email: string,
-  role: "admin" | "member" | "viewer"
-}
-```
-
-**Returns:**
-```typescript
-{
-  success: boolean
-}
-```
-
-**Rate Limited:** Yes (write, per-org)
-
----
-
-### `removeMember`
-**Type:** `protectedAction`
-
-Remove a member from an organization.
-
-**Args:**
-```typescript
-{
-  organizationId: Id<"organization">,
-  userId: Id<"user">
-}
-```
-
-**Returns:**
-```typescript
-{
-  success: boolean
-}
-```
-
-**Rate Limited:** Yes (write, per-org)
-
----
-
-### `leaveOrganization`
-**Type:** `protectedAction`
-
-Leave an organization (cannot leave if you're the owner).
-
-**Args:**
-```typescript
-{
-  organizationId: Id<"organization">
-}
-```
-
-**Returns:**
-```typescript
-{
-  success: boolean
-}
-```
-
-**Rate Limited:** Yes (write, per-org)
-
----
-
-### `listOrganizationMembers`
-**Type:** `protectedQuery`
-
-List all members of an organization.
-
-**Args:**
-```typescript
-{
-  organizationId: string
-}
-```
-
-**Returns:** Array of member objects
-
-**Rate Limited:** Yes (read)
-
----
-
-### `loadOrganizationsByUserId`
-**Type:** `protectedQuery`
-
-Load all organizations for a user.
-
-**Args:**
-```typescript
-{
-  userId: Id<"user">
-}
-```
-
-**Returns:** Array of organization objects
-
----
-
-### `rotateKeys`
-**Type:** `protectedMutation`
-
-Rotate organization encryption keys (owner only).
-
-**Args:**
-```typescript
-{
-  organizationId: Id<"organization">,
-  memberIds: Array<Id<"member">>,
-  wrappedOrgKeys: Array<string>,
-  reason: "member_removed" | "scheduled" | "manual"
-}
-```
-
-**Returns:**
-```typescript
-{
-  success: boolean
-}
-```
-
-**Rate Limited:** Yes (keyRotation, per-org)
 
 ---
 
@@ -793,72 +578,6 @@ Check if the user has keys stored.
 
 ---
 
-### `loadPendingOrgKeyRewrapRequests`
-**Type:** `protectedQuery`
-
-Load pending organization key rewrap requests for the current user.
-
-**Args:** None
-
-**Returns:**
-```typescript
-{
-  success: boolean,
-  requests: Array</* Request objects */>
-}
-```
-
----
-
-### `completeOrgKeyRewrapRequest`
-**Type:** `protectedMutation`
-
-Complete a key rewrap request (org owner only).
-
-**Args:**
-```typescript
-{
-  requestId: Id<"orgKeyRewrapRequest">,
-  wrappedOrgKey: string
-}
-```
-
-**Returns:**
-```typescript
-{
-  success: boolean,
-  requestId: Id<"orgKeyRewrapRequest">
-}
-```
-
-**Rate Limited:** Yes (write)
-
----
-
-### `cancelOrgKeyRewrapRequest`
-**Type:** `protectedMutation`
-
-Cancel a pending rewrap request.
-
-**Args:**
-```typescript
-{
-  requestId: Id<"orgKeyRewrapRequest">
-}
-```
-
-**Returns:**
-```typescript
-{
-  success: boolean,
-  requestId: Id<"orgKeyRewrapRequest">
-}
-```
-
-**Rate Limited:** Yes (write)
-
----
-
 ## Device Authentication
 
 OAuth2 device flow for CLI authentication.
@@ -1058,7 +777,6 @@ All errors are returned as `ConvexError` with the following structure:
 
 **Resource Not Found:**
 - `USER_NOT_FOUND`
-- `ORGANIZATION_NOT_FOUND`
 - `PROJECT_NOT_FOUND`
 - `ENVIRONMENT_NOT_FOUND`
 - `FOLDER_NOT_FOUND`
@@ -1067,14 +785,11 @@ All errors are returned as `ConvexError` with the following structure:
 **Limits:**
 - `RATE_LIMIT_EXCEEDED`
 - `PERSONAL_PROJECTS_LIMIT_REACHED`
-- `ORGANIZATION_PROJECTS_LIMIT_REACHED`
 - `ENVIRONMENT_LIMIT_REACHED`
-- `MEMBER_LIMIT_REACHED`
 
 **Conflicts:**
 - `RESOURCE_ALREADY_EXISTS`
 - `DUPLICATE_SLUG`
-- `INVITATION_ALREADY_PENDING`
 
 See `lib/errors.ts` for the complete list and helper functions.
 
@@ -1087,7 +802,6 @@ Rate limits are applied per-user across all endpoints:
 - **Read operations:** Lower limit (frequent queries allowed)
 - **Write operations:** Standard limit
 - **Delete operations:** Same as write
-- **Key rotation:** Stricter limit (security-sensitive)
 
 Rate limits are tracked using a token bucket algorithm with per-endpoint and per-resource limits.
 
@@ -1108,7 +822,7 @@ Rate limits are tracked using a token bucket algorithm with per-endpoint and per
 
 - **Zero-knowledge:** All secrets encrypted client-side
 - **End-to-end encrypted:** Private keys never leave client
-- **Multi-tenancy:** Personal and organization projects
+- **Personal projects:** User-owned project management
 - **Subscription-based:** Autumn billing integration
 - **Audit logging:** All secret operations logged
 

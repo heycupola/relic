@@ -10,32 +10,26 @@ export enum ErrorCode {
 
   // Resource Not Found (4xx)
   USER_NOT_FOUND = "USER_NOT_FOUND",
-  ORGANIZATION_NOT_FOUND = "ORGANIZATION_NOT_FOUND",
   PROJECT_NOT_FOUND = "PROJECT_NOT_FOUND",
   ENVIRONMENT_NOT_FOUND = "ENVIRONMENT_NOT_FOUND",
   FOLDER_NOT_FOUND = "FOLDER_NOT_FOUND",
   SECRET_NOT_FOUND = "SECRET_NOT_FOUND",
-  MEMBER_NOT_FOUND = "MEMBER_NOT_FOUND",
-  INVITATION_NOT_FOUND = "INVITATION_NOT_FOUND",
   REQUEST_NOT_FOUND = "REQUEST_NOT_FOUND",
+  SHARE_NOT_FOUND = "SHARE_NOT_FOUND",
 
   // Resource State Issues
-  ORGANIZATION_INACCESSIBLE = "ORGANIZATION_INACCESSIBLE",
+  PROJECT_INACCESSIBLE = "PROJECT_INACCESSIBLE",
   RESOURCE_DELETED = "RESOURCE_DELETED",
   RESOURCE_ARCHIVED = "RESOURCE_ARCHIVED",
 
   // Limit & Quota Errors
   RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED",
   PERSONAL_PROJECTS_LIMIT_REACHED = "PERSONAL_PROJECTS_LIMIT_REACHED",
-  ORGANIZATION_PROJECTS_LIMIT_REACHED = "ORGANIZATION_PROJECTS_LIMIT_REACHED",
   ENVIRONMENT_LIMIT_REACHED = "ENVIRONMENT_LIMIT_REACHED",
-  MEMBER_LIMIT_REACHED = "MEMBER_LIMIT_REACHED",
 
   // Duplicate/Conflict Errors
   RESOURCE_ALREADY_EXISTS = "RESOURCE_ALREADY_EXISTS",
   DUPLICATE_SLUG = "DUPLICATE_SLUG",
-  INVITATION_ALREADY_PENDING = "INVITATION_ALREADY_PENDING",
-  MEMBER_ALREADY_EXISTS = "MEMBER_ALREADY_EXISTS",
 
   // Validation Errors
   INVALID_ARGUMENTS = "INVALID_ARGUMENTS",
@@ -70,32 +64,26 @@ const ERROR_MESSAGES: Record<ErrorCode, string> = {
 
   // Resource Not Found
   [ErrorCode.USER_NOT_FOUND]: "User not found",
-  [ErrorCode.ORGANIZATION_NOT_FOUND]: "Organization not found",
   [ErrorCode.PROJECT_NOT_FOUND]: "Project not found",
   [ErrorCode.ENVIRONMENT_NOT_FOUND]: "Environment not found",
   [ErrorCode.FOLDER_NOT_FOUND]: "Folder not found",
   [ErrorCode.SECRET_NOT_FOUND]: "Secret not found",
-  [ErrorCode.MEMBER_NOT_FOUND]: "Member not found",
-  [ErrorCode.INVITATION_NOT_FOUND]: "Invitation not found",
   [ErrorCode.REQUEST_NOT_FOUND]: "Request not found",
+  [ErrorCode.SHARE_NOT_FOUND]: "Project share not found",
 
   // Resource State
-  [ErrorCode.ORGANIZATION_INACCESSIBLE]: "This organization is not accessible",
+  [ErrorCode.PROJECT_INACCESSIBLE]: "This project is not accessible",
   [ErrorCode.RESOURCE_DELETED]: "This resource has been deleted",
   [ErrorCode.RESOURCE_ARCHIVED]: "This resource is archived",
 
   // Limits
   [ErrorCode.RATE_LIMIT_EXCEEDED]: "Rate limit exceeded. Please slow down",
   [ErrorCode.PERSONAL_PROJECTS_LIMIT_REACHED]: "Personal project limit reached",
-  [ErrorCode.ORGANIZATION_PROJECTS_LIMIT_REACHED]: "Organization project limit reached",
   [ErrorCode.ENVIRONMENT_LIMIT_REACHED]: "Environment limit reached",
-  [ErrorCode.MEMBER_LIMIT_REACHED]: "Member limit reached",
 
   // Duplicates
   [ErrorCode.RESOURCE_ALREADY_EXISTS]: "Resource already exists",
   [ErrorCode.DUPLICATE_SLUG]: "A resource with this slug already exists",
-  [ErrorCode.INVITATION_ALREADY_PENDING]: "An invitation is already pending for this user",
-  [ErrorCode.MEMBER_ALREADY_EXISTS]: "User is already a member",
 
   // Validation
   [ErrorCode.INVALID_ARGUMENTS]: "Invalid arguments provided",
@@ -145,30 +133,17 @@ export function createError(options: ErrorOptions): never {
 // Helper functions for common error patterns
 
 export function notFoundError(
-  resource:
-    | "user"
-    | "organization"
-    | "project"
-    | "environment"
-    | "folder"
-    | "secret"
-    | "member"
-    | "membership"
-    | "invitation"
-    | "request",
+  resource: "user" | "project" | "environment" | "folder" | "secret" | "request" | "share",
   severity: ErrorSeverity = ErrorSeverity.High,
 ): never {
   const codeMap = {
     user: ErrorCode.USER_NOT_FOUND,
-    organization: ErrorCode.ORGANIZATION_NOT_FOUND,
     project: ErrorCode.PROJECT_NOT_FOUND,
     environment: ErrorCode.ENVIRONMENT_NOT_FOUND,
     folder: ErrorCode.FOLDER_NOT_FOUND,
     secret: ErrorCode.SECRET_NOT_FOUND,
-    member: ErrorCode.MEMBER_NOT_FOUND,
-    membership: ErrorCode.MEMBER_NOT_FOUND,
-    invitation: ErrorCode.INVITATION_NOT_FOUND,
     request: ErrorCode.REQUEST_NOT_FOUND,
+    share: ErrorCode.SHARE_NOT_FOUND,
   };
 
   createError({
@@ -189,16 +164,14 @@ export function permissionError(
 }
 
 export function limitReachedError(
-  resource: "personal_projects" | "organization_projects" | "environments" | "members",
+  resource: "personal_projects" | "environments",
   currentUsage?: number,
   limit?: number,
   severity: ErrorSeverity = ErrorSeverity.Medium,
 ): never {
   const codeMap = {
     personal_projects: ErrorCode.PERSONAL_PROJECTS_LIMIT_REACHED,
-    organization_projects: ErrorCode.ORGANIZATION_PROJECTS_LIMIT_REACHED,
     environments: ErrorCode.ENVIRONMENT_LIMIT_REACHED,
-    members: ErrorCode.MEMBER_LIMIT_REACHED,
   };
 
   let message: string | undefined;

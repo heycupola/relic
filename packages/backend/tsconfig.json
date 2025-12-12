@@ -2,6 +2,6 @@
   "extends": "@repo/typescript-config/convex.json",
   "compilerOptions": {
     "skipLibCheck": true,
-    "types": ["vite/client", "vitest/globals"]
+    "types": ["@types/bun"]
   }
 }

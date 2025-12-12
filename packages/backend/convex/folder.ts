@@ -3,7 +3,7 @@ import { doc } from "convex-helpers/validators";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { assertProjectAccess, Sector } from "./lib/access";
+import { assertProjectAccess } from "./lib/access";
 import { alreadyExistsError, createError, ErrorCode, notFoundError } from "./lib/errors";
 import { generateSlug } from "./lib/helpers";
 import { protectedMutation } from "./lib/middleware";
@@ -33,7 +33,7 @@ export const createFolder = protectedMutation({
       projectId: environment.projectId,
     });
 
-    await assertProjectAccess(ctx, project, Sector.Folder, ["create"]);
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
@@ -90,7 +90,7 @@ export const updateFolder = protectedMutation({
       }
     }
 
-    await assertProjectAccess(ctx, project, Sector.Folder, ["update"]);
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
@@ -118,7 +118,7 @@ export const deleteFolder = protectedMutation({
       projectId: folder.projectId,
     });
 
-    await assertProjectAccess(ctx, project, Sector.Folder, ["delete"]);
+    await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "delete");
 

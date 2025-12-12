@@ -9,6 +9,61 @@ import { protectedAction } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
 import type { ProtectedActionCtx } from "./lib/types";
 
+export const _insertActionLog = internalMutation({
+  args: {
+    projectId: v.id("project"),
+    userId: v.id("user"),
+    action: v.union(
+      v.literal("secret.created"),
+      v.literal("secret.updated"),
+      v.literal("secret.deleted"),
+      v.literal("secret.exported"),
+      v.literal("secrets.bulk.updated"),
+      v.literal("secrets.bulk_deleted"),
+      v.literal("secrets.bulk_exported"),
+      v.literal("share.added"),
+      v.literal("share.revoked"),
+      v.literal("keys.rotated"),
+    ),
+    environmentId: v.optional(v.id("environment")),
+    environmentName: v.optional(v.string()),
+    metadata: v.optional(
+      v.object({
+        folderId: v.optional(v.id("folder")),
+        folderName: v.optional(v.string()),
+        secretId: v.optional(v.id("secret")),
+        key: v.optional(v.string()),
+        newKey: v.optional(v.string()),
+        exportFormat: v.optional(v.union(v.literal("relic"), v.literal("env"), v.literal("json"))),
+        exportCount: v.optional(v.number()),
+        affectedValueCount: v.optional(v.number()),
+        deleteCount: v.optional(v.number()),
+        sharedUserId: v.optional(v.string()),
+        sharedUserEmail: v.optional(v.string()),
+        oldKeyVersion: v.optional(v.number()),
+        newKeyVersion: v.optional(v.number()),
+      }),
+    ),
+  },
+  returns: v.object({ success: v.boolean() }),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+
+    await ctx.db.insert("actionLog", {
+      action: args.action,
+      projectId: args.projectId,
+      projectName: project?.name || "Unknown",
+      environmentId: args.environmentId,
+      environmentName: args.environmentName,
+      timestamp: Date.now(),
+      userId: args.userId,
+      metadata: args.metadata,
+    });
+
+    return { success: true };
+  },
+});
+
 export const _logSecretAction = internalMutation({
   args: {
     projectId: v.id("project"),
