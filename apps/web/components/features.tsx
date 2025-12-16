@@ -1,54 +1,86 @@
-import Link from "next/link";
+import { SectionWrapper } from "./section-wrapper";
 
 export function Features() {
   const features = [
     {
-      title: "sdk",
-      description: "a gateway to use your secrets in your project",
-      href: "https://x.com/icanvardar",
+      command: "encrypt",
+      title: "Client-side Encryption",
+      description:
+        "All secrets are encrypted on your machine before storage. Zero-knowledge architecture.",
     },
     {
-      title: "tui",
-      description: "terminal interface for visual control",
-      href: "https://x.com/icanvardar",
+      command: "cli",
+      title: "Command Line Interface",
+      description:
+        "Powerful CLI for automation, scripts, and CI/CD pipelines. Manage secrets directly from your terminal.",
     },
     {
-      title: "cli",
-      description: "manage your secrets from the terminal",
-      href: "https://x.com/icanvardar",
+      command: "tui",
+      title: "Terminal User Interface",
+      description:
+        "Interactive visual interface in your terminal. Navigate, search, and manage secrets with ease.",
+    },
+    {
+      command: "sdk",
+      title: "SDK Integration",
+      description:
+        "Official SDKs for JavaScript, Python, Go, and Rust. Access secrets programmatically in any language.",
+    },
+    {
+      command: "organize",
+      title: "Project Organization",
+      description: "Organize secrets by project, environment (dev, staging, prod), and folders.",
+    },
+    {
+      command: "structure",
+      title: "Folder Structure",
+      description:
+        "Additional layer of organization with backend, frontend, or custom folder types.",
     },
   ];
 
   return (
-    <section className="px-8 py-8">
-      <div className="flex items-stretch gap-2">
-        {features.map((feature) => (
-          <Link key={feature.title} href={feature.href} className="flex-1 group relative">
-            <div className="absolute inset-0 border border-border rounded-md translate-x-1 translate-y-1 opacity-0 group-hover:opacity-100 transition-opacity" />
-
-            <div className="relative h-32 border border-border rounded-md p-3 flex flex-col justify-between transition-transform group-hover:-translate-x-0.5 group-hover:-translate-y-0.5">
-              <h3
-                className="text-xl font-extralight text-soft-silver"
-                style={{
-                  lineHeight: "0.93",
-                  letterSpacing: "-0.07em",
-                }}
-              >
-                {feature.title}
-              </h3>
-              <p
-                className="text-sm font-extralight text-soft-silver"
-                style={{
-                  lineHeight: "0.93",
-                  letterSpacing: "-0.07em",
-                }}
-              >
-                {feature.description}
-              </p>
+    <SectionWrapper label="Features" id="features" showStripes>
+      <div className="mx-auto max-w-6xl px-6 py-16 lg:px-12">
+        <div className="border-b-2 border-border pb-6">
+          <h2 className="text-2xl font-semibold text-foreground">What is Relic?</h2>
+          <p className="mt-2 max-w-2xl text-foreground/60">
+            A terminal-native secret manager that encrypts and stores secrets on your behalf with
+            complete security.
+          </p>
+        </div>
+        <div className="mt-6 border-2 border-border bg-muted/30">
+          <div className="border-b-2 border-border bg-muted px-4 py-2 flex items-center gap-2">
+            <div className="flex gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-foreground/20" />
+              <span className="w-3 h-3 rounded-full bg-foreground/20" />
+              <span className="w-3 h-3 rounded-full bg-foreground/20" />
             </div>
-          </Link>
-        ))}
+            <span className="ml-2 font-mono text-xs text-foreground/50">relic --features</span>
+          </div>
+          <ul className="p-4 space-y-0 font-mono text-sm">
+            {features.map((feature, index) => (
+              <li
+                // biome-ignore lint/suspicious/noArrayIndexKey: features are static
+                key={index}
+                className="py-3 border-b border-border/50 last:border-0 hover:bg-muted/50 transition-colors px-2 -mx-2"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="text-foreground/40 select-none shrink-0">$</span>
+                  <div>
+                    <span className="text-green-600 dark:text-green-400">{feature.command}</span>
+                    <span className="text-foreground/40 mx-2">→</span>
+                    <span className="font-sans font-medium text-foreground">{feature.title}</span>
+                    <p className="mt-1 font-sans text-foreground/55 text-sm">
+                      {feature.description}
+                    </p>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
-    </section>
+    </SectionWrapper>
   );
 }
