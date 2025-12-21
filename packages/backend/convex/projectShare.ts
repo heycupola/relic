@@ -83,6 +83,8 @@ export const shareProject = protectedMutation({
       sharedBy: ctx.userId,
     });
 
+    const sId: Id<"projectShare"> = shareId;
+
     await ctx.runMutation(internal.actionLog._insertActionLog, {
       projectId: args.projectId,
       userId: ctx.userId,
@@ -93,7 +95,7 @@ export const shareProject = protectedMutation({
       },
     });
 
-    return { success: true, shareId };
+    return { success: true, shareId: sId };
   },
 });
 
@@ -294,7 +296,15 @@ export const getProjectShare = protectedQuery({
   args: {
     projectId: v.id("project"),
   },
-  handler: async (ctx: ProtectedQueryCtx, args) => {
+  handler: async (
+    ctx: ProtectedQueryCtx,
+    args,
+  ): Promise<{
+    id: Id<"projectShare">;
+    projectId: Id<"project">;
+    encryptedProjectKey: string;
+    sharedAt: number;
+  }> => {
     const share: Doc<"projectShare"> | null = await ctx.runQuery(
       internal.projectShare._loadActiveShareByProjectAndUser,
       {
