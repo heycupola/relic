@@ -1,51 +1,29 @@
+import { AppPreview } from "@/components/app-preview";
+import { ContainerLines } from "@/components/container-lines";
+import { FAQ } from "@/components/faq";
 import { Features } from "@/components/features";
 import { Footer } from "@/components/footer";
-import { GridContainer, Section } from "@/components/grid-container";
+import { Header } from "@/components/header";
 import { Hero } from "@/components/hero";
-import { Navbar } from "@/components/navbar";
-import { Supporters } from "@/components/supporters";
-import { TerminalShowcase } from "@/components/terminal-showcase";
+import { HowItWorks } from "@/components/how-it-works";
+import { InstallSection } from "@/components/install-section";
+import { SDKSection } from "@/components/sdk-section";
 
 export default function Home() {
   return (
-    <GridContainer>
-      <Section className="border-t-0">
-        <Navbar />
-      </Section>
-
-      <Section>
-        <div className="relative">
-          <div className="absolute left-0 top-0 -translate-x-1/2 -translate-y-1/2 text-electric-ink text-xs font-bold pointer-events-none select-none z-10">
-            +
-          </div>
-          <div className="absolute right-0 top-0 translate-x-1/2 -translate-y-1/2 text-electric-ink text-xs font-bold pointer-events-none select-none z-10">
-            +
-          </div>
-          <div className="absolute left-0 bottom-0 -translate-x-1/2 translate-y-1/2 text-electric-ink text-xs font-bold pointer-events-none select-none z-10">
-            +
-          </div>
-          <div className="absolute right-0 bottom-0 translate-x-1/2 translate-y-1/2 text-electric-ink text-xs font-bold pointer-events-none select-none z-10">
-            +
-          </div>
-          <Hero />
-        </div>
-      </Section>
-
-      <Section>
-        <TerminalShowcase />
-      </Section>
-
-      <Section>
+    <div className="min-h-screen bg-background text-foreground">
+      <ContainerLines />
+      <Header />
+      <main>
+        <Hero />
+        <InstallSection />
+        <AppPreview />
         <Features />
-      </Section>
-
-      <Section>
-        <Supporters />
-      </Section>
-
-      <Section className="mt-auto">
-        <Footer />
-      </Section>
-    </GridContainer>
+        <HowItWorks />
+        <SDKSection />
+        <FAQ />
+      </main>
+      <Footer />
+    </div>
   );
 }

@@ -784,7 +784,7 @@ All errors are returned as `ConvexError` with the following structure:
 
 **Limits:**
 - `RATE_LIMIT_EXCEEDED`
-- `PERSONAL_PROJECTS_LIMIT_REACHED`
+- `PROJECTS_LIMIT_REACHED`
 - `ENVIRONMENT_LIMIT_REACHED`
 
 **Conflicts:**

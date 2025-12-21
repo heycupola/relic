@@ -30,7 +30,7 @@ export const createProject = protectedAction({
   },
   handler: async (ctx: ProtectedActionCtx, args) => {
     const { data, error } = await ctx.autumn.check(ctx, {
-      featureId: "personal_projects",
+      featureId: "projects",
     });
 
     if (error || !data) {
@@ -44,12 +44,7 @@ export const createProject = protectedAction({
     if (!data.allowed) {
       const currentUsage = data.usage || 0;
 
-      throw limitReachedError(
-        "personal_projects",
-        currentUsage,
-        data.included_usage,
-        ErrorSeverity.High,
-      );
+      throw limitReachedError("projects", currentUsage, data.included_usage, ErrorSeverity.High);
     }
 
     await checkRateLimit(ctx, "write");
@@ -62,7 +57,7 @@ export const createProject = protectedAction({
     });
 
     await ctx.autumn.track(ctx, {
-      featureId: "personal_projects",
+      featureId: "projects",
       value: 1,
     });
 
@@ -126,6 +121,8 @@ export const getProject = protectedQuery({
       description: project.description,
       ownerId: project.ownerId,
       isArchived: project.isArchived,
+      keyVersion: project.keyVersion,
+      encryptedProjectKey: project.encryptedProjectKey,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
     };
@@ -176,7 +173,7 @@ export const archiveProject = protectedAction({
     });
 
     await ctx.autumn.track(ctx, {
-      featureId: "personal_projects",
+      featureId: "projects",
       value: -1,
     });
 
@@ -202,7 +199,7 @@ export const unarchiveProject = protectedAction({
     });
 
     const { data, error } = await ctx.autumn.check(ctx, {
-      featureId: "personal_projects",
+      featureId: "projects",
     });
 
     if (error || !data) {
@@ -214,16 +211,11 @@ export const unarchiveProject = protectedAction({
     }
 
     if (!data.allowed) {
-      throw limitReachedError(
-        "personal_projects",
-        data.usage,
-        data.included_usage,
-        ErrorSeverity.High,
-      );
+      throw limitReachedError("projects", data.usage, data.included_usage, ErrorSeverity.High);
     }
 
     await ctx.autumn.track(ctx, {
-      featureId: "personal_projects",
+      featureId: "projects",
       value: 1,
     });
 

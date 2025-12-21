@@ -3,6 +3,12 @@ import { httpAction } from "./_generated/server";
 import type { Id } from "./betterAuth/_generated/dataModel";
 
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+const WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS = 300; // 5 minutes
+
+// In-memory cache for idempotency (resets on deployment)
+// For production, consider storing in database
+const processedEventIds = new Set<string>();
+const MAX_CACHED_EVENTS = 1000;
 
 async function verifyStripeSignature(
   payload: string,
@@ -30,6 +36,14 @@ async function verifyStripeSignature(
 
   if (!timestamp || !sig) return false;
 
+  // Prevent replay attacks by checking timestamp tolerance
+  const timestampSeconds = parseInt(timestamp, 10);
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - timestampSeconds) > WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS) {
+    console.error("[Stripe Webhook] Timestamp outside tolerance window");
+    return false;
+  }
+
   const signedPayload = `${timestamp}.${payload}`;
   const expectedSig = await crypto.subtle.sign("HMAC", key, encoder.encode(signedPayload));
 
@@ -41,6 +55,7 @@ async function verifyStripeSignature(
 }
 
 type StripeEvent = {
+  id: string; // Event ID for idempotency
   type: string;
   data: {
     object: {
@@ -90,10 +105,25 @@ export const stripe = httpAction(async (ctx, request) => {
     return new Response("Invalid payload", { status: 400 });
   }
 
-  console.log(`[Stripe Webhook] Received: ${event.type}`);
+  console.log(`[Stripe Webhook] Received: ${event.type} (ID: ${event.id})`);
+
+  // Idempotency check - skip if already processed
+  if (processedEventIds.has(event.id)) {
+    console.log(`[Stripe Webhook] Event ${event.id} already processed, skipping`);
+    return new Response("Already processed", { status: 200 });
+  }
 
   try {
     await handleWebhookEvent(ctx, event);
+
+    // Mark as processed after successful handling
+    processedEventIds.add(event.id);
+
+    // Prevent unbounded memory growth
+    if (processedEventIds.size > MAX_CACHED_EVENTS) {
+      const firstId = processedEventIds.values().next().value;
+      if (firstId) processedEventIds.delete(firstId);
+    }
   } catch (error) {
     console.error(`[Stripe Webhook] Error handling ${event.type}:`, error);
     return new Response("Error processing webhook", { status: 500 });
@@ -107,36 +137,59 @@ type WebhookContext = {
   runMutation: (mutation: any, args: any) => Promise<any>;
   scheduler: {
     // biome-ignore lint/suspicious/noExplicitAny: Convex scheduler requires generic mutation types
-    runAfter: (delayMs: number, mutation: any, args: any) => Promise<void>;
+    runAfter: (delayMs: number, mutation: any, args: any) => Promise<Id<"_scheduled_functions">>;
   };
 };
+
+function isValidUserId(userId: string): userId is Id<"user"> {
+  // Convex IDs follow a specific pattern - basic validation
+  return typeof userId === "string" && userId.length > 0 && userId.length < 100;
+}
 
 async function handleWebhookEvent(ctx: WebhookContext, event: StripeEvent) {
   const { type, data } = event;
   const { metadata, status, items } = data.object;
 
-  if (!metadata || !metadata.userId) {
+  if (!metadata?.userId) {
     console.log("[Stripe Webhook] No userId in metadata, skipping");
     return;
   }
+
+  // Validate userId before using
+  if (!isValidUserId(metadata.userId)) {
+    console.error(`[Stripe Webhook] Invalid userId format: ${metadata.userId}`);
+    return;
+  }
+
+  const userId = metadata.userId;
 
   switch (type) {
     case "customer.subscription.created":
     case "customer.subscription.updated": {
       const isActive = status === "active";
-      const priceId = items?.data[0]?.price?.id || items?.data[0]?.plan?.id;
+      // Safer array access
+      const firstItem = items?.data?.[0];
+      const priceId = firstItem?.price?.id ?? firstItem?.plan?.id;
 
-      await handleUserSubscriptionChange(ctx, metadata.userId as Id<"user">, isActive, priceId);
+      await handleUserSubscriptionChange(ctx, userId, isActive, priceId);
       break;
     }
 
     case "customer.subscription.deleted": {
-      await handleUserSubscriptionChange(ctx, metadata.userId as Id<"user">, false, undefined);
+      await handleUserSubscriptionChange(ctx, userId, false, undefined);
+      break;
+    }
+
+    case "checkout.session.completed": {
+      console.log(`[Stripe Webhook] Checkout completed for user ${userId}`);
+      // Initial subscription is handled by subscription.created
       break;
     }
 
     case "invoice.payment_failed": {
-      console.log("[Stripe Webhook] Payment failed, handled by subscription.updated");
+      console.log(
+        `[Stripe Webhook] Payment failed for user ${userId}, handled by subscription.updated`,
+      );
       break;
     }
 

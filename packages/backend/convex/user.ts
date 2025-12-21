@@ -14,11 +14,7 @@ export const getProPlan = protectedAction({
       userId: ctx.userId,
     });
 
-    const hasPro = await ctx.autumn.check(ctx, {
-      featureId: "can_create_org",
-    });
-
-    if (!hasPro.data?.allowed) {
+    if (!user.hasPro) {
       const checkoutResult = await ctx.autumn.checkout(ctx, {
         productId: "pro",
         successUrl: `${process.env.SITE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
@@ -64,7 +60,7 @@ export const checkProPlan = protectedAction({
   args: {},
   handler: async (ctx: ProtectedActionCtx) => {
     const hasPro = await ctx.autumn.check(ctx, {
-      featureId: "can_create_org",
+      featureId: "can_share_project",
     });
 
     return { success: true, hasProPlan: hasPro.data?.allowed ?? false };

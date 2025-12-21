@@ -1,4 +1,4 @@
-import { components, internal } from "../_generated/api";
+import { api, components, internal } from "../_generated/api";
 import type { Doc } from "../_generated/dataModel";
 import type { Doc as BetterAuthDoc, Id as BetterAuthId } from "../betterAuth/_generated/dataModel";
 import { createError, ErrorCode, notFoundError, permissionError } from "./errors";
@@ -99,7 +99,22 @@ export async function isProjectAccessible(
   ctx: ProtectedQueryCtx | ProtectedMutationCtx | ProtectedActionCtx,
   project: Doc<"project">,
 ): Promise<ProjectAccessResult> {
-  // NOTE: check if there is a valid projectAccess available
+  if (ctx.userId !== project.ownerId) {
+    const projectShare = await ctx.runQuery(
+      internal.projectShare._loadActiveShareByProjectAndUser,
+      {
+        projectId: project._id,
+        userId: ctx.userId,
+      },
+    );
+
+    if (!projectShare) {
+      return {
+        accessible: false,
+        reason: ProjectAccessReason.Restricted,
+      };
+    }
+  }
 
   if (project.isArchived) {
     return {
