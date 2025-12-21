@@ -24,7 +24,7 @@ export enum ErrorCode {
 
   // Limit & Quota Errors
   RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED",
-  PERSONAL_PROJECTS_LIMIT_REACHED = "PERSONAL_PROJECTS_LIMIT_REACHED",
+  PROJECTS_LIMIT_REACHED = "PROJECTS_LIMIT_REACHED",
   ENVIRONMENT_LIMIT_REACHED = "ENVIRONMENT_LIMIT_REACHED",
 
   // Duplicate/Conflict Errors
@@ -78,7 +78,7 @@ const ERROR_MESSAGES: Record<ErrorCode, string> = {
 
   // Limits
   [ErrorCode.RATE_LIMIT_EXCEEDED]: "Rate limit exceeded. Please slow down",
-  [ErrorCode.PERSONAL_PROJECTS_LIMIT_REACHED]: "Personal project limit reached",
+  [ErrorCode.PROJECTS_LIMIT_REACHED]: "Project limit reached",
   [ErrorCode.ENVIRONMENT_LIMIT_REACHED]: "Environment limit reached",
 
   // Duplicates
@@ -164,13 +164,13 @@ export function permissionError(
 }
 
 export function limitReachedError(
-  resource: "personal_projects" | "environments",
+  resource: "projects" | "environments",
   currentUsage?: number,
   limit?: number,
   severity: ErrorSeverity = ErrorSeverity.Medium,
 ): never {
   const codeMap = {
-    personal_projects: ErrorCode.PERSONAL_PROJECTS_LIMIT_REACHED,
+    projects: ErrorCode.PROJECTS_LIMIT_REACHED,
     environments: ErrorCode.ENVIRONMENT_LIMIT_REACHED,
   };
 
