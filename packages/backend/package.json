@@ -9,15 +9,17 @@
     "format": "biome format --write .",
     "test": "vitest",
     "test:once": "vitest run",
-    "test:debug": "vitest --inspect-brk --no-file-parallelism",
-    "test:coverage": "vitest run --coverage --coverage.reporter=text",
-    "betterAuth:generate-schema": "cd ./convex/betterAuth && bun x @better-auth/cli generate -y --output generatedSchema.ts"
+    "test:debug": "vitest --inspect-brk",
+    "test:coverage": "vitest --coverage",
+    "betterAuth:generate-schema": "cd ./convex/betterAuth && bun x @better-auth/cli generate -y --output generatedSchema.ts",
+    "stripe:listen-local": "stripe listen --forward-to http://127.0.0.1:3211/webhook/stripe"
   },
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",
     "@repo/typescript-config": "*",
     "@types/bun": "latest",
-    "convex-test": "^0.0.38"
+    "convex-test": "^0.0.38",
+    "vitest": "^4.0.16"
   },
   "peerDependencies": {
     "typescript": "^5"
