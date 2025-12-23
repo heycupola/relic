@@ -5,17 +5,20 @@ import type { Id as BetterAuthId } from "../betterAuth/_generated/dataModel";
 export type ProtectedQueryCtx = QueryCtx & {
   userId: BetterAuthId<"user">;
   email: string | undefined;
+  name: string | undefined;
 };
 
 export type ProtectedMutationCtx = MutationCtx & {
   userId: BetterAuthId<"user">;
   email: string | undefined;
+  name: string | undefined;
 };
 
 export type ProtectedActionCtx = ActionCtx & {
   autumn: Autumn;
   userId: BetterAuthId<"user">;
   email: string | undefined;
+  name: string | undefined;
 };
 
 export enum ErrorSeverity {

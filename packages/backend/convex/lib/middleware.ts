@@ -16,6 +16,7 @@ export const protectedQuery = customQuery(query, {
     ctx: {
       userId: BetterAuthId<"user">;
       email: string | undefined;
+      name: string | undefined;
     };
     args: Record<string, never>;
   }> => {
@@ -33,6 +34,7 @@ export const protectedQuery = customQuery(query, {
       ctx: {
         userId: identity.subject as BetterAuthId<"user">,
         email: identity.email,
+        name: identity.name,
       },
       args: {},
     };
@@ -48,6 +50,7 @@ export const protectedMutation = customMutation(mutation, {
     ctx: {
       userId: BetterAuthId<"user">;
       email: string | undefined;
+      name: string | undefined;
     };
     args: Record<string, never>;
   }> => {
@@ -65,6 +68,7 @@ export const protectedMutation = customMutation(mutation, {
       ctx: {
         userId: identity.subject as BetterAuthId<"user">,
         email: identity.email,
+        name: identity.name,
       },
       args: {},
     };
@@ -81,6 +85,7 @@ export const protectedAction = customAction(action, {
       autumn: Autumn;
       userId: BetterAuthId<"user">;
       email: string | undefined;
+      name: string | undefined;
     };
     args: Record<string, never>;
   }> => {
@@ -107,6 +112,7 @@ export const protectedAction = customAction(action, {
         autumn,
         userId: identity.subject as BetterAuthId<"user">,
         email: identity.email,
+        name: identity.name,
       },
       args: {},
     };
