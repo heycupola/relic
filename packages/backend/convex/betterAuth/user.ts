@@ -1,9 +1,9 @@
 import { v } from "convex/values";
 import { doc } from "convex-helpers/validators";
 import { notFoundError } from "../lib/errors";
+import { EmailKind } from "../lib/types";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
-import { UserEmailType } from "./lib/types";
+import { internalQuery, mutation, query } from "./_generated/server";
 import schema from "./schema";
 
 export const loadUserById = query({
@@ -118,36 +118,61 @@ export const setKeysAndSalt = mutation({
   },
 });
 
-export const _loadUserById = internalQuery({
-  args: { userId: v.id("user") },
-  returns: v.union(v.null(), doc(schema, "user")),
-  handler: async (ctx: QueryCtx, args) => {
-    return await ctx.db.get(args.userId);
-  },
-});
-
-export const _markEmailSent = internalMutation({
+export const updateUserAfterEmailSent = mutation({
   args: {
     userId: v.id("user"),
-    emailType: v.union(
-      v.literal(UserEmailType.AccessRestricted),
-      v.literal(UserEmailType.GracePeriod),
+    emailKind: v.union(
+      v.literal(EmailKind.AccessRestricted),
+      v.literal(EmailKind.GracePeriodStarted),
+      v.literal(EmailKind.PlanUpgraded),
+      v.literal(EmailKind.Welcome),
     ),
   },
   returns: v.object({ success: v.boolean() }),
   handler: async (ctx, args) => {
-    if (args.emailType === UserEmailType.AccessRestricted) {
+    if (args.emailKind === EmailKind.AccessRestricted) {
       await ctx.db.patch(args.userId, {
         accessRestrictedEmailSent: true,
         updatedAt: Date.now(),
       });
-    } else {
+    } else if (args.emailKind === EmailKind.GracePeriodStarted) {
       await ctx.db.patch(args.userId, {
         gracePeriodEmailSent: true,
         updatedAt: Date.now(),
       });
     }
 
+    // NOTE: we're not gonna handle welcome and plan upgraded for now
+
     return { success: true };
+  },
+});
+
+export const loadUsersToRestrict = query({
+  args: {},
+  returns: v.object({ success: v.boolean(), usersToRestrict: v.array(doc(schema, "user")) }),
+  handler: async (ctx, _args) => {
+    const now = Date.now();
+    const sevenDaysMs = 86_400 * 7;
+
+    const usersToRestrict = await ctx.db
+      .query("user")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("accessRestrictedEmailSent"), false),
+          q.lt(q.field("planDowngradedAt"), now - sevenDaysMs),
+        ),
+      )
+      .collect();
+
+    return { success: true, usersToRestrict };
+  },
+});
+
+export const _loadUserById = internalQuery({
+  args: { userId: v.id("user") },
+  returns: v.union(v.null(), doc(schema, "user")),
+  handler: async (ctx: QueryCtx, args) => {
+    return await ctx.db.get(args.userId);
   },
 });
