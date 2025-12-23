@@ -1,10 +1,30 @@
 import { internal } from "./_generated/api";
-import { httpAction } from "./_generated/server";
 import type { Id } from "./betterAuth/_generated/dataModel";
 
-const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+const WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS = 300; // 5 minutes
 
-async function verifyStripeSignature(
+export type StripeEvent = {
+  id: string; // Event ID for idempotency
+  type: string;
+  data: {
+    object: {
+      id: string;
+      customer?: string;
+      metadata?: {
+        userId?: string;
+      };
+      status?: string;
+      items?: {
+        data: Array<{
+          plan?: { id?: string };
+          price?: { id?: string };
+        }>;
+      };
+    };
+  };
+};
+
+export async function verifyStripeSignature(
   payload: string,
   signature: string,
   secret: string,
@@ -30,6 +50,14 @@ async function verifyStripeSignature(
 
   if (!timestamp || !sig) return false;
 
+  // Prevent replay attacks by checking timestamp tolerance
+  const timestampSeconds = parseInt(timestamp, 10);
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - timestampSeconds) > WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS) {
+    console.error("[Stripe Webhook] Timestamp outside tolerance window");
+    return false;
+  }
+
   const signedPayload = `${timestamp}.${payload}`;
   const expectedSig = await crypto.subtle.sign("HMAC", key, encoder.encode(signedPayload));
 
@@ -40,103 +68,63 @@ async function verifyStripeSignature(
   return expectedSigHex === sig;
 }
 
-type StripeEvent = {
-  type: string;
-  data: {
-    object: {
-      id: string;
-      customer?: string;
-      metadata?: {
-        userId?: string;
-      };
-      status?: string;
-      items?: {
-        data: Array<{
-          plan?: { id?: string };
-          price?: { id?: string };
-        }>;
-      };
-    };
-  };
-};
-
-export const stripe = httpAction(async (ctx, request) => {
-  const signature = request.headers.get("stripe-signature");
-  const payload = await request.text();
-
-  if (!signature) {
-    console.error("Missing stripe-signature header");
-    return new Response("Missing signature", { status: 400 });
-  }
-
-  if (!STRIPE_WEBHOOK_SECRET) {
-    console.error("STRIPE_WEBHOOK_SECRET is not configured");
-    return new Response("Server configuration error", { status: 500 });
-  }
-
-  const isValid = await verifyStripeSignature(payload, signature, STRIPE_WEBHOOK_SECRET);
-
-  if (!isValid) {
-    console.error("Invalid webhook signature");
-    return new Response("Invalid signature", { status: 401 });
-  }
-
-  let event: StripeEvent;
-
-  try {
-    event = JSON.parse(payload);
-  } catch (err) {
-    console.error("Error parsing webhook payload:", err);
-    return new Response("Invalid payload", { status: 400 });
-  }
-
-  console.log(`[Stripe Webhook] Received: ${event.type}`);
-
-  try {
-    await handleWebhookEvent(ctx, event);
-  } catch (error) {
-    console.error(`[Stripe Webhook] Error handling ${event.type}:`, error);
-    return new Response("Error processing webhook", { status: 500 });
-  }
-
-  return new Response("OK", { status: 200 });
-});
-
 type WebhookContext = {
   // biome-ignore lint/suspicious/noExplicitAny: Convex HTTP action context requires generic mutation types
   runMutation: (mutation: any, args: any) => Promise<any>;
   scheduler: {
     // biome-ignore lint/suspicious/noExplicitAny: Convex scheduler requires generic mutation types
-    runAfter: (delayMs: number, mutation: any, args: any) => Promise<void>;
+    runAfter: (delayMs: number, mutation: any, args: any) => Promise<Id<"_scheduled_functions">>;
   };
 };
 
-async function handleWebhookEvent(ctx: WebhookContext, event: StripeEvent) {
+function isValidUserId(userId: string): userId is Id<"user"> {
+  // Convex IDs follow a specific pattern - basic validation
+  return typeof userId === "string" && userId.length > 0 && userId.length < 100;
+}
+
+export async function handleWebhookEvent(ctx: WebhookContext, event: StripeEvent) {
   const { type, data } = event;
   const { metadata, status, items } = data.object;
 
-  if (!metadata || !metadata.userId) {
+  if (!metadata?.userId) {
     console.log("[Stripe Webhook] No userId in metadata, skipping");
     return;
   }
+
+  if (!isValidUserId(metadata.userId)) {
+    console.error(`[Stripe Webhook] Invalid userId format: ${metadata.userId}`);
+    return;
+  }
+
+  const userId = metadata.userId;
 
   switch (type) {
     case "customer.subscription.created":
     case "customer.subscription.updated": {
       const isActive = status === "active";
-      const priceId = items?.data[0]?.price?.id || items?.data[0]?.plan?.id;
 
-      await handleUserSubscriptionChange(ctx, metadata.userId as Id<"user">, isActive, priceId);
+      const firstItem = items?.data?.[0];
+      const priceId = firstItem?.price?.id ?? firstItem?.plan?.id;
+
+      await handleUserSubscriptionChange(ctx, userId, isActive, priceId);
       break;
     }
 
     case "customer.subscription.deleted": {
-      await handleUserSubscriptionChange(ctx, metadata.userId as Id<"user">, false, undefined);
+      await handleUserSubscriptionChange(ctx, userId, false, undefined);
+      break;
+    }
+
+    case "checkout.session.completed": {
+      console.log(`[Stripe Webhook] Checkout completed for user ${userId}`);
+      // Initial subscription is handled by subscription.created
       break;
     }
 
     case "invoice.payment_failed": {
-      console.log("[Stripe Webhook] Payment failed, handled by subscription.updated");
+      console.log(
+        `[Stripe Webhook] Payment failed for user ${userId}, handled by subscription.updated`,
+      );
       break;
     }
 

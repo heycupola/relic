@@ -1,4 +1,4 @@
-import { components, internal } from "../_generated/api";
+import { api, components, internal } from "../_generated/api";
 import type { Doc } from "../_generated/dataModel";
 import type { Doc as BetterAuthDoc, Id as BetterAuthId } from "../betterAuth/_generated/dataModel";
 import { createError, ErrorCode, notFoundError, permissionError } from "./errors";
@@ -62,7 +62,7 @@ export async function syncUserPlanStatus(
     throw notFoundError("user");
   }
 
-  const projects = await ctx.runQuery(internal.project._loadProjects, {
+  const projects = await ctx.runQuery(internal.project._loadActiveProjectsByOwner, {
     ownerId: user._id as BetterAuthId<"user">,
   });
 
@@ -86,11 +86,30 @@ export async function getUserProjectsWithRestrictions(
   const inGracePeriod = isInGracePeriod(user);
   const gracePeriodDaysRemaining = getGracePeriodDaysRemaining(user);
 
+  // If user has Pro plan or in grace period, all projects accessible
+  if (user.hasPro || inGracePeriod) {
+    return {
+      accessibleProjects: projects,
+      restrictedProjects: [],
+      isInGracePeriod: inGracePeriod,
+      gracePeriodDaysRemaining,
+    };
+  }
+
+  // Free plan + grace period ended: only 2 newest projects accessible
+  const FREE_PLAN_PROJECT_LIMIT = 2;
+
+  // Sort by createdAt DESC (newest first)
+  const sortedProjects = [...projects].sort((a, b) => b.createdAt - a.createdAt);
+
+  const accessibleProjects = sortedProjects.slice(0, FREE_PLAN_PROJECT_LIMIT);
+  const restrictedProjects = sortedProjects.slice(FREE_PLAN_PROJECT_LIMIT);
+
   return {
-    accessibleProjects: projects,
-    restrictedProjects: [],
-    isInGracePeriod: inGracePeriod,
-    gracePeriodDaysRemaining,
+    accessibleProjects,
+    restrictedProjects,
+    isInGracePeriod: false,
+    gracePeriodDaysRemaining: 0,
   };
 }
 
@@ -99,7 +118,37 @@ export async function isProjectAccessible(
   ctx: ProtectedQueryCtx | ProtectedMutationCtx | ProtectedActionCtx,
   project: Doc<"project">,
 ): Promise<ProjectAccessResult> {
-  // NOTE: check if there is a valid projectAccess available
+  const isOwner = ctx.userId === project.ownerId;
+  const { user } = await syncUserPlanStatus(ctx);
+  const inGracePeriod = isInGracePeriod(user as BetterAuthDoc<"user">);
+  const gracePeriodDaysRemaining = getGracePeriodDaysRemaining(user as BetterAuthDoc<"user">);
+
+  // Check if user is not owner - must have projectShare
+  if (!isOwner) {
+    const projectShare = await ctx.runQuery(
+      internal.projectShare._loadActiveShareByProjectAndUser,
+      {
+        projectId: project._id,
+        userId: ctx.userId,
+      },
+    );
+
+    if (!projectShare) {
+      return {
+        accessible: false,
+        reason: ProjectAccessReason.Restricted,
+      };
+    }
+
+    // Shared project: If user is access restricted (Free plan + grace period ended),
+    // they cannot access ANY projects (including shared ones)
+    if (!user.hasPro && !inGracePeriod) {
+      return {
+        accessible: false,
+        reason: ProjectAccessReason.Restricted,
+      };
+    }
+  }
 
   if (project.isArchived) {
     return {
@@ -107,11 +156,6 @@ export async function isProjectAccessible(
       reason: ProjectAccessReason.Archived,
     };
   }
-
-  const { user } = await syncUserPlanStatus(ctx);
-
-  const inGracePeriod = isInGracePeriod(user as BetterAuthDoc<"user">);
-  const gracePeriodDaysRemaining = getGracePeriodDaysRemaining(user as BetterAuthDoc<"user">);
 
   if (inGracePeriod) {
     return {
@@ -130,6 +174,7 @@ export async function isProjectAccessible(
 export const assertProjectAccess = async (
   ctx: ProtectedQueryCtx | ProtectedMutationCtx | ProtectedActionCtx,
   project: Doc<"project">,
+  options?: { skipArchivedCheck?: boolean },
 ): Promise<void> => {
   if (ctx.userId !== project.ownerId) {
     throw permissionError("access this project", ErrorSeverity.High);
@@ -138,6 +183,11 @@ export const assertProjectAccess = async (
   const { accessible, reason } = await isProjectAccessible(ctx, project);
 
   if (!accessible) {
+    // Skip archived check if requested (e.g., for archive/unarchive operations)
+    if (options?.skipArchivedCheck && reason === ProjectAccessReason.Archived) {
+      return;
+    }
+
     throw createError({
       code: ErrorCode.PROJECT_INACCESSIBLE,
       message: reason || "This project is not accessible",

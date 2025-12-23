@@ -24,8 +24,10 @@ export enum ErrorCode {
 
   // Limit & Quota Errors
   RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED",
-  PERSONAL_PROJECTS_LIMIT_REACHED = "PERSONAL_PROJECTS_LIMIT_REACHED",
+  PROJECTS_LIMIT_REACHED = "PROJECTS_LIMIT_REACHED",
   ENVIRONMENT_LIMIT_REACHED = "ENVIRONMENT_LIMIT_REACHED",
+  PRO_PLAN_REQUIRED = "PRO_PLAN_REQUIRED",
+  PROJECT_SHARES_LIMIT_REACHED = "PROJECT_SHARES_LIMIT_REACHED",
 
   // Duplicate/Conflict Errors
   RESOURCE_ALREADY_EXISTS = "RESOURCE_ALREADY_EXISTS",
@@ -78,8 +80,10 @@ const ERROR_MESSAGES: Record<ErrorCode, string> = {
 
   // Limits
   [ErrorCode.RATE_LIMIT_EXCEEDED]: "Rate limit exceeded. Please slow down",
-  [ErrorCode.PERSONAL_PROJECTS_LIMIT_REACHED]: "Personal project limit reached",
+  [ErrorCode.PROJECTS_LIMIT_REACHED]: "Project limit reached",
   [ErrorCode.ENVIRONMENT_LIMIT_REACHED]: "Environment limit reached",
+  [ErrorCode.PROJECT_SHARES_LIMIT_REACHED]: "Project share limit reached",
+  [ErrorCode.PRO_PLAN_REQUIRED]: "To perform this act, please get pro plan.",
 
   // Duplicates
   [ErrorCode.RESOURCE_ALREADY_EXISTS]: "Resource already exists",
@@ -164,20 +168,27 @@ export function permissionError(
 }
 
 export function limitReachedError(
-  resource: "personal_projects" | "environments",
+  resource: "projects" | "environments" | "projectShares",
   currentUsage?: number,
   limit?: number,
   severity: ErrorSeverity = ErrorSeverity.Medium,
 ): never {
   const codeMap = {
-    personal_projects: ErrorCode.PERSONAL_PROJECTS_LIMIT_REACHED,
+    projects: ErrorCode.PROJECTS_LIMIT_REACHED,
     environments: ErrorCode.ENVIRONMENT_LIMIT_REACHED,
+    projectShares: ErrorCode.PROJECT_SHARES_LIMIT_REACHED,
   };
 
   let message: string | undefined;
   if (currentUsage !== undefined && limit !== undefined) {
+    const resourceNames = {
+      projects: "project",
+      environments: "environment",
+      projectShares: "project share",
+    };
+    const resourceName = resourceNames[resource];
     const plural = currentUsage !== 1 ? "s" : "";
-    message = `Limit reached. You have ${currentUsage} ${resource.replace("_", " ")}${plural} out of ${limit} allowed. Upgrade your plan for more`;
+    message = `Limit reached. You have ${currentUsage} ${resourceName}${plural} out of ${limit} allowed. Upgrade your plan for more`;
   }
 
   createError({

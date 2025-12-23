@@ -29,3 +29,10 @@ export enum SecretPrimitiveType {
   Number = "number",
   Boolean = "boolean",
 }
+
+export enum EmailKind {
+  AccessRestricted = "access-restricted",
+  GracePeriodStarted = "grace-period-started",
+  PlanUpgraded = "plan-upgraded",
+  Welcome = "welcome",
+}

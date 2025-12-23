@@ -1,9 +1,11 @@
 import { v } from "convex/values";
-import { components } from "./_generated/api";
-import { internalMutation } from "./_generated/server";
+import { components, internal } from "./_generated/api";
+import { internalAction, internalMutation } from "./_generated/server";
+import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
 import { protectedAction, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
-import type { ProtectedActionCtx, ProtectedQueryCtx } from "./lib/types";
+import { EmailKind, type ProtectedActionCtx, type ProtectedQueryCtx } from "./lib/types";
+import { sendEmail } from "./resend";
 
 export const getProPlan = protectedAction({
   args: {},
@@ -14,11 +16,7 @@ export const getProPlan = protectedAction({
       userId: ctx.userId,
     });
 
-    const hasPro = await ctx.autumn.check(ctx, {
-      featureId: "can_create_org",
-    });
-
-    if (!hasPro.data?.allowed) {
+    if (!user.hasPro) {
       const checkoutResult = await ctx.autumn.checkout(ctx, {
         productId: "pro",
         successUrl: `${process.env.SITE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
@@ -63,8 +61,10 @@ export const getProPlan = protectedAction({
 export const checkProPlan = protectedAction({
   args: {},
   handler: async (ctx: ProtectedActionCtx) => {
+    await checkRateLimit(ctx, "read");
+
     const hasPro = await ctx.autumn.check(ctx, {
-      featureId: "can_create_org",
+      featureId: "can_share_project",
     });
 
     return { success: true, hasProPlan: hasPro.data?.allowed ?? false };
@@ -82,7 +82,7 @@ export const getCurrentUser = protectedQuery({
   },
 });
 
-export const _handlePlanUpgrade = internalMutation({
+export const _handlePlanUpgrade = internalAction({
   args: {
     userId: v.id("user"),
   },
@@ -94,10 +94,15 @@ export const _handlePlanUpgrade = internalMutation({
     await ctx.runMutation(components.betterAuth.user.upgradeToPro, {
       userId: user._id,
     });
+
+    await sendEmail(ctx, user._id, user.email, {
+      kind: EmailKind.PlanUpgraded,
+      userName: user.name,
+    });
   },
 });
 
-export const _handlePlanDowngrade = internalMutation({
+export const _handlePlanDowngrade = internalAction({
   args: {
     userId: v.id("user"),
   },
@@ -109,5 +114,99 @@ export const _handlePlanDowngrade = internalMutation({
     await ctx.runMutation(components.betterAuth.user.downgradeToFree, {
       userId: user._id,
     });
+
+    await sendEmail(ctx, user._id, user.email, {
+      kind: EmailKind.GracePeriodStarted,
+      daysRemaining: 7,
+      userName: user.name,
+    });
+  },
+});
+
+export const _handleEmailDelivered = internalMutation({
+  args: {
+    userId: v.id("user"),
+    emailKind: v.union(
+      v.literal(EmailKind.AccessRestricted),
+      v.literal(EmailKind.GracePeriodStarted),
+      v.literal(EmailKind.PlanUpgraded),
+      v.literal(EmailKind.Welcome),
+    ),
+    emailId: v.string(),
+    deliveredAt: v.number(),
+  },
+  returns: v.object({ success: v.boolean() }),
+  handler: async (ctx, args) => {
+    await ctx.runMutation(components.betterAuth.user.updateUserAfterEmailSent, {
+      emailKind: args.emailKind,
+      userId: args.userId,
+    });
+
+    return { success: true };
+  },
+});
+
+export const _handleEmailFailed = internalMutation({
+  args: {
+    userId: v.string(),
+    emailKind: v.string(),
+    reason: v.string(),
+    failedAt: v.number(),
+  },
+  handler: async (_ctx, args) => {
+    console.error(
+      `[Email] Failed to deliver ${args.emailKind} to user ${args.userId}: ${args.reason}`,
+    );
+
+    // NOTE: it's enough for the MVP
+    // later add retry logic, notification, log table, etc.
+  },
+});
+
+export const _batchSendAccessRestrictedEmails = internalAction({
+  args: {},
+  returns: v.object({ success: v.boolean() }),
+  handler: async (ctx, _args) => {
+    const { usersToRestrict } = await ctx.runQuery(
+      components.betterAuth.user.loadUsersToRestrict,
+      {},
+    );
+
+    for (const user of usersToRestrict) {
+      const projects = await ctx.runQuery(internal.project._loadActiveProjectsByOwner, {
+        ownerId: user._id as BetterAuthId<"user">,
+      });
+      const projectShares = await ctx.runQuery(internal.projectShare._loadActiveSharesByUser, {
+        userId: user._id as BetterAuthId<"user">,
+      });
+
+      await sendEmail(ctx, user._id, user.email, {
+        kind: EmailKind.AccessRestricted,
+        ownedProjectCount: projects.length,
+        sharedProjectCount: projectShares.length,
+        userName: user.name,
+      });
+    }
+
+    return { success: true };
+  },
+});
+
+export const _sendWelcomeEmail = internalAction({
+  args: {
+    userId: v.id("user"),
+  },
+  returns: v.object({ success: v.boolean() }),
+  handler: async (ctx, args) => {
+    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: args.userId,
+    });
+
+    await sendEmail(ctx, user._id, user.email, {
+      kind: EmailKind.Welcome,
+      userName: user.name,
+    });
+
+    return { success: true };
   },
 });

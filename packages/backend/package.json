@@ -9,15 +9,19 @@
     "format": "biome format --write .",
     "test": "vitest",
     "test:once": "vitest run",
-    "test:debug": "vitest --inspect-brk --no-file-parallelism",
-    "test:coverage": "vitest run --coverage --coverage.reporter=text",
-    "betterAuth:generate-schema": "cd ./convex/betterAuth && bun x @better-auth/cli generate -y --output generatedSchema.ts"
+    "test:debug": "vitest --inspect-brk",
+    "test:coverage": "vitest --coverage",
+    "betterAuth:generate-schema": "cd ./convex/betterAuth && bun x @better-auth/cli generate -y --output generatedSchema.ts",
+    "stripe:listen-local": "stripe listen --forward-to http://127.0.0.1:3211/webhook/stripe"
   },
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",
     "@repo/typescript-config": "*",
     "@types/bun": "latest",
-    "convex-test": "^0.0.38"
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "convex-test": "^0.0.38",
+    "vitest": "^4.0.16"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -25,9 +29,16 @@
   "dependencies": {
     "@convex-dev/better-auth": "catalog:",
     "@convex-dev/rate-limiter": "^0.2.14",
+    "@convex-dev/resend": "^0.2.3",
+    "@react-email/components": "^1.0.2",
+    "@react-email/render": "^2.0.0",
     "@useautumn/convex": "^0.0.12",
     "better-auth": "catalog:",
     "convex": "catalog:",
-    "convex-helpers": "catalog:"
+    "convex-helpers": "catalog:",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "react-email": "^5.1.0",
+    "resend": "^6.6.0"
   }
 }

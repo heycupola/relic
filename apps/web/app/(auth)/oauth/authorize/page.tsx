@@ -249,7 +249,7 @@ function AuthorizeContent() {
   return (
     <GridContainer>
       <Section className="border-t-0 flex-1 flex items-center justify-center">
-        <div className="w-full px-8 py-16">
+        <div className="w-full py-16">
           <div className="flex flex-col items-center gap-10">
             <Link href="/" className="flex items-center">
               <Image
@@ -285,7 +285,7 @@ export default function AuthorizePage() {
       fallback={
         <GridContainer>
           <Section className="border-t-0 flex-1 flex items-center justify-center">
-            <div className="w-full px-8 py-16">
+            <div className="w-full py-16">
               <div className="flex flex-col items-center gap-10">
                 <Link href="/" className="flex items-center">
                   <Image
