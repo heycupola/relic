@@ -13,7 +13,6 @@ import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as deviceAuth from "../deviceAuth.js";
 import type * as generatedSchema from "../generatedSchema.js";
-import type * as lib_types from "../lib/types.js";
 import type * as user from "../user.js";
 
 import type {
@@ -29,7 +28,6 @@ const fullApi: ApiFromModules<{
   crons: typeof crons;
   deviceAuth: typeof deviceAuth;
   generatedSchema: typeof generatedSchema;
-  "lib/types": typeof lib_types;
   user: typeof user;
 }> = anyApi as any;
 

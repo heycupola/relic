@@ -17,6 +17,11 @@ import type * as environment from "../environment.js";
 import type * as folder from "../folder.js";
 import type * as http from "../http.js";
 import type * as lib_access from "../lib/access.js";
+import type * as lib_emails_access_restricted from "../lib/emails/access_restricted.js";
+import type * as lib_emails_grace_period_started from "../lib/emails/grace_period_started.js";
+import type * as lib_emails_index from "../lib/emails/index.js";
+import type * as lib_emails_plan_upgraded from "../lib/emails/plan_upgraded.js";
+import type * as lib_emails_welcome from "../lib/emails/welcome.js";
 import type * as lib_errors from "../lib/errors.js";
 import type * as lib_helpers from "../lib/helpers.js";
 import type * as lib_middleware from "../lib/middleware.js";
@@ -25,11 +30,11 @@ import type * as lib_types from "../lib/types.js";
 import type * as project from "../project.js";
 import type * as projectShare from "../projectShare.js";
 import type * as rateLimiter from "../rateLimiter.js";
+import type * as resend from "../resend.js";
 import type * as secret from "../secret.js";
-import type * as test_helpers_setup from "../test/helpers/setup.js";
+import type * as stripe from "../stripe.js";
 import type * as user from "../user.js";
 import type * as userKey from "../userKey.js";
-import type * as webhook from "../webhook.js";
 
 import type {
   ApiFromModules,
@@ -47,6 +52,11 @@ declare const fullApi: ApiFromModules<{
   folder: typeof folder;
   http: typeof http;
   "lib/access": typeof lib_access;
+  "lib/emails/access_restricted": typeof lib_emails_access_restricted;
+  "lib/emails/grace_period_started": typeof lib_emails_grace_period_started;
+  "lib/emails/index": typeof lib_emails_index;
+  "lib/emails/plan_upgraded": typeof lib_emails_plan_upgraded;
+  "lib/emails/welcome": typeof lib_emails_welcome;
   "lib/errors": typeof lib_errors;
   "lib/helpers": typeof lib_helpers;
   "lib/middleware": typeof lib_middleware;
@@ -55,11 +65,11 @@ declare const fullApi: ApiFromModules<{
   project: typeof project;
   projectShare: typeof projectShare;
   rateLimiter: typeof rateLimiter;
+  resend: typeof resend;
   secret: typeof secret;
-  "test/helpers/setup": typeof test_helpers_setup;
+  stripe: typeof stripe;
   user: typeof user;
   userKey: typeof userKey;
-  webhook: typeof webhook;
 }>;
 
 /**
@@ -1377,6 +1387,33 @@ export declare const components: {
           userId?: null | string;
         }
       >;
+      loadUsersToRestrict: FunctionReference<
+        "query",
+        "internal",
+        {},
+        {
+          success: boolean;
+          usersToRestrict: Array<{
+            _creationTime: number;
+            _id: string;
+            accessRestrictedEmailSent?: null | boolean;
+            createdAt: number;
+            email: string;
+            emailVerified: boolean;
+            encryptedPrivateKey?: null | string;
+            gracePeriodEmailSent?: null | boolean;
+            hasPro: boolean;
+            image?: null | string;
+            keysUpdatedAt?: null | number;
+            name: string;
+            planDowngradedAt?: null | number;
+            publicKey?: null | string;
+            salt?: null | string;
+            updatedAt: number;
+            userId?: null | string;
+          }>;
+        }
+      >;
       setKeysAndSalt: FunctionReference<
         "mutation",
         "internal",
@@ -1384,6 +1421,19 @@ export declare const components: {
           encryptedPrivateKey: string;
           publicKey: string;
           salt: string;
+          userId: string;
+        },
+        { success: boolean }
+      >;
+      updateUserAfterEmailSent: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          emailKind:
+            | "access-restricted"
+            | "grace-period-started"
+            | "plan-upgraded"
+            | "welcome";
           userId: string;
         },
         { success: boolean }
@@ -1550,6 +1600,155 @@ export declare const components: {
     };
     time: {
       getServerTime: FunctionReference<"mutation", "internal", {}, number>;
+    };
+  };
+  resend: {
+    lib: {
+      cancelEmail: FunctionReference<
+        "mutation",
+        "internal",
+        { emailId: string },
+        null
+      >;
+      cleanupAbandonedEmails: FunctionReference<
+        "mutation",
+        "internal",
+        { olderThan?: number },
+        null
+      >;
+      cleanupOldEmails: FunctionReference<
+        "mutation",
+        "internal",
+        { olderThan?: number },
+        null
+      >;
+      createManualEmail: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          from: string;
+          headers?: Array<{ name: string; value: string }>;
+          replyTo?: Array<string>;
+          subject: string;
+          to: Array<string> | string;
+        },
+        string
+      >;
+      get: FunctionReference<
+        "query",
+        "internal",
+        { emailId: string },
+        {
+          bcc?: Array<string>;
+          bounced?: boolean;
+          cc?: Array<string>;
+          clicked?: boolean;
+          complained: boolean;
+          createdAt: number;
+          deliveryDelayed?: boolean;
+          errorMessage?: string;
+          failed?: boolean;
+          finalizedAt: number;
+          from: string;
+          headers?: Array<{ name: string; value: string }>;
+          html?: string;
+          opened: boolean;
+          replyTo: Array<string>;
+          resendId?: string;
+          segment: number;
+          status:
+            | "waiting"
+            | "queued"
+            | "cancelled"
+            | "sent"
+            | "delivered"
+            | "delivery_delayed"
+            | "bounced"
+            | "failed";
+          subject?: string;
+          template?: {
+            id: string;
+            variables?: Record<string, string | number>;
+          };
+          text?: string;
+          to: Array<string>;
+        } | null
+      >;
+      getStatus: FunctionReference<
+        "query",
+        "internal",
+        { emailId: string },
+        {
+          bounced: boolean;
+          clicked: boolean;
+          complained: boolean;
+          deliveryDelayed: boolean;
+          errorMessage: string | null;
+          failed: boolean;
+          opened: boolean;
+          status:
+            | "waiting"
+            | "queued"
+            | "cancelled"
+            | "sent"
+            | "delivered"
+            | "delivery_delayed"
+            | "bounced"
+            | "failed";
+        } | null
+      >;
+      handleEmailEvent: FunctionReference<
+        "mutation",
+        "internal",
+        { event: any },
+        null
+      >;
+      sendEmail: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          bcc?: Array<string>;
+          cc?: Array<string>;
+          from: string;
+          headers?: Array<{ name: string; value: string }>;
+          html?: string;
+          options: {
+            apiKey: string;
+            initialBackoffMs: number;
+            onEmailEvent?: { fnHandle: string };
+            retryAttempts: number;
+            testMode: boolean;
+          };
+          replyTo?: Array<string>;
+          subject?: string;
+          template?: {
+            id: string;
+            variables?: Record<string, string | number>;
+          };
+          text?: string;
+          to: Array<string>;
+        },
+        string
+      >;
+      updateManualEmail: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          emailId: string;
+          errorMessage?: string;
+          resendId?: string;
+          status:
+            | "waiting"
+            | "queued"
+            | "cancelled"
+            | "sent"
+            | "delivered"
+            | "delivery_delayed"
+            | "bounced"
+            | "failed";
+        },
+        null
+      >;
     };
   };
 };

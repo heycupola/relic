@@ -2,6 +2,10 @@
   "extends": "@repo/typescript-config/convex.json",
   "compilerOptions": {
     "skipLibCheck": true,
-    "types": ["@types/bun"]
-  }
+    "types": ["@types/bun"],
+    "jsx": "react",
+    "esModuleInterop": true,
+    "moduleResolution": "bundler"
+  },
+  "include": ["convex/**/*", "emails/**/*"]
 }

@@ -18,6 +18,8 @@
     "@edge-runtime/vm": "^5.0.0",
     "@repo/typescript-config": "*",
     "@types/bun": "latest",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
     "convex-test": "^0.0.38",
     "vitest": "^4.0.16"
   },
@@ -27,9 +29,16 @@
   "dependencies": {
     "@convex-dev/better-auth": "catalog:",
     "@convex-dev/rate-limiter": "^0.2.14",
+    "@convex-dev/resend": "^0.2.3",
+    "@react-email/components": "^1.0.2",
+    "@react-email/render": "^2.0.0",
     "@useautumn/convex": "^0.0.12",
     "better-auth": "catalog:",
     "convex": "catalog:",
-    "convex-helpers": "catalog:"
+    "convex-helpers": "catalog:",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "react-email": "^5.1.0",
+    "resend": "^6.6.0"
   }
 }

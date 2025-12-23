@@ -1325,6 +1325,34 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         },
         Name
       >;
+      loadUsersToRestrict: FunctionReference<
+        "query",
+        "internal",
+        {},
+        {
+          success: boolean;
+          usersToRestrict: Array<{
+            _creationTime: number;
+            _id: string;
+            accessRestrictedEmailSent?: null | boolean;
+            createdAt: number;
+            email: string;
+            emailVerified: boolean;
+            encryptedPrivateKey?: null | string;
+            gracePeriodEmailSent?: null | boolean;
+            hasPro: boolean;
+            image?: null | string;
+            keysUpdatedAt?: null | number;
+            name: string;
+            planDowngradedAt?: null | number;
+            publicKey?: null | string;
+            salt?: null | string;
+            updatedAt: number;
+            userId?: null | string;
+          }>;
+        },
+        Name
+      >;
       setKeysAndSalt: FunctionReference<
         "mutation",
         "internal",
@@ -1332,6 +1360,20 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           encryptedPrivateKey: string;
           publicKey: string;
           salt: string;
+          userId: string;
+        },
+        { success: boolean },
+        Name
+      >;
+      updateUserAfterEmailSent: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          emailKind:
+            | "access-restricted"
+            | "grace-period-started"
+            | "plan-upgraded"
+            | "welcome";
           userId: string;
         },
         { success: boolean },
