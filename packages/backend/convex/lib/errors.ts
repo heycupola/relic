@@ -26,6 +26,8 @@ export enum ErrorCode {
   RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED",
   PROJECTS_LIMIT_REACHED = "PROJECTS_LIMIT_REACHED",
   ENVIRONMENT_LIMIT_REACHED = "ENVIRONMENT_LIMIT_REACHED",
+  PRO_PLAN_REQUIRED = "PRO_PLAN_REQUIRED",
+  PROJECT_SHARES_LIMIT_REACHED = "PROJECT_SHARES_LIMIT_REACHED",
 
   // Duplicate/Conflict Errors
   RESOURCE_ALREADY_EXISTS = "RESOURCE_ALREADY_EXISTS",
@@ -80,6 +82,8 @@ const ERROR_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCode.RATE_LIMIT_EXCEEDED]: "Rate limit exceeded. Please slow down",
   [ErrorCode.PROJECTS_LIMIT_REACHED]: "Project limit reached",
   [ErrorCode.ENVIRONMENT_LIMIT_REACHED]: "Environment limit reached",
+  [ErrorCode.PROJECT_SHARES_LIMIT_REACHED]: "Project share limit reached",
+  [ErrorCode.PRO_PLAN_REQUIRED]: "To perform this act, please get pro plan.",
 
   // Duplicates
   [ErrorCode.RESOURCE_ALREADY_EXISTS]: "Resource already exists",
@@ -164,7 +168,7 @@ export function permissionError(
 }
 
 export function limitReachedError(
-  resource: "projects" | "environments",
+  resource: "projects" | "environments" | "projectShares",
   currentUsage?: number,
   limit?: number,
   severity: ErrorSeverity = ErrorSeverity.Medium,
@@ -172,12 +176,19 @@ export function limitReachedError(
   const codeMap = {
     projects: ErrorCode.PROJECTS_LIMIT_REACHED,
     environments: ErrorCode.ENVIRONMENT_LIMIT_REACHED,
+    projectShares: ErrorCode.PROJECT_SHARES_LIMIT_REACHED,
   };
 
   let message: string | undefined;
   if (currentUsage !== undefined && limit !== undefined) {
+    const resourceNames = {
+      projects: "project",
+      environments: "environment",
+      projectShares: "project share",
+    };
+    const resourceName = resourceNames[resource];
     const plural = currentUsage !== 1 ? "s" : "";
-    message = `Limit reached. You have ${currentUsage} ${resource.replace("_", " ")}${plural} out of ${limit} allowed. Upgrade your plan for more`;
+    message = `Limit reached. You have ${currentUsage} ${resourceName}${plural} out of ${limit} allowed. Upgrade your plan for more`;
   }
 
   createError({
