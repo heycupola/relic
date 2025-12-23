@@ -9,21 +9,24 @@ import {
   alreadyExistsError,
   createError,
   ErrorCode,
+  limitReachedError,
   notFoundError,
   permissionError,
 } from "./lib/errors";
-import { protectedMutation, protectedQuery } from "./lib/middleware";
+import { protectedAction, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
-import { ErrorSeverity, type ProtectedMutationCtx, type ProtectedQueryCtx } from "./lib/types";
+import { ErrorSeverity, type ProtectedActionCtx, type ProtectedQueryCtx } from "./lib/types";
 import schema from "./schema";
 
-export const shareProject = protectedMutation({
+export const shareProject = protectedAction({
   args: {
     projectId: v.id("project"),
     userEmail: v.string(),
     encryptedProjectKey: v.string(),
   },
-  handler: async (ctx: ProtectedMutationCtx, args) => {
+  handler: async (ctx: ProtectedActionCtx, args) => {
+    await checkRateLimit(ctx, "write");
+
     const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: args.projectId,
     });
@@ -34,7 +37,30 @@ export const shareProject = protectedMutation({
       throw permissionError("share this project", ErrorSeverity.High);
     }
 
-    await checkRateLimit(ctx, "write");
+    // Check if user has Pro plan to share projects
+    const canShare = await ctx.autumn.check(ctx, {
+      featureId: "can_share_project",
+    });
+
+    if (!canShare.data?.allowed) {
+      throw createError({
+        code: ErrorCode.PRO_PLAN_REQUIRED,
+        severity: ErrorSeverity.Medium,
+      });
+    }
+
+    // Check project_shares limit
+    const sharesLimit = await ctx.autumn.check(ctx, {
+      featureId: "project_shares",
+    });
+
+    if (!sharesLimit.data?.allowed) {
+      throw limitReachedError(
+        "projectShares",
+        sharesLimit.data?.usage,
+        sharesLimit.data?.usage_limit,
+      );
+    }
 
     const targetUser = await ctx.runQuery(components.betterAuth.user.loadUserByEmail, {
       email: args.userEmail,
@@ -95,11 +121,17 @@ export const shareProject = protectedMutation({
       },
     });
 
+    // Track project_shares usage
+    await ctx.autumn.track(ctx, {
+      featureId: "project_shares",
+      value: 1,
+    });
+
     return { success: true, shareId: sId };
   },
 });
 
-export const revokeShare = protectedMutation({
+export const revokeShare = protectedAction({
   args: {
     shareId: v.id("projectShare"),
     newEncryptedProjectKey: v.string(),
@@ -111,7 +143,7 @@ export const revokeShare = protectedMutation({
       }),
     ),
   },
-  handler: async (ctx: ProtectedMutationCtx, args) => {
+  handler: async (ctx: ProtectedActionCtx, args) => {
     const share: Doc<"projectShare"> = await ctx.runQuery(internal.projectShare._loadShareById, {
       shareId: args.shareId,
     });
@@ -198,6 +230,12 @@ export const revokeShare = protectedMutation({
         oldKeyVersion,
         newKeyVersion: args.newKeyVersion,
       },
+    });
+
+    // Track project_shares usage (-1 for revoked share)
+    await ctx.autumn.track(ctx, {
+      featureId: "project_shares",
+      value: -1,
     });
 
     return { success: true };
