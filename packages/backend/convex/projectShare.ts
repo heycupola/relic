@@ -18,6 +18,8 @@ import { checkRateLimit } from "./lib/rateLimit";
 import { ErrorSeverity, type ProtectedActionCtx, type ProtectedQueryCtx } from "./lib/types";
 import schema from "./schema";
 
+const FREE_SHARE_LIMIT = 5;
+
 export const shareProject = protectedAction({
   args: {
     projectId: v.id("project"),
@@ -47,19 +49,6 @@ export const shareProject = protectedAction({
         code: ErrorCode.PRO_PLAN_REQUIRED,
         severity: ErrorSeverity.Medium,
       });
-    }
-
-    // Check project_shares limit
-    const sharesLimit = await ctx.autumn.check(ctx, {
-      featureId: "project_shares",
-    });
-
-    if (!sharesLimit.data?.allowed) {
-      throw limitReachedError(
-        "projectShares",
-        sharesLimit.data?.usage,
-        sharesLimit.data?.usage_limit,
-      );
     }
 
     const targetUser = await ctx.runQuery(components.betterAuth.user.loadUserByEmail, {
@@ -102,6 +91,19 @@ export const shareProject = protectedAction({
       throw alreadyExistsError("share", ErrorSeverity.Medium);
     }
 
+    const currentUsage = project.share_usage_count ?? 0;
+
+    if (currentUsage >= FREE_SHARE_LIMIT) {
+      try {
+        await ctx.autumn.track(ctx, {
+          featureId: "additional_shares",
+          value: 1,
+        });
+      } catch (_error: unknown) {
+        throw limitReachedError("projectShares", currentUsage, FREE_SHARE_LIMIT);
+      }
+    }
+
     const { shareId } = await ctx.runMutation(internal.projectShare._insertProjectShare, {
       projectId: args.projectId,
       userId: targetUser._id as BetterAuthId<"user">,
@@ -121,9 +123,8 @@ export const shareProject = protectedAction({
       },
     });
 
-    // Track project_shares usage
-    await ctx.autumn.track(ctx, {
-      featureId: "project_shares",
+    await ctx.runMutation(internal.projectShare._trackShareUsageCount, {
+      projectId: project._id,
       value: 1,
     });
 
@@ -232,9 +233,35 @@ export const revokeShare = protectedAction({
       },
     });
 
-    // Track project_shares usage (-1 for revoked share)
-    await ctx.autumn.track(ctx, {
-      featureId: "project_shares",
+    const currentUsage = project.share_usage_count ?? 0;
+
+    if (currentUsage > FREE_SHARE_LIMIT) {
+      try {
+        await ctx.autumn.track(ctx, {
+          featureId: "additional_shares",
+          value: -1,
+        });
+      } catch (error: unknown) {
+        console.error("Failed to track usage decrease in Autumn:", error);
+
+        await ctx.scheduler.runAfter(5 * 60 * 1000, internal.autumn._retryAutumnTracking, {
+          identity: {
+            customerId: ctx.userId,
+            customerData: {
+              name: ctx.name,
+              email: ctx.email,
+            },
+          },
+          attemptCount: 1,
+          featureId: "additional_shares",
+          projectId: project._id,
+          value: -1,
+        });
+      }
+    }
+
+    await ctx.runMutation(internal.projectShare._trackShareUsageCount, {
+      projectId: share.projectId,
       value: -1,
     });
 
@@ -512,5 +539,27 @@ export const _insertKeyRotation = internalMutation({
     });
 
     return { success: true, rotationId };
+  },
+});
+
+export const _trackShareUsageCount = internalMutation({
+  args: { projectId: v.id("project"), value: v.number() },
+  returns: v.object({ success: v.boolean() }),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+
+    if (!project) {
+      return { success: false };
+    }
+
+    const currentCount = project.share_usage_count ?? 0;
+
+    const newCount = currentCount + args.value;
+
+    await ctx.db.patch(args.projectId, {
+      share_usage_count: newCount,
+    });
+
+    return { success: true };
   },
 });
