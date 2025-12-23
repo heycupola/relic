@@ -29,6 +29,8 @@ export const createProject = protectedAction({
     encryptedProjectKey: v.string(),
   },
   handler: async (ctx: ProtectedActionCtx, args) => {
+    await checkRateLimit(ctx, "write");
+
     const { data, error } = await ctx.autumn.check(ctx, {
       featureId: "projects",
     });
@@ -46,8 +48,6 @@ export const createProject = protectedAction({
 
       throw limitReachedError("projects", currentUsage, data.included_usage, ErrorSeverity.High);
     }
-
-    await checkRateLimit(ctx, "write");
 
     const { projectId } = await ctx.runMutation(internal.project._insertProject, {
       name: args.name,
@@ -190,7 +190,7 @@ export const unarchiveProject = protectedAction({
       projectId: args.projectId,
     });
 
-    await assertProjectAccess(ctx, project);
+    await assertProjectAccess(ctx, project, { skipArchivedCheck: true });
 
     await checkRateLimit(ctx, "write");
 
@@ -239,7 +239,7 @@ export const _loadProjectById = internalQuery({
   },
 });
 
-export const _loadProjects = internalQuery({
+export const _loadActiveProjectsByOwner = internalQuery({
   args: {
     ownerId: v.id("user"),
   },
