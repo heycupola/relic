@@ -286,6 +286,7 @@ export const _insertProject = internalMutation({
       ownerId: args.ownerId.toString(),
       encryptedProjectKey: args.encryptedProjectKey,
       keyVersion: 1,
+      share_usage_count: 0,
       isArchived: false,
       createdAt: now,
       updatedAt: now,
