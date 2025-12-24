@@ -18,7 +18,9 @@ import { checkRateLimit } from "./lib/rateLimit";
 import { ErrorSeverity, type ProtectedActionCtx, type ProtectedQueryCtx } from "./lib/types";
 import schema from "./schema";
 
-const FREE_SHARE_LIMIT = 5;
+export const shareLimits = {
+  freeShareLimit: 5,
+};
 
 export const shareProject = protectedAction({
   args: {
@@ -93,14 +95,14 @@ export const shareProject = protectedAction({
 
     const currentUsage = project.share_usage_count ?? 0;
 
-    if (currentUsage >= FREE_SHARE_LIMIT) {
+    if (currentUsage >= shareLimits.freeShareLimit) {
       try {
         await ctx.autumn.track(ctx, {
           featureId: "additional_shares",
           value: 1,
         });
       } catch (_error: unknown) {
-        throw limitReachedError("projectShares", currentUsage, FREE_SHARE_LIMIT);
+        throw limitReachedError("projectShares", currentUsage, shareLimits.freeShareLimit);
       }
     }
 
@@ -141,6 +143,12 @@ export const revokeShare = protectedAction({
       v.object({
         shareId: v.id("projectShare"),
         newEncryptedProjectKey: v.string(),
+      }),
+    ),
+    reEncryptedSecrets: v.array(
+      v.object({
+        secretId: v.id("secret"),
+        newEncryptedValue: v.string(),
       }),
     ),
   },
@@ -207,13 +215,30 @@ export const revokeShare = protectedAction({
       });
     }
 
+    let secretsReEncrypted = 0;
+
+    if (args.reEncryptedSecrets.length > 0) {
+      const { totalEncrypted } = await ctx.runMutation(
+        internal.secret._reEncryptSecretsForKeyRotation,
+        {
+          secrets: args.reEncryptedSecrets.map((s) => ({
+            secretId: s.secretId,
+            newEncryptedValue: s.newEncryptedValue,
+            newEncryptionKeyVersion: args.newKeyVersion,
+          })),
+          userId: ctx.userId,
+        },
+      );
+      secretsReEncrypted = totalEncrypted;
+    }
+
     await ctx.runMutation(internal.projectShare._insertKeyRotation, {
       projectId: share.projectId,
       oldKeyVersion,
       newKeyVersion: args.newKeyVersion,
       rotatedBy: ctx.userId,
       reason: "share_revoked",
-      secretsReEncrypted: 0,
+      secretsReEncrypted,
       sharesUpdated: args.rewrappedShares.length,
     });
 
@@ -235,7 +260,7 @@ export const revokeShare = protectedAction({
 
     const currentUsage = project.share_usage_count ?? 0;
 
-    if (currentUsage > FREE_SHARE_LIMIT) {
+    if (currentUsage > shareLimits.freeShareLimit) {
       try {
         await ctx.autumn.track(ctx, {
           featureId: "additional_shares",
@@ -269,7 +294,7 @@ export const revokeShare = protectedAction({
   },
 });
 
-export const listProjectShares = protectedQuery({
+export const listActiveProjectSharesByProject = protectedQuery({
   args: {
     projectId: v.id("project"),
   },
@@ -319,7 +344,7 @@ export const listProjectShares = protectedQuery({
   },
 });
 
-export const listSharedWithMe = protectedQuery({
+export const listActiveSharedProjectsForCurrentUser = protectedQuery({
   args: {},
   handler: async (ctx: ProtectedQueryCtx) => {
     const shares: Doc<"projectShare">[] = await ctx.runQuery(

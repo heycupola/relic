@@ -281,40 +281,6 @@ export const deleteSecret = protectedMutation({
   },
 });
 
-export const reEncryptSecretsBulk = protectedMutation({
-  args: {
-    secretIds: v.array(v.id("secret")),
-    encryptedValues: v.array(v.string()),
-  },
-  handler: async (ctx, args) => {
-    if (args.secretIds.length !== args.encryptedValues.length) {
-      throw createError({
-        code: ErrorCode.ARRAY_LENGTH_MISMATCH,
-        message: "secret id length and encrypted values length was not matched",
-        severity: ErrorSeverity.Medium,
-      });
-    }
-
-    if (args.secretIds.length === 0 || args.encryptedValues.length === 0) {
-      throw createError({
-        code: ErrorCode.INVALID_ARGUMENTS,
-        message: "secret ids or encryptedValues cannot be empty",
-        severity: ErrorSeverity.Medium,
-      });
-    }
-
-    const { totalEncrypted } = await ctx.runMutation(internal.secret._reEncryptSecretsBulk, {
-      encryptedValues: args.encryptedValues,
-      secretIds: args.secretIds,
-      userId: ctx.userId,
-    });
-
-    const te: number = totalEncrypted;
-
-    return { success: true, totalEncrypted: te };
-  },
-});
-
 export const _loadSecretById = internalQuery({
   args: {
     secretId: v.id("secret"),
@@ -472,94 +438,56 @@ export const _updateSecret = internalMutation({
   },
 });
 
-export const _reEncryptSecretsBulk = internalMutation({
+export const _reEncryptSecretsForKeyRotation = internalMutation({
   args: {
     userId: v.id("user"),
-    secretIds: v.array(v.id("secret")),
-    encryptedValues: v.array(v.string()),
+    secrets: v.array(
+      v.object({
+        secretId: v.id("secret"),
+        newEncryptedValue: v.string(),
+        newEncryptionKeyVersion: v.number(),
+      }),
+    ),
   },
+  returns: v.object({
+    success: v.boolean(),
+    totalEncrypted: v.number(),
+  }),
   handler: async (ctx, args) => {
+    if (args.secrets.length === 0) {
+      return { success: true, totalEncrypted: 0 };
+    }
+
     const secretsData = await Promise.all(
-      args.secretIds.map(async (secretId, index) => ({
-        secretId,
-        index,
-        secret: await ctx.db.get(secretId),
+      args.secrets.map(async (item) => ({
+        ...item,
+        secret: await ctx.db.get(item.secretId),
       })),
     );
 
-    const validSecretsData: Array<{
-      secretId: Id<"secret">;
-      index: number;
-      secret: Doc<"secret">;
-    }> = [];
-
-    for (const item of secretsData) {
+    const validSecrets = secretsData.filter((item) => {
       if (!item.secret) {
         console.error(`Secret ${item.secretId} not found`);
-        continue;
+        return false;
       }
-      if (item.secret.createdBy !== args.userId) {
-        console.error(`Secret ${item.secretId} doesn't belong to user ${args.userId}`);
-        continue;
-      }
-      validSecretsData.push({
-        secretId: item.secretId,
-        index: item.index,
-        secret: item.secret,
-      });
-    }
+      return true;
+    });
 
-    const uniqueProjectIds = [...new Set(validSecretsData.map(({ secret }) => secret.projectId))];
-    const projectsData = await Promise.all(
-      uniqueProjectIds.map(async (projectId) => ({
-        projectId,
-        project: await ctx.db.get(projectId),
-      })),
-    );
-
-    const projectMap = new Map<Id<"project">, Doc<"project">>();
-    for (const { project } of projectsData) {
-      if (project) {
-        projectMap.set(project._id, project);
-      }
-    }
-
-    const finalValidSecrets: Array<{
-      secretId: Id<"secret">;
-      index: number;
-      secret: Doc<"secret">;
-    }> = [];
-
-    for (const item of validSecretsData) {
-      const project = projectMap.get(item.secret.projectId);
-      if (!project) {
-        console.error(`Project ${item.secret.projectId} not found`);
-        continue;
-      }
-      finalValidSecrets.push(item);
-    }
-
-    if (finalValidSecrets.length === 0) {
+    if (validSecrets.length === 0) {
       return { success: false, totalEncrypted: 0 };
     }
 
     let totalEncrypted = 0;
-    for (const { secret, index } of finalValidSecrets) {
-      const encryptedValue = args.encryptedValues[index];
-      if (!encryptedValue) {
-        console.error(`No encrypted value found at index ${index}`);
-        continue;
-      }
+    const now = Date.now();
 
-      await ctx.db.patch(secret._id, {
-        encryptedValue,
-        updatedAt: Date.now(),
+    for (const { secretId, newEncryptedValue, newEncryptionKeyVersion } of validSecrets) {
+      await ctx.db.patch(secretId, {
+        encryptedValue: newEncryptedValue,
+        encryptionKeyVersion: newEncryptionKeyVersion,
+        updatedAt: now,
         updatedBy: args.userId,
-        // NOTE: encryptionKeyVersion stays the same cuz this is master key change,
-        // not key rotation
-        encryptionKeyVersion: secret.encryptionKeyVersion,
       });
-      totalEncrypted += 1;
+      totalEncrypted++;
     }
 
     return { success: true, totalEncrypted };
