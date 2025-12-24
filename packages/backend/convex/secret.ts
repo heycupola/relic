@@ -5,7 +5,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
 import { assertProjectAccess } from "./lib/access";
-import { createError, ErrorCode, notFoundError } from "./lib/errors";
+import { alreadyExistsError, createError, ErrorCode, notFoundError } from "./lib/errors";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
 import {
@@ -52,11 +52,15 @@ export const createSecret = protectedMutation({
     }
 
     // NOTE: loads the secret and checks the its existence to prevent duplications
-    await ctx.runQuery(internal.secret._loadSecretByKeyAndEnvironmentIdAndFolderId, {
+    const secret = await ctx.runQuery(internal.secret._loadSecretByKeyAndEnvironmentIdAndFolderId, {
       environmentId: args.environmentId,
       folderId: args.folderId,
       key: args.key,
     });
+
+    if (secret) {
+      throw alreadyExistsError("secret", ErrorSeverity.Medium);
+    }
 
     // create secret
     const { secretId } = await ctx.runMutation(internal.secret._insertSecret, {
@@ -297,7 +301,7 @@ export const _loadSecretByKeyAndEnvironmentIdAndFolderId = internalQuery({
     environmentId: v.id("environment"),
     folderId: v.optional(v.id("folder")),
   },
-  returns: doc(schema, "secret"),
+  returns: v.union(doc(schema, "secret"), v.null()),
   handler: async (ctx, args) => {
     const secret = await ctx.db
       .query("secret")
@@ -308,10 +312,6 @@ export const _loadSecretByKeyAndEnvironmentIdAndFolderId = internalQuery({
         q.and(q.eq(q.field("isDeleted"), false), q.eq(q.field("folderId"), args.folderId)),
       )
       .first();
-
-    if (!secret) {
-      throw notFoundError("secret");
-    }
 
     return secret;
   },
