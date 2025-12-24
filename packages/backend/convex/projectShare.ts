@@ -137,8 +137,91 @@ export const shareProject = protectedAction({
 export const revokeShare = protectedAction({
   args: {
     shareId: v.id("projectShare"),
+  },
+  handler: async (ctx: ProtectedActionCtx, args) => {
+    await checkRateLimit(ctx, "write");
+
+    const share: Doc<"projectShare"> = await ctx.runQuery(internal.projectShare._loadShareById, {
+      shareId: args.shareId,
+    });
+
+    const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
+      projectId: share.projectId,
+    });
+
+    await assertProjectAccess(ctx, project);
+
+    if (ctx.userId !== project.ownerId) {
+      throw permissionError("revoke this share", ErrorSeverity.High);
+    }
+
+    if (share.revokedAt !== undefined) {
+      throw createError({
+        code: ErrorCode.INVALID_OPERATION,
+        message: "Share is already revoked",
+        severity: ErrorSeverity.Medium,
+      });
+    }
+
+    await ctx.runMutation(internal.projectShare._revokeProjectShare, {
+      shareId: args.shareId,
+    });
+
+    const revokedUser = (await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: share.userId as BetterAuthId<"user">,
+    })) as BetterAuthDoc<"user"> | null;
+
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      projectId: share.projectId,
+      userId: ctx.userId,
+      action: "share.revoked",
+      metadata: {
+        sharedUserId: share.userId,
+        sharedUserEmail: revokedUser?.email,
+        keyRotated: false,
+      },
+    });
+
+    const currentUsage = project.share_usage_count ?? 0;
+
+    if (currentUsage > shareLimits.freeShareLimit) {
+      try {
+        await ctx.autumn.track(ctx, {
+          featureId: "additional_shares",
+          value: -1,
+        });
+      } catch (error: unknown) {
+        console.error("Failed to track usage decrease in Autumn:", error);
+
+        await ctx.scheduler.runAfter(5 * 60 * 1000, internal.autumn._retryAutumnTracking, {
+          identity: {
+            customerId: ctx.userId,
+            customerData: {
+              name: ctx.name,
+              email: ctx.email,
+            },
+          },
+          attemptCount: 1,
+          featureId: "additional_shares",
+          projectId: project._id,
+          value: -1,
+        });
+      }
+    }
+
+    await ctx.runMutation(internal.projectShare._trackShareUsageCount, {
+      projectId: share.projectId,
+      value: -1,
+    });
+
+    return { success: true };
+  },
+});
+
+export const revokeShareWithRotation = protectedAction({
+  args: {
+    shareId: v.id("projectShare"),
     newEncryptedProjectKey: v.string(),
-    newKeyVersion: v.number(),
     rewrappedShares: v.array(
       v.object({
         shareId: v.id("projectShare"),
@@ -160,6 +243,8 @@ export const revokeShare = protectedAction({
     const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: share.projectId,
     });
+
+    const newKeyVersion = project.keyVersion + 1;
 
     await assertProjectAccess(ctx, project);
 
@@ -185,7 +270,7 @@ export const revokeShare = protectedAction({
     await ctx.runMutation(internal.project._rotateProjectKey, {
       projectId: share.projectId,
       newEncryptedProjectKey: args.newEncryptedProjectKey,
-      newKeyVersion: args.newKeyVersion,
+      newKeyVersion,
     });
 
     for (const rewrapped of args.rewrappedShares) {
@@ -224,7 +309,7 @@ export const revokeShare = protectedAction({
           secrets: args.reEncryptedSecrets.map((s) => ({
             secretId: s.secretId,
             newEncryptedValue: s.newEncryptedValue,
-            newEncryptionKeyVersion: args.newKeyVersion,
+            newEncryptionKeyVersion: newKeyVersion,
           })),
           userId: ctx.userId,
         },
@@ -235,7 +320,7 @@ export const revokeShare = protectedAction({
     await ctx.runMutation(internal.projectShare._insertKeyRotation, {
       projectId: share.projectId,
       oldKeyVersion,
-      newKeyVersion: args.newKeyVersion,
+      newKeyVersion,
       rotatedBy: ctx.userId,
       reason: "share_revoked",
       secretsReEncrypted,
@@ -253,8 +338,11 @@ export const revokeShare = protectedAction({
       metadata: {
         sharedUserId: share.userId,
         sharedUserEmail: revokedUser?.email,
+        keyRotated: true,
         oldKeyVersion,
-        newKeyVersion: args.newKeyVersion,
+        newKeyVersion,
+        secretsReEncrypted,
+        sharesUpdated: args.rewrappedShares.length,
       },
     });
 
@@ -382,7 +470,7 @@ export const listActiveSharedProjectsForCurrentUser = protectedQuery({
   },
 });
 
-export const getProjectShare = protectedQuery({
+export const getProjectShareByProjectForCurrentUser = protectedQuery({
   args: {
     projectId: v.id("project"),
   },
