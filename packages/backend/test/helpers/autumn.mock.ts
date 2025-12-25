@@ -1,5 +1,5 @@
 import type { GenericActionCtx } from "convex/server";
-import type { DataModel } from "../../_generated/dataModel";
+import type { DataModel } from "../../convex/_generated/dataModel";
 
 export interface MockAutumnCheckData {
   allowed: boolean;

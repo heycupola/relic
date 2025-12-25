@@ -2,50 +2,27 @@
 
 import { ConvexError } from "convex/values";
 import type { convexTest } from "convex-test";
-import { expect, vi } from "vitest";
+import { expect } from "vitest";
 import { components } from "../convex/_generated/api";
 import type { Id as BetterAuthId } from "../convex/betterAuth/_generated/dataModel";
 import type { ErrorCode } from "../convex/lib/errors";
-import { createMockAutumn } from "./helpers/autumn.mock";
 import {
   createUserKeys,
   decryptPrivateKeyWithPassword,
   deriveKeyFromPassword,
 } from "./helpers/crypto";
 
-export const modules = import.meta.glob(["../convex/**/*.ts", "!../convex/betterAuth/**"]);
+export const modules = import.meta.glob([
+  "../convex/**/*.ts",
+  "!../convex/betterAuth/**",
+  "!../convex/rateLimiter.ts",
+  "!../convex/lib/rateLimit.ts",
+]);
 export const betterAuthModules = import.meta.glob("../convex/betterAuth/**/*.ts");
 
-vi.mock("../convex/rateLimiter", () => ({
-  rateLimiter: {
-    limit: vi.fn(() => Promise.resolve({ ok: true, retryAfter: 0 })),
-    check: vi.fn(() => Promise.resolve({ ok: true, retryAfter: 0 })),
-    reset: vi.fn(() => Promise.resolve(undefined)),
-  },
-}));
-
-vi.mock("@convex-dev/rate-limiter/convex.config", () => ({
-  default: {},
-}));
-
-const identifyFn = async (ctx: any) => {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) return null;
-  return {
-    customerId: identity.subject,
-    customerData: {
-      name: identity.name,
-      email: identity.email,
-    },
-  };
-};
-
-export const mockAutumn = createMockAutumn(identifyFn);
-
-vi.mock("../convex/autumn", () => ({
-  autumn: mockAutumn,
-  initAutumn: () => mockAutumn,
-}));
+// Get the mock autumn from globalThis (set by vitest.setup.ts)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const mockAutumn = (globalThis as any).__mockAutumn;
 
 export interface TestUser {
   userId: BetterAuthId<"user">;
