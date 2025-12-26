@@ -305,5 +305,32 @@ describe("Project Lifecycle", () => {
       expect(project.keyVersion).toBe(2);
       expect(project.encryptedProjectKey).toBe(newKey);
     });
+
+    test("should not archive project with active shares", async () => {
+      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
+      mockAutumn.setFeature(owner.userId, "additional_shares", 5);
+
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const { projectId } = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project-name",
+      });
+
+      await owner.asUser.action(api.projectShare.shareProject, {
+        projectId,
+        userEmail: collaborator.email,
+        encryptedProjectKey,
+      });
+
+      await expectConvexError(
+        () =>
+          owner.asUser.action(api.project.archiveProject, {
+            projectId,
+          }),
+        ErrorCode.INVALID_OPERATION,
+        "Cannot archive project with 1 active share(s)",
+      );
+    });
   });
 });

@@ -19,6 +19,30 @@ vi.mock("@convex-dev/rate-limiter/convex.config", () => ({
   default: {},
 }));
 
+// Mock Resend SDK
+vi.mock("resend", () => ({
+  Resend: vi.fn().mockImplementation(() => ({
+    emails: {
+      send: vi.fn().mockResolvedValue({ data: { id: "mock-email-id" }, error: null }),
+    },
+  })),
+}));
+
+// Mock Resend component
+vi.mock("../convex/resend", () => ({
+  resendSdk: {
+    emails: {
+      send: vi.fn().mockResolvedValue({ data: { id: "mock-email-id" }, error: null }),
+    },
+  },
+  resend: {
+    sendEmailManually: vi.fn().mockResolvedValue("mock-email-id"),
+  },
+  sendEmail: vi.fn().mockResolvedValue({ emailId: "mock-email-id" }),
+  getUpgradeUrl: vi.fn().mockReturnValue("https://relic.so/upgrade"),
+  getDashboardUrl: vi.fn().mockReturnValue("https://relic.so/dashboard"),
+}));
+
 // Create the mock autumn in a hoisted block so it's available before vi.mock runs
 const { _mockAutumn } = vi.hoisted(() => {
   // Inline minimal MockAutumn implementation for hoisting
