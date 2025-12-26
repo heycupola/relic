@@ -11,9 +11,12 @@ import type { ProtectedActionCtx } from "./lib/types";
 
 export const _insertActionLog = internalMutation({
   args: {
-    projectId: v.id("project"),
+    projectId: v.optional(v.id("project")),
     userId: v.id("user"),
     action: v.union(
+      v.literal("user.keys_created"),
+      v.literal("user.password_changed"),
+      v.literal("project.key_rotated"),
       v.literal("secret.created"),
       v.literal("secret.updated"),
       v.literal("secret.deleted"),
@@ -23,6 +26,7 @@ export const _insertActionLog = internalMutation({
       v.literal("secrets.bulk_exported"),
       v.literal("share.added"),
       v.literal("share.revoked"),
+      v.literal("share.key_updated"),
       v.literal("keys.rotated"),
     ),
     environmentId: v.optional(v.id("environment")),
@@ -40,19 +44,27 @@ export const _insertActionLog = internalMutation({
         deleteCount: v.optional(v.number()),
         sharedUserId: v.optional(v.string()),
         sharedUserEmail: v.optional(v.string()),
+        shareId: v.optional(v.id("projectShare")),
+        reason: v.optional(v.string()),
         oldKeyVersion: v.optional(v.number()),
         newKeyVersion: v.optional(v.number()),
+        keyRotated: v.optional(v.boolean()),
+        secretsReEncrypted: v.optional(v.number()),
+        sharesUpdated: v.optional(v.number()),
       }),
     ),
   },
   returns: v.object({ success: v.boolean() }),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
+    let project: Doc<"project"> | null | undefined;
+    if (args.projectId) {
+      project = await ctx.db.get(args.projectId);
+    }
 
     await ctx.db.insert("actionLog", {
       action: args.action,
       projectId: args.projectId,
-      projectName: project?.name || "Unknown",
+      projectName: project?.name,
       environmentId: args.environmentId,
       environmentName: args.environmentName,
       timestamp: Date.now(),

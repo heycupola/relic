@@ -18,18 +18,18 @@ export const createEnvironment = protectedMutation({
   args: {
     projectId: v.id("project"),
     name: v.string(),
-    slug: v.string(),
+    // slug: v.string(),
     // description: v.optional(v.string()),
-    color: v.optional(v.string()),
+    // color: v.optional(v.string()),
   },
   handler: async (
     ctx: ProtectedMutationCtx,
     args: {
       projectId: Id<"project">;
       name: string;
-      slug: string;
+      // slug: string;
       // description?: string;
-      color?: string;
+      // color?: string;
     },
   ): Promise<{ success: boolean; environmentId: Id<"environment"> }> => {
     const project = await ctx.runQuery(internal.project._loadProjectById, {
@@ -42,7 +42,7 @@ export const createEnvironment = protectedMutation({
 
     const existingEnv = await ctx.runQuery(
       internal.environment._loadEnvironmentByProjectIdAndSlug,
-      { projectId: args.projectId, slug: args.slug },
+      { projectId: args.projectId, slug: generateSlug(args.name) },
     );
 
     if (existingEnv) {

@@ -5,7 +5,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
 import { assertProjectAccess } from "./lib/access";
-import { createError, ErrorCode, notFoundError } from "./lib/errors";
+import { alreadyExistsError, createError, ErrorCode, notFoundError } from "./lib/errors";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
 import {
@@ -52,11 +52,15 @@ export const createSecret = protectedMutation({
     }
 
     // NOTE: loads the secret and checks the its existence to prevent duplications
-    await ctx.runQuery(internal.secret._loadSecretByKeyAndEnvironmentIdAndFolderId, {
+    const secret = await ctx.runQuery(internal.secret._loadSecretByKeyAndEnvironmentIdAndFolderId, {
       environmentId: args.environmentId,
       folderId: args.folderId,
       key: args.key,
     });
+
+    if (secret) {
+      throw alreadyExistsError("secret", ErrorSeverity.Medium);
+    }
 
     // create secret
     const { secretId } = await ctx.runMutation(internal.secret._insertSecret, {
@@ -281,40 +285,6 @@ export const deleteSecret = protectedMutation({
   },
 });
 
-export const reEncryptSecretsBulk = protectedMutation({
-  args: {
-    secretIds: v.array(v.id("secret")),
-    encryptedValues: v.array(v.string()),
-  },
-  handler: async (ctx, args) => {
-    if (args.secretIds.length !== args.encryptedValues.length) {
-      throw createError({
-        code: ErrorCode.ARRAY_LENGTH_MISMATCH,
-        message: "secret id length and encrypted values length was not matched",
-        severity: ErrorSeverity.Medium,
-      });
-    }
-
-    if (args.secretIds.length === 0 || args.encryptedValues.length === 0) {
-      throw createError({
-        code: ErrorCode.INVALID_ARGUMENTS,
-        message: "secret ids or encryptedValues cannot be empty",
-        severity: ErrorSeverity.Medium,
-      });
-    }
-
-    const { totalEncrypted } = await ctx.runMutation(internal.secret._reEncryptSecretsBulk, {
-      encryptedValues: args.encryptedValues,
-      secretIds: args.secretIds,
-      userId: ctx.userId,
-    });
-
-    const te: number = totalEncrypted;
-
-    return { success: true, totalEncrypted: te };
-  },
-});
-
 export const _loadSecretById = internalQuery({
   args: {
     secretId: v.id("secret"),
@@ -331,7 +301,7 @@ export const _loadSecretByKeyAndEnvironmentIdAndFolderId = internalQuery({
     environmentId: v.id("environment"),
     folderId: v.optional(v.id("folder")),
   },
-  returns: doc(schema, "secret"),
+  returns: v.union(doc(schema, "secret"), v.null()),
   handler: async (ctx, args) => {
     const secret = await ctx.db
       .query("secret")
@@ -342,10 +312,6 @@ export const _loadSecretByKeyAndEnvironmentIdAndFolderId = internalQuery({
         q.and(q.eq(q.field("isDeleted"), false), q.eq(q.field("folderId"), args.folderId)),
       )
       .first();
-
-    if (!secret) {
-      throw notFoundError("secret");
-    }
 
     return secret;
   },
@@ -376,6 +342,56 @@ export const _loadSecretsByFolderId = internalQuery({
       .withIndex("by_folder", (q) => q.eq("folderId", args.folderId))
       .filter((q) => q.eq(q.field("isDeleted"), false))
       .collect();
+  },
+});
+
+export const _validateSecretsForRotation = internalQuery({
+  args: {
+    secretIds: v.array(v.id("secret")),
+    projectId: v.id("project"),
+  },
+  returns: v.object({
+    valid: v.boolean(),
+    missingSecretIds: v.array(v.id("secret")),
+    wrongProjectSecretIds: v.array(v.id("secret")),
+    totalExpected: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    if (args.secretIds.length === 0) {
+      return {
+        valid: true,
+        missingSecretIds: [],
+        wrongProjectSecretIds: [],
+        totalExpected: 0,
+      };
+    }
+
+    const secrets = await Promise.all(args.secretIds.map((id) => ctx.db.get(id)));
+
+    const missingSecretIds: Id<"secret">[] = [];
+    const wrongProjectSecretIds: Id<"secret">[] = [];
+
+    for (let i = 0; i < secrets.length; i++) {
+      const secret = secrets[i];
+      const secretId = args.secretIds[i];
+
+      if (secretId === undefined) {
+        continue;
+      }
+
+      if (!secret || secret.isDeleted) {
+        missingSecretIds.push(secretId);
+      } else if (secret.projectId !== args.projectId) {
+        wrongProjectSecretIds.push(secretId);
+      }
+    }
+
+    return {
+      valid: missingSecretIds.length === 0 && wrongProjectSecretIds.length === 0,
+      missingSecretIds,
+      wrongProjectSecretIds,
+      totalExpected: args.secretIds.length,
+    };
   },
 });
 
@@ -472,94 +488,39 @@ export const _updateSecret = internalMutation({
   },
 });
 
-export const _reEncryptSecretsBulk = internalMutation({
+export const _reEncryptSecretsForKeyRotation = internalMutation({
   args: {
     userId: v.id("user"),
-    secretIds: v.array(v.id("secret")),
-    encryptedValues: v.array(v.string()),
+    secrets: v.array(
+      v.object({
+        secretId: v.id("secret"),
+        newEncryptedValue: v.string(),
+        newEncryptionKeyVersion: v.number(),
+      }),
+    ),
   },
+  returns: v.object({
+    success: v.boolean(),
+    totalEncrypted: v.number(),
+  }),
   handler: async (ctx, args) => {
-    const secretsData = await Promise.all(
-      args.secretIds.map(async (secretId, index) => ({
-        secretId,
-        index,
-        secret: await ctx.db.get(secretId),
-      })),
-    );
-
-    const validSecretsData: Array<{
-      secretId: Id<"secret">;
-      index: number;
-      secret: Doc<"secret">;
-    }> = [];
-
-    for (const item of secretsData) {
-      if (!item.secret) {
-        console.error(`Secret ${item.secretId} not found`);
-        continue;
-      }
-      if (item.secret.createdBy !== args.userId) {
-        console.error(`Secret ${item.secretId} doesn't belong to user ${args.userId}`);
-        continue;
-      }
-      validSecretsData.push({
-        secretId: item.secretId,
-        index: item.index,
-        secret: item.secret,
-      });
-    }
-
-    const uniqueProjectIds = [...new Set(validSecretsData.map(({ secret }) => secret.projectId))];
-    const projectsData = await Promise.all(
-      uniqueProjectIds.map(async (projectId) => ({
-        projectId,
-        project: await ctx.db.get(projectId),
-      })),
-    );
-
-    const projectMap = new Map<Id<"project">, Doc<"project">>();
-    for (const { project } of projectsData) {
-      if (project) {
-        projectMap.set(project._id, project);
-      }
-    }
-
-    const finalValidSecrets: Array<{
-      secretId: Id<"secret">;
-      index: number;
-      secret: Doc<"secret">;
-    }> = [];
-
-    for (const item of validSecretsData) {
-      const project = projectMap.get(item.secret.projectId);
-      if (!project) {
-        console.error(`Project ${item.secret.projectId} not found`);
-        continue;
-      }
-      finalValidSecrets.push(item);
-    }
-
-    if (finalValidSecrets.length === 0) {
-      return { success: false, totalEncrypted: 0 };
+    // NOTE: Caller MUST validate secrets via _validateSecretsForRotation before calling this.
+    // This mutation assumes all secretIds are valid to maintain atomicity.
+    if (args.secrets.length === 0) {
+      return { success: true, totalEncrypted: 0 };
     }
 
     let totalEncrypted = 0;
-    for (const { secret, index } of finalValidSecrets) {
-      const encryptedValue = args.encryptedValues[index];
-      if (!encryptedValue) {
-        console.error(`No encrypted value found at index ${index}`);
-        continue;
-      }
+    const now = Date.now();
 
-      await ctx.db.patch(secret._id, {
-        encryptedValue,
-        updatedAt: Date.now(),
+    for (const { secretId, newEncryptedValue, newEncryptionKeyVersion } of args.secrets) {
+      await ctx.db.patch(secretId, {
+        encryptedValue: newEncryptedValue,
+        encryptionKeyVersion: newEncryptionKeyVersion,
+        updatedAt: now,
         updatedBy: args.userId,
-        // NOTE: encryptionKeyVersion stays the same cuz this is master key change,
-        // not key rotation
-        encryptionKeyVersion: secret.encryptionKeyVersion,
       });
-      totalEncrypted += 1;
+      totalEncrypted++;
     }
 
     return { success: true, totalEncrypted };

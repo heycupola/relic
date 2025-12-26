@@ -18,6 +18,10 @@ import { checkRateLimit } from "./lib/rateLimit";
 import { ErrorSeverity, type ProtectedActionCtx, type ProtectedQueryCtx } from "./lib/types";
 import schema from "./schema";
 
+export const shareLimits = {
+  freeShareLimit: 5,
+};
+
 export const shareProject = protectedAction({
   args: {
     projectId: v.id("project"),
@@ -47,19 +51,6 @@ export const shareProject = protectedAction({
         code: ErrorCode.PRO_PLAN_REQUIRED,
         severity: ErrorSeverity.Medium,
       });
-    }
-
-    // Check project_shares limit
-    const sharesLimit = await ctx.autumn.check(ctx, {
-      featureId: "project_shares",
-    });
-
-    if (!sharesLimit.data?.allowed) {
-      throw limitReachedError(
-        "projectShares",
-        sharesLimit.data?.usage,
-        sharesLimit.data?.usage_limit,
-      );
     }
 
     const targetUser = await ctx.runQuery(components.betterAuth.user.loadUserByEmail, {
@@ -102,6 +93,19 @@ export const shareProject = protectedAction({
       throw alreadyExistsError("share", ErrorSeverity.Medium);
     }
 
+    const currentUsage = project.share_usage_count ?? 0;
+
+    if (currentUsage >= shareLimits.freeShareLimit) {
+      try {
+        await ctx.autumn.track(ctx, {
+          featureId: "additional_shares",
+          value: 1,
+        });
+      } catch (_error: unknown) {
+        throw limitReachedError("projectShares", currentUsage, shareLimits.freeShareLimit);
+      }
+    }
+
     const { shareId } = await ctx.runMutation(internal.projectShare._insertProjectShare, {
       projectId: args.projectId,
       userId: targetUser._id as BetterAuthId<"user">,
@@ -121,9 +125,8 @@ export const shareProject = protectedAction({
       },
     });
 
-    // Track project_shares usage
-    await ctx.autumn.track(ctx, {
-      featureId: "project_shares",
+    await ctx.runMutation(internal.projectShare._trackShareUsageCount, {
+      projectId: project._id,
       value: 1,
     });
 
@@ -134,16 +137,10 @@ export const shareProject = protectedAction({
 export const revokeShare = protectedAction({
   args: {
     shareId: v.id("projectShare"),
-    newEncryptedProjectKey: v.string(),
-    newKeyVersion: v.number(),
-    rewrappedShares: v.array(
-      v.object({
-        shareId: v.id("projectShare"),
-        newEncryptedProjectKey: v.string(),
-      }),
-    ),
   },
   handler: async (ctx: ProtectedActionCtx, args) => {
+    await checkRateLimit(ctx, "write");
+
     const share: Doc<"projectShare"> = await ctx.runQuery(internal.projectShare._loadShareById, {
       shareId: args.shareId,
     });
@@ -166,18 +163,129 @@ export const revokeShare = protectedAction({
       });
     }
 
-    await checkRateLimit(ctx, "write");
-
     await ctx.runMutation(internal.projectShare._revokeProjectShare, {
       shareId: args.shareId,
     });
 
-    const oldKeyVersion = project.keyVersion;
-    await ctx.runMutation(internal.project._rotateProjectKey, {
+    const revokedUser = (await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: share.userId as BetterAuthId<"user">,
+    })) as BetterAuthDoc<"user"> | null;
+
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
       projectId: share.projectId,
-      newEncryptedProjectKey: args.newEncryptedProjectKey,
-      newKeyVersion: args.newKeyVersion,
+      userId: ctx.userId,
+      action: "share.revoked",
+      metadata: {
+        sharedUserId: share.userId,
+        sharedUserEmail: revokedUser?.email,
+        keyRotated: false,
+      },
     });
+
+    const currentUsage = project.share_usage_count ?? 0;
+
+    if (currentUsage > shareLimits.freeShareLimit) {
+      try {
+        await ctx.autumn.track(ctx, {
+          featureId: "additional_shares",
+          value: -1,
+        });
+      } catch (error: unknown) {
+        console.error("Failed to track usage decrease in Autumn:", error);
+
+        await ctx.scheduler.runAfter(5 * 60 * 1000, internal.autumn._retryAutumnTracking, {
+          identity: {
+            customerId: ctx.userId,
+            customerData: {
+              name: ctx.name,
+              email: ctx.email,
+            },
+          },
+          attemptCount: 1,
+          featureId: "additional_shares",
+          projectId: project._id,
+          value: -1,
+        });
+      }
+    }
+
+    await ctx.runMutation(internal.projectShare._trackShareUsageCount, {
+      projectId: share.projectId,
+      value: -1,
+    });
+
+    return { success: true };
+  },
+});
+
+export const revokeShareWithRotation = protectedAction({
+  args: {
+    shareId: v.id("projectShare"),
+    newEncryptedProjectKey: v.string(),
+    rewrappedShares: v.array(
+      v.object({
+        shareId: v.id("projectShare"),
+        newEncryptedProjectKey: v.string(),
+      }),
+    ),
+    reEncryptedSecrets: v.array(
+      v.object({
+        secretId: v.id("secret"),
+        newEncryptedValue: v.string(),
+      }),
+    ),
+  },
+  handler: async (ctx: ProtectedActionCtx, args) => {
+    const share: Doc<"projectShare"> = await ctx.runQuery(internal.projectShare._loadShareById, {
+      shareId: args.shareId,
+    });
+
+    const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
+      projectId: share.projectId,
+    });
+
+    const newKeyVersion = project.keyVersion + 1;
+
+    await assertProjectAccess(ctx, project);
+
+    if (ctx.userId !== project.ownerId) {
+      throw permissionError("revoke this share", ErrorSeverity.High);
+    }
+
+    if (share.revokedAt !== undefined) {
+      throw createError({
+        code: ErrorCode.INVALID_OPERATION,
+        message: "Share is already revoked",
+        severity: ErrorSeverity.Medium,
+      });
+    }
+
+    if (args.reEncryptedSecrets.length > 0) {
+      const secretValidation = await ctx.runQuery(internal.secret._validateSecretsForRotation, {
+        secretIds: args.reEncryptedSecrets.map((s) => s.secretId),
+        projectId: share.projectId,
+      });
+
+      if (!secretValidation.valid) {
+        if (secretValidation.missingSecretIds.length > 0) {
+          throw createError({
+            code: ErrorCode.SECRET_NOT_FOUND,
+            message: `Cannot rotate: ${secretValidation.missingSecretIds.length} secret(s) not found`,
+            severity: ErrorSeverity.High,
+            metadata: { missingSecretIds: secretValidation.missingSecretIds },
+          });
+        }
+
+        if (secretValidation.wrongProjectSecretIds.length > 0) {
+          throw createError({
+            code: ErrorCode.INVALID_OPERATION,
+            message: `Cannot rotate: ${secretValidation.wrongProjectSecretIds.length} secret(s) belong to different project`,
+            severity: ErrorSeverity.High,
+            metadata: { wrongProjectSecretIds: secretValidation.wrongProjectSecretIds },
+          });
+        }
+      }
+    }
 
     for (const rewrapped of args.rewrappedShares) {
       const otherShare = await ctx.runQuery(internal.projectShare._loadShareById, {
@@ -199,20 +307,52 @@ export const revokeShare = protectedAction({
           severity: ErrorSeverity.High,
         });
       }
+    }
 
+    await checkRateLimit(ctx, "write");
+
+    await ctx.runMutation(internal.projectShare._revokeProjectShare, {
+      shareId: args.shareId,
+    });
+
+    const oldKeyVersion = project.keyVersion;
+    await ctx.runMutation(internal.project._rotateProjectKey, {
+      projectId: share.projectId,
+      newEncryptedProjectKey: args.newEncryptedProjectKey,
+      newKeyVersion,
+    });
+
+    for (const rewrapped of args.rewrappedShares) {
       await ctx.runMutation(internal.projectShare._updateShareKey, {
         shareId: rewrapped.shareId,
         newEncryptedProjectKey: rewrapped.newEncryptedProjectKey,
       });
     }
 
+    let secretsReEncrypted = 0;
+
+    if (args.reEncryptedSecrets.length > 0) {
+      const { totalEncrypted } = await ctx.runMutation(
+        internal.secret._reEncryptSecretsForKeyRotation,
+        {
+          secrets: args.reEncryptedSecrets.map((s) => ({
+            secretId: s.secretId,
+            newEncryptedValue: s.newEncryptedValue,
+            newEncryptionKeyVersion: newKeyVersion,
+          })),
+          userId: ctx.userId,
+        },
+      );
+      secretsReEncrypted = totalEncrypted;
+    }
+
     await ctx.runMutation(internal.projectShare._insertKeyRotation, {
       projectId: share.projectId,
       oldKeyVersion,
-      newKeyVersion: args.newKeyVersion,
+      newKeyVersion,
       rotatedBy: ctx.userId,
       reason: "share_revoked",
-      secretsReEncrypted: 0,
+      secretsReEncrypted,
       sharesUpdated: args.rewrappedShares.length,
     });
 
@@ -227,14 +367,43 @@ export const revokeShare = protectedAction({
       metadata: {
         sharedUserId: share.userId,
         sharedUserEmail: revokedUser?.email,
+        keyRotated: true,
         oldKeyVersion,
-        newKeyVersion: args.newKeyVersion,
+        newKeyVersion,
+        secretsReEncrypted,
+        sharesUpdated: args.rewrappedShares.length,
       },
     });
 
-    // Track project_shares usage (-1 for revoked share)
-    await ctx.autumn.track(ctx, {
-      featureId: "project_shares",
+    const currentUsage = project.share_usage_count ?? 0;
+
+    if (currentUsage > shareLimits.freeShareLimit) {
+      try {
+        await ctx.autumn.track(ctx, {
+          featureId: "additional_shares",
+          value: -1,
+        });
+      } catch (error: unknown) {
+        console.error("Failed to track usage decrease in Autumn:", error);
+
+        await ctx.scheduler.runAfter(5 * 60 * 1000, internal.autumn._retryAutumnTracking, {
+          identity: {
+            customerId: ctx.userId,
+            customerData: {
+              name: ctx.name,
+              email: ctx.email,
+            },
+          },
+          attemptCount: 1,
+          featureId: "additional_shares",
+          projectId: project._id,
+          value: -1,
+        });
+      }
+    }
+
+    await ctx.runMutation(internal.projectShare._trackShareUsageCount, {
+      projectId: share.projectId,
       value: -1,
     });
 
@@ -242,7 +411,7 @@ export const revokeShare = protectedAction({
   },
 });
 
-export const listProjectShares = protectedQuery({
+export const listActiveProjectSharesByProject = protectedQuery({
   args: {
     projectId: v.id("project"),
   },
@@ -292,7 +461,7 @@ export const listProjectShares = protectedQuery({
   },
 });
 
-export const listSharedWithMe = protectedQuery({
+export const listActiveSharedProjectsForCurrentUser = protectedQuery({
   args: {},
   handler: async (ctx: ProtectedQueryCtx) => {
     const shares: Doc<"projectShare">[] = await ctx.runQuery(
@@ -330,7 +499,7 @@ export const listSharedWithMe = protectedQuery({
   },
 });
 
-export const getProjectShare = protectedQuery({
+export const getProjectShareByProjectForCurrentUser = protectedQuery({
   args: {
     projectId: v.id("project"),
   },
@@ -512,5 +681,27 @@ export const _insertKeyRotation = internalMutation({
     });
 
     return { success: true, rotationId };
+  },
+});
+
+export const _trackShareUsageCount = internalMutation({
+  args: { projectId: v.id("project"), value: v.number() },
+  returns: v.object({ success: v.boolean() }),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+
+    if (!project) {
+      return { success: false };
+    }
+
+    const currentCount = project.share_usage_count ?? 0;
+
+    const newCount = currentCount + args.value;
+
+    await ctx.db.patch(args.projectId, {
+      share_usage_count: newCount,
+    });
+
+    return { success: true };
   },
 });
