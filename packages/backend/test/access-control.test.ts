@@ -15,7 +15,7 @@ import {
   type TestUser,
 } from "./setup";
 
-describe("Project Lifecycle", () => {
+describe("Access Control", () => {
   let t: TestConvex<typeof schema>;
   let testUsers: TestUser[] = [];
   let owner: TestUser, collaborator: TestUser, nonCollaborator: TestUser;

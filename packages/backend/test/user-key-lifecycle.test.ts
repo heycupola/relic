@@ -11,7 +11,6 @@ import {
   encryptPrivateKeyWithPassword,
   exportPrivateKey,
   importPublicKey,
-  unwrapAESKeyWithRSA,
   wrapAESKeyWithRSA,
 } from "./helpers/crypto";
 import {
@@ -24,7 +23,7 @@ import {
   type TestUser,
 } from "./setup";
 
-describe("Project Lifecycle", () => {
+describe("User Key Lifecycle", () => {
   let t: TestConvex<typeof schema>;
   let testUsers: TestUser[] = [];
   let owner: TestUser, owner2: TestUser, collaborator: TestUser, collaborator2: TestUser;

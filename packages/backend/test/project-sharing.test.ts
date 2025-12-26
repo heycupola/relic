@@ -1,7 +1,6 @@
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
-import type { Id } from "../convex/_generated/dataModel";
 import { ErrorCode } from "../convex/lib/errors.ts";
 import * as projectShareModule from "../convex/projectShare";
 import schema from "../convex/schema";
@@ -19,7 +18,6 @@ import {
   getTestUsers,
   mockAutumn,
   modules,
-  randomString,
   type TestUser,
 } from "./setup";
 
