@@ -105,6 +105,40 @@ export const rotateUserKeys = protectedMutation({
   handler: async (ctx: ProtectedMutationCtx, args) => {
     await checkRateLimit(ctx, "write");
 
+    for (const rewrapped of args.rewrappedShares) {
+      const share = await ctx.db.get(rewrapped.shareId);
+
+      if (!share || share.userId !== ctx.userId) {
+        throw permissionError("update this share");
+      }
+
+      if (share.revokedAt !== undefined) {
+        throw createError({
+          code: ErrorCode.INVALID_OPERATION,
+          message: `Cannot rewrap revoked share: ${rewrapped.shareId}`,
+          severity: ErrorSeverity.High,
+          metadata: { shareId: rewrapped.shareId },
+        });
+      }
+    }
+
+    for (const rewrapped of args.rewrappedOwnedProjects) {
+      const project = await ctx.db.get(rewrapped.projectId);
+
+      if (!project || project.ownerId !== ctx.userId) {
+        throw permissionError("update this project");
+      }
+
+      if (project.isArchived) {
+        throw createError({
+          code: ErrorCode.INVALID_OPERATION,
+          message: `Cannot rewrap archived project: ${rewrapped.projectId}`,
+          severity: ErrorSeverity.High,
+          metadata: { projectId: rewrapped.projectId },
+        });
+      }
+    }
+
     await ctx.runMutation(components.betterAuth.user.setKeysAndSalt, {
       userId: ctx.userId,
       publicKey: args.newPublicKey,
@@ -117,23 +151,15 @@ export const rotateUserKeys = protectedMutation({
     let projectsUpdatedCount = 0;
 
     for (const rewrapped of args.rewrappedShares) {
-      const share = await ctx.db.get(rewrapped.shareId);
-
-      if (!share || share.userId !== ctx.userId) {
-        throw permissionError("update this share");
-      }
-
-      if (share.revokedAt !== undefined) {
-        continue;
-      }
-
       await ctx.db.patch(rewrapped.shareId, {
         encryptedProjectKey: rewrapped.newEncryptedProjectKey,
         updatedAt: now,
       });
 
+      const share = await ctx.db.get(rewrapped.shareId);
+
       await ctx.runMutation(internal.actionLog._insertActionLog, {
-        projectId: share.projectId,
+        projectId: share!.projectId,
         userId: ctx.userId,
         action: "share.key_updated",
         metadata: {
@@ -146,16 +172,6 @@ export const rotateUserKeys = protectedMutation({
     }
 
     for (const rewrapped of args.rewrappedOwnedProjects) {
-      const project = await ctx.db.get(rewrapped.projectId);
-
-      if (!project || project.ownerId !== ctx.userId) {
-        throw permissionError("update this project");
-      }
-
-      if (project.isArchived) {
-        continue;
-      }
-
       await ctx.db.patch(rewrapped.projectId, {
         encryptedProjectKey: rewrapped.newEncryptedProjectKey,
         updatedAt: now,
