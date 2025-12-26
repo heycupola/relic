@@ -1,5 +1,5 @@
-import { api, components, internal } from "../_generated/api";
-import type { Doc } from "../_generated/dataModel";
+import { components, internal } from "../_generated/api";
+import type { Doc, Id } from "../_generated/dataModel";
 import type { Doc as BetterAuthDoc, Id as BetterAuthId } from "../betterAuth/_generated/dataModel";
 import { createError, ErrorCode, notFoundError, permissionError } from "./errors";
 import type { ProtectedActionCtx, ProtectedMutationCtx, ProtectedQueryCtx } from "./types";
@@ -46,6 +46,18 @@ export function getGracePeriodDaysRemaining(user: BetterAuthDoc<"user">): number
   }
 
   return Math.ceil(timeRemaining / (24 * 60 * 60 * 1000));
+}
+
+function getAccessibleProjectIds(projects: Doc<"project">[]): Id<"project">[] {
+  const FREE_PLAN_PROJECT_LIMIT = 2;
+
+  const sortedProjects = [...projects].sort((a, b) => {
+    const timeDiff = b.createdAt - a.createdAt;
+    if (timeDiff !== 0) return timeDiff;
+    return b._id.localeCompare(a._id);
+  });
+
+  return sortedProjects.slice(0, FREE_PLAN_PROJECT_LIMIT).map((p) => p._id);
 }
 
 export async function syncUserPlanStatus(
@@ -97,13 +109,9 @@ export async function getUserProjectsWithRestrictions(
   }
 
   // Free plan + grace period ended: only 2 newest projects accessible
-  const FREE_PLAN_PROJECT_LIMIT = 2;
-
-  // Sort by createdAt DESC (newest first)
-  const sortedProjects = [...projects].sort((a, b) => b.createdAt - a.createdAt);
-
-  const accessibleProjects = sortedProjects.slice(0, FREE_PLAN_PROJECT_LIMIT);
-  const restrictedProjects = sortedProjects.slice(FREE_PLAN_PROJECT_LIMIT);
+  const accessibleProjectIds = getAccessibleProjectIds(projects);
+  const accessibleProjects = projects.filter((p) => accessibleProjectIds.includes(p._id));
+  const restrictedProjects = projects.filter((p) => !accessibleProjectIds.includes(p._id));
 
   return {
     accessibleProjects,
@@ -123,6 +131,13 @@ export async function isProjectAccessible(
   const inGracePeriod = isInGracePeriod(user as BetterAuthDoc<"user">);
   const gracePeriodDaysRemaining = getGracePeriodDaysRemaining(user as BetterAuthDoc<"user">);
 
+  if (project.isArchived) {
+    return {
+      accessible: false,
+      reason: ProjectAccessReason.Archived,
+    };
+  }
+
   // Check if user is not owner - must have projectShare
   if (!isOwner) {
     const projectShare = await ctx.runQuery(
@@ -140,21 +155,35 @@ export async function isProjectAccessible(
       };
     }
 
-    // Shared project: If user is access restricted (Free plan + grace period ended),
-    // they cannot access ANY projects (including shared ones)
-    if (!user.hasPro && !inGracePeriod) {
+    // Check if owner is restricted and this project is in their restricted list
+    const owner = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: project.ownerId,
+    });
+
+    if (!owner) {
       return {
         accessible: false,
         reason: ProjectAccessReason.Restricted,
       };
     }
-  }
 
-  if (project.isArchived) {
-    return {
-      accessible: false,
-      reason: ProjectAccessReason.Archived,
-    };
+    const ownerInGracePeriod = isInGracePeriod(owner as BetterAuthDoc<"user">);
+
+    // Only check restriction if owner has been downgraded (planDowngradedAt exists)
+    if (owner.planDowngradedAt && !owner.hasPro && !ownerInGracePeriod) {
+      const ownerProjects = await ctx.runQuery(internal.project._loadActiveProjectsByOwner, {
+        ownerId: owner._id as BetterAuthId<"user">,
+      });
+
+      const accessibleProjectIds = getAccessibleProjectIds(ownerProjects);
+
+      if (!accessibleProjectIds.includes(project._id)) {
+        return {
+          accessible: false,
+          reason: ProjectAccessReason.Restricted,
+        };
+      }
+    }
   }
 
   if (inGracePeriod) {
