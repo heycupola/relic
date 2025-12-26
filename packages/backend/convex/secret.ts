@@ -504,33 +504,16 @@ export const _reEncryptSecretsForKeyRotation = internalMutation({
     totalEncrypted: v.number(),
   }),
   handler: async (ctx, args) => {
+    // NOTE: Caller MUST validate secrets via _validateSecretsForRotation before calling this.
+    // This mutation assumes all secretIds are valid to maintain atomicity.
     if (args.secrets.length === 0) {
       return { success: true, totalEncrypted: 0 };
-    }
-
-    const secretsData = await Promise.all(
-      args.secrets.map(async (item) => ({
-        ...item,
-        secret: await ctx.db.get(item.secretId),
-      })),
-    );
-
-    const missingSecrets = secretsData.filter((item) => !item.secret || item.secret.isDeleted);
-
-    if (missingSecrets.length > 0) {
-      const missingIds = missingSecrets.map((item) => item.secretId);
-      throw createError({
-        code: ErrorCode.SECRET_NOT_FOUND,
-        message: `Cannot rotate: ${missingSecrets.length} secret(s) not found or deleted`,
-        severity: ErrorSeverity.High,
-        metadata: { missingSecretIds: missingIds },
-      });
     }
 
     let totalEncrypted = 0;
     const now = Date.now();
 
-    for (const { secretId, newEncryptedValue, newEncryptionKeyVersion } of secretsData) {
+    for (const { secretId, newEncryptedValue, newEncryptionKeyVersion } of args.secrets) {
       await ctx.db.patch(secretId, {
         encryptedValue: newEncryptedValue,
         encryptionKeyVersion: newEncryptionKeyVersion,
