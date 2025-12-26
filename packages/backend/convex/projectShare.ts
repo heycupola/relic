@@ -260,8 +260,6 @@ export const revokeShareWithRotation = protectedAction({
       });
     }
 
-    await checkRateLimit(ctx, "write");
-
     if (args.reEncryptedSecrets.length > 0) {
       const secretValidation = await ctx.runQuery(internal.secret._validateSecretsForRotation, {
         secretIds: args.reEncryptedSecrets.map((s) => s.secretId),
@@ -310,6 +308,8 @@ export const revokeShareWithRotation = protectedAction({
         });
       }
     }
+
+    await checkRateLimit(ctx, "write");
 
     await ctx.runMutation(internal.projectShare._revokeProjectShare, {
       shareId: args.shareId,
