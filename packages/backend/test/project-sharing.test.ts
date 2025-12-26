@@ -1,6 +1,7 @@
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 import { ErrorCode } from "../convex/lib/errors.ts";
 import * as projectShareModule from "../convex/projectShare";
 import schema from "../convex/schema";
@@ -18,6 +19,7 @@ import {
   getTestUsers,
   mockAutumn,
   modules,
+  randomString,
   type TestUser,
 } from "./setup";
 
@@ -479,6 +481,75 @@ describe("Project Sharing", () => {
         () => owner.asUser.action(api.projectShare.revokeShare, { shareId: projectShare.id }),
         ErrorCode.INVALID_OPERATION,
       );
+    });
+
+    test("should rollback when invalid secret ID provided", async () => {
+      const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
+      const { projectId } = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project",
+      });
+
+      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "env",
+        projectId,
+      });
+
+      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+        encryptionKeyVersion: 1,
+        encryptedValue: await encryptSecret(projectKey, "value1"),
+        environmentId,
+        key: "key1",
+        primitiveType: "string",
+      });
+
+      await owner.asUser.mutation(api.secret.deleteSecret, {
+        secretId,
+      });
+
+      const { shareId } = await owner.asUser.action(api.projectShare.shareProject, {
+        encryptedProjectKey: await wrapAESKeyWithRSA(
+          projectKey,
+          await importPublicKey(collaborator.publicKey!),
+        ),
+        projectId,
+        userEmail: collaborator.email,
+      });
+
+      const { encryptedProjectKey: newEncryptedProjectKey, projectKey: newProjectKey } =
+        await createProjectKey(owner.publicKey!);
+
+      const newEncryptedValue = await encryptSecret(newProjectKey, "value1");
+
+      await expectConvexError(
+        () =>
+          owner.asUser.action(api.projectShare.revokeShareWithRotation, {
+            newEncryptedProjectKey,
+            shareId,
+            reEncryptedSecrets: [
+              {
+                secretId,
+                newEncryptedValue,
+              },
+            ],
+            rewrappedShares: [],
+          }),
+        ErrorCode.SECRET_NOT_FOUND,
+      );
+
+      const project = await owner.asUser.query(internal.project._loadProjectById, { projectId });
+      expect(project.encryptedProjectKey).toBe(encryptedProjectKey);
+      expect(project.keyVersion).toBe(1);
+
+      const secret = await owner.asUser.query(internal.secret._loadSecretById, { secretId });
+      const decryptedValue = await decryptSecret(projectKey, secret!.encryptedValue);
+      expect(decryptedValue).toBe("value1");
+
+      const share = await collaborator.asUser.query(
+        api.projectShare.getProjectShareByProjectForCurrentUser,
+        { projectId },
+      );
+      expect(share).toBeDefined();
     });
   });
 });
