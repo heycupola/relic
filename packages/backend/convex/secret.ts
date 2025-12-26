@@ -345,6 +345,56 @@ export const _loadSecretsByFolderId = internalQuery({
   },
 });
 
+export const _validateSecretsForRotation = internalQuery({
+  args: {
+    secretIds: v.array(v.id("secret")),
+    projectId: v.id("project"),
+  },
+  returns: v.object({
+    valid: v.boolean(),
+    missingSecretIds: v.array(v.id("secret")),
+    wrongProjectSecretIds: v.array(v.id("secret")),
+    totalExpected: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    if (args.secretIds.length === 0) {
+      return {
+        valid: true,
+        missingSecretIds: [],
+        wrongProjectSecretIds: [],
+        totalExpected: 0,
+      };
+    }
+
+    const secrets = await Promise.all(args.secretIds.map((id) => ctx.db.get(id)));
+
+    const missingSecretIds: Id<"secret">[] = [];
+    const wrongProjectSecretIds: Id<"secret">[] = [];
+
+    for (let i = 0; i < secrets.length; i++) {
+      const secret = secrets[i];
+      const secretId = args.secretIds[i];
+
+      if (secretId === undefined) {
+        continue;
+      }
+
+      if (!secret || secret.isDeleted) {
+        missingSecretIds.push(secretId);
+      } else if (secret.projectId !== args.projectId) {
+        wrongProjectSecretIds.push(secretId);
+      }
+    }
+
+    return {
+      valid: missingSecretIds.length === 0 && wrongProjectSecretIds.length === 0,
+      missingSecretIds,
+      wrongProjectSecretIds,
+      totalExpected: args.secretIds.length,
+    };
+  },
+});
+
 export const _insertSecret = internalMutation({
   args: {
     projectId: v.id("project"),
@@ -465,22 +515,22 @@ export const _reEncryptSecretsForKeyRotation = internalMutation({
       })),
     );
 
-    const validSecrets = secretsData.filter((item) => {
-      if (!item.secret) {
-        console.error(`Secret ${item.secretId} not found`);
-        return false;
-      }
-      return true;
-    });
+    const missingSecrets = secretsData.filter((item) => !item.secret || item.secret.isDeleted);
 
-    if (validSecrets.length === 0) {
-      return { success: false, totalEncrypted: 0 };
+    if (missingSecrets.length > 0) {
+      const missingIds = missingSecrets.map((item) => item.secretId);
+      throw createError({
+        code: ErrorCode.SECRET_NOT_FOUND,
+        message: `Cannot rotate: ${missingSecrets.length} secret(s) not found or deleted`,
+        severity: ErrorSeverity.High,
+        metadata: { missingSecretIds: missingIds },
+      });
     }
 
     let totalEncrypted = 0;
     const now = Date.now();
 
-    for (const { secretId, newEncryptedValue, newEncryptionKeyVersion } of validSecrets) {
+    for (const { secretId, newEncryptedValue, newEncryptionKeyVersion } of secretsData) {
       await ctx.db.patch(secretId, {
         encryptedValue: newEncryptedValue,
         encryptionKeyVersion: newEncryptionKeyVersion,
