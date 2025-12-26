@@ -168,6 +168,18 @@ export const archiveProject = protectedAction({
 
     await checkRateLimit(ctx, "write");
 
+    const activeShares = await ctx.runQuery(internal.projectShare._loadActiveSharesByProject, {
+      projectId: args.projectId,
+    });
+
+    if (activeShares.length > 0) {
+      throw createError({
+        code: ErrorCode.INVALID_OPERATION,
+        message: `Cannot archive project with ${activeShares.length} active share(s). Revoke all shares first.`,
+        severity: ErrorSeverity.Medium,
+      });
+    }
+
     await ctx.runMutation(internal.project._archiveProject, {
       projectId: args.projectId,
     });
