@@ -262,16 +262,32 @@ export const revokeShareWithRotation = protectedAction({
 
     await checkRateLimit(ctx, "write");
 
-    await ctx.runMutation(internal.projectShare._revokeProjectShare, {
-      shareId: args.shareId,
-    });
+    if (args.reEncryptedSecrets.length > 0) {
+      const secretValidation = await ctx.runQuery(internal.secret._validateSecretsForRotation, {
+        secretIds: args.reEncryptedSecrets.map((s) => s.secretId),
+        projectId: share.projectId,
+      });
 
-    const oldKeyVersion = project.keyVersion;
-    await ctx.runMutation(internal.project._rotateProjectKey, {
-      projectId: share.projectId,
-      newEncryptedProjectKey: args.newEncryptedProjectKey,
-      newKeyVersion,
-    });
+      if (!secretValidation.valid) {
+        if (secretValidation.missingSecretIds.length > 0) {
+          throw createError({
+            code: ErrorCode.SECRET_NOT_FOUND,
+            message: `Cannot rotate: ${secretValidation.missingSecretIds.length} secret(s) not found`,
+            severity: ErrorSeverity.High,
+            metadata: { missingSecretIds: secretValidation.missingSecretIds },
+          });
+        }
+
+        if (secretValidation.wrongProjectSecretIds.length > 0) {
+          throw createError({
+            code: ErrorCode.INVALID_OPERATION,
+            message: `Cannot rotate: ${secretValidation.wrongProjectSecretIds.length} secret(s) belong to different project`,
+            severity: ErrorSeverity.High,
+            metadata: { wrongProjectSecretIds: secretValidation.wrongProjectSecretIds },
+          });
+        }
+      }
+    }
 
     for (const rewrapped of args.rewrappedShares) {
       const otherShare = await ctx.runQuery(internal.projectShare._loadShareById, {
@@ -293,7 +309,20 @@ export const revokeShareWithRotation = protectedAction({
           severity: ErrorSeverity.High,
         });
       }
+    }
 
+    await ctx.runMutation(internal.projectShare._revokeProjectShare, {
+      shareId: args.shareId,
+    });
+
+    const oldKeyVersion = project.keyVersion;
+    await ctx.runMutation(internal.project._rotateProjectKey, {
+      projectId: share.projectId,
+      newEncryptedProjectKey: args.newEncryptedProjectKey,
+      newKeyVersion,
+    });
+
+    for (const rewrapped of args.rewrappedShares) {
       await ctx.runMutation(internal.projectShare._updateShareKey, {
         shareId: rewrapped.shareId,
         newEncryptedProjectKey: rewrapped.newEncryptedProjectKey,
