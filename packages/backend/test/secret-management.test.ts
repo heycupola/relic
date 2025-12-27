@@ -165,5 +165,7 @@ describe("Secret Management", () => {
         expect(folder).toBeNull();
       });
     });
+
+    test("should move secrets between folders", async () => {});
   });
 });

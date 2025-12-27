@@ -45,8 +45,8 @@ export const requestDeviceCode = mutation({
     const deviceCode = generateSecureDeviceCode();
     const userCode = generateSecureUserCode(8);
     const now = Date.now();
-    const expiresIn = 30 * 60 * 1000;
-    const pollingInterval = 5 * 1000;
+    const expiresIn = 30 * 60 * 1_000;
+    const pollingInterval = 5 * 1_000;
 
     await ctx.db.insert("deviceCode", {
       deviceCode,
@@ -58,7 +58,7 @@ export const requestDeviceCode = mutation({
       pollingInterval,
     });
 
-    const verificationUri = `${process.env.SITE_URL}/oauth/authorize`;
+    const verificationUri = `${process.env.SITE_URL || "http://localhost:3000"}/oauth/authorize`;
 
     return {
       device_code: deviceCode,
@@ -100,7 +100,7 @@ export const pollDeviceToken = mutation({
 
     if (deviceCodeEntry.lastPolledAt) {
       const timeSinceLastPoll = now - deviceCodeEntry.lastPolledAt;
-      const pollingInterval = deviceCodeEntry.pollingInterval || 5000;
+      const pollingInterval = deviceCodeEntry.pollingInterval || 5_000;
 
       if (timeSinceLastPoll < pollingInterval) {
         throw deviceAuthError("polling_too_fast");
@@ -133,7 +133,7 @@ export const pollDeviceToken = mutation({
     await ctx.db.delete(deviceCodeEntry._id);
 
     const sessionToken = generateSecureDeviceCode();
-    const sessionExpiresAt = now + 30 * 24 * 60 * 60 * 1000;
+    const sessionExpiresAt = now + 30 * 24 * 60 * 60 * 1_000;
 
     await ctx.db.insert("session", {
       token: sessionToken,
