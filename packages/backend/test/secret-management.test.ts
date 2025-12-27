@@ -166,6 +166,6 @@ describe("Secret Management", () => {
       });
     });
 
-    test("should move secrets between folders", async () => {});
+    test.skip("should move secrets between folders", async () => {});
   });
 });
