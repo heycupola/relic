@@ -45,8 +45,8 @@ describe("User Key Lifecycle", () => {
     mockAutumn.reset();
   });
 
-  describe("User Key Lifecycle", () => {
-    describe("Project Sharing", () => {
+  describe("Key Rotation", () => {
+    describe("With Shared Projects", () => {
       let freeShareLimitSpy: ReturnType<typeof vi.spyOn>;
 
       beforeEach(async () => {

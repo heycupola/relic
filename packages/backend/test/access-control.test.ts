@@ -36,7 +36,7 @@ describe("Access Control", () => {
     mockAutumn.reset();
   });
 
-  describe("Access Control", () => {
+  describe("Project Restrictions", () => {
     beforeEach(async () => {
       mockAutumn.setFeature(owner.userId, "projects", 2);
       mockAutumn.setFeature(collaborator.userId, "projects", 2);

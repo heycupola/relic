@@ -15,7 +15,7 @@ export const createFolder = protectedMutation({
   args: {
     environmentId: v.id("environment"),
     name: v.string(),
-    description: v.optional(v.string()),
+    // description: v.optional(v.string()),
   },
   returns: v.object({ success: v.boolean(), folderId: v.id("folder"), path: v.string() }),
   handler: async (
@@ -54,6 +54,7 @@ export const createFolder = protectedMutation({
         environmentId: environment._id,
         name: args.name,
         projectId: project._id,
+        // description: args.description
       },
     );
 

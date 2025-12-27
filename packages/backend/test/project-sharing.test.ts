@@ -48,7 +48,7 @@ describe("Project Sharing", () => {
     mockAutumn.reset();
   });
 
-  describe("Project Sharing", () => {
+  describe("Share Management", () => {
     let freeShareLimitSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(async () => {
@@ -240,7 +240,7 @@ describe("Project Sharing", () => {
         key,
         encryptionKeyVersion: 1,
         encryptedValue,
-        primitiveType: "string",
+        valueType: "string",
         environmentId,
         folderId: undefined,
       });
@@ -498,7 +498,7 @@ describe("Project Sharing", () => {
         encryptedValue: await encryptSecret(projectKey, "value1"),
         environmentId,
         key: "key1",
-        primitiveType: "string",
+        valueType: "string",
       });
 
       await owner.asUser.mutation(api.secret.deleteSecret, {

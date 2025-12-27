@@ -89,7 +89,7 @@ describe("Project Sharing Performance", () => {
             encryptedValue: await encryptSecret(projectKey, secretValues[index]),
             environmentId,
             key: secretKey,
-            primitiveType: "string",
+            valueType: "string",
             folderId: undefined,
           });
           secretIds.push(secretId);
