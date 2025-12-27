@@ -12,7 +12,7 @@ import {
   ErrorSeverity,
   type ProtectedMutationCtx,
   type ProtectedQueryCtx,
-  SecretPrimitiveType,
+  SecretValueType,
 } from "./lib/types";
 import schema from "./schema";
 
@@ -24,7 +24,7 @@ export const createSecret = protectedMutation({
     folderId: v.optional(v.id("folder")),
     key: v.string(),
     encryptedValue: v.string(),
-    primitiveType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
+    valueType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
     // description: v.optional(v.string()),
     encryptionKeyVersion: v.number(),
     // tags: v.optional(v.array(v.string())),
@@ -69,7 +69,7 @@ export const createSecret = protectedMutation({
       encryptionKeyVersion: args.encryptionKeyVersion,
       environmentId: args.environmentId,
       key: args.key,
-      primitiveType: args.primitiveType,
+      valueType: args.valueType,
       projectId: project._id,
       folderId: args.folderId,
     });
@@ -123,7 +123,7 @@ export const getSecret = protectedQuery({
       folderId: secretInstance.folderId,
       key: secretInstance.key,
       encryptedValue: secretInstance.encryptedValue,
-      primitiveType: secretInstance.primitiveType,
+      valueType: secretInstance.valueType,
       description: secretInstance.description,
       encryptionKeyVersion: secretInstance.encryptionKeyVersion,
       tags: secretInstance.tags,
@@ -143,10 +143,10 @@ export const updateSecret = protectedMutation({
       key: v.optional(v.string()),
       encryptedValue: v.optional(v.string()),
       encryptionKeyVersion: v.optional(v.number()),
-      primitiveType: v.union(
-        v.literal(SecretPrimitiveType.String),
-        v.literal(SecretPrimitiveType.Number),
-        v.literal(SecretPrimitiveType.Boolean),
+      valueType: v.union(
+        v.literal(SecretValueType.String),
+        v.literal(SecretValueType.Number),
+        v.literal(SecretValueType.Boolean),
       ),
     }),
     // description: v.optional(v.string()),
@@ -185,7 +185,7 @@ export const updateSecret = protectedMutation({
         key: args.updates.key,
         encryptedValue: args.updates.encryptedValue,
         encryptionKeyVersion: args.updates.encryptionKeyVersion,
-        primitiveType: args.updates.primitiveType,
+        valueType: args.updates.valueType,
       },
     });
 
@@ -404,7 +404,7 @@ export const _insertSecret = internalMutation({
     encryptedValue: v.string(),
     // description: v.string(),
     encryptionKeyVersion: v.number(),
-    primitiveType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
+    valueType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
     // tags: v.array(v.string()),
     createdBy: v.id("user"),
   },
@@ -420,7 +420,7 @@ export const _insertSecret = internalMutation({
       encryptedValue: args.encryptedValue,
       // description: args.description,
       encryptionKeyVersion: args.encryptionKeyVersion,
-      primitiveType: args.primitiveType,
+      valueType: args.valueType,
       // tags: args.tags,
       isDeleted: false,
       createdBy: args.createdBy,
@@ -441,11 +441,11 @@ export const _updateSecret = internalMutation({
       key: v.optional(v.string()),
       encryptedValue: v.optional(v.string()),
       encryptionKeyVersion: v.optional(v.number()),
-      primitiveType: v.optional(
+      valueType: v.optional(
         v.union(
-          v.literal(SecretPrimitiveType.String),
-          v.literal(SecretPrimitiveType.Number),
-          v.literal(SecretPrimitiveType.Boolean),
+          v.literal(SecretValueType.String),
+          v.literal(SecretValueType.Number),
+          v.literal(SecretValueType.Boolean),
         ),
       ),
       isDeleted: v.optional(v.boolean()),
@@ -462,7 +462,7 @@ export const _updateSecret = internalMutation({
       key?: string;
       encryptedValue?: string;
       encryptionKeyVersion?: number;
-      primitiveType?: SecretPrimitiveType;
+      valueType?: SecretValueType;
       isDeleted?: boolean;
       // description?: string;
       // tags?: string[];
@@ -476,8 +476,7 @@ export const _updateSecret = internalMutation({
       updates.encryptedValue = args.updates.encryptedValue;
     if (args.updates.encryptionKeyVersion !== undefined)
       updates.encryptionKeyVersion = args.updates.encryptionKeyVersion;
-    if (args.updates.primitiveType !== undefined)
-      updates.primitiveType = args.updates.primitiveType;
+    if (args.updates.valueType !== undefined) updates.valueType = args.updates.valueType;
     if (args.updates.isDeleted !== undefined) updates.isDeleted = args.updates.isDeleted;
     // if (args.updates.description !== undefined) updates.description = args.updates.description;
     // if (args.updates.tags !== undefined) updates.tags = args.updates.tags;

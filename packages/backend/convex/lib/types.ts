@@ -27,7 +27,7 @@ export enum ErrorSeverity {
   Low = "low",
 }
 
-export enum SecretPrimitiveType {
+export enum SecretValueType {
   String = "string",
   Number = "number",
   Boolean = "boolean",

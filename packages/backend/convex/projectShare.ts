@@ -4,7 +4,7 @@ import { components, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Doc as BetterAuthDoc, Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
-import { assertProjectAccess } from "./lib/access";
+import { assertProjectAccess, isProjectAccessible } from "./lib/access";
 import {
   alreadyExistsError,
   createError,
@@ -477,6 +477,8 @@ export const listActiveSharedProjectsForCurrentUser = protectedQuery({
           projectId: share.projectId,
         });
 
+        const { accessible } = await isProjectAccessible(ctx, project);
+
         const owner = (await ctx.runQuery(components.betterAuth.user.loadUserById, {
           userId: project.ownerId as BetterAuthId<"user">,
         })) as BetterAuthDoc<"user"> | null;
@@ -491,6 +493,7 @@ export const listActiveSharedProjectsForCurrentUser = protectedQuery({
           ownerName: owner?.name || "Unknown",
           sharedAt: share.sharedAt,
           encryptedProjectKey: share.encryptedProjectKey,
+          isRestricted: !accessible,
         };
       }),
     );
@@ -522,6 +525,20 @@ export const getProjectShareByProjectForCurrentUser = protectedQuery({
 
     if (!share) {
       throw notFoundError("share");
+    }
+
+    const project = await ctx.runQuery(internal.project._loadProjectById, {
+      projectId: args.projectId,
+    });
+
+    const { accessible } = await isProjectAccessible(ctx, project);
+
+    if (!accessible) {
+      throw createError({
+        code: ErrorCode.PROJECT_INACCESSIBLE,
+        message: "This project is not accessible",
+        severity: ErrorSeverity.High,
+      });
     }
 
     return {

@@ -140,6 +140,15 @@ export const updateProject = protectedMutation({
       projectId: args.projectId,
     });
 
+    // Owner-only operation
+    if (ctx.userId !== project.ownerId) {
+      throw createError({
+        code: ErrorCode.INSUFFICIENT_PERMISSION,
+        message: "Only the project owner can update project settings",
+        severity: ErrorSeverity.High,
+      });
+    }
+
     await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
@@ -163,6 +172,15 @@ export const archiveProject = protectedAction({
     const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: args.projectId,
     });
+
+    // Owner-only operation
+    if (ctx.userId !== project.ownerId) {
+      throw createError({
+        code: ErrorCode.INSUFFICIENT_PERMISSION,
+        message: "Only the project owner can archive projects",
+        severity: ErrorSeverity.High,
+      });
+    }
 
     await assertProjectAccess(ctx, project);
 
@@ -201,6 +219,15 @@ export const unarchiveProject = protectedAction({
     const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: args.projectId,
     });
+
+    // Owner-only operation
+    if (ctx.userId !== project.ownerId) {
+      throw createError({
+        code: ErrorCode.INSUFFICIENT_PERMISSION,
+        message: "Only the project owner can unarchive projects",
+        severity: ErrorSeverity.High,
+      });
+    }
 
     await assertProjectAccess(ctx, project, { skipArchivedCheck: true });
 

@@ -200,7 +200,7 @@ export const getEnvironmentData = protectedQuery({
       id: Id<"secret">;
       key: string;
       encryptedValue: string;
-      primitiveType: string;
+      valueType: string;
       createdBy: BetterAuthId<"user">;
       createdAt: number;
       updatedBy: BetterAuthId<"user">;
@@ -219,7 +219,7 @@ export const getEnvironmentData = protectedQuery({
           id: secret._id,
           key: secret.key,
           encryptedValue: secret.encryptedValue,
-          primitiveType: secret.primitiveType,
+          valueType: secret.valueType,
           createdBy: secret.createdBy,
           createdAt: secret.createdAt,
           updatedBy: secret.updatedBy,

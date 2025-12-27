@@ -1,7 +1,6 @@
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
-import type { Id } from "../convex/_generated/dataModel";
 import { ErrorCode } from "../convex/lib/errors.ts";
 import * as projectShareModule from "../convex/projectShare";
 import schema from "../convex/schema";
@@ -19,7 +18,6 @@ import {
   getTestUsers,
   mockAutumn,
   modules,
-  randomString,
   type TestUser,
 } from "./setup";
 
@@ -50,7 +48,7 @@ describe("Project Sharing", () => {
     mockAutumn.reset();
   });
 
-  describe("Project Sharing", () => {
+  describe("Share Management", () => {
     let freeShareLimitSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(async () => {
@@ -242,7 +240,7 @@ describe("Project Sharing", () => {
         key,
         encryptionKeyVersion: 1,
         encryptedValue,
-        primitiveType: "string",
+        valueType: "string",
         environmentId,
         folderId: undefined,
       });
@@ -500,7 +498,7 @@ describe("Project Sharing", () => {
         encryptedValue: await encryptSecret(projectKey, "value1"),
         environmentId,
         key: "key1",
-        primitiveType: "string",
+        valueType: "string",
       });
 
       await owner.asUser.mutation(api.secret.deleteSecret, {

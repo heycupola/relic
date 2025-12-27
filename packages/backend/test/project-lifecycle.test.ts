@@ -34,7 +34,7 @@ describe("Project Lifecycle", () => {
     mockAutumn.reset();
   });
 
-  describe("Project Lifecycle", () => {
+  describe("CRUD Operations", () => {
     beforeEach(async () => {
       mockAutumn.setFeature(owner.userId, "projects", 2);
       mockAutumn.setFeature(collaborator.userId, "projects", 2);
