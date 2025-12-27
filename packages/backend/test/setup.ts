@@ -145,7 +145,16 @@ export const expectConvexError = async (
     expect(err).toBeInstanceOf(ConvexError);
 
     if (err instanceof ConvexError) {
-      const errorData = typeof err.data === "string" ? JSON.parse(err.data) : err.data;
+      // Handle double-encoded JSON from component errors
+      // This can happen when errors propagate through component boundaries
+      let errorData = err.data;
+      while (typeof errorData === "string") {
+        try {
+          errorData = JSON.parse(errorData);
+        } catch {
+          break;
+        }
+      }
 
       expect(errorData.code).toBe(expectedCode);
 
