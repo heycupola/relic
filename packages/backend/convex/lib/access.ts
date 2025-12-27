@@ -205,13 +205,14 @@ export const assertProjectAccess = async (
   project: Doc<"project">,
   options?: { skipArchivedCheck?: boolean },
 ): Promise<void> => {
-  if (ctx.userId !== project.ownerId) {
-    throw permissionError("access this project", ErrorSeverity.High);
-  }
-
   const { accessible, reason } = await isProjectAccessible(ctx, project);
 
   if (!accessible) {
+    // Non-owner without valid share
+    if (reason === ProjectAccessReason.Restricted) {
+      throw permissionError("access this project", ErrorSeverity.High);
+    }
+
     // Skip archived check if requested (e.g., for archive/unarchive operations)
     if (options?.skipArchivedCheck && reason === ProjectAccessReason.Archived) {
       return;
