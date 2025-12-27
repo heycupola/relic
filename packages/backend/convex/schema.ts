@@ -66,7 +66,7 @@ export default defineSchema({
     folderId: v.optional(v.id("folder")),
     key: v.string(),
     encryptedValue: v.string(),
-    primitiveType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
+    valueType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
     description: v.optional(v.string()),
     encryptionKeyVersion: v.number(),
     tags: v.optional(v.array(v.string())),
