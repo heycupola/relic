@@ -35,7 +35,7 @@ export async function verifyStripeSignature(
     encoder.encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["verify"],
+    ["sign"],
   );
 
   const parts = signature.split(",");

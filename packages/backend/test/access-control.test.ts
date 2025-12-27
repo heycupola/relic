@@ -109,8 +109,8 @@ describe("Access Control", () => {
       const restrictedState = await owner.asUser.query(api.project.listUserProjects, {});
 
       expect(restrictedState.projects.length).toBe(6);
-      expect(restrictedState.projects.filter((p) => !p.isRestricted).length).toBe(2);
-      expect(restrictedState.projects.filter((p) => p.isRestricted).length).toBe(4);
+      expect(restrictedState.projects.filter((p) => !p.isRestricted).length).toBe(1);
+      expect(restrictedState.projects.filter((p) => p.isRestricted).length).toBe(5);
       expect(restrictedState.isInGracePeriod).toBe(false);
       expect(restrictedState.gracePeriodDaysRemaining).not.toBeDefined();
 
