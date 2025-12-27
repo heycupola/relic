@@ -15,8 +15,10 @@ export const resendSdk = new Resend(process.env.RESEND_API_KEY);
 
 export const resend: ResendComponent = new ResendComponent(components.resend, {});
 
-const FROM_EMAIL_ADDRESS = "Can Vardar <can@relic.so>";
-const SITE_URL = process.env.SITE_URL || "https://relic.so";
+const FROM_EMAIL_ADDRESS = process.env.FROM_EMAIL_ADDRESS || "Can Vardar <can@relic.so>";
+const SITE_URL =
+  process.env.SITE_URL ||
+  (process.env.ENVIRONMENT === "development" ? "http://localhost:3000" : "https://relic.so");
 
 export const getUpgradeUrl = () => `${SITE_URL}/upgrade`;
 export const getDashboardUrl = () => `${SITE_URL}/dashboard`;

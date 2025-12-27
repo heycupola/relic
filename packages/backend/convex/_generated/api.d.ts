@@ -26,6 +26,7 @@ import type * as lib_errors from "../lib/errors.js";
 import type * as lib_helpers from "../lib/helpers.js";
 import type * as lib_middleware from "../lib/middleware.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
+import type * as lib_resend from "../lib/resend.js";
 import type * as lib_types from "../lib/types.js";
 import type * as project from "../project.js";
 import type * as projectShare from "../projectShare.js";
@@ -61,6 +62,7 @@ declare const fullApi: ApiFromModules<{
   "lib/helpers": typeof lib_helpers;
   "lib/middleware": typeof lib_middleware;
   "lib/rateLimit": typeof lib_rateLimit;
+  "lib/resend": typeof lib_resend;
   "lib/types": typeof lib_types;
   project: typeof project;
   projectShare: typeof projectShare;

@@ -3,6 +3,7 @@ import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import { authComponent, createAuth } from "./auth";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
+import { verifyResendSignature } from "./lib/resend";
 import type { EmailKind } from "./lib/types";
 import { handleWebhookEvent, type StripeEvent, verifyStripeSignature } from "./stripe";
 
@@ -10,6 +11,7 @@ const http = httpRouter();
 authComponent.registerRoutes(http, createAuth);
 
 export const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+export const RESEND_WEBHOOK_SECRET = process.env.RESEND_WEBHOOK_SECRET;
 
 // In-memory cache for idempotency (resets on deployment)
 // For production, consider storing in database
@@ -78,11 +80,65 @@ http.route({
 });
 
 http.route({
+  path: "/health",
+  method: "GET",
+  handler: httpAction(async (_ctx, _request) => {
+    return new Response(
+      JSON.stringify(
+        {
+          status: "healthy",
+          service: "relic-api",
+          timestamp: new Date().toISOString(),
+          environment: process.env.ENVIRONMENT || "development",
+          version: "1.0.0",
+        },
+        null,
+        2,
+      ),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      },
+    );
+  }),
+});
+
+http.route({
   path: "/webhook/resend",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
+    const svixId = request.headers.get("svix-id");
+    const svixTimestamp = request.headers.get("svix-timestamp");
+    const svixSignature = request.headers.get("svix-signature");
+    const rawPayload = await request.text();
+
+    if (!RESEND_WEBHOOK_SECRET) {
+      console.error("[Resend Webhook] RESEND_WEBHOOK_SECRET is not configured");
+      return new Response("Server configuration error", { status: 500 });
+    }
+
+    const isValid = await verifyResendSignature(
+      rawPayload,
+      {
+        "svix-id": svixId,
+        "svix-timestamp": svixTimestamp,
+        "svix-signature": svixSignature,
+      },
+      RESEND_WEBHOOK_SECRET,
+    );
+
+    if (!isValid) {
+      console.error("[Resend Webhook] Invalid signature");
+      return new Response("Invalid signature", { status: 401 });
+    }
+
     try {
-      const payload = (await request.json()) as {
+      const payload = JSON.parse(rawPayload) as {
         type: string;
         data?: {
           email_id?: string;
@@ -91,6 +147,7 @@ http.route({
       };
 
       const eventType = payload.type;
+      console.log(`[Resend Webhook] Received: ${eventType}`);
 
       if (eventType === "email.delivered") {
         const tags = payload.data?.tags || [];
