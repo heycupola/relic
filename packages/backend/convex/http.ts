@@ -16,6 +16,7 @@ export const RESEND_WEBHOOK_SECRET = process.env.RESEND_WEBHOOK_SECRET;
 // In-memory cache for idempotency (resets on deployment)
 // For production, consider storing in database
 const processedEventIds = new Set<string>();
+const processedResendEventIds = new Set<string>();
 const MAX_CACHED_EVENTS = 1000;
 
 http.route({
@@ -137,6 +138,17 @@ http.route({
       return new Response("Invalid signature", { status: 401 });
     }
 
+    if (!svixId) {
+      console.error("[Resend Webhook] Missing svix-id header");
+      return new Response("Missing event ID", { status: 400 });
+    }
+
+    // Idempotency check - skip if already processed
+    if (processedResendEventIds.has(svixId)) {
+      console.log(`[Resend Webhook] Event ${svixId} already processed, skipping`);
+      return new Response("Already processed", { status: 200 });
+    }
+
     try {
       const payload = JSON.parse(rawPayload) as {
         type: string;
@@ -147,7 +159,7 @@ http.route({
       };
 
       const eventType = payload.type;
-      console.log(`[Resend Webhook] Received: ${eventType}`);
+      console.log(`[Resend Webhook] Received: ${eventType} (ID: ${svixId})`);
 
       if (eventType === "email.delivered") {
         const tags = payload.data?.tags || [];
@@ -183,9 +195,18 @@ http.route({
         }
       }
 
+      // Mark as processed after successful handling
+      processedResendEventIds.add(svixId);
+
+      // Prevent unbounded memory growth
+      if (processedResendEventIds.size > MAX_CACHED_EVENTS) {
+        const firstId = processedResendEventIds.values().next().value;
+        if (firstId) processedResendEventIds.delete(firstId);
+      }
+
       return new Response(null, { status: 200 });
     } catch (error) {
-      console.error("[Webhook] Error handling Resend webhook:", error);
+      console.error("[Resend Webhook] Error handling webhook:", error);
       return new Response("Webhook handler error", { status: 500 });
     }
   }),

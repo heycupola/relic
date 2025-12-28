@@ -30,12 +30,17 @@ export async function verifyResendSignature(
   const secretWithoutPrefix = secret.startsWith("whsec_") ? secret.substring(6) : secret;
 
   const base64ToBytes = (base64: string): Uint8Array => {
-    const binaryString = atob(base64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
+    try {
+      const binaryString = atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      return bytes;
+    } catch (_error) {
+      console.error("[Resend Webhook] Invalid base64 in secret");
+      throw new Error("Invalid webhook secret format");
     }
-    return bytes;
   };
 
   const secretBytes = base64ToBytes(secretWithoutPrefix);
