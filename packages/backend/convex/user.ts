@@ -84,7 +84,7 @@ export const getCurrentUser = protectedQuery({
 
 export const _handlePlanUpgrade = internalAction({
   args: {
-    userId: v.id("user"),
+    userId: v.string(),
   },
   handler: async (ctx, args) => {
     const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
@@ -104,7 +104,7 @@ export const _handlePlanUpgrade = internalAction({
 
 export const _handlePlanDowngrade = internalAction({
   args: {
-    userId: v.id("user"),
+    userId: v.string(),
   },
   handler: async (ctx, args) => {
     const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
@@ -125,7 +125,7 @@ export const _handlePlanDowngrade = internalAction({
 
 export const _handleEmailDelivered = internalMutation({
   args: {
-    userId: v.id("user"),
+    userId: v.string(),
     emailKind: v.union(
       v.literal(EmailKind.AccessRestricted),
       v.literal(EmailKind.GracePeriodStarted),
@@ -194,7 +194,7 @@ export const _batchSendAccessRestrictedEmails = internalAction({
 
 export const _sendWelcomeEmail = internalAction({
   args: {
-    userId: v.id("user"),
+    userId: v.string(),
   },
   returns: v.object({ success: v.boolean() }),
   handler: async (ctx, args) => {
