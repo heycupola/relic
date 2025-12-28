@@ -49,7 +49,7 @@ export function getGracePeriodDaysRemaining(user: BetterAuthDoc<"user">): number
 }
 
 function getAccessibleProjectIds(projects: Doc<"project">[]): Id<"project">[] {
-  const FREE_PLAN_PROJECT_LIMIT = 2;
+  const FREE_PLAN_PROJECT_LIMIT = 1;
 
   const sortedProjects = [...projects].sort((a, b) => {
     const timeDiff = b.createdAt - a.createdAt;
