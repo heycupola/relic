@@ -1,0 +1,18 @@
+{
+  "name": "@repo/tui",
+  "module": "index.tsx",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19.2.7"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.1.65",
+    "@opentui/react": "^0.1.65",
+    "react": "^19.2.3"
+  }
+}
