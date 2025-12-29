@@ -1,0 +1,63 @@
+import { createCliRenderer } from "@opentui/core";
+import { createRoot } from "@opentui/react";
+import { HomePage } from "./components/HomePage";
+import { LoginPage } from "./components/LoginPage";
+import { ProjectPage } from "./components/ProjectPage";
+import { RouterProvider, useRouter } from "./lib/router";
+
+function AppRouter() {
+  const { route, navigate, goBack } = useRouter();
+
+  const handleLogin = () => {
+    navigate({ name: "home" });
+  };
+
+  const handleLogout = () => {
+    navigate({ name: "login" });
+  };
+
+  const handleSelectProject = (
+    projectId: string,
+    projectName: string,
+    projectStatus: "owned" | "shared" | "archived",
+  ) => {
+    navigate({ name: "project", projectId, projectName, projectStatus });
+  };
+
+  const handleBackFromProject = () => {
+    goBack();
+  };
+
+  switch (route.name) {
+    case "login":
+      return <LoginPage onLogin={handleLogin} />;
+    case "home":
+      return <HomePage onLogout={handleLogout} onSelectProject={handleSelectProject} />;
+    case "project":
+      return (
+        <ProjectPage
+          projectId={route.projectId}
+          projectName={route.projectName}
+          projectStatus={route.projectStatus}
+          onBack={handleBackFromProject}
+        />
+      );
+    case "settings":
+      return <HomePage onLogout={handleLogout} onSelectProject={handleSelectProject} />;
+    default:
+      return <LoginPage onLogin={handleLogin} />;
+  }
+}
+
+function App() {
+  return (
+    <RouterProvider>
+      <AppRouter />
+    </RouterProvider>
+  );
+}
+
+const renderer = await createCliRenderer({
+  exitOnCtrlC: true,
+});
+createRoot(renderer).render(<App />);
