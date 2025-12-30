@@ -1,3 +1,5 @@
+import { THEME_COLORS } from "../lib/constants";
+
 interface LoginButtonProps {
   label: string;
   selected: boolean;
@@ -9,12 +11,12 @@ export function LoginButton({ label, selected }: LoginButtonProps) {
       width={40}
       height={3}
       borderStyle={selected ? "double" : "single"}
-      borderColor={selected ? "#7aa2f7" : "#565f89"}
-      backgroundColor={selected ? "#292e42" : "#1a1b26"}
+      borderColor={selected ? THEME_COLORS.primary : THEME_COLORS.textMuted}
+      backgroundColor={selected ? THEME_COLORS.inputBg : THEME_COLORS.header}
       justifyContent="center"
       alignItems="center"
     >
-      <text fg={selected ? "#7aa2f7" : "#a9b1d6"}>
+      <text fg={selected ? THEME_COLORS.primary : THEME_COLORS.textMuted}>
         {selected ? "› " : "  "}
         {label}
         {selected ? " ‹" : "  "}

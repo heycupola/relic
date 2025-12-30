@@ -1,7 +1,7 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useState } from "react";
+import { THEME_COLORS } from "../lib/constants";
 import { GuideBar } from "./GuideBar";
-import { LoginButton } from "./LoginButton";
 import { Modal } from "./Modal";
 
 const OAUTH_URLS = {
@@ -12,18 +12,18 @@ const OAUTH_URLS = {
 };
 
 const LOGIN_OPTIONS = [
-  { id: "google", label: "Login with Google" },
-  { id: "github", label: "Login with GitHub" },
+  { id: "google", label: "Google" },
+  { id: "github", label: "GitHub" },
 ] as const;
 
 const SHORTCUTS = [
-  { key: "↑/k", description: "Up" },
-  { key: "↓/j", description: "Down" },
-  { key: "↵", description: "Select" },
-  { key: "q", description: "Quit" },
+  { key: "↑/k", description: "up" },
+  { key: "↓/j", description: "down" },
+  { key: "↵", description: "select" },
+  { key: "q", description: "quit" },
 ];
 
-const MODAL_SHORTCUTS = [{ key: "Esc", description: "Cancel" }];
+const MODAL_SHORTCUTS = [{ key: "esc", description: "cancel" }];
 
 interface DeviceAuthState {
   isOpen: boolean;
@@ -117,68 +117,76 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const currentShortcuts = deviceAuth.isOpen ? MODAL_SHORTCUTS : SHORTCUTS;
 
   return (
-    <box flexDirection="column" width={width} height={height} backgroundColor="#0f0f14">
+    <box
+      flexDirection="column"
+      width={width}
+      height={height}
+      backgroundColor={THEME_COLORS.background}
+    >
       <box
         flexDirection="column"
         justifyContent="center"
         alignItems="center"
         flexGrow={1}
-        backgroundColor="#0f0f14"
+        backgroundColor={THEME_COLORS.background}
       >
         <box
           flexDirection="column"
           alignItems="center"
-          borderStyle="single"
-          borderColor="#3b4261"
-          backgroundColor="#1a1b26"
+          backgroundColor={THEME_COLORS.header}
           width={50}
+          paddingTop={2}
+          paddingBottom={2}
+          paddingLeft={2}
+          paddingRight={2}
         >
           <box height={7} justifyContent="center" alignItems="center">
             <ascii-font text="relic" font="block" />
           </box>
 
-          {/* <box height={1}>
-                        <text fg="#c0caf5">
-                            <strong>Welcome to Relic</strong>
-                        </text>
-                    </box> */}
-
-          <box height={1}>
-            <text fg="#565f89">Zero-knowledge secret management</text>
+          <box height={1} marginBottom={1}>
+            <text fg={THEME_COLORS.textMuted}>Zero-knowledge secret management</text>
           </box>
 
-          <box flexDirection="column" marginTop={1} marginBottom={1}>
-            {LOGIN_OPTIONS.map((option, index) => (
-              <LoginButton
-                key={option.id}
-                label={option.label}
-                selected={index === selectedIndex}
-              />
-            ))}
+          <box height={1} marginBottom={1} width={44} justifyContent="center" alignItems="center">
+            <text fg={THEME_COLORS.textDim}>───────── Sign in with ─────────</text>
+          </box>
+
+          <box flexDirection="column" alignItems="center" width={44}>
+            <box flexDirection="column">
+              {LOGIN_OPTIONS.map((option, index) => {
+                const isSelected = index === selectedIndex;
+                return (
+                  <box key={option.id} height={1} width={22}>
+                    <text>
+                      <span fg={isSelected ? THEME_COLORS.primary : THEME_COLORS.textDim}>
+                        {isSelected ? "› " : "  "}
+                      </span>
+                      <span fg={isSelected ? THEME_COLORS.text : THEME_COLORS.textMuted}>
+                        Login with {option.label}
+                      </span>
+                    </text>
+                  </box>
+                );
+              })}
+            </box>
           </box>
         </box>
       </box>
 
-      <Modal visible={deviceAuth.isOpen} title="Device Authorization" width={55} height={14}>
+      <Modal visible={deviceAuth.isOpen} title="Device Authorization" width={55} height={12}>
         <box flexDirection="column" alignItems="center" gap={1}>
-          <text fg="#565f89">A browser window has been opened.</text>
-          <text fg="#565f89">Enter this code to sign in with {deviceAuth.provider}:</text>
+          <text fg={THEME_COLORS.textMuted}>
+            Enter this code to sign in with {deviceAuth.provider}:
+          </text>
           <box height={1} />
-          <box
-            borderStyle="single"
-            borderColor="#7aa2f7"
-            paddingLeft={2}
-            paddingRight={2}
-            height={3}
-            justifyContent="center"
-            alignItems="center"
-          >
-            <text fg="#7aa2f7">
-              <strong>{deviceAuth.userCode}</strong>
+          <box paddingLeft={3} paddingRight={3} height={1}>
+            <text fg={THEME_COLORS.primary}>
+              <strong> {deviceAuth.userCode.split("").join(" ")} </strong>
             </text>
           </box>
           <box height={1} />
-          <text fg="#3b4261">Waiting for authorization...</text>
+          <text fg={THEME_COLORS.textDim}>Waiting for authorization...</text>
         </box>
       </Modal>
 

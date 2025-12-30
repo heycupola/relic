@@ -1,22 +1,21 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { STATUS_COLORS, THEME_COLORS } from "../lib/constants";
+import type { Project, ProjectStatus } from "../lib/types";
+import { usePaste } from "../lib/usePaste";
+import { useTaskQueue } from "../lib/useTaskQueue";
+import { useTextInput } from "../lib/useTextInput";
 import { GuideBar } from "./GuideBar";
 import { Modal } from "./Modal";
+import { TextInput } from "./TextInput";
 
-type ProjectStatus = "owned" | "shared" | "archived";
 type ModalType = "none" | "create" | "logout";
 
-interface Project {
-  id: string;
-  name: string;
-  status: ProjectStatus;
+interface HomePageProps {
+  userName: string;
+  onSelectProject: (projectId: string, projectName: string, projectStatus: ProjectStatus) => void;
+  onLogout: () => void;
 }
-
-const STATUS_COLORS: Record<ProjectStatus, string> = {
-  owned: "#9ece6a",
-  shared: "#7aa2f7",
-  archived: "#565f89",
-};
 
 const MOCK_PROJECTS: Project[] = [
   { id: "1", name: "api-gateway", status: "owned" },
@@ -24,87 +23,98 @@ const MOCK_PROJECTS: Project[] = [
   { id: "3", name: "payment-service", status: "archived" },
 ];
 
-const SHORTCUTS = [
-  { key: "↑/k", description: "Up" },
-  { key: "↓/j", description: "Down" },
-  { key: "↵", description: "Select" },
-  { key: "n", description: "New" },
-  { key: "ctrl+l", description: "Logout" },
-  { key: "q", description: "Quit" },
-];
+const STATUS_ICONS: Record<ProjectStatus, string> = {
+  owned: "●",
+  shared: "◐",
+  archived: "○",
+};
 
-interface HomePageProps {
-  onLogout: () => void;
-  onSelectProject?: (projectId: string, projectName: string, projectStatus: ProjectStatus) => void;
-}
+const PROJECT_NAME_MAX_LENGTH = 50;
 
-export function HomePage({ onLogout, onSelectProject }: HomePageProps) {
+export function HomePage({ userName, onSelectProject, onLogout }: HomePageProps) {
   const { width, height } = useTerminalDimensions();
+  const { runTask, showSuccess } = useTaskQueue();
+
+  const [projects] = useState<Project[]>(MOCK_PROJECTS);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
   const [activeModal, setActiveModal] = useState<ModalType>("none");
-  const [newProjectName, setNewProjectName] = useState("");
+  const [cursorVisible, setCursorVisible] = useState(true);
+
+  const projectNameInput = useTextInput({
+    maxLength: PROJECT_NAME_MAX_LENGTH,
+    onSubmit: (value) => {
+      if (value.trim()) {
+        closeModal();
+        runTask(`Creating project "${value}"...`, async () => {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        }).then(() => {
+          showSuccess(`Project "${value}" created`);
+        });
+      }
+    },
+  });
+
+  useEffect(() => {
+    if (activeModal === "none") return;
+    const interval = setInterval(() => {
+      setCursorVisible((prev) => !prev);
+    }, 530);
+    return () => clearInterval(interval);
+  }, [activeModal]);
+
+  const handlePaste = useCallback(
+    (text: string) => {
+      if (activeModal === "create") {
+        setCursorVisible(true);
+        projectNameInput.handlePaste(text);
+      }
+    },
+    [activeModal, projectNameInput],
+  );
+
+  usePaste(handlePaste);
 
   const moveUp = () => {
-    if (activeModal !== "none") return;
+    if (projects.length === 0) return;
     setSelectedIndex((prev) => (prev > 0 ? prev - 1 : projects.length - 1));
   };
 
   const moveDown = () => {
-    if (activeModal !== "none") return;
+    if (projects.length === 0) return;
     setSelectedIndex((prev) => (prev < projects.length - 1 ? prev + 1 : 0));
-  };
-
-  const openCreateModal = () => {
-    setActiveModal("create");
-    setNewProjectName("");
-  };
-
-  const openLogoutModal = () => {
-    setActiveModal("logout");
-  };
-
-  const closeModal = () => {
-    setActiveModal("none");
-    setNewProjectName("");
-  };
-
-  const createProject = () => {
-    if (newProjectName.trim()) {
-      const newProject: Project = {
-        id: Date.now().toString(),
-        name: newProjectName.trim(),
-        status: "owned",
-      };
-      setProjects((prev) => [...prev, newProject]);
-      closeModal();
-    }
   };
 
   const selectProject = () => {
     const project = projects[selectedIndex];
-    if (project && onSelectProject) {
+    if (project) {
       onSelectProject(project.id, project.name, project.status);
     }
   };
 
+  const closeModal = () => {
+    setActiveModal("none");
+    projectNameInput.reset();
+  };
+
+  const confirmLogout = () => {
+    onLogout();
+  };
+
   useKeyboard((key) => {
+    setCursorVisible(true);
+
     if (activeModal === "create") {
       if (key.name === "escape") {
         closeModal();
-      } else if (key.name === "return") {
-        createProject();
-      } else if (key.name === "backspace") {
-        setNewProjectName((prev) => prev.slice(0, -1));
-      } else if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
-        setNewProjectName((prev) => prev + key.sequence);
+      } else if (!projectNameInput.handleKey(key)) {
+        return;
       }
       return;
     }
 
     if (activeModal === "logout") {
       if (key.name === "y") {
-        onLogout();
+        confirmLogout();
       } else if (key.name === "n" || key.name === "escape") {
         closeModal();
       }
@@ -118,119 +128,161 @@ export function HomePage({ onLogout, onSelectProject }: HomePageProps) {
     } else if (key.name === "return") {
       selectProject();
     } else if (key.name === "n") {
-      openCreateModal();
-    } else if (key.ctrl && key.name === "l") {
-      openLogoutModal();
+      setActiveModal("create");
+    } else if ((key.name === "l" && key.ctrl) || key.sequence === "\x0C") {
+      setActiveModal("logout");
     } else if (key.name === "q") {
       process.exit(0);
     }
   });
 
+  const getShortcuts = () => {
+    if (activeModal === "create") {
+      return [
+        { key: "↵", description: "create" },
+        { key: "esc", description: "cancel" },
+      ];
+    }
+    if (activeModal === "logout") {
+      return [
+        { key: "↵", description: "confirm" },
+        { key: "esc", description: "cancel" },
+      ];
+    }
+    return [
+      { key: "↑/k", description: "up" },
+      { key: "↓/j", description: "down" },
+      { key: "↵", description: "select" },
+      { key: "n", description: "new project" },
+      { key: "ctrl+l", description: "logout" },
+      { key: "q", description: "quit" },
+    ];
+  };
+
   return (
-    <box flexDirection="column" width={width} height={height} backgroundColor="#0f0f14">
+    <box
+      flexDirection="column"
+      width={width}
+      height={height}
+      backgroundColor={THEME_COLORS.background}
+    >
       <box
         flexDirection="column"
         justifyContent="center"
         alignItems="center"
         flexGrow={1}
-        backgroundColor="#0f0f14"
+        backgroundColor={THEME_COLORS.background}
       >
         <box
           flexDirection="column"
           alignItems="center"
-          borderStyle="single"
-          borderColor="#3b4261"
-          backgroundColor="#1a1b26"
+          backgroundColor={THEME_COLORS.header}
           width={50}
+          paddingTop={2}
+          paddingBottom={2}
+          paddingLeft={2}
+          paddingRight={2}
         >
-          <box height={2} justifyContent="center" alignItems="center" marginTop={1}>
-            <text fg="#7aa2f7">
-              <strong>relic</strong>
-            </text>
+          {/* ASCII relic logo */}
+          <box height={7} justifyContent="center" alignItems="center">
+            <ascii-font text="relic" font="block" />
           </box>
 
-          <box height={1} marginBottom={1} flexDirection="row" gap={2}>
-            <text fg="#565f89">Your Projects</text>
-            <text>
-              <span fg="#7aa2f7">{projects.length}</span>
-              <span fg="#565f89">/</span>
-              <span fg="#565f89">10</span>
-            </text>
+          <box height={1} marginBottom={1}>
+            <text fg={THEME_COLORS.textMuted}>Zero-knowledge secret management</text>
           </box>
 
-          {projects.map((project, index) => (
-            <box
-              key={project.id}
-              width={44}
-              height={3}
-              borderStyle="single"
-              borderColor={index === selectedIndex ? "#7aa2f7" : "#3b4261"}
-              backgroundColor={index === selectedIndex ? "#292e42" : "#1a1b26"}
-              flexDirection="row"
-              justifyContent="space-between"
-              alignItems="center"
-              paddingLeft={1}
-              paddingRight={1}
-            >
-              <text fg={index === selectedIndex ? "#7aa2f7" : "#c0caf5"}>
-                {index === selectedIndex ? "› " : "  "}
-                {project.name}
-              </text>
-              <text fg={STATUS_COLORS[project.status]}>[{project.status}]</text>
-            </box>
-          ))}
+          {/* Projects heading with count */}
+          <box
+            height={1}
+            width={44}
+            marginTop={1}
+            marginBottom={1}
+            flexDirection="row"
+            justifyContent="space-between"
+            alignItems="center"
+          >
+            <text fg={THEME_COLORS.textMuted}> Projects</text>
+            <text fg={THEME_COLORS.textDim}>{projects.length} / 10</text>
+          </box>
+
+          {/* Project List */}
+          <box flexDirection="column" width={44}>
+            {projects.length === 0 ? (
+              <box height={1}>
+                <text fg={THEME_COLORS.textDim}>No projects yet. Press 'n' to create one.</text>
+              </box>
+            ) : (
+              projects.map((project, index) => {
+                const isSelected = index === selectedIndex;
+                const statusColor = STATUS_COLORS[project.status];
+                const statusIcon = STATUS_ICONS[project.status];
+
+                return (
+                  <box
+                    key={project.id}
+                    height={1}
+                    width={44}
+                    flexDirection="row"
+                    justifyContent="space-between"
+                    alignItems="center"
+                  >
+                    <text fg={isSelected ? THEME_COLORS.text : THEME_COLORS.textMuted}>
+                      <span fg={isSelected ? THEME_COLORS.primary : THEME_COLORS.textDim}>
+                        {isSelected ? "› " : "  "}
+                      </span>
+                      {project.name}
+                    </text>
+                    <text>
+                      {isSelected && <span fg={THEME_COLORS.textDim}>[{project.status}] </span>}
+                      <span fg={statusColor}>{statusIcon}</span>
+                    </text>
+                  </box>
+                );
+              })
+            )}
+          </box>
         </box>
       </box>
 
-      <Modal visible={activeModal === "create"} title="Create New Project" width={50} height={12}>
+      <Modal
+        visible={activeModal === "create"}
+        title="Create New Project"
+        width={50}
+        height={8}
+        shortcuts={[
+          { key: "↵", description: "create" },
+          { key: "esc", description: "cancel" },
+        ]}
+      >
         <box flexDirection="column" alignItems="center" gap={1}>
-          <text fg="#565f89">Enter project name:</text>
-          <box
+          <text fg={THEME_COLORS.textMuted}>Enter project name:</text>
+          <TextInput
+            value={projectNameInput.value}
+            cursor={projectNameInput.cursor}
+            cursorVisible={cursorVisible}
             width={40}
-            height={3}
-            borderStyle="single"
-            borderColor="#7aa2f7"
-            backgroundColor="#292e42"
-            paddingLeft={1}
-            alignItems="center"
-          >
-            <text fg="#c0caf5">
-              {newProjectName}
-              <span fg="#7aa2f7">_</span>
-            </text>
-          </box>
-          <box height={1} />
-          <box flexDirection="row" gap={2}>
-            <text>
-              <span fg="#9ece6a">[↵]</span>
-              <span fg="#565f89"> Create</span>
-            </text>
-            <text>
-              <span fg="#f7768e">[Esc]</span>
-              <span fg="#565f89"> Cancel</span>
-            </text>
-          </box>
+            maxLength={PROJECT_NAME_MAX_LENGTH}
+          />
         </box>
       </Modal>
 
-      <Modal visible={activeModal === "logout"} title="Logout" width={40} height={8}>
+      <Modal
+        visible={activeModal === "logout"}
+        title="Logout"
+        width={40}
+        height={6}
+        shortcuts={[
+          { key: "y", description: "yes" },
+          { key: "n", description: "no" },
+        ]}
+      >
         <box flexDirection="column" alignItems="center" gap={1}>
-          <text fg="#c0caf5">Are you sure you want to logout?</text>
-          <box height={1} />
-          <box flexDirection="row" gap={2}>
-            <text>
-              <span fg="#9ece6a">[y]</span>
-              <span fg="#565f89"> Yes</span>
-            </text>
-            <text>
-              <span fg="#f7768e">[n]</span>
-              <span fg="#565f89"> No</span>
-            </text>
-          </box>
+          <text fg={THEME_COLORS.text}>Are you sure you want to logout?</text>
         </box>
       </Modal>
 
-      {activeModal === "none" && <GuideBar shortcuts={SHORTCUTS} />}
+      {activeModal === "none" && <GuideBar shortcuts={getShortcuts()} />}
     </box>
   );
 }

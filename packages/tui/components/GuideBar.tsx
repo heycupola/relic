@@ -1,4 +1,6 @@
 import { useTerminalDimensions } from "@opentui/react";
+import { THEME_COLORS } from "../lib/constants";
+import { useTaskQueue } from "../lib/useTaskQueue";
 
 interface Shortcut {
   key: string;
@@ -10,13 +12,20 @@ interface GuideBarProps {
 }
 
 export function GuideBar({ shortcuts }: GuideBarProps) {
-  const { width } = useTerminalDimensions();
+  const { width, height } = useTerminalDimensions();
+  const { task } = useTaskQueue();
+
+  const hasActiveTask = task.status !== "idle";
+  const topPosition = hasActiveTask ? height - 2 : height - 1;
 
   return (
     <box
+      position="absolute"
+      left={0}
+      top={topPosition}
       width={width}
       height={1}
-      backgroundColor="#1a1b26"
+      backgroundColor={THEME_COLORS.header}
       flexDirection="row"
       justifyContent="flex-start"
       paddingLeft={1}
@@ -25,9 +34,9 @@ export function GuideBar({ shortcuts }: GuideBarProps) {
       <text>
         {shortcuts.map((shortcut, index) => (
           <>
-            <span fg="#7aa2f7">{shortcut.key}</span>
-            <span fg="#565f89"> {shortcut.description}</span>
-            {index < shortcuts.length - 1 && <span fg="#3b4261"> │ </span>}
+            <span fg={THEME_COLORS.primary}>{shortcut.key}</span>
+            <span fg={THEME_COLORS.textMuted}> {shortcut.description}</span>
+            {index < shortcuts.length - 1 && <span fg={THEME_COLORS.textDim}> │ </span>}
           </>
         ))}
       </text>
