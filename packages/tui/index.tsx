@@ -3,7 +3,9 @@ import { createRoot } from "@opentui/react";
 import { HomePage } from "./components/HomePage";
 import { LoginPage } from "./components/LoginPage";
 import { ProjectPage } from "./components/ProjectPage";
+import { TaskBar } from "./components/TaskBar";
 import { RouterProvider, useRouter } from "./lib/router";
+import { TaskProvider } from "./lib/useTaskQueue";
 
 function AppRouter() {
   const { route, navigate, goBack } = useRouter();
@@ -51,9 +53,12 @@ function AppRouter() {
 
 function App() {
   return (
-    <RouterProvider>
-      <AppRouter />
-    </RouterProvider>
+    <TaskProvider>
+      <RouterProvider>
+        <AppRouter />
+        <TaskBar />
+      </RouterProvider>
+    </TaskProvider>
   );
 }
 
