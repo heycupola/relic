@@ -1,45 +1,31 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { STATUS_COLORS, THEME_COLORS } from "../lib/constants";
+import type {
+  Environment,
+  Folder,
+  LogEntry,
+  ModalType,
+  ProjectStatus,
+  Secret,
+  SharedUser,
+  ViewLevel,
+} from "../lib/types";
+import { usePaste } from "../lib/usePaste";
+import { useTaskQueue } from "../lib/useTaskQueue";
+import { useTextInput } from "../lib/useTextInput";
 import { GuideBar } from "./GuideBar";
-import { Modal } from "./Modal";
-
-type ViewLevel = "environments" | "environment" | "folder";
-type ModalType = "none" | "createEnv" | "createFolder" | "createSecret";
-
-interface Environment {
-  id: string;
-  name: string;
-}
-
-interface Folder {
-  id: string;
-  name: string;
-  environmentId: string;
-}
-
-interface Secret {
-  id: string;
-  key: string;
-  folderId?: string;
-  environmentId: string;
-}
-
-interface SharedUser {
-  email: string;
-  name: string;
-}
-
-interface LogEntry {
-  id: string;
-  action: string;
-  timestamp: number;
-  user: string;
-}
+import {
+  CreateEnvironmentModal,
+  CreateFolderModal,
+  CreateSecretModal,
+  ManageCollaboratorsModal,
+} from "./modals";
 
 interface ProjectPageProps {
   projectId: string;
   projectName: string;
-  projectStatus: "owned" | "shared" | "archived";
+  projectStatus: ProjectStatus;
   onBack: () => void;
 }
 
@@ -66,20 +52,14 @@ const MOCK_SECRETS: Secret[] = [
 ];
 
 const MOCK_SHARED_USERS: SharedUser[] = [
-  { email: "john@example.com", name: "John" },
-  { email: "jane@example.com", name: "Jane" },
+  { id: "u1", email: "john@example.com", name: "John" },
+  { id: "u2", email: "jane@example.com", name: "Jane" },
 ];
 
 const MOCK_LOGS: LogEntry[] = [
   { id: "l1", action: "secret.created", timestamp: Date.now() - 3600000, user: "you" },
   { id: "l2", action: "folder.created", timestamp: Date.now() - 7200000, user: "john@example.com" },
 ];
-
-const STATUS_COLORS = {
-  owned: "#9ece6a",
-  shared: "#7aa2f7",
-  archived: "#565f89",
-};
 
 export function ProjectPage({
   projectId: _projectId,
@@ -88,6 +68,7 @@ export function ProjectPage({
   onBack,
 }: ProjectPageProps) {
   const { width, height } = useTerminalDimensions();
+  const { runTask, showSuccess } = useTaskQueue();
 
   const [environments] = useState<Environment[]>(MOCK_ENVIRONMENTS);
   const [folders] = useState<Folder[]>(MOCK_FOLDERS);
@@ -99,13 +80,88 @@ export function ProjectPage({
   const [selectedEnvId, setSelectedEnvId] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
-
+  const [cursorVisible, setCursorVisible] = useState(true);
   const [activeModal, setActiveModal] = useState<ModalType>("none");
-  const [newEnvName, setNewEnvName] = useState("");
-  const [newFolderName, setNewFolderName] = useState("");
-  const [newSecretKey, setNewSecretKey] = useState("");
-  const [newSecretValue, setNewSecretValue] = useState("");
+
   const [secretInputFocus, setSecretInputFocus] = useState<"key" | "value">("key");
+  const [collabSelectedIndex, setCollabSelectedIndex] = useState(0);
+  const [collabAddMode, setCollabAddMode] = useState(false);
+
+  const envInput = useTextInput({
+    maxLength: 30,
+    onSubmit: (value) => {
+      if (value.trim()) {
+        closeModal();
+        runTask(`Creating environment "${value}"...`, async () => {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        }).then(() => {
+          showSuccess(`Environment "${value}" created`);
+        });
+      }
+    },
+  });
+
+  const folderInput = useTextInput({
+    maxLength: 30,
+    onSubmit: (value) => {
+      if (value.trim()) {
+        console.log("Creating folder:", value);
+        closeModal();
+      }
+    },
+  });
+
+  const secretKeyInput = useTextInput({ maxLength: 100 });
+  const secretValueInput = useTextInput({ maxLength: 1000 });
+
+  const collabEmailInput = useTextInput({
+    maxLength: 100,
+    onSubmit: (value) => {
+      if (value.trim()) {
+        console.log("Adding collaborator:", value);
+        closeModal();
+      }
+    },
+  });
+
+  useEffect(() => {
+    if (activeModal === "none") return;
+    const interval = setInterval(() => {
+      setCursorVisible((prev) => !prev);
+    }, 530);
+    return () => clearInterval(interval);
+  }, [activeModal]);
+
+  const handlePaste = useCallback(
+    (text: string) => {
+      setCursorVisible(true);
+      if (activeModal === "createEnv") {
+        envInput.handlePaste(text);
+      } else if (activeModal === "createFolder") {
+        folderInput.handlePaste(text);
+      } else if (activeModal === "createSecret") {
+        if (secretInputFocus === "key") {
+          secretKeyInput.handlePaste(text);
+        } else {
+          secretValueInput.handlePaste(text);
+        }
+      } else if (activeModal === "manageCollaborators" && collabAddMode) {
+        collabEmailInput.handlePaste(text);
+      }
+    },
+    [
+      activeModal,
+      secretInputFocus,
+      collabAddMode,
+      envInput,
+      folderInput,
+      secretKeyInput,
+      secretValueInput,
+      collabEmailInput,
+    ],
+  );
+
+  usePaste(handlePaste);
 
   const selectedEnv = environments.find((e) => e.id === selectedEnvId);
   const selectedFolder = folders.find((f) => f.id === selectedFolderId);
@@ -130,13 +186,6 @@ export function ProjectPage({
   };
 
   const items = getCurrentItems();
-
-  const getBreadcrumb = () => {
-    const parts: string[] = [];
-    if (selectedEnv) parts.push(selectedEnv.name);
-    if (selectedFolder) parts.push(selectedFolder.name);
-    return parts.length > 0 ? parts.join(" / ") : "Select Environment";
-  };
 
   const moveUp = () => {
     if (items.length === 0) return;
@@ -179,66 +228,81 @@ export function ProjectPage({
 
   const closeModal = () => {
     setActiveModal("none");
-    setNewEnvName("");
-    setNewFolderName("");
-    setNewSecretKey("");
-    setNewSecretValue("");
+    envInput.reset();
+    folderInput.reset();
+    secretKeyInput.reset();
+    secretValueInput.reset();
+    collabEmailInput.reset();
     setSecretInputFocus("key");
-  };
-
-  const handleCreateEnv = () => {
-    if (newEnvName.trim()) {
-      console.log("Creating environment:", newEnvName);
-      closeModal();
-    }
-  };
-
-  const handleCreateFolder = () => {
-    if (newFolderName.trim()) {
-      console.log("Creating folder:", newFolderName);
-      closeModal();
-    }
+    setCollabAddMode(false);
+    setCollabSelectedIndex(0);
   };
 
   const handleCreateSecret = () => {
-    if (newSecretKey.trim() && newSecretValue.trim()) {
-      console.log("Creating secret:", newSecretKey, newSecretValue);
+    if (secretKeyInput.value.trim() && secretValueInput.value.trim()) {
+      console.log("Creating secret:", secretKeyInput.value, secretValueInput.value);
       closeModal();
     }
   };
 
   useKeyboard((key) => {
+    setCursorVisible(true);
+
     if (activeModal === "createEnv") {
-      if (key.name === "escape") closeModal();
-      else if (key.name === "return") handleCreateEnv();
-      else if (key.name === "backspace") setNewEnvName((prev) => prev.slice(0, -1));
-      else if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
-        setNewEnvName((prev) => prev + key.sequence);
+      if (key.name === "escape") {
+        closeModal();
+      } else if (!envInput.handleKey(key)) {
+        return;
       }
       return;
     }
 
     if (activeModal === "createFolder") {
-      if (key.name === "escape") closeModal();
-      else if (key.name === "return") handleCreateFolder();
-      else if (key.name === "backspace") setNewFolderName((prev) => prev.slice(0, -1));
-      else if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
-        setNewFolderName((prev) => prev + key.sequence);
+      if (key.name === "escape") {
+        closeModal();
+      } else if (!folderInput.handleKey(key)) {
+        return;
       }
       return;
     }
 
     if (activeModal === "createSecret") {
-      if (key.name === "escape") closeModal();
-      else if (key.name === "tab") {
+      if (key.name === "escape") {
+        closeModal();
+      } else if (key.name === "tab") {
         setSecretInputFocus((prev) => (prev === "key" ? "value" : "key"));
-      } else if (key.name === "return") handleCreateSecret();
-      else if (key.name === "backspace") {
-        if (secretInputFocus === "key") setNewSecretKey((prev) => prev.slice(0, -1));
-        else setNewSecretValue((prev) => prev.slice(0, -1));
-      } else if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
-        if (secretInputFocus === "key") setNewSecretKey((prev) => prev + key.sequence);
-        else setNewSecretValue((prev) => prev + key.sequence);
+      } else if (key.name === "return") {
+        handleCreateSecret();
+      } else {
+        const currentInput = secretInputFocus === "key" ? secretKeyInput : secretValueInput;
+        currentInput.handleKey(key);
+      }
+      return;
+    }
+
+    if (activeModal === "manageCollaborators") {
+      if (collabAddMode) {
+        if (key.name === "escape") {
+          setCollabAddMode(false);
+          collabEmailInput.reset();
+        } else if (!collabEmailInput.handleKey(key)) {
+          return;
+        }
+      } else {
+        if (key.name === "escape") {
+          closeModal();
+        } else if (key.name === "a") {
+          setCollabAddMode(true);
+        } else if (key.name === "d") {
+          const selectedCollab = sharedUsers[collabSelectedIndex];
+          if (selectedCollab) {
+            console.log("Revoking collaborator:", selectedCollab.email);
+          }
+        } else if (key.name === "up" || key.name === "k") {
+          setCollabSelectedIndex((prev) => (prev > 0 ? prev - 1 : sharedUsers.length - 1));
+        } else if (key.name === "down" || key.name === "j") {
+          setCollabSelectedIndex((prev) => (prev < sharedUsers.length - 1 ? prev + 1 : 0));
+        }
       }
       return;
     }
@@ -257,72 +321,105 @@ export function ProjectPage({
       setActiveModal("createFolder");
     } else if (key.name === "s" && (viewLevel === "environment" || viewLevel === "folder")) {
       setActiveModal("createSecret");
+    } else if (key.name === "c") {
+      setActiveModal("manageCollaborators");
     }
   });
 
   const getShortcuts = () => {
     const base = [
-      { key: "↑/k", description: "Up" },
-      { key: "↓/j", description: "Down" },
+      { key: "↑/k", description: "up" },
+      { key: "↓/j", description: "down" },
     ];
 
     if (viewLevel === "environments") {
       return [
-        { key: "n", description: "New Env" },
-        { key: "↵", description: "Enter" },
+        { key: "n", description: "new environment" },
+        { key: "c", description: "collaborators" },
+        { key: "↵", description: "enter" },
         ...base,
-        { key: "Esc", description: "Back" },
+        { key: "esc", description: "back" },
       ];
     }
     if (viewLevel === "environment") {
       return [
-        { key: "f", description: "New Folder" },
-        { key: "s", description: "New Secret" },
-        { key: "↵", description: "Enter" },
+        { key: "f", description: "new folder" },
+        { key: "s", description: "new secret" },
+        { key: "c", description: "collaborators" },
+        { key: "↵", description: "enter" },
         ...base,
-        { key: "Esc", description: "Back" },
+        { key: "esc", description: "back" },
       ];
     }
-    return [{ key: "s", description: "New Secret" }, ...base, { key: "Esc", description: "Back" }];
+    return [
+      { key: "s", description: "new secret" },
+      { key: "c", description: "collaborators" },
+      ...base,
+      { key: "esc", description: "back" },
+    ];
   };
 
   const getTypeIndicator = (type: "env" | "folder" | "secret") => {
-    if (type === "env") return { prefix: "[E]", color: "#bb9af7" };
-    if (type === "folder") return { prefix: "[/]", color: "#e0af68" };
-    return { prefix: "[*]", color: "#9ece6a" };
+    if (type === "env") return { prefix: "[E]", color: THEME_COLORS.secondary };
+    if (type === "folder") return { prefix: "[/]", color: THEME_COLORS.accent };
+    return { prefix: "[*]", color: THEME_COLORS.success };
   };
 
   return (
-    <box flexDirection="column" width={width} height={height} backgroundColor="#0f0f14">
-      {/* Header */}
+    <box
+      flexDirection="column"
+      width={width}
+      height={height}
+      backgroundColor={THEME_COLORS.background}
+    >
       <box
-        height={3}
+        height={4}
         paddingLeft={2}
         paddingRight={2}
-        alignItems="center"
-        backgroundColor="#1a1b26"
+        flexDirection="column"
+        justifyContent="center"
+        backgroundColor={THEME_COLORS.header}
       >
-        <box flexDirection="row" justifyContent="space-between" width={width - 4}>
-          <text>
-            <span fg="#7aa2f7">
-              <strong>relic</strong>
-            </span>
-            <span fg="#3b4261"> / </span>
-            <span fg="#c0caf5">{projectName}</span>
-          </text>
-          <text fg={STATUS_COLORS[projectStatus]}>{projectStatus}</text>
-        </box>
+        <text>
+          <span fg={THEME_COLORS.primary}>relic</span>
+          <span fg={THEME_COLORS.textDim}> / </span>
+          <span fg={THEME_COLORS.text}>
+            <strong>{projectName}</strong>
+          </span>
+        </text>
+        <text>
+          <span fg={STATUS_COLORS[projectStatus]}>
+            {projectStatus === "owned" ? "●" : projectStatus === "shared" ? "◐" : "○"}{" "}
+            {projectStatus}
+          </span>
+          <span fg={THEME_COLORS.textDim}> · </span>
+          <span fg={THEME_COLORS.textMuted}>{environments.length} environments</span>
+          <span fg={THEME_COLORS.textDim}> · </span>
+          <span fg={THEME_COLORS.textMuted}>{secrets.length} secrets</span>
+        </text>
       </box>
 
-      {/* Breadcrumb */}
-      <box height={1} paddingLeft={2}>
-        <text fg="#565f89">{getBreadcrumb()}</text>
+      <box height={1} paddingLeft={2} marginTop={1}>
+        <text>
+          <span fg={THEME_COLORS.textDim}>relic / {projectName}</span>
+          {selectedEnv && <span fg={THEME_COLORS.textDim}> / </span>}
+          {selectedEnv && <span fg={THEME_COLORS.secondary}>{selectedEnv.name}</span>}
+          {selectedFolder && <span fg={THEME_COLORS.textDim}> / </span>}
+          {selectedFolder && <span fg={THEME_COLORS.accent}>{selectedFolder.name}</span>}
+        </text>
       </box>
 
-      {/* Main content list */}
+      <box height={1} paddingLeft={2} marginTop={1}>
+        <text fg={THEME_COLORS.textMuted}>
+          {viewLevel === "environments" && "─ Environments"}
+          {viewLevel === "environment" && "─ Folders & Secrets"}
+          {viewLevel === "folder" && "─ Secrets"}
+        </text>
+      </box>
+
       <box flexDirection="column" flexGrow={1} paddingLeft={2} paddingRight={2} paddingTop={1}>
         {items.length === 0 ? (
-          <text fg="#3b4261">Empty. Use shortcuts below to create items.</text>
+          <text fg={THEME_COLORS.textDim}>Empty. Use shortcuts below to create items.</text>
         ) : (
           items.map((item, index) => {
             const indicator = getTypeIndicator(item.type);
@@ -332,11 +429,14 @@ export function ProjectPage({
             return (
               <box key={item.id} height={1}>
                 <text>
-                  <span fg={isSelected ? "#7aa2f7" : "#3b4261"}>
+                  <span fg={isSelected ? THEME_COLORS.primary : THEME_COLORS.textDim}>
                     {isSelected && canEnter ? "› " : "  "}
                   </span>
                   <span fg={indicator.color}>{indicator.prefix}</span>
-                  <span fg={isSelected ? "#c0caf5" : "#565f89"}> {item.name}</span>
+                  <span fg={isSelected ? THEME_COLORS.text : THEME_COLORS.textMuted}>
+                    {" "}
+                    {item.name}
+                  </span>
                 </text>
               </box>
             );
@@ -344,28 +444,27 @@ export function ProjectPage({
         )}
       </box>
 
-      {/* Footer panels */}
       <box height={6} flexDirection="row" paddingLeft={2} paddingRight={2} gap={2}>
         <box flexDirection="column" width="50%">
-          <text fg="#3b4261">─ Collaborators [{sharedUsers.length}]</text>
+          <text fg={THEME_COLORS.textDim}>─ Collaborators [{sharedUsers.length}]</text>
           <box flexDirection="column" paddingLeft={2} paddingTop={1}>
             {sharedUsers.length > 0 ? (
               sharedUsers.slice(0, 3).map((user) => (
-                <text key={user.email} fg="#565f89">
+                <text key={user.email} fg={THEME_COLORS.textMuted}>
                   {user.email}
                 </text>
               ))
             ) : (
-              <text fg="#3b4261">none</text>
+              <text fg={THEME_COLORS.textDim}>none</text>
             )}
           </box>
         </box>
 
         <box flexDirection="column" width="50%">
-          <text fg="#3b4261">─ Activity</text>
+          <text fg={THEME_COLORS.textDim}>─ Activity</text>
           <box flexDirection="column" paddingLeft={2} paddingTop={1}>
             {logs.slice(0, 3).map((log) => (
-              <text key={log.id} fg="#565f89">
+              <text key={log.id} fg={THEME_COLORS.textMuted}>
                 {log.action.split(".")[1]} · {log.user}
               </text>
             ))}
@@ -373,119 +472,43 @@ export function ProjectPage({
         </box>
       </box>
 
-      <Modal
+      <CreateEnvironmentModal
         visible={activeModal === "createEnv"}
-        title="Create Environment"
-        width={50}
-        height={10}
-      >
-        <box flexDirection="column" alignItems="center" gap={1}>
-          <text fg="#565f89">Environment name:</text>
-          <box
-            width={40}
-            height={3}
-            borderStyle="single"
-            borderColor="#7aa2f7"
-            backgroundColor="#292e42"
-            paddingLeft={1}
-            alignItems="center"
-          >
-            <text fg="#c0caf5">
-              {newEnvName}
-              <span fg="#7aa2f7">_</span>
-            </text>
-          </box>
-          <box flexDirection="row" gap={2}>
-            <text>
-              <span fg="#9ece6a">[↵]</span>
-              <span fg="#565f89"> Create</span>
-            </text>
-            <text>
-              <span fg="#f7768e">[Esc]</span>
-              <span fg="#565f89"> Cancel</span>
-            </text>
-          </box>
-        </box>
-      </Modal>
+        value={envInput.value}
+        cursor={envInput.cursor}
+        cursorVisible={cursorVisible}
+        onClose={closeModal}
+      />
 
-      <Modal visible={activeModal === "createFolder"} title="Create Folder" width={50} height={10}>
-        <box flexDirection="column" alignItems="center" gap={1}>
-          <text fg="#565f89">Folder name:</text>
-          <box
-            width={40}
-            height={3}
-            borderStyle="single"
-            borderColor="#7aa2f7"
-            backgroundColor="#292e42"
-            paddingLeft={1}
-            alignItems="center"
-          >
-            <text fg="#c0caf5">
-              {newFolderName}
-              <span fg="#7aa2f7">_</span>
-            </text>
-          </box>
-          <box flexDirection="row" gap={2}>
-            <text>
-              <span fg="#9ece6a">[↵]</span>
-              <span fg="#565f89"> Create</span>
-            </text>
-            <text>
-              <span fg="#f7768e">[Esc]</span>
-              <span fg="#565f89"> Cancel</span>
-            </text>
-          </box>
-        </box>
-      </Modal>
+      <CreateFolderModal
+        visible={activeModal === "createFolder"}
+        value={folderInput.value}
+        cursor={folderInput.cursor}
+        cursorVisible={cursorVisible}
+        onClose={closeModal}
+      />
 
-      <Modal visible={activeModal === "createSecret"} title="Create Secret" width={50} height={14}>
-        <box flexDirection="column" alignItems="center" gap={1}>
-          <text fg="#565f89">Secret Key:</text>
-          <box
-            width={40}
-            height={3}
-            borderStyle="single"
-            borderColor={secretInputFocus === "key" ? "#7aa2f7" : "#3b4261"}
-            backgroundColor="#292e42"
-            paddingLeft={1}
-            alignItems="center"
-          >
-            <text fg="#c0caf5">
-              {newSecretKey}
-              {secretInputFocus === "key" && <span fg="#7aa2f7">_</span>}
-            </text>
-          </box>
-          <text fg="#565f89">Secret Value:</text>
-          <box
-            width={40}
-            height={3}
-            borderStyle="single"
-            borderColor={secretInputFocus === "value" ? "#7aa2f7" : "#3b4261"}
-            backgroundColor="#292e42"
-            paddingLeft={1}
-            alignItems="center"
-          >
-            <text fg="#c0caf5">
-              {newSecretValue}
-              {secretInputFocus === "value" && <span fg="#7aa2f7">_</span>}
-            </text>
-          </box>
-          <box flexDirection="row" gap={2}>
-            <text>
-              <span fg="#9ece6a">[↵]</span>
-              <span fg="#565f89"> Create</span>
-            </text>
-            <text>
-              <span fg="#bb9af7">[Tab]</span>
-              <span fg="#565f89"> Switch</span>
-            </text>
-            <text>
-              <span fg="#f7768e">[Esc]</span>
-              <span fg="#565f89"> Cancel</span>
-            </text>
-          </box>
-        </box>
-      </Modal>
+      <CreateSecretModal
+        visible={activeModal === "createSecret"}
+        keyValue={secretKeyInput.value}
+        keyCursor={secretKeyInput.cursor}
+        secretValue={secretValueInput.value}
+        secretCursor={secretValueInput.cursor}
+        cursorVisible={cursorVisible}
+        focusedField={secretInputFocus}
+        onClose={closeModal}
+      />
+
+      <ManageCollaboratorsModal
+        visible={activeModal === "manageCollaborators"}
+        collaborators={sharedUsers}
+        selectedIndex={collabSelectedIndex}
+        isAddMode={collabAddMode}
+        addEmail={collabEmailInput.value}
+        addEmailCursor={collabEmailInput.cursor}
+        cursorVisible={cursorVisible}
+        onClose={closeModal}
+      />
 
       {activeModal === "none" && <GuideBar shortcuts={getShortcuts()} />}
     </box>
