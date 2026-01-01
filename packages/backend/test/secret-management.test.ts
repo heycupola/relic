@@ -174,7 +174,7 @@ describe("Secret Management", () => {
       mockAutumn.setFeature(owner.userId, "projects", 2);
     });
 
-    test("should create secret with default server scope", async () => {
+    test("should create secret with default shared scope", async () => {
       const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
 
       const { projectId } = await owner.asUser.action(api.project.createProject, {
@@ -202,7 +202,7 @@ describe("Secret Management", () => {
         secretId,
       });
 
-      expect(secret.scope).toBe("server");
+      expect(secret.scope).toBe("shared");
     });
 
     test("should create secret with explicit client scope", async () => {

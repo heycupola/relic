@@ -67,7 +67,7 @@ export default defineSchema({
     key: v.string(),
     encryptedValue: v.string(),
     valueType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
-    scope: v.union(v.literal("client"), v.literal("server")),
+    scope: v.union(v.literal("client"), v.literal("server"), v.literal("shared")),
     description: v.optional(v.string()),
     encryptionKeyVersion: v.number(),
     tags: v.optional(v.array(v.string())),
