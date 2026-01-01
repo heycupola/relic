@@ -1,45 +1,117 @@
-import { useTerminalDimensions } from "@opentui/react";
 import { THEME_COLORS } from "../lib/constants";
-import { useTaskQueue } from "../lib/useTaskQueue";
 
 interface Shortcut {
   key: string;
   description: string;
 }
 
-interface GuideBarProps {
+interface ShortcutGroup {
   shortcuts: Shortcut[];
 }
 
-export function GuideBar({ shortcuts }: GuideBarProps) {
-  const { width, height } = useTerminalDimensions();
-  const { task } = useTaskQueue();
+interface GuideBarProps {
+  shortcuts?: Shortcut[];
+  groups?: {
+    primary: ShortcutGroup[];
+    secondary: ShortcutGroup[];
+  };
+  inline?: boolean;
+  customWidth?: number;
+  minimal?: boolean;
+  showHelp?: boolean; // Only show [?] help when this is true
+}
 
-  const hasActiveTask = task.status !== "idle";
-  const topPosition = hasActiveTask ? height - 2 : height - 1;
+/**
+ * Ultra-minimal premium GuideBar
+ * Shows only essential actions - trusts users to know navigation
+ */
+export function GuideBar({
+  shortcuts,
+  groups,
+  customWidth,
+  minimal = false,
+  showHelp = false,
+}: GuideBarProps) {
+  const boxWidth = customWidth ?? 66;
 
-  return (
-    <box
-      position="absolute"
-      left={0}
-      top={topPosition}
-      width={width}
-      height={1}
-      backgroundColor={THEME_COLORS.header}
-      flexDirection="row"
-      justifyContent="flex-start"
-      paddingLeft={1}
-      gap={2}
-    >
-      <text>
-        {shortcuts.map((shortcut, index) => (
-          <>
-            <span fg={THEME_COLORS.primary}>{shortcut.key}</span>
-            <span fg={THEME_COLORS.textMuted}> {shortcut.description}</span>
-            {index < shortcuts.length - 1 && <span fg={THEME_COLORS.textDim}> │ </span>}
-          </>
-        ))}
-      </text>
-    </box>
-  );
+  // Ultra-minimal premium style
+  if (minimal && groups) {
+    // Only show first 3 primary actions + help (if enabled)
+    const primaryActions = groups.primary.flatMap((g) => g.shortcuts).slice(0, 3);
+
+    return (
+      <box width={boxWidth} height={1}>
+        <text>
+          {primaryActions.map((shortcut, index) => (
+            <>
+              <span fg={THEME_COLORS.textDim}>[</span>
+              <span fg={THEME_COLORS.primary}>{shortcut.key}</span>
+              <span fg={THEME_COLORS.textDim}>]</span>
+              <span fg={THEME_COLORS.textMuted}> {shortcut.description}</span>
+              {(index < primaryActions.length - 1 || showHelp) && (
+                <span fg={THEME_COLORS.textDim}> </span>
+              )}
+            </>
+          ))}
+          {showHelp && (
+            <>
+              <span fg={THEME_COLORS.textDim}>[</span>
+              <span fg={THEME_COLORS.accent}>?</span>
+              <span fg={THEME_COLORS.textDim}>]</span>
+              <span fg={THEME_COLORS.textMuted}> help</span>
+            </>
+          )}
+        </text>
+      </box>
+    );
+  }
+
+  // Grouped layout fallback
+  if (groups) {
+    const allShortcuts = [
+      ...groups.primary.flatMap((g) => g.shortcuts),
+      ...groups.secondary.flatMap((g) => g.shortcuts),
+    ];
+
+    return (
+      <box width={boxWidth} height={1}>
+        <text>
+          {allShortcuts.slice(0, 5).map((shortcut, index) => (
+            <>
+              <span fg={THEME_COLORS.textDim}>[</span>
+              <span fg={THEME_COLORS.primary}>{shortcut.key}</span>
+              <span fg={THEME_COLORS.textDim}>]</span>
+              <span fg={THEME_COLORS.textMuted}> {shortcut.description}</span>
+              {index < Math.min(allShortcuts.length, 5) - 1 && (
+                <span fg={THEME_COLORS.textDim}> </span>
+              )}
+            </>
+          ))}
+        </text>
+      </box>
+    );
+  }
+
+  // Legacy single shortcuts array
+  if (shortcuts) {
+    return (
+      <box width={boxWidth} height={1}>
+        <text>
+          {shortcuts.slice(0, 5).map((shortcut, index) => (
+            <>
+              <span fg={THEME_COLORS.textDim}>[</span>
+              <span fg={THEME_COLORS.primary}>{shortcut.key}</span>
+              <span fg={THEME_COLORS.textDim}>]</span>
+              <span fg={THEME_COLORS.textMuted}> {shortcut.description}</span>
+              {index < Math.min(shortcuts.length, 5) - 1 && (
+                <span fg={THEME_COLORS.textDim}> </span>
+              )}
+            </>
+          ))}
+        </text>
+      </box>
+    );
+  }
+
+  return null;
 }
