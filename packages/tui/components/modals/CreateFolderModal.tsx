@@ -22,7 +22,7 @@ export function CreateFolderModal({
       visible={visible}
       title="Create Folder"
       width={50}
-      height={8}
+      height={9}
       shortcuts={[
         { key: "↵", description: "create" },
         { key: "esc", description: "cancel" },

@@ -31,7 +31,7 @@ export function TextInput({
   const cursorFg = showCursor ? THEME_COLORS.header : THEME_COLORS.text;
 
   return (
-    <box flexDirection="column" gap={1}>
+    <box flexDirection="column">
       {label && (
         <box flexDirection="row" justifyContent="space-between" width={width}>
           <text fg={THEME_COLORS.textMuted}>{label}</text>

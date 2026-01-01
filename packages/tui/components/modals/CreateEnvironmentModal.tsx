@@ -22,7 +22,7 @@ export function CreateEnvironmentModal({
       visible={visible}
       title="Create Environment"
       width={50}
-      height={8}
+      height={9}
       shortcuts={[
         { key: "↵", description: "create" },
         { key: "esc", description: "cancel" },

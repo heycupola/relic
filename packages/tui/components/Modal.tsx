@@ -55,11 +55,12 @@ export function Modal({
         backgroundColor={THEME_COLORS.header}
         paddingLeft={2}
         paddingRight={2}
+        paddingTop={1}
         paddingBottom={1}
       >
         {/* Title */}
         {title && (
-          <box height={3} justifyContent="center" alignItems="center">
+          <box height={1} justifyContent="center" alignItems="center" marginBottom={1}>
             <text fg={THEME_COLORS.text}>
               <strong>{title}</strong>
             </text>
@@ -69,29 +70,23 @@ export function Modal({
         <box flexDirection="column" flexGrow={1} alignItems="center" justifyContent="center">
           {children}
         </box>
+        {/* Shortcuts - inside card at bottom */}
+        {shortcuts && (
+          <box height={1} justifyContent="center" alignItems="center" marginTop={2}>
+            <text>
+              {shortcuts.map((shortcut, index) => (
+                <>
+                  <span fg={THEME_COLORS.textDim}>[</span>
+                  <span fg={THEME_COLORS.primary}>{shortcut.key}</span>
+                  <span fg={THEME_COLORS.textDim}>]</span>
+                  <span fg={THEME_COLORS.textMuted}> {shortcut.description}</span>
+                  {index < shortcuts.length - 1 && <span fg={THEME_COLORS.textDim}> </span>}
+                </>
+              ))}
+            </text>
+          </box>
+        )}
       </box>
-      {/* Shortcuts - directly below modal card */}
-      {shortcuts && (
-        <box
-          position="absolute"
-          left={left}
-          top={top + height}
-          width={width}
-          height={1}
-          justifyContent="center"
-          alignItems="center"
-        >
-          <text>
-            {shortcuts.map((shortcut, index) => (
-              <>
-                <span fg={THEME_COLORS.primary}>{shortcut.key}</span>
-                <span fg={THEME_COLORS.textMuted}> {shortcut.description}</span>
-                {index < shortcuts.length - 1 && <span fg={THEME_COLORS.textDim}> </span>}
-              </>
-            ))}
-          </text>
-        </box>
-      )}
     </>
   );
 }
