@@ -18,6 +18,7 @@ export interface Folder {
 export interface Secret {
   id: string;
   key: string;
+  value?: string;
   folderId?: string;
   environmentId: string;
 }
@@ -42,6 +43,7 @@ export type ModalType =
   | "createEnv"
   | "createFolder"
   | "createSecret"
-  | "manageCollaborators";
+  | "manageCollaborators"
+  | "commandPalette";
 
 export type ProjectStatus = "owned" | "shared" | "archived";

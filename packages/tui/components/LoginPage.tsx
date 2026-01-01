@@ -16,14 +16,10 @@ const LOGIN_OPTIONS = [
   { id: "github", label: "GitHub" },
 ] as const;
 
-const SHORTCUTS = [
-  { key: "↑/k", description: "up" },
-  { key: "↓/j", description: "down" },
-  { key: "↵", description: "select" },
-  { key: "q", description: "quit" },
-];
-
-const MODAL_SHORTCUTS = [{ key: "esc", description: "cancel" }];
+const SHORTCUT_GROUPS = {
+  primary: [{ shortcuts: [{ key: "↵", description: "sign in" }] }],
+  secondary: [],
+};
 
 interface DeviceAuthState {
   isOpen: boolean;
@@ -114,8 +110,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     }
   });
 
-  const currentShortcuts = deviceAuth.isOpen ? MODAL_SHORTCUTS : SHORTCUTS;
-
   return (
     <box
       flexDirection="column"
@@ -135,8 +129,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           alignItems="center"
           backgroundColor={THEME_COLORS.header}
           width={50}
-          paddingTop={2}
-          paddingBottom={2}
+          paddingTop={1}
+          paddingBottom={1}
           paddingLeft={2}
           paddingRight={2}
         >
@@ -148,11 +142,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             <text fg={THEME_COLORS.textMuted}>Zero-knowledge secret management</text>
           </box>
 
-          <box height={1} marginBottom={1} width={44} justifyContent="center" alignItems="center">
-            <text fg={THEME_COLORS.textDim}>───────── Sign in with ─────────</text>
-          </box>
-
-          <box flexDirection="column" alignItems="center" width={44}>
+          <box flexDirection="column" width={44} marginTop={1}>
             <box flexDirection="column">
               {LOGIN_OPTIONS.map((option, index) => {
                 const isSelected = index === selectedIndex;
@@ -171,6 +161,13 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               })}
             </box>
           </box>
+
+          {/* Shortcuts - inside card, minimal */}
+          {!deviceAuth.isOpen && (
+            <box marginTop={1}>
+              <GuideBar groups={SHORTCUT_GROUPS} customWidth={44} minimal={true} />
+            </box>
+          )}
         </box>
       </box>
 
@@ -189,8 +186,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           <text fg={THEME_COLORS.textDim}>Waiting for authorization...</text>
         </box>
       </Modal>
-
-      <GuideBar shortcuts={currentShortcuts} />
     </box>
   );
 }

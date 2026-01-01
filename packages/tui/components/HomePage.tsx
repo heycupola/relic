@@ -31,12 +31,13 @@ const STATUS_ICONS: Record<ProjectStatus, string> = {
 
 const PROJECT_NAME_MAX_LENGTH = 50;
 
-export function HomePage({ userName, onSelectProject, onLogout }: HomePageProps) {
+export function HomePage({ onSelectProject, onLogout }: HomePageProps) {
   const { width, height } = useTerminalDimensions();
   const { runTask, showSuccess } = useTaskQueue();
 
   const [projects] = useState<Project[]>(MOCK_PROJECTS);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [scrollOffset, setScrollOffset] = useState(0);
   const [activeModal, setActiveModal] = useState<ModalType>("none");
   const [cursorVisible, setCursorVisible] = useState(true);
 
@@ -74,14 +75,32 @@ export function HomePage({ userName, onSelectProject, onLogout }: HomePageProps)
 
   usePaste(handlePaste);
 
+  const PAGE_SIZE = 5;
+
   const moveUp = () => {
     if (projects.length === 0) return;
-    setSelectedIndex((prev) => (prev > 0 ? prev - 1 : projects.length - 1));
+    setSelectedIndex((prev) => {
+      const next = prev > 0 ? prev - 1 : projects.length - 1;
+      if (next < scrollOffset) {
+        setScrollOffset(next);
+      } else if (next >= scrollOffset + PAGE_SIZE) {
+        setScrollOffset(Math.max(0, projects.length - PAGE_SIZE));
+      }
+      return next;
+    });
   };
 
   const moveDown = () => {
     if (projects.length === 0) return;
-    setSelectedIndex((prev) => (prev < projects.length - 1 ? prev + 1 : 0));
+    setSelectedIndex((prev) => {
+      const next = prev < projects.length - 1 ? prev + 1 : 0;
+      if (next >= scrollOffset + PAGE_SIZE) {
+        setScrollOffset(next - PAGE_SIZE + 1);
+      } else if (next < scrollOffset) {
+        setScrollOffset(0);
+      }
+      return next;
+    });
   };
 
   const selectProject = () => {
@@ -136,28 +155,17 @@ export function HomePage({ userName, onSelectProject, onLogout }: HomePageProps)
     }
   });
 
-  const getShortcuts = () => {
-    if (activeModal === "create") {
-      return [
-        { key: "↵", description: "create" },
-        { key: "esc", description: "cancel" },
-      ];
-    }
-    if (activeModal === "logout") {
-      return [
-        { key: "↵", description: "confirm" },
-        { key: "esc", description: "cancel" },
-      ];
-    }
-    return [
-      { key: "↑/k", description: "up" },
-      { key: "↓/j", description: "down" },
-      { key: "↵", description: "select" },
-      { key: "n", description: "new project" },
-      { key: "ctrl+l", description: "logout" },
-      { key: "q", description: "quit" },
-    ];
-  };
+  const getShortcutGroups = () => ({
+    primary: [
+      {
+        shortcuts: [
+          { key: "n", description: "new project" },
+          { key: "^l", description: "logout" },
+        ],
+      },
+    ],
+    secondary: [],
+  });
 
   return (
     <box
@@ -178,8 +186,8 @@ export function HomePage({ userName, onSelectProject, onLogout }: HomePageProps)
           alignItems="center"
           backgroundColor={THEME_COLORS.header}
           width={50}
-          paddingTop={2}
-          paddingBottom={2}
+          paddingTop={1}
+          paddingBottom={1}
           paddingLeft={2}
           paddingRight={2}
         >
@@ -202,19 +210,24 @@ export function HomePage({ userName, onSelectProject, onLogout }: HomePageProps)
             justifyContent="space-between"
             alignItems="center"
           >
-            <text fg={THEME_COLORS.textMuted}> Projects</text>
+            <text fg={THEME_COLORS.textMuted}>Projects</text>
             <text fg={THEME_COLORS.textDim}>{projects.length} / 10</text>
           </box>
 
           {/* Project List */}
-          <box flexDirection="column" width={44}>
+          <box
+            flexDirection="column"
+            width={44}
+            height={projects.length === 0 ? 1 : Math.min(projects.length, PAGE_SIZE)}
+          >
             {projects.length === 0 ? (
               <box height={1}>
                 <text fg={THEME_COLORS.textDim}>No projects yet. Press 'n' to create one.</text>
               </box>
             ) : (
-              projects.map((project, index) => {
-                const isSelected = index === selectedIndex;
+              projects.slice(scrollOffset, scrollOffset + PAGE_SIZE).map((project, index) => {
+                const actualIndex = index + scrollOffset;
+                const isSelected = actualIndex === selectedIndex;
                 const statusColor = STATUS_COLORS[project.status];
                 const statusIcon = STATUS_ICONS[project.status];
 
@@ -242,6 +255,13 @@ export function HomePage({ userName, onSelectProject, onLogout }: HomePageProps)
               })
             )}
           </box>
+
+          {/* Shortcuts - inside card, minimal style */}
+          {activeModal === "none" && (
+            <box marginTop={1}>
+              <GuideBar groups={getShortcutGroups()} customWidth={44} minimal={true} />
+            </box>
+          )}
         </box>
       </box>
 
@@ -249,20 +269,20 @@ export function HomePage({ userName, onSelectProject, onLogout }: HomePageProps)
         visible={activeModal === "create"}
         title="Create New Project"
         width={50}
-        height={8}
+        height={9}
         shortcuts={[
           { key: "↵", description: "create" },
           { key: "esc", description: "cancel" },
         ]}
       >
-        <box flexDirection="column" alignItems="center" gap={1}>
-          <text fg={THEME_COLORS.textMuted}>Enter project name:</text>
+        <box flexDirection="column" alignItems="center">
           <TextInput
             value={projectNameInput.value}
             cursor={projectNameInput.cursor}
             cursorVisible={cursorVisible}
             width={40}
             maxLength={PROJECT_NAME_MAX_LENGTH}
+            label="Project name:"
           />
         </box>
       </Modal>
@@ -270,8 +290,8 @@ export function HomePage({ userName, onSelectProject, onLogout }: HomePageProps)
       <Modal
         visible={activeModal === "logout"}
         title="Logout"
-        width={40}
-        height={6}
+        width={45}
+        height={8}
         shortcuts={[
           { key: "y", description: "yes" },
           { key: "n", description: "no" },
@@ -281,8 +301,6 @@ export function HomePage({ userName, onSelectProject, onLogout }: HomePageProps)
           <text fg={THEME_COLORS.text}>Are you sure you want to logout?</text>
         </box>
       </Modal>
-
-      {activeModal === "none" && <GuideBar shortcuts={getShortcuts()} />}
     </box>
   );
 }

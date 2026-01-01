@@ -5,6 +5,7 @@ import { LoginPage } from "./components/LoginPage";
 import { ProjectPage } from "./components/ProjectPage";
 import { TaskBar } from "./components/TaskBar";
 import { RouterProvider, useRouter } from "./lib/router";
+import type { ProjectStatus } from "./lib/types";
 import { TaskProvider } from "./lib/useTaskQueue";
 
 function AppRouter() {
@@ -21,7 +22,7 @@ function AppRouter() {
   const handleSelectProject = (
     projectId: string,
     projectName: string,
-    projectStatus: "owned" | "shared" | "archived",
+    projectStatus: ProjectStatus,
   ) => {
     navigate({ name: "project", projectId, projectName, projectStatus });
   };
@@ -34,7 +35,13 @@ function AppRouter() {
     case "login":
       return <LoginPage onLogin={handleLogin} />;
     case "home":
-      return <HomePage onLogout={handleLogout} onSelectProject={handleSelectProject} />;
+      return (
+        <HomePage
+          userName="icanvardar"
+          onLogout={handleLogout}
+          onSelectProject={handleSelectProject}
+        />
+      );
     case "project":
       return (
         <ProjectPage
@@ -44,8 +51,6 @@ function AppRouter() {
           onBack={handleBackFromProject}
         />
       );
-    case "settings":
-      return <HomePage onLogout={handleLogout} onSelectProject={handleSelectProject} />;
     default:
       return <LoginPage onLogin={handleLogin} />;
   }
