@@ -12,7 +12,7 @@ interface ManageCollaboratorsModalProps {
   visible: boolean;
   collaborators: Collaborator[];
   selectedIndex: number;
-  isAddMode: boolean;
+  mode: "list" | "add" | "confirmRevoke";
   addEmail: string;
   addEmailCursor: number;
   cursorVisible: boolean;
@@ -23,7 +23,7 @@ export function ManageCollaboratorsModal({
   visible,
   collaborators,
   selectedIndex,
-  isAddMode,
+  mode,
   addEmail,
   addEmailCursor,
   cursorVisible,
@@ -31,28 +31,53 @@ export function ManageCollaboratorsModal({
 }: ManageCollaboratorsModalProps) {
   if (!visible) return null;
 
-  const shortcuts = isAddMode
-    ? [
+  const selectedCollaborator = collaborators[selectedIndex];
+
+  // Dynamic title based on mode
+  const getTitle = () => {
+    if (mode === "add") return "Add New Collaborator";
+    if (mode === "confirmRevoke") return "Revoke Access";
+    return "Manage Collaborators";
+  };
+
+  // Dynamic shortcuts based on mode
+  const getShortcuts = () => {
+    if (mode === "add") {
+      return [
         { key: "↵", description: "add" },
         { key: "esc", description: "back" },
-      ]
-    : [
-        { key: "a", description: "add user" },
-        { key: "d", description: "revoke" },
-        { key: "↑/↓", description: "navigate" },
-        { key: "esc", description: "close" },
       ];
+    }
+    if (mode === "confirmRevoke") {
+      return [
+        { key: "y", description: "yes" },
+        { key: "n", description: "no" },
+      ];
+    }
+    return [
+      { key: "a", description: "add" },
+      { key: "d", description: "revoke" },
+      { key: "esc", description: "close" },
+    ];
+  };
+
+  // Dynamic height based on mode
+  const getHeight = () => {
+    if (mode === "add") return 9;
+    if (mode === "confirmRevoke") return 8;
+    return 13;
+  };
 
   return (
     <Modal
       visible={visible}
-      title="Manage Collaborators"
+      title={getTitle()}
       width={50}
-      height={isAddMode ? 8 : 12}
-      shortcuts={shortcuts}
+      height={getHeight()}
+      shortcuts={getShortcuts()}
     >
-      {isAddMode ? (
-        <box flexDirection="column" alignItems="center" gap={1}>
+      {mode === "add" && (
+        <box flexDirection="column" alignItems="center">
           <TextInput
             value={addEmail}
             cursor={addEmailCursor}
@@ -62,17 +87,23 @@ export function ManageCollaboratorsModal({
             label="Email address:"
           />
         </box>
-      ) : (
-        <box flexDirection="column" alignItems="center" gap={1} width={40}>
-          <box flexDirection="row" justifyContent="space-between" width={40}>
-            <text fg={THEME_COLORS.textMuted}>Current collaborators:</text>
+      )}
+      {mode === "confirmRevoke" && selectedCollaborator && (
+        <box flexDirection="column" alignItems="center">
+          <text fg={THEME_COLORS.text}>Revoke {selectedCollaborator.name}'s access?</text>
+        </box>
+      )}
+      {mode === "list" && (
+        <box flexDirection="column" alignItems="center" width={44}>
+          <box flexDirection="row" justifyContent="space-between" width={44}>
+            <text fg={THEME_COLORS.textMuted}>Collaborators:</text>
             <text fg={THEME_COLORS.textDim}>
               {collaborators.length}/{COLLABORATOR_LIMIT}
             </text>
           </box>
-          <box flexDirection="column" width={40} gap={0}>
+          <box flexDirection="column" width={44} marginTop={1}>
             {collaborators.length === 0 ? (
-              <text fg={THEME_COLORS.textDim}>No collaborators yet. Press 'a' to add one.</text>
+              <text fg={THEME_COLORS.textDim}>No collaborators yet.</text>
             ) : (
               collaborators.map((collab, index) => {
                 const isSelected = index === selectedIndex;
