@@ -1,3 +1,4 @@
+export { CommandPaletteModal } from "./CommandPaletteModal";
 export { CreateEnvironmentModal } from "./CreateEnvironmentModal";
 export { CreateFolderModal } from "./CreateFolderModal";
 export { CreateSecretModal } from "./CreateSecretModal";
