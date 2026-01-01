@@ -168,4 +168,307 @@ describe("Secret Management", () => {
 
     test.skip("should move secrets between folders", async () => {});
   });
+
+  describe("Scope Management", () => {
+    beforeEach(async () => {
+      mockAutumn.setFeature(owner.userId, "projects", 2);
+    });
+
+    test("should create secret with default server scope", async () => {
+      const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
+
+      const { projectId } = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+
+      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "environment_" + randomString(),
+        projectId,
+      });
+
+      const encryptedValue = await encryptSecret(projectKey, "secret-value");
+
+      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+        encryptedValue,
+        encryptionKeyVersion: 1,
+        environmentId,
+        key: "API_KEY",
+        valueType: "string",
+        folderId: undefined,
+      });
+
+      const secret = await owner.asUser.query(api.secret.getSecret, {
+        secretId,
+      });
+
+      expect(secret.scope).toBe("server");
+    });
+
+    test("should create secret with explicit client scope", async () => {
+      const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
+
+      const { projectId } = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+
+      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "environment_" + randomString(),
+        projectId,
+      });
+
+      const encryptedValue = await encryptSecret(projectKey, "public-api-key");
+
+      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+        encryptedValue,
+        encryptionKeyVersion: 1,
+        environmentId,
+        key: "PUBLIC_API_KEY",
+        valueType: "string",
+        folderId: undefined,
+        scope: "client",
+      });
+
+      const secret = await owner.asUser.query(api.secret.getSecret, {
+        secretId,
+      });
+
+      expect(secret.scope).toBe("client");
+    });
+
+    test("should create secret with explicit server scope", async () => {
+      const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
+
+      const { projectId } = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+
+      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "environment_" + randomString(),
+        projectId,
+      });
+
+      const encryptedValue = await encryptSecret(projectKey, "database-password");
+
+      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+        encryptedValue,
+        encryptionKeyVersion: 1,
+        environmentId,
+        key: "DB_PASSWORD",
+        valueType: "string",
+        folderId: undefined,
+        scope: "server",
+      });
+
+      const secret = await owner.asUser.query(api.secret.getSecret, {
+        secretId,
+      });
+
+      expect(secret.scope).toBe("server");
+    });
+
+    test("should update secret scope from server to client", async () => {
+      const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
+
+      const { projectId } = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+
+      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "environment_" + randomString(),
+        projectId,
+      });
+
+      const encryptedValue = await encryptSecret(projectKey, "initial-value");
+
+      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+        encryptedValue,
+        encryptionKeyVersion: 1,
+        environmentId,
+        key: "CONFIGURABLE_KEY",
+        valueType: "string",
+        folderId: undefined,
+        scope: "server",
+      });
+
+      const secretBefore = await owner.asUser.query(api.secret.getSecret, {
+        secretId,
+      });
+
+      expect(secretBefore.scope).toBe("server");
+
+      const newEncryptedValue = await encryptSecret(projectKey, "updated-value");
+
+      await owner.asUser.mutation(api.secret.updateSecret, {
+        secretId,
+        updates: {
+          encryptedValue: newEncryptedValue,
+          encryptionKeyVersion: 1,
+          valueType: "string",
+          scope: "client",
+        },
+      });
+
+      const secretAfter = await owner.asUser.query(api.secret.getSecret, {
+        secretId,
+      });
+
+      expect(secretAfter.scope).toBe("client");
+    });
+
+    test("should update secret scope from client to server", async () => {
+      const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
+
+      const { projectId } = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+
+      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "environment_" + randomString(),
+        projectId,
+      });
+
+      const encryptedValue = await encryptSecret(projectKey, "public-key");
+
+      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+        encryptedValue,
+        encryptionKeyVersion: 1,
+        environmentId,
+        key: "FEATURE_FLAG",
+        valueType: "boolean",
+        folderId: undefined,
+        scope: "client",
+      });
+
+      const secretBefore = await owner.asUser.query(api.secret.getSecret, {
+        secretId,
+      });
+
+      expect(secretBefore.scope).toBe("client");
+
+      const newEncryptedValue = await encryptSecret(projectKey, "false");
+
+      await owner.asUser.mutation(api.secret.updateSecret, {
+        secretId,
+        updates: {
+          encryptedValue: newEncryptedValue,
+          encryptionKeyVersion: 1,
+          valueType: "boolean",
+          scope: "server",
+        },
+      });
+
+      const secretAfter = await owner.asUser.query(api.secret.getSecret, {
+        secretId,
+      });
+
+      expect(secretAfter.scope).toBe("server");
+    });
+
+    test("should preserve scope when updating other fields", async () => {
+      const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
+
+      const { projectId } = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+
+      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "environment_" + randomString(),
+        projectId,
+      });
+
+      const encryptedValue = await encryptSecret(projectKey, "original-value");
+
+      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+        encryptedValue,
+        encryptionKeyVersion: 1,
+        environmentId,
+        key: "PRESERVE_SCOPE_TEST",
+        valueType: "string",
+        folderId: undefined,
+        scope: "client",
+      });
+
+      const secretBefore = await owner.asUser.query(api.secret.getSecret, {
+        secretId,
+      });
+
+      expect(secretBefore.scope).toBe("client");
+
+      const newEncryptedValue = await encryptSecret(projectKey, "updated-value");
+
+      await owner.asUser.mutation(api.secret.updateSecret, {
+        secretId,
+        updates: {
+          encryptedValue: newEncryptedValue,
+          encryptionKeyVersion: 1,
+          valueType: "string",
+        },
+      });
+
+      const secretAfter = await owner.asUser.query(api.secret.getSecret, {
+        secretId,
+      });
+
+      expect(secretAfter.scope).toBe("client");
+      const decryptedValue = await decryptSecret(projectKey, secretAfter.encryptedValue);
+      expect(decryptedValue).toBe("updated-value");
+    });
+
+    test("should create multiple secrets with different scopes in same environment", async () => {
+      const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
+
+      const { projectId } = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+
+      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "environment_" + randomString(),
+        projectId,
+      });
+
+      const secrets = [
+        { key: "CLIENT_KEY_1", scope: "client" as const, value: "client-value-1" },
+        { key: "CLIENT_KEY_2", scope: "client" as const, value: "client-value-2" },
+        { key: "SERVER_KEY_1", scope: "server" as const, value: "server-value-1" },
+        { key: "SERVER_KEY_2", scope: "server" as const, value: "server-value-2" },
+      ];
+
+      const secretIds: Id<"secret">[] = [];
+
+      for (const secret of secrets) {
+        const encryptedValue = await encryptSecret(projectKey, secret.value);
+
+        const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+          encryptedValue,
+          encryptionKeyVersion: 1,
+          environmentId,
+          key: secret.key,
+          valueType: "string",
+          folderId: undefined,
+          scope: secret.scope,
+        });
+
+        secretIds.push(secretId);
+      }
+
+      for (let i = 0; i < secrets.length; i++) {
+        const retrievedSecret = await owner.asUser.query(api.secret.getSecret, {
+          secretId: secretIds[i],
+        });
+
+        expect(retrievedSecret.scope).toBe(secrets[i].scope);
+        expect(retrievedSecret.key).toBe(secrets[i].key);
+
+        const decryptedValue = await decryptSecret(projectKey, retrievedSecret.encryptedValue);
+        expect(decryptedValue).toBe(secrets[i].value);
+      }
+    });
+  });
 });
