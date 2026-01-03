@@ -2,6 +2,7 @@ export interface Key {
   name: string;
   ctrl: boolean;
   meta: boolean;
+  option: boolean;
   shift: boolean;
   sequence: string;
 }
@@ -64,7 +65,7 @@ export function useTextInput({
         return true;
       }
 
-      if (key.name === "b" && key.meta) {
+      if (key.name === "left" && key.option) {
         let pos = cursor;
         while (pos > 0 && value[pos - 1] === " ") pos--;
         while (pos > 0 && value[pos - 1] !== " ") pos--;
@@ -72,11 +73,21 @@ export function useTextInput({
         return true;
       }
 
-      if (key.name === "f" && key.meta) {
+      if (key.name === "right" && key.option) {
         let pos = cursor;
         while (pos < value.length && value[pos] !== " ") pos++;
         while (pos < value.length && value[pos] === " ") pos++;
         setCursor(pos);
+        return true;
+      }
+
+      if (key.name === "left" && key.meta) {
+        setCursor(0);
+        return true;
+      }
+
+      if (key.name === "right" && key.meta) {
+        setCursor(value.length);
         return true;
       }
 
@@ -97,6 +108,14 @@ export function useTextInput({
       }
 
       if (key.name === "backspace" && key.meta) {
+        const newPos = 0;
+        const newText = value.slice(cursor);
+        setValue(newText);
+        setCursor(newPos);
+        return true;
+      }
+
+      if (key.name === "backspace" && key.option) {
         const result = deleteWordBackward(value, cursor);
         setValue(result.text);
         setCursor(result.cursor);
@@ -108,6 +127,17 @@ export function useTextInput({
         setValue(result.text);
         setCursor(result.cursor);
         return true;
+      }
+
+      // Ignore escape key
+      if (key.name === "escape") {
+        return false;
+      }
+
+      // Ignore arrow keys and other non-printable keys
+      const ignoredKeys = ["up", "down", "pageup", "pagedown", "home", "end", "insert", "delete", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"];
+      if (ignoredKeys.includes(key.name)) {
+        return false;
       }
 
       if (key.sequence && !key.ctrl && !key.meta) {
