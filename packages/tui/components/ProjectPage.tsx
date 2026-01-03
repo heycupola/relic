@@ -14,14 +14,16 @@ import type {
 import { usePaste } from "../lib/usePaste";
 import { useTaskQueue } from "../lib/useTaskQueue";
 import { useTextInput } from "../lib/useTextInput";
+import { useMultilineInput, type Position } from "../lib/useMultilineInput";
 import { GuideBar } from "./GuideBar";
-import {
-  CommandPaletteModal,
-  CreateEnvironmentModal,
-  CreateFolderModal,
-  CreateSecretModal,
-  ManageCollaboratorsModal,
-} from "./modals";
+import type { BulkImportFormat, CollisionInfo } from "../lib/bulkImportTypes";
+import { isEnvFormat, parseEnvContent } from "../lib/envParser";
+import { validateBulkImportJson } from "../lib/bulkImportValidator";
+import { envToJson, jsonToEnv, detectFormat } from "../lib/formatConverter";
+import type { SecretScope } from "../lib/types";
+import { BulkImportModal, CommandPaletteModal, ManageCollaboratorsModal } from "./modals";
+import { DeleteConfirmation, getDeleteConfirmationShortcuts } from "./DeleteConfirmation";
+import { InlineInput } from "./InlineInput";
 
 interface ProjectPageProps {
   projectId: string;
@@ -47,20 +49,24 @@ const MOCK_SECRETS: Secret[] = [
     id: "s1",
     key: "DATABASE_URL",
     value: "postgresql://user:pass@localhost:5432/db",
+    type: "string",
     environmentId: "env1",
   },
-  { id: "s2", key: "API_KEY", value: "sk_test_4eC39HqLyjWDarjtT1zdp7dc", environmentId: "env1" },
+  { id: "s2", key: "API_KEY", value: "sk_test_4eC39HqLyjWDarjtT1zdp7dc", type: "string", environmentId: "env1" },
   {
     id: "s3",
     key: "JWT_SECRET",
     value: "a-very-secret-signing-key",
+    type: "string",
     environmentId: "env1",
     folderId: "f1",
   },
-  { id: "s4", key: "SMTP_PASSWORD", value: "pass123", environmentId: "env1", folderId: "f1" },
-  { id: "s5", key: "AWS_ACCESS_KEY", value: "AKIAIOSFODNN7EXAMPLE", environmentId: "env1" },
-  { id: "s6", key: "REDIS_URL", value: "redis://localhost:6379", environmentId: "env1" },
-  { id: "s7", key: "STRIPE_KEY", value: "sk_test_51Mz...", environmentId: "env2" },
+  { id: "s4", key: "SMTP_PASSWORD", value: "pass123", type: "string", environmentId: "env1", folderId: "f1" },
+  { id: "s5", key: "AWS_ACCESS_KEY", value: "AKIAIOSFODNN7EXAMPLE", type: "string", environmentId: "env1" },
+  { id: "s6", key: "REDIS_URL", value: "redis://localhost:6379", type: "string", environmentId: "env1" },
+  { id: "s7", key: "STRIPE_KEY", value: "sk_test_51Mz...", type: "string", environmentId: "env2" },
+  { id: "s8", key: "MAX_CONNECTIONS", value: "100", type: "number", environmentId: "env1" },
+  { id: "s9", key: "DEBUG_MODE", value: "true", type: "boolean", environmentId: "env1" },
 ];
 
 const MOCK_SHARED_USERS: SharedUser[] = [
@@ -97,84 +103,117 @@ export function ProjectPage({
   const [activeModal, setActiveModal] = useState<ModalType>("none");
   const [showSecrets, setShowSecrets] = useState(false);
 
-  const [secretInputFocus, setSecretInputFocus] = useState<"key" | "value" | "type">("key");
-  const [secretValueType, setSecretValueType] = useState<"string" | "number" | "boolean">("string");
   const [collabSelectedIndex, setCollabSelectedIndex] = useState(0);
-  const [collabMode, setCollabMode] = useState<"list" | "add" | "confirmRevoke">("list");
   const [commandPaletteIndex, setCommandPaletteIndex] = useState(0);
 
-  const envInput = useTextInput({
-    maxLength: 30,
-    onSubmit: (value) => {
-      if (value.trim()) {
-        closeModal();
-        runTask(`Creating environment "${value}"...`, async () => {
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-        }).then(() => {
-          showSuccess(`Environment "${value}" created`);
-        });
-      }
-    },
-  });
+  // Inline input state
+  const [creatingItem, setCreatingItem] = useState<"env" | "folder" | "collab" | null>(null);
+  const [newItemInput, setNewItemInput] = useState("");
+  const [newItemCursor, setNewItemCursor] = useState(0);
 
-  const folderInput = useTextInput({
-    maxLength: 30,
-    onSubmit: (value) => {
-      if (value.trim()) {
-        console.log("Creating folder:", value);
-        closeModal();
-      }
-    },
-  });
+  // Inline delete confirmation state (shows "Delete [name]? (y/n)" below item)
+  const [confirmingDelete, setConfirmingDelete] = useState<{
+    type: "env" | "folder" | "secret" | "collab";
+    id: string;
+    name: string;
+  } | null>(null);
 
-  const secretKeyInput = useTextInput({ maxLength: 100 });
-  const secretValueInput = useTextInput({ maxLength: 1000 });
+  // Inline edit/rename state
+  const [editingItem, setEditingItem] = useState<{
+    type: "env" | "folder";
+    id: string;
+    originalName: string;
+  } | null>(null);
+  const [editItemInput, setEditItemInput] = useState("");
+  const [editItemCursor, setEditItemCursor] = useState(0);
 
-  const collabEmailInput = useTextInput({
-    maxLength: 100,
-    onSubmit: (value) => {
-      if (value.trim()) {
-        console.log("Adding collaborator:", value);
-        closeModal();
-      }
-    },
-  });
+  // Bulk import state
+  const bulkImportInput = useMultilineInput({ maxLines: 50, maxLineLength: 100 });
+  const [bulkImportFormat, setBulkImportFormat] = useState<BulkImportFormat>("env");
+  const [bulkImportCollisions, setBulkImportCollisions] = useState<CollisionInfo[]>([]);
+  const [bulkImportMode, setBulkImportMode] = useState<"import" | "update">("import");
 
   useEffect(() => {
-    if (activeModal === "none") return;
+    if (activeModal === "none" && !creatingItem && !editingItem) return;
     const interval = setInterval(() => {
       setCursorVisible((prev) => !prev);
     }, 530);
     return () => clearInterval(interval);
-  }, [activeModal]);
+  }, [activeModal, creatingItem, editingItem]);
+
+  // Real-time sync: Validate on content change and update collision state
+  useEffect(() => {
+    if (activeModal !== "bulkImport") return;
+
+    const trimmed = bulkImportInput.value.trim();
+    if (trimmed === "") {
+      setBulkImportCollisions([]);
+      return;
+    }
+
+    // Parse based on current format
+    let secrets;
+    try {
+      if (bulkImportFormat === "env") {
+        secrets = parseEnvContent(trimmed);
+      } else {
+        secrets = JSON.parse(trimmed);
+      }
+
+      const result = validateBulkImportJson(secrets);
+      if (result.valid && result.secrets.length > 0) {
+        // Check for collisions in real-time
+        const collisions: CollisionInfo[] = [];
+        for (const secret of result.secrets) {
+          const existing = secrets.find((s: Secret) => s.key === secret.key);
+          if (existing) {
+            collisions.push({ key: secret.key, existingSecretId: existing.id });
+          }
+        }
+        setBulkImportCollisions(collisions);
+      } else {
+        setBulkImportCollisions([]);
+      }
+    } catch {
+      // Parse error - clear collisions
+      setBulkImportCollisions([]);
+    }
+  }, [bulkImportInput.value, bulkImportFormat, activeModal, secrets]);
 
   const handlePaste = useCallback(
     (text: string) => {
       setCursorVisible(true);
-      if (activeModal === "createEnv") {
-        envInput.handlePaste(text);
-      } else if (activeModal === "createFolder") {
-        folderInput.handlePaste(text);
-      } else if (activeModal === "createSecret") {
-        if (secretInputFocus === "key") {
-          secretKeyInput.handlePaste(text);
-        } else {
-          secretValueInput.handlePaste(text);
+      if (activeModal === "bulkImport") {
+        const trimmed = text.trim();
+        const detectedFormat = detectFormat(trimmed);
+
+        if (detectedFormat === "env") {
+          // .env format detected - set it directly
+          bulkImportInput.setValue(trimmed);
+          setBulkImportFormat("env");
+          return;
         }
-      } else if (activeModal === "manageCollaborators" && collabMode === "add") {
-        collabEmailInput.handlePaste(text);
+
+        if (detectedFormat === "json") {
+          try {
+            const parsed = JSON.parse(trimmed);
+            const result = validateBulkImportJson(parsed);
+            if (result.valid && result.secrets.length > 0) {
+              // Valid JSON - paste it formatted
+              bulkImportInput.setValue(JSON.stringify(parsed, null, 2));
+              setBulkImportFormat("json");
+              return;
+            }
+          } catch {
+            // Invalid JSON, ignore
+          }
+        }
+
+        // If we get here, the pasted content is neither valid .env nor valid JSON
+        // Don't paste it - just ignore
       }
     },
-    [
-      activeModal,
-      secretInputFocus,
-      collabMode,
-      envInput,
-      folderInput,
-      secretKeyInput,
-      secretValueInput,
-      collabEmailInput,
-    ],
+    [activeModal, bulkImportInput],
   );
 
   usePaste(handlePaste);
@@ -196,6 +235,7 @@ export function ProjectPage({
           id: s.id,
           name: s.key,
           value: s.value,
+          secretType: s.type || "string",
         })),
       ];
     }
@@ -206,6 +246,7 @@ export function ProjectPage({
         id: s.id,
         name: s.key,
         value: s.value,
+        secretType: s.type || "string",
       }));
     }
     return [];
@@ -278,112 +319,439 @@ export function ProjectPage({
 
   const closeModal = () => {
     setActiveModal("none");
-    envInput.reset();
-    folderInput.reset();
-    secretKeyInput.reset();
-    secretValueInput.reset();
-    collabEmailInput.reset();
-    setSecretInputFocus("key");
-    setSecretValueType("string");
-    setCollabMode("list");
     setCollabSelectedIndex(0);
-  };
-
-  const handleCreateSecret = () => {
-    if (secretKeyInput.value.trim() && secretValueInput.value.trim()) {
-      console.log("Creating secret:", secretKeyInput.value, secretValueInput.value);
-      closeModal();
-    }
+    setBulkImportFormat("env");
+    setBulkImportCollisions([]);
+    bulkImportInput.reset();
   };
 
   useKeyboard((key) => {
     setCursorVisible(true);
 
-    if (activeModal === "createEnv") {
-      if (key.name === "escape") {
-        closeModal();
-      } else if (!envInput.handleKey(key)) {
-        return;
-      }
-      return;
+    const isRestricted = projectStatus === "restricted" || projectStatus === "archived";
+    if (isRestricted) {
+      // Block modification shortcuts
+      const blockedKeys = ["n", "u", "d", "c"];
+      if (blockedKeys.includes(key.name)) return;
+      // Block Option+keys (Update/Import)
+      if ((key.meta || key.option) && (key.name === "u" || key.name === "i")) return;
     }
 
-    if (activeModal === "createFolder") {
+    // Inline input handling with cursor support
+    if (creatingItem) {
+      // Helper: Terminal sends Option as meta+ESC sequence
+      const isOptionKey = key.meta && key.sequence === "\x1b";
+
       if (key.name === "escape") {
-        closeModal();
-      } else if (!folderInput.handleKey(key)) {
+        setCreatingItem(null);
+        setNewItemInput("");
+        setNewItemCursor(0);
         return;
       }
-      return;
-    }
 
-    if (activeModal === "createSecret") {
-      if (key.name === "escape") {
-        closeModal();
-      } else if (key.name === "tab") {
-        // Cycle: key -> value -> type -> key
-        setSecretInputFocus((prev) => {
-          if (prev === "key") return "value";
-          if (prev === "value") return "type";
-          return "key";
-        });
-      } else if (key.name === "return") {
-        handleCreateSecret();
-      } else if (secretInputFocus === "type") {
-        // Handle left/right for type cycling
-        if (key.name === "left" || key.name === "h") {
-          setSecretValueType((prev) => {
-            if (prev === "string") return "boolean";
-            if (prev === "number") return "string";
-            return "number";
-          });
-        } else if (key.name === "right" || key.name === "l") {
-          setSecretValueType((prev) => {
-            if (prev === "string") return "number";
-            if (prev === "number") return "boolean";
-            return "string";
-          });
+      if (key.name === "return") {
+        const trimmed = newItemInput.trim();
+        if (trimmed) {
+          if (creatingItem === "env") {
+            runTask(`Creating environment "${trimmed}"...`, async () => {
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+            }).then(() => {
+              showSuccess(`Environment "${trimmed}" created`);
+              setCreatingItem(null);
+              setNewItemInput("");
+              setNewItemCursor(0);
+            });
+          } else if (creatingItem === "folder") {
+            runTask(`Creating folder "${trimmed}"...`, async () => {
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+            }).then(() => {
+              showSuccess(`Folder "${trimmed}" created`);
+              setCreatingItem(null);
+              setNewItemInput("");
+              setNewItemCursor(0);
+            });
+          } else if (creatingItem === "collab") {
+            runTask(`Adding collaborator "${trimmed}"...`, async () => {
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+            }).then(() => {
+              showSuccess(`Collaborator "${trimmed}" added`);
+              setCreatingItem(null);
+              setNewItemInput("");
+              setNewItemCursor(0);
+            });
+          }
         }
-      } else {
-        const currentInput = secretInputFocus === "key" ? secretKeyInput : secretValueInput;
-        currentInput.handleKey(key);
+        return;
       }
+
+      // Arrow left with modifiers
+      if (key.name === "left") {
+        if (isOptionKey || key.option) {
+          // Option+Left: Jump word backward
+          let pos = newItemCursor;
+          while (pos > 0 && newItemInput[pos - 1] === " ") pos--;
+          while (pos > 0 && newItemInput[pos - 1] !== " ") pos--;
+          setNewItemCursor(pos);
+        } else if (key.meta) {
+          // Cmd+Left: Jump to start
+          setNewItemCursor(0);
+        } else {
+          // Regular left
+          setNewItemCursor((prev) => Math.max(0, prev - 1));
+        }
+        return;
+      }
+
+      // Arrow right with modifiers
+      if (key.name === "right") {
+        if (isOptionKey || key.option) {
+          // Option+Right: Jump word forward
+          let pos = newItemCursor;
+          while (pos < newItemInput.length && newItemInput[pos] !== " ") pos++;
+          while (pos < newItemInput.length && newItemInput[pos] === " ") pos++;
+          setNewItemCursor(pos);
+        } else if (key.meta) {
+          // Cmd+Right: Jump to end
+          setNewItemCursor(newItemInput.length);
+        } else {
+          // Regular right
+          setNewItemCursor((prev) => Math.min(newItemInput.length, prev + 1));
+        }
+        return;
+      }
+
+      // Ignore up/down arrows
+      if (key.name === "up" || key.name === "down") {
+        return;
+      }
+
+      // Backspace with modifiers
+      if (key.name === "backspace") {
+        if (key.meta || key.option) {
+          // Meta/Option+Backspace: Delete word backward
+          // (Terminal sends Option as meta, so both behave the same)
+          if (newItemCursor > 0) {
+            let newPos = newItemCursor;
+            while (newPos > 0 && newItemInput[newPos - 1] === " ") newPos--;
+            while (newPos > 0 && newItemInput[newPos - 1] !== " ") newPos--;
+            setNewItemInput(newItemInput.slice(0, newPos) + newItemInput.slice(newItemCursor));
+            setNewItemCursor(newPos);
+          }
+        } else {
+          // Regular backspace: Delete one character
+          if (newItemCursor > 0) {
+            setNewItemInput(
+              newItemInput.slice(0, newItemCursor - 1) + newItemInput.slice(newItemCursor),
+            );
+            setNewItemCursor(newItemCursor - 1);
+          }
+        }
+        return;
+      }
+
+      // Delete key (forward delete)
+      if (key.name === "delete") {
+        if (newItemCursor < newItemInput.length) {
+          setNewItemInput(
+            newItemInput.slice(0, newItemCursor) + newItemInput.slice(newItemCursor + 1),
+          );
+        }
+        return;
+      }
+
+      // Ctrl+A: Jump to start
+      if (key.name === "a" && key.ctrl) {
+        setNewItemCursor(0);
+        return;
+      }
+
+      // Ctrl+E: Jump to end
+      if (key.name === "e" && key.ctrl) {
+        setNewItemCursor(newItemInput.length);
+        return;
+      }
+
+      // Ctrl+U: Delete all
+      if (key.name === "u" && key.ctrl) {
+        setNewItemInput("");
+        setNewItemCursor(0);
+        return;
+      }
+
+      // Ctrl+W: Delete word backward
+      if (key.name === "w" && key.ctrl) {
+        if (newItemCursor > 0) {
+          let newPos = newItemCursor;
+          while (newPos > 0 && newItemInput[newPos - 1] === " ") newPos--;
+          while (newPos > 0 && newItemInput[newPos - 1] !== " ") newPos--;
+          setNewItemInput(newItemInput.slice(0, newPos) + newItemInput.slice(newItemCursor));
+          setNewItemCursor(newPos);
+        }
+        return;
+      }
+
+      // Meta+B (Option+Left): Jump word backward
+      if (key.name === "b" && key.meta) {
+        let pos = newItemCursor;
+        while (pos > 0 && newItemInput[pos - 1] === " ") pos--;
+        while (pos > 0 && newItemInput[pos - 1] !== " ") pos--;
+        setNewItemCursor(pos);
+        return;
+      }
+
+      // Meta+F (Option+Right): Jump word forward
+      if (key.name === "f" && key.meta) {
+        let pos = newItemCursor;
+        while (pos < newItemInput.length && newItemInput[pos] !== " ") pos++;
+        while (pos < newItemInput.length && newItemInput[pos] === " ") pos++;
+        setNewItemCursor(pos);
+        return;
+      }
+
+      // Meta+D (Option+Delete): Delete word forward
+      if (key.name === "d" && key.meta) {
+        let endPos = newItemCursor;
+        while (endPos < newItemInput.length && newItemInput[endPos] === " ") endPos++;
+        while (endPos < newItemInput.length && newItemInput[endPos] !== " ") endPos++;
+        setNewItemInput(newItemInput.slice(0, newItemCursor) + newItemInput.slice(endPos));
+        return;
+      }
+
+      // Regular typing (30 char limit)
+      if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta && !key.option) {
+        if (newItemInput.length < 30) {
+          setNewItemInput(
+            newItemInput.slice(0, newItemCursor) + key.sequence + newItemInput.slice(newItemCursor),
+          );
+          setNewItemCursor(newItemCursor + 1);
+        }
+        return;
+      }
+
+      // Ignore all other keys
+      return;
+    }
+
+    // Inline edit/rename handling
+    if (editingItem) {
+      // Helper: Terminal sends Option as meta+ESC sequence
+      const isOptionKey = key.meta && key.sequence === "\x1b";
+
+      // Escape or up/down arrows cancel editing
+      if (key.name === "escape" || key.name === "up" || key.name === "down") {
+        setEditingItem(null);
+        setEditItemInput("");
+        setEditItemCursor(0);
+        return;
+      }
+
+      // Enter saves the edit
+      if (key.name === "return") {
+        const trimmed = editItemInput.trim();
+        if (trimmed && trimmed !== editingItem.originalName) {
+          const itemType = editingItem.type === "env" ? "environment" : "folder";
+          runTask(`Renaming ${itemType} to "${trimmed}"...`, async () => {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }).then(() => {
+            showSuccess(`${itemType} renamed to "${trimmed}"`);
+            setEditingItem(null);
+            setEditItemInput("");
+            setEditItemCursor(0);
+          });
+        } else {
+          // No change or empty - just cancel
+          setEditingItem(null);
+          setEditItemInput("");
+          setEditItemCursor(0);
+        }
+        return;
+      }
+
+      // Arrow left with modifiers
+      if (key.name === "left") {
+        if (isOptionKey || key.option) {
+          // Option+Left: Jump word backward
+          let pos = editItemCursor;
+          while (pos > 0 && editItemInput[pos - 1] === " ") pos--;
+          while (pos > 0 && editItemInput[pos - 1] !== " ") pos--;
+          setEditItemCursor(pos);
+        } else if (key.meta) {
+          // Cmd+Left: Jump to start
+          setEditItemCursor(0);
+        } else {
+          // Regular left
+          setEditItemCursor((prev) => Math.max(0, prev - 1));
+        }
+        return;
+      }
+
+      // Arrow right with modifiers
+      if (key.name === "right") {
+        if (isOptionKey || key.option) {
+          // Option+Right: Jump word forward
+          let pos = editItemCursor;
+          while (pos < editItemInput.length && editItemInput[pos] !== " ") pos++;
+          while (pos < editItemInput.length && editItemInput[pos] === " ") pos++;
+          setEditItemCursor(pos);
+        } else if (key.meta) {
+          // Cmd+Right: Jump to end
+          setEditItemCursor(editItemInput.length);
+        } else {
+          // Regular right
+          setEditItemCursor((prev) => Math.min(editItemInput.length, prev + 1));
+        }
+        return;
+      }
+
+      // Backspace with modifiers
+      if (key.name === "backspace") {
+        if (key.meta || key.option) {
+          // Meta/Option+Backspace: Delete word backward
+          if (editItemCursor > 0) {
+            let newPos = editItemCursor;
+            while (newPos > 0 && editItemInput[newPos - 1] === " ") newPos--;
+            while (newPos > 0 && editItemInput[newPos - 1] !== " ") newPos--;
+            setEditItemInput(editItemInput.slice(0, newPos) + editItemInput.slice(editItemCursor));
+            setEditItemCursor(newPos);
+          }
+        } else {
+          // Regular backspace: Delete one character
+          if (editItemCursor > 0) {
+            setEditItemInput(
+              editItemInput.slice(0, editItemCursor - 1) + editItemInput.slice(editItemCursor),
+            );
+            setEditItemCursor(editItemCursor - 1);
+          }
+        }
+        return;
+      }
+
+      // Delete key (forward delete)
+      if (key.name === "delete") {
+        if (editItemCursor < editItemInput.length) {
+          setEditItemInput(
+            editItemInput.slice(0, editItemCursor) + editItemInput.slice(editItemCursor + 1),
+          );
+        }
+        return;
+      }
+
+      // Ctrl+A: Jump to start
+      if (key.name === "a" && key.ctrl) {
+        setEditItemCursor(0);
+        return;
+      }
+
+      // Ctrl+E: Jump to end
+      if (key.name === "e" && key.ctrl) {
+        setEditItemCursor(editItemInput.length);
+        return;
+      }
+
+      // Ctrl+U: Delete all
+      if (key.name === "u" && key.ctrl) {
+        setEditItemInput("");
+        setEditItemCursor(0);
+        return;
+      }
+
+      // Ctrl+W: Delete word backward
+      if (key.name === "w" && key.ctrl) {
+        if (editItemCursor > 0) {
+          let newPos = editItemCursor;
+          while (newPos > 0 && editItemInput[newPos - 1] === " ") newPos--;
+          while (newPos > 0 && editItemInput[newPos - 1] !== " ") newPos--;
+          setEditItemInput(
+            editItemInput.slice(0, newPos) + editItemInput.slice(editItemCursor),
+          );
+          setEditItemCursor(newPos);
+        }
+        return;
+      }
+
+      // Meta+B (Option+Left): Jump word backward
+      if (key.name === "b" && key.meta) {
+        let pos = editItemCursor;
+        while (pos > 0 && editItemInput[pos - 1] === " ") pos--;
+        while (pos > 0 && editItemInput[pos - 1] !== " ") pos--;
+        setEditItemCursor(pos);
+        return;
+      }
+
+      // Meta+F (Option+Right): Jump word forward
+      if (key.name === "f" && key.meta) {
+        let pos = editItemCursor;
+        while (pos < editItemInput.length && editItemInput[pos] !== " ") pos++;
+        while (pos < editItemInput.length && editItemInput[pos] === " ") pos++;
+        setEditItemCursor(pos);
+        return;
+      }
+
+      // Meta+D (Option+Delete): Delete word forward
+      if (key.name === "d" && key.meta) {
+        let endPos = editItemCursor;
+        while (endPos < editItemInput.length && editItemInput[endPos] === " ") endPos++;
+        while (endPos < editItemInput.length && editItemInput[endPos] !== " ") endPos++;
+        setEditItemInput(editItemInput.slice(0, editItemCursor) + editItemInput.slice(endPos));
+        return;
+      }
+
+      // Regular typing (30 char limit)
+      if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta && !key.option) {
+        if (editItemInput.length < 30) {
+          setEditItemInput(
+            editItemInput.slice(0, editItemCursor) + key.sequence + editItemInput.slice(editItemCursor),
+          );
+          setEditItemCursor(editItemCursor + 1);
+        }
+        return;
+      }
+
       return;
     }
 
     if (activeModal === "manageCollaborators") {
-      if (collabMode === "add") {
-        if (key.name === "escape") {
-          setCollabMode("list");
-          collabEmailInput.reset();
-        } else if (!collabEmailInput.handleKey(key)) {
-          return;
-        }
-      } else if (collabMode === "confirmRevoke") {
+      // Handle revoke confirmation first
+      if (confirmingDelete && confirmingDelete.type === "collab") {
         if (key.name === "y") {
-          const selectedCollab = sharedUsers[collabSelectedIndex];
-          if (selectedCollab) {
-            console.log("Revoking collaborator:", selectedCollab.email);
-            // TODO: Actually revoke collaborator
-          }
-          setCollabMode("list");
+          // Revoke without rotation (just yes)
+          runTask(`Revoking ${confirmingDelete.name}...`, async () => {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }).then(() => {
+            showSuccess(`${confirmingDelete.name} revoked`);
+            setConfirmingDelete(null);
+          });
+        } else if (key.name === "r") {
+          // Revoke with rotation (yes + rotate)
+          runTask(`Revoking ${confirmingDelete.name} and rotating keys...`, async () => {
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+          }).then(() => {
+            showSuccess(`${confirmingDelete.name} revoked and keys rotated`);
+            setConfirmingDelete(null);
+          });
         } else if (key.name === "n" || key.name === "escape") {
-          setCollabMode("list");
+          setConfirmingDelete(null);
         }
-      } else {
-        if (key.name === "escape") {
-          closeModal();
-        } else if (key.name === "a") {
-          setCollabMode("add");
-        } else if (key.name === "d") {
-          if (sharedUsers[collabSelectedIndex]) {
-            setCollabMode("confirmRevoke");
-          }
-        } else if (key.name === "up" || key.name === "k") {
-          setCollabSelectedIndex((prev) => (prev > 0 ? prev - 1 : sharedUsers.length - 1));
-        } else if (key.name === "down" || key.name === "j") {
-          setCollabSelectedIndex((prev) => (prev < sharedUsers.length - 1 ? prev + 1 : 0));
+        return;
+      }
+
+      if (key.name === "escape") {
+        closeModal();
+      } else if (key.name === "a") {
+        setCreatingItem("collab");
+        setNewItemInput("");
+        setNewItemCursor(0);
+      } else if (key.name === "d") {
+        const user = sharedUsers[collabSelectedIndex];
+        if (user) {
+          setConfirmingDelete({ type: "collab", id: user.id, name: user.email });
         }
+      } else if (key.name === "up" || key.name === "k") {
+        setCollabSelectedIndex((prev) => (prev > 0 ? prev - 1 : sharedUsers.length - 1));
+        setConfirmingDelete(null); // Clear confirmation on navigation
+      } else if (key.name === "down" || key.name === "j") {
+        setCollabSelectedIndex((prev) => (prev < sharedUsers.length - 1 ? prev + 1 : 0));
+        setConfirmingDelete(null); // Clear confirmation on navigation
       }
       return;
     }
@@ -407,6 +775,132 @@ export function ProjectPage({
       return;
     }
 
+    if (activeModal === "bulkImport") {
+      if (key.name === "escape") {
+        closeModal();
+        return;
+      }
+
+      // Cmd+J: Toggle format - only convert from .env to JSON (one-way to avoid data loss)
+      if (key.name === "j" && key.meta) {
+        const currentContent = bulkImportInput.value.trim();
+
+        if (bulkImportFormat === "env") {
+          // Convert .env to JSON (removes comments and normalizes format)
+          if (currentContent === "") {
+            // Empty content - just switch format with empty array
+            bulkImportInput.setValue("[\n  {\n    \"key\": \"\",\n    \"value\": \"\",\n    \"type\": \"string\",\n    \"scope\": \"shared\"\n  }\n]");
+            setBulkImportFormat("json");
+          } else {
+            const jsonContent = envToJson(currentContent);
+            if (jsonContent && jsonContent.trim() !== "" && jsonContent !== "[]") {
+              bulkImportInput.setValue(jsonContent);
+              setBulkImportFormat("json");
+            }
+          }
+        } else {
+          // JSON to .env - convert back
+          const fs = require("fs");
+          fs.writeFileSync("/tmp/tui_debug.log", `Converting JSON to ENV\ncurrentContent length: ${currentContent.length}\ncurrentContent: ${currentContent.substring(0, 300)}\n`);
+
+          const envContent = jsonToEnv(currentContent);
+          fs.appendFileSync("/tmp/tui_debug.log", `envContent result: "${envContent}"\nenvContent length: ${envContent.length}\n`);
+
+          if (envContent && envContent.trim() !== "") {
+            fs.appendFileSync("/tmp/tui_debug.log", "SUCCESS: Setting value and switching format\n");
+            bulkImportInput.setValue(envContent);
+            setBulkImportFormat("env");
+          } else {
+            fs.appendFileSync("/tmp/tui_debug.log", "FAILED: Conversion returned empty\n");
+            showSuccess("Could not convert - check JSON syntax");
+          }
+        }
+        return;
+      }
+
+      // Cmd+I: Import (skip collisions)
+      if (key.name === "i" && key.meta) {
+        const trimmed = bulkImportInput.value.trim();
+        if (!trimmed) return;
+
+        let secrets;
+        if (bulkImportFormat === "env") {
+          secrets = parseEnvContent(trimmed);
+        } else {
+          try {
+            secrets = JSON.parse(trimmed);
+          } catch {
+            // Invalid JSON - don't import
+            return;
+          }
+        }
+
+        const result = validateBulkImportJson(secrets);
+        // Don't import if validation failed or no secrets
+        if (!result.valid || result.errors.length > 0 || result.secrets.length === 0) {
+          return;
+        }
+
+        // Check for collisions with existing secrets
+        const collisions: CollisionInfo[] = [];
+        for (const secret of result.secrets) {
+          const existing = secrets.find((s: Secret) => s.key === secret.key);
+          if (existing) {
+            collisions.push({ key: secret.key, existingSecretId: existing.id });
+          }
+        }
+
+        // Update collision state for display
+        setBulkImportCollisions(collisions);
+
+        runTask("Importing secrets (skipping collisions)...", async () => {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }).then(() => {
+          const skipped = collisions.length;
+          const imported = result.secrets.length - skipped;
+          showSuccess(`${imported} secrets imported${skipped > 0 ? ` (${skipped} skipped)` : ""}`);
+          closeModal();
+        });
+        return;
+      }
+
+      // Cmd+O: Import and overwrite collisions
+      if (key.name === "o" && key.meta) {
+        const trimmed = bulkImportInput.value.trim();
+        if (!trimmed) return;
+
+        let secrets;
+        if (bulkImportFormat === "env") {
+          secrets = parseEnvContent(trimmed);
+        } else {
+          try {
+            secrets = JSON.parse(trimmed);
+          } catch {
+            // Invalid JSON - don't import
+            return;
+          }
+        }
+
+        const result = validateBulkImportJson(secrets);
+        // Don't import if validation failed or no secrets
+        if (!result.valid || result.errors.length > 0 || result.secrets.length === 0) {
+          return;
+        }
+
+        runTask("Importing secrets (overwriting collisions)...", async () => {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }).then(() => {
+          showSuccess(`${result.secrets.length} secrets imported (collisions overwritten)`);
+          closeModal();
+        });
+        return;
+      }
+
+      // Delegate to multiline input for editing
+      bulkImportInput.handleKey(key as any);
+      return;
+    }
+
     if (activeModal !== "none") {
       if (key.name === "escape") {
         closeModal();
@@ -414,22 +908,112 @@ export function ProjectPage({
       return;
     }
 
+    // Handle delete confirmation first (y/n)
+    if (confirmingDelete && (confirmingDelete.type === "env" || confirmingDelete.type === "folder" || confirmingDelete.type === "secret")) {
+      if (key.name === "y") {
+        const itemType = confirmingDelete.type === "env" ? "environment" : confirmingDelete.type;
+        runTask(`Deleting ${itemType} "${confirmingDelete.name}"...`, async () => {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }).then(() => {
+          showSuccess(`${confirmingDelete.name} deleted`);
+          setConfirmingDelete(null);
+        });
+      } else if (key.name === "n" || key.name === "escape") {
+        setConfirmingDelete(null);
+      }
+      return;
+    }
+
     if (key.name === "escape" || key.name === "backspace") {
+      setConfirmingDelete(null); // Clear confirmation on navigation
       goBack();
     } else if (key.name === "k" || key.name === "up") {
       moveUp();
+      setConfirmingDelete(null); // Clear confirmation on navigation
     } else if (key.name === "j" || key.name === "down") {
       moveDown();
+      setConfirmingDelete(null); // Clear confirmation on navigation
     } else if (key.name === "return" || key.name === "l" || key.name === "right") {
       enter();
+    } else if (key.name === "d") {
+      // Delete current item with confirmation
+      const items = getCurrentItems();
+      const item = items[selectedIndex];
+      if (item) {
+        let itemType: "env" | "folder" | "secret" | "collab" = "secret";
+        if (viewLevel === "environments") itemType = "env";
+        else if (item.type === "folder") itemType = "folder";
+        else if (item.type === "secret") itemType = "secret";
+        setConfirmingDelete({ type: itemType, id: item.id, name: item.name });
+      }
     } else if (key.name === "n" && viewLevel === "environments") {
-      setActiveModal("createEnv");
-    } else if (key.name === "f" && viewLevel === "environment") {
-      setActiveModal("createFolder");
-    } else if (key.name === "s" && (viewLevel === "environment" || viewLevel === "folder")) {
-      setActiveModal("createSecret");
+      setCreatingItem("env");
+      setNewItemInput("");
+      setNewItemCursor(0);
+    } else if (key.name === "n" && viewLevel === "environment") {
+      setCreatingItem("folder");
+      setNewItemInput("");
+      setNewItemCursor(0);
+    } else if (key.name === "i" && key.meta && (viewLevel === "environment" || viewLevel === "folder")) {
+      // Option+I: Import secrets
+      const placeholderTemplate = `# Paste your .env file or JSON array here
+# Example .env format:
+API_KEY=your_api_key_here
+DATABASE_URL=postgresql://localhost:5432/db
+REDIS_URL=redis://localhost:6379
+
+# Press ⌥j to switch to JSON format for type/scope control`;
+
+      bulkImportInput.setValue(placeholderTemplate);
+      setBulkImportFormat("env");
+      setBulkImportMode("import");
+      setActiveModal("bulkImport");
+    } else if (key.name === "u" && key.meta && (viewLevel === "environment" || viewLevel === "folder")) {
+      // Option+U: Update/edit secrets
+      const itemsToLoad = getCurrentItems().filter(item => item.type === "secret");
+      if (itemsToLoad.length === 0) {
+        showSuccess("No secrets to edit");
+        return;
+      }
+      const secretsJson = JSON.stringify(
+        itemsToLoad.map(item => ({
+          key: item.name,
+          value: (item as { value?: string }).value || "",
+          type: "string",
+          scope: "shared",
+        })),
+        null,
+        2
+      );
+      bulkImportInput.setValue(secretsJson);
+      setBulkImportFormat("json");
+      setBulkImportMode("update");
+      setActiveModal("bulkImport");
     } else if (key.name === "c") {
       setActiveModal("manageCollaborators");
+    } else if (key.name === "u" && !key.meta) {
+      // 'u' for rename at environments level, or rename folder at environment level
+      if (viewLevel === "environments") {
+        // Rename environment
+        const env = environments[selectedIndex];
+        if (env) {
+          setEditingItem({ type: "env", id: env.id, originalName: env.name });
+          setEditItemInput(env.name);
+          setEditItemCursor(env.name.length);
+        }
+      } else if (viewLevel === "environment") {
+        // Check if selected item is folder - only rename folders with 'u'
+        const items = getCurrentItems();
+        const selectedItem = items[selectedIndex];
+        if (selectedItem && selectedItem.type === "folder") {
+          // Rename folder
+          setEditingItem({ type: "folder", id: selectedItem.id, originalName: selectedItem.name });
+          setEditItemInput(selectedItem.name);
+          setEditItemCursor(selectedItem.name.length);
+        }
+        // If secret is selected, do nothing - use Ctrl+U for bulk edit
+      }
+      // folder level: 'u' does nothing, use Ctrl+U for bulk edit
     } else if (key.name === "w") {
       console.log("Opening web dashboard for project:", _projectId);
     } else if (key.name === "v") {
@@ -443,20 +1027,38 @@ export function ProjectPage({
   const getAllCommands = () => {
     const commands = [];
 
+    const isRestricted = projectStatus === "restricted" || projectStatus === "archived";
+
     // Create commands - context aware
     if (viewLevel === "environments") {
-      commands.push({ key: "n", description: "New environment", category: "Create" });
+      commands.push({ key: "n", description: "Create environment", category: "Create", disabled: isRestricted });
+      commands.push({ key: "u", description: "Rename environment", category: "Manage", disabled: isRestricted });
+      commands.push({ key: "esc", description: "Back to home", category: "Navigate" });
     }
     if (viewLevel === "environment") {
-      commands.push({ key: "f", description: "New folder", category: "Create" });
-      commands.push({ key: "s", description: "New secret", category: "Create" });
+      commands.push({ key: "n", description: "Create folder", category: "Create", disabled: isRestricted });
+
+      // Get current selected item to determine which commands to show
+      const currentItems = getCurrentItems();
+      const selectedItem = currentItems[selectedIndex];
+      const isFolderSelected = selectedItem?.type === "folder";
+
+      if (isFolderSelected) {
+        commands.push({ key: "u", description: "Rename folder", category: "Manage", disabled: isRestricted });
+      }
+
+      commands.push({ key: "⌥u", description: "Update secrets", category: "Manage", disabled: isRestricted });
+      commands.push({ key: "⌥i", description: "Import secrets", category: "Create", disabled: isRestricted });
+      commands.push({ key: "esc", description: "Go back", category: "Navigate" });
     }
     if (viewLevel === "folder") {
-      commands.push({ key: "s", description: "New secret", category: "Create" });
+      commands.push({ key: "⌥u", description: "Update secrets", category: "Manage", disabled: isRestricted });
+      commands.push({ key: "⌥i", description: "Import secrets", category: "Create", disabled: isRestricted });
+      commands.push({ key: "esc", description: "Go back", category: "Navigate" });
     }
 
     // Manage commands - always available
-    commands.push({ key: "c", description: "Manage collaborators", category: "Manage" });
+    commands.push({ key: "c", description: "Manage collaborators", category: "Manage", disabled: isRestricted });
     commands.push({ key: "w", description: "View log history", category: "Manage" });
 
     // View commands - context aware
@@ -468,27 +1070,132 @@ export function ProjectPage({
       });
     }
 
-    return commands;
+    // Sort commands to match CommandPaletteModal visual order
+    const categoryOrder = ["Navigate", "Create", "Manage", "View", "Account"];
+    return commands.sort((a, b) => {
+      const idxA = categoryOrder.indexOf(a.category);
+      const idxB = categoryOrder.indexOf(b.category);
+      // If categories match (or neither found), maintain original order (stable sort)
+      if (idxA === idxB) return 0;
+      // If one found and other not, put found first (though all should be found)
+      if (idxA === -1) return 1;
+      if (idxB === -1) return -1;
+      return idxA - idxB;
+    });
   };
 
   const executeCommand = (key: string) => {
-    if (key === "n" && viewLevel === "environments") setActiveModal("createEnv");
-    else if (key === "f" && viewLevel === "environment") setActiveModal("createFolder");
-    else if (key === "s") setActiveModal("createSecret");
-    else if (key === "c") setActiveModal("manageCollaborators");
-    else if (key === "v") setShowSecrets((prev) => !prev);
-    else if (key === "esc") goBack();
+    if (key === "n" && viewLevel === "environments") {
+      setCreatingItem("env");
+      setNewItemInput("");
+      setNewItemCursor(0);
+    } else if (key === "n" && viewLevel === "environment") {
+      setCreatingItem("folder");
+      setNewItemInput("");
+      setNewItemCursor(0);
+    } else if (key === "u" && viewLevel === "environments") {
+      // Rename environment
+      const env = environments[selectedIndex];
+      if (env) {
+        setEditingItem({ type: "env", id: env.id, originalName: env.name });
+        setEditItemInput(env.name);
+        setEditItemCursor(env.name.length);
+      }
+    } else if (key === "u" && viewLevel === "environment") {
+      // Rename folder (only works if a folder is selected)
+      const currentItems = getCurrentItems();
+      const selectedItem = currentItems[selectedIndex];
+      if (selectedItem && selectedItem.type === "folder") {
+        setEditingItem({ type: "folder", id: selectedItem.id, originalName: selectedItem.name });
+        setEditItemInput(selectedItem.name);
+        setEditItemCursor(selectedItem.name.length);
+      }
+    } else if (key === "esc") {
+      // Back to home/previous level
+      goBack();
+    } else if (key === "⌥i") {
+      // Import secrets
+      const placeholderTemplate = `# Paste your .env file or JSON array here
+# Example .env format:
+API_KEY=your_api_key_here
+DATABASE_URL=postgresql://localhost:5432/db
+REDIS_URL=redis://localhost:6379
+
+# Press ⌥j to switch to JSON format for type/scope control`;
+
+      bulkImportInput.setValue(placeholderTemplate);
+      setBulkImportFormat("env");
+      setBulkImportMode("import");
+      setActiveModal("bulkImport");
+    } else if (key === "⌥u") {
+      // Update secrets
+      const itemsToLoad = getCurrentItems().filter(item => item.type === "secret");
+      if (itemsToLoad.length === 0) {
+        showSuccess("No secrets to edit");
+        return;
+      }
+      const secretsJson = JSON.stringify(
+        itemsToLoad.map(item => ({
+          key: item.name,
+          value: (item as { value?: string }).value || "",
+          type: "string",
+          scope: "shared",
+        })),
+        null,
+        2
+      );
+      bulkImportInput.setValue(secretsJson);
+      setBulkImportFormat("json");
+      setBulkImportMode("update");
+      setActiveModal("bulkImport");
+    } else if (key === "c") {
+      setActiveModal("manageCollaborators");
+    } else if (key === "v") {
+      setShowSecrets((prev) => !prev);
+    }
   };
 
   const getShortcutGroups = () => {
+    const isRestricted = projectStatus === "restricted" || projectStatus === "archived";
+
+    // When creating an environment or folder, show only create/cancel shortcuts
+    if (creatingItem === "env" || creatingItem === "folder") {
+      return {
+        primary: [
+          {
+            shortcuts: [
+              { key: "↵", description: "create" },
+              { key: "esc", description: "cancel" },
+            ],
+          },
+        ],
+        secondary: [],
+      };
+    }
+
+    // When editing/renaming an environment or folder, show only save/cancel shortcuts
+    if (editingItem) {
+      return {
+        primary: [
+          {
+            shortcuts: [
+              { key: "↵", description: "save" },
+              { key: "esc", description: "cancel" },
+            ],
+          },
+        ],
+        secondary: [],
+      };
+    }
+
     // Ultra-minimal: only show relevant create action(s) for current context + esc back
     if (viewLevel === "environments") {
       return {
         primary: [
           {
             shortcuts: [
-              { key: "n", description: "new environment" },
-              { key: "esc", description: "back" },
+              { key: "n", description: "create environment", disabled: isRestricted },
+              { key: "u", description: "rename environment", disabled: isRestricted },
             ],
           },
         ],
@@ -497,14 +1204,25 @@ export function ProjectPage({
     }
 
     if (viewLevel === "environment") {
+      // Get current selected item to determine if rename should be shown
+      const currentItems = getCurrentItems();
+      const selectedItem = currentItems[selectedIndex];
+      const isSecretSelected = selectedItem?.type === "secret";
+
+      const shortcuts = [
+        { key: "n", description: "create folder", disabled: isRestricted },
+        // Only show rename if a folder is selected (not a secret)
+        ...(isSecretSelected ? [] : [{ key: "u", description: "rename folder", disabled: isRestricted }]),
+        // Show update secrets only when secret is selected
+        ...(isSecretSelected ? [{ key: "⌥u", description: "update secrets", disabled: isRestricted }] : []),
+        { key: "⌥i", description: "import secrets", disabled: isRestricted },
+        { key: "esc", description: "back" },
+      ];
+
       return {
         primary: [
           {
-            shortcuts: [
-              { key: "f", description: "new folder" },
-              { key: "s", description: "new secret" },
-              { key: "esc", description: "back" },
-            ],
+            shortcuts,
           },
         ],
         secondary: [],
@@ -516,8 +1234,8 @@ export function ProjectPage({
       primary: [
         {
           shortcuts: [
-            { key: "s", description: "new secret" },
-            { key: "esc", description: "back" },
+            { key: "⌥u", description: "update secrets", disabled: isRestricted },
+            { key: "⌥i", description: "import secrets", disabled: isRestricted },
           ],
         },
       ],
@@ -577,7 +1295,7 @@ export function ProjectPage({
               </text>
               <text>
                 <span fg={STATUS_COLORS[projectStatus]}>
-                  {projectStatus === "owned" ? "●" : projectStatus === "shared" ? "◐" : "○"}{" "}
+                  {projectStatus === "owned" ? "●" : projectStatus === "shared" ? "◉" : "○"}{" "}
                   {projectStatus}
                 </span>
               </text>
@@ -587,46 +1305,110 @@ export function ProjectPage({
             <box
               flexDirection="column"
               width={66}
-              height={items.length === 0 ? 1 : Math.min(items.length, PAGE_SIZE)}
+              height={
+                items.length === 0 && !creatingItem
+                  ? 1
+                  : Math.min(
+                    items.length + (creatingItem ? 1 : 0) + (confirmingDelete ? 1 : 0),
+                    PAGE_SIZE + (confirmingDelete ? 1 : 0)
+                  )
+              }
             >
-              {items.length === 0 ? (
+              {items.length === 0 && !creatingItem ? (
                 <box height={1}>
                   <text fg={THEME_COLORS.textDim}>Empty. Use shortcuts below to create items.</text>
                 </box>
               ) : (
-                items.slice(scrollOffset, scrollOffset + PAGE_SIZE).map((item, index) => {
-                  const indicator = getTypeIndicator(item.type);
-                  const actualIndex = index + scrollOffset;
-                  const isSelected = actualIndex === selectedIndex;
-                  const canEnter = item.type !== "secret";
+                <>
+                  {items.slice(scrollOffset, scrollOffset + PAGE_SIZE).map((item, index) => {
+                    const indicator = getTypeIndicator(item.type);
+                    const actualIndex = index + scrollOffset;
+                    const isSelected = actualIndex === selectedIndex && !creatingItem && !editingItem;
+                    const canEnter = item.type !== "secret";
+                    const isEditing = editingItem?.id === item.id;
 
-                  return (
-                    <box key={item.id} height={1} width={66}>
-                      <text>
-                        <span fg={isSelected ? THEME_COLORS.primary : THEME_COLORS.textDim}>
-                          {isSelected && canEnter ? "› " : "  "}
-                        </span>
-                        <span fg={indicator.color}>{indicator.prefix}</span>
-                        <span fg={isSelected ? THEME_COLORS.text : THEME_COLORS.textMuted}>
-                          {" "}
-                          {item.name}
-                          {item.type === "secret" && (
-                            <span fg={THEME_COLORS.textDim}>
-                              : {showSecrets ? (item as { value: string }).value : "********"}
-                            </span>
-                          )}
-                        </span>
-                      </text>
-                    </box>
-                  );
-                })
+                    return (
+                      <box key={item.id} flexDirection="column">
+                        {isEditing ? (
+                          <InlineInput
+                            value={editItemInput}
+                            cursor={editItemCursor}
+                            cursorVisible={cursorVisible}
+                            maxWidth={50}
+                            maxLength={30}
+                            width={66}
+                            isFocused={true}
+                            icon="[~]"
+                            iconColor={THEME_COLORS.accent}
+                          />
+                        ) : (
+                          <box height={1} width={66}>
+                            <text>
+                              <span fg={isSelected ? THEME_COLORS.primary : THEME_COLORS.textDim}>
+                                {isSelected && canEnter ? "› " : "  "}
+                              </span>
+                              <span fg={indicator.color}>{indicator.prefix}</span>
+                              <span fg={isSelected ? THEME_COLORS.text : THEME_COLORS.textMuted}>
+                                {" "}
+                                {item.name}
+                              </span>
+                              {item.type === "secret" && (() => {
+                                const secretItem = item as { value: string; secretType?: string };
+                                const secretType = secretItem.secretType || "string";
+                                const value = showSecrets ? (secretItem.value || "") : "********";
+                                // Calculate max value length: 66 - "  [*] " - name - ": " - type - " = "
+                                const prefixLen = 6 + item.name.length + 2 + secretType.length + 3;
+                                const maxValueLen = 66 - prefixLen;
+                                const displayValue = value.length > maxValueLen
+                                  ? value.slice(0, maxValueLen - 3) + "..."
+                                  : value;
+                                return (
+                                  <>
+                                    <span fg={THEME_COLORS.textDim}>: </span>
+                                    <span fg={THEME_COLORS.secondary}>{secretType}</span>
+                                    <span fg={THEME_COLORS.textDim}> = </span>
+                                    <span fg={THEME_COLORS.accent}>{displayValue}</span>
+                                  </>
+                                );
+                              })()}
+                            </text>
+                          </box>
+                        )}
+                        <DeleteConfirmation
+                          itemType={viewLevel === "environments" ? "environment" : item.type === "folder" ? "folder" : "secret"}
+                          itemName={item.name}
+                          visible={confirmingDelete?.id === item.id}
+                        />
+                      </box>
+                    );
+                  })}
+                  {creatingItem && (() => {
+                    const placeholder = creatingItem === "env"
+                      ? "e.g. production, staging"
+                      : creatingItem === "folder"
+                        ? "e.g. database, auth"
+                        : "e.g. user@example.com";
+
+                    return (
+                      <InlineInput
+                        value={newItemInput}
+                        cursor={newItemCursor}
+                        cursorVisible={cursorVisible}
+                        maxWidth={50}
+                        maxLength={30}
+                        placeholder={placeholder}
+                        width={66}
+                      />
+                    );
+                  })()}
+                </>
               )}
             </box>
 
             {/* Stats/Footer Area */}
             <box flexDirection="column" marginTop={1}>
               {viewLevel === "environments" && logs.length > 0 && (
-                <box height={1} width={66} marginBottom={1}>
+                <box height={1} width={66}>
                   <text fg={THEME_COLORS.textDim}>
                     Latest Pulse:{" "}
                     <span fg={THEME_COLORS.textMuted}>
@@ -677,42 +1459,16 @@ export function ProjectPage({
         </box>
       </box>
 
-      <CreateEnvironmentModal
-        visible={activeModal === "createEnv"}
-        value={envInput.value}
-        cursor={envInput.cursor}
-        cursorVisible={cursorVisible}
-        onClose={closeModal}
-      />
-
-      <CreateFolderModal
-        visible={activeModal === "createFolder"}
-        value={folderInput.value}
-        cursor={folderInput.cursor}
-        cursorVisible={cursorVisible}
-        onClose={closeModal}
-      />
-
-      <CreateSecretModal
-        visible={activeModal === "createSecret"}
-        keyValue={secretKeyInput.value}
-        keyCursor={secretKeyInput.cursor}
-        secretValue={secretValueInput.value}
-        secretCursor={secretValueInput.cursor}
-        cursorVisible={cursorVisible}
-        focusedField={secretInputFocus}
-        valueType={secretValueType}
-        onClose={closeModal}
-      />
-
       <ManageCollaboratorsModal
         visible={activeModal === "manageCollaborators"}
+        projectName={projectName}
         collaborators={sharedUsers}
         selectedIndex={collabSelectedIndex}
-        mode={collabMode}
-        addEmail={collabEmailInput.value}
-        addEmailCursor={collabEmailInput.cursor}
+        creatingCollab={creatingItem === "collab"}
+        newCollabInput={newItemInput}
+        newCollabCursor={newItemCursor}
         cursorVisible={cursorVisible}
+        confirmingDelete={confirmingDelete}
         onClose={closeModal}
       />
 
@@ -720,6 +1476,18 @@ export function ProjectPage({
         visible={activeModal === "commandPalette"}
         commands={getAllCommands()}
         selectedIndex={commandPaletteIndex}
+        onClose={closeModal}
+      />
+
+      <BulkImportModal
+        visible={activeModal === "bulkImport"}
+        content={bulkImportInput.value}
+        cursor={bulkImportInput.cursor}
+        format={bulkImportFormat}
+        collisions={bulkImportCollisions}
+        cursorVisible={cursorVisible}
+        mode={bulkImportMode}
+        contextPath={viewLevel === "folder" ? "Current folder" : "Current environment"}
         onClose={closeModal}
       />
     </box>

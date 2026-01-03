@@ -19,6 +19,7 @@ export interface Secret {
   id: string;
   key: string;
   value?: string;
+  type?: "string" | "number" | "boolean" | "json";
   folderId?: string;
   environmentId: string;
 }
@@ -44,6 +45,9 @@ export type ModalType =
   | "createFolder"
   | "createSecret"
   | "manageCollaborators"
-  | "commandPalette";
+  | "commandPalette"
+  | "bulkImport";
 
-export type ProjectStatus = "owned" | "shared" | "archived";
+export type ProjectStatus = "owned" | "shared" | "archived" | "restricted";
+
+export type SecretScope = "client" | "server" | "shared";

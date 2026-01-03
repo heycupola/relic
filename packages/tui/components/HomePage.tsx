@@ -1,306 +1,879 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { STATUS_COLORS, THEME_COLORS } from "../lib/constants";
 import type { Project, ProjectStatus } from "../lib/types";
-import { usePaste } from "../lib/usePaste";
 import { useTaskQueue } from "../lib/useTaskQueue";
-import { useTextInput } from "../lib/useTextInput";
 import { GuideBar } from "./GuideBar";
 import { Modal } from "./Modal";
-import { TextInput } from "./TextInput";
+import { DeleteConfirmation, getDeleteConfirmationShortcuts } from "./DeleteConfirmation";
+import { ChangePasswordModal } from "./modals/ChangePasswordModal";
+import { CommandPaletteModal } from "./modals/CommandPaletteModal";
+import { InlineInput } from "./InlineInput";
 
-type ModalType = "none" | "create" | "logout";
+type ModalType = "none" | "logout" | "password" | "commandPalette";
 
 interface HomePageProps {
-  userName: string;
-  onSelectProject: (projectId: string, projectName: string, projectStatus: ProjectStatus) => void;
-  onLogout: () => void;
+    userName: string;
+    onSelectProject: (projectId: string, projectName: string, projectStatus: ProjectStatus) => void;
+    onLogout: () => void;
 }
 
 const MOCK_PROJECTS: Project[] = [
-  { id: "1", name: "api-gateway", status: "owned" },
-  { id: "2", name: "user-service", status: "shared" },
-  { id: "3", name: "payment-service", status: "archived" },
+    { id: "1", name: "api-gateway", status: "owned" },
+    { id: "2", name: "user-service", status: "shared" },
+    { id: "3", name: "payment-service", status: "archived" },
+    { id: "4", name: "legacy-api", status: "restricted" },
 ];
 
 const STATUS_ICONS: Record<ProjectStatus, string> = {
-  owned: "●",
-  shared: "◐",
-  archived: "○",
+    owned: "●",
+    shared: "◉",
+    archived: "○",
+    restricted: "Ø",
 };
 
 const PROJECT_NAME_MAX_LENGTH = 50;
 
 export function HomePage({ onSelectProject, onLogout }: HomePageProps) {
-  const { width, height } = useTerminalDimensions();
-  const { runTask, showSuccess } = useTaskQueue();
+    const { width, height } = useTerminalDimensions();
+    const { runTask, showSuccess } = useTaskQueue();
 
-  const [projects] = useState<Project[]>(MOCK_PROJECTS);
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const [scrollOffset, setScrollOffset] = useState(0);
-  const [activeModal, setActiveModal] = useState<ModalType>("none");
-  const [cursorVisible, setCursorVisible] = useState(true);
+    const [projects] = useState<Project[]>(MOCK_PROJECTS);
+    const [selectedIndex, setSelectedIndex] = useState(0);
+    const [scrollOffset, setScrollOffset] = useState(0);
+    const [activeModal, setActiveModal] = useState<ModalType>("none");
+    const [cursorVisible, setCursorVisible] = useState(true);
+    const [commandPaletteIndex, setCommandPaletteIndex] = useState(0);
 
-  const projectNameInput = useTextInput({
-    maxLength: PROJECT_NAME_MAX_LENGTH,
-    onSubmit: (value) => {
-      if (value.trim()) {
-        closeModal();
-        runTask(`Creating project "${value}"...`, async () => {
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-        }).then(() => {
-          showSuccess(`Project "${value}" created`);
+    // Inline input state
+    const [creatingProject, setCreatingProject] = useState(false);
+    const [newProjectInput, setNewProjectInput] = useState("");
+    const [newProjectCursor, setNewProjectCursor] = useState(0);
+
+    // Inline delete confirmation state
+    const [confirmingDelete, setConfirmingDelete] = useState<{
+        id: string;
+        name: string;
+    } | null>(null);
+
+    // Inline edit/rename state
+    const [editingProject, setEditingProject] = useState<{
+        id: string;
+        originalName: string;
+    } | null>(null);
+    const [editProjectInput, setEditProjectInput] = useState("");
+    const [editProjectCursor, setEditProjectCursor] = useState(0);
+
+    useEffect(() => {
+        if (activeModal === "none" && !creatingProject && !editingProject) return;
+        const interval = setInterval(() => {
+            setCursorVisible((prev) => !prev);
+        }, 530);
+        return () => clearInterval(interval);
+    }, [activeModal, creatingProject, editingProject]);
+
+    const PAGE_SIZE = 5;
+
+    const moveUp = () => {
+        if (projects.length === 0) return;
+        setSelectedIndex((prev) => {
+            const next = prev > 0 ? prev - 1 : projects.length - 1;
+            if (next < scrollOffset) {
+                setScrollOffset(next);
+            } else if (next >= scrollOffset + PAGE_SIZE) {
+                setScrollOffset(Math.max(0, projects.length - PAGE_SIZE));
+            }
+            return next;
         });
-      }
-    },
-  });
+    };
 
-  useEffect(() => {
-    if (activeModal === "none") return;
-    const interval = setInterval(() => {
-      setCursorVisible((prev) => !prev);
-    }, 530);
-    return () => clearInterval(interval);
-  }, [activeModal]);
+    const moveDown = () => {
+        if (projects.length === 0) return;
+        setSelectedIndex((prev) => {
+            const next = prev < projects.length - 1 ? prev + 1 : 0;
+            if (next >= scrollOffset + PAGE_SIZE) {
+                setScrollOffset(next - PAGE_SIZE + 1);
+            } else if (next < scrollOffset) {
+                setScrollOffset(0);
+            }
+            return next;
+        });
+    };
 
-  const handlePaste = useCallback(
-    (text: string) => {
-      if (activeModal === "create") {
+    const selectProject = () => {
+        const project = projects[selectedIndex];
+        if (project) {
+            onSelectProject(project.id, project.name, project.status);
+        }
+    };
+
+    const closeModal = () => {
+        setActiveModal("none");
+    };
+
+    const confirmLogout = () => {
+        onLogout();
+    };
+
+    const getAllCommands = () => {
+        const commands = [
+            { key: "n", description: "Create project", category: "Create" },
+            { key: "u", description: "Rename project", category: "Manage" },
+            { key: "p", description: "Change password", category: "Account" },
+            { key: "^l", description: "Logout", category: "Account" },
+        ];
+
+        // Sort commands to match CommandPaletteModal visual order
+        const categoryOrder = ["Navigate", "Create", "Manage", "View", "Account"];
+        return commands.sort((a, b) => {
+            const idxA = categoryOrder.indexOf(a.category);
+            const idxB = categoryOrder.indexOf(b.category);
+            if (idxA === idxB) return 0;
+            if (idxA === -1) return 1;
+            if (idxB === -1) return -1;
+            return idxA - idxB;
+        });
+    };
+
+    const executeCommand = (key: string) => {
+        if (key === "n") {
+            setCreatingProject(true);
+            setNewProjectInput("");
+            setNewProjectCursor(0);
+        } else if (key === "u") {
+            const project = projects[selectedIndex];
+            if (project && project.status !== "restricted" && project.status !== "archived") {
+                setEditingProject({ id: project.id, originalName: project.name });
+                setEditProjectInput(project.name);
+                setEditProjectCursor(project.name.length);
+            }
+        } else if (key === "p") {
+            setActiveModal("password");
+        } else if (key === "^l") {
+            setActiveModal("logout");
+        }
+    };
+
+    useKeyboard((key) => {
         setCursorVisible(true);
-        projectNameInput.handlePaste(text);
-      }
-    },
-    [activeModal, projectNameInput],
-  );
 
-  usePaste(handlePaste);
+        // Inline input handling with cursor support
+        if (creatingProject) {
+            // Helper: Terminal sends Option as meta+ESC sequence
+            const isOptionKey = key.meta && key.sequence === "\x1b";
+            const isCmd = key.meta && !isOptionKey;
 
-  const PAGE_SIZE = 5;
+            if (key.name === "escape") {
+                setCreatingProject(false);
+                setNewProjectInput("");
+                setNewProjectCursor(0);
+                return;
+            }
 
-  const moveUp = () => {
-    if (projects.length === 0) return;
-    setSelectedIndex((prev) => {
-      const next = prev > 0 ? prev - 1 : projects.length - 1;
-      if (next < scrollOffset) {
-        setScrollOffset(next);
-      } else if (next >= scrollOffset + PAGE_SIZE) {
-        setScrollOffset(Math.max(0, projects.length - PAGE_SIZE));
-      }
-      return next;
+            if (key.name === "return") {
+                const trimmed = newProjectInput.trim();
+                if (trimmed) {
+                    runTask(`Creating project "${trimmed}"...`, async () => {
+                        await new Promise((resolve) => setTimeout(resolve, 1500));
+                    }).then(() => {
+                        showSuccess(`Project "${trimmed}" created`);
+                        setCreatingProject(false);
+                        setNewProjectInput("");
+                        setNewProjectCursor(0);
+                    });
+                }
+                return;
+            }
+
+            // Arrow left with modifiers
+            if (key.name === "left") {
+                if (isOptionKey || key.option) {
+                    let pos = newProjectCursor;
+                    while (pos > 0 && newProjectInput[pos - 1] === " ") pos--;
+                    while (pos > 0 && newProjectInput[pos - 1] !== " ") pos--;
+                    setNewProjectCursor(pos);
+                } else if (key.meta) {
+                    setNewProjectCursor(0);
+                } else {
+                    setNewProjectCursor((prev) => Math.max(0, prev - 1));
+                }
+                return;
+            }
+
+            // Arrow right with modifiers
+            if (key.name === "right") {
+                if (isOptionKey || key.option) {
+                    let pos = newProjectCursor;
+                    while (pos < newProjectInput.length && newProjectInput[pos] !== " ") pos++;
+                    while (pos < newProjectInput.length && newProjectInput[pos] === " ") pos++;
+                    setNewProjectCursor(pos);
+                } else if (key.meta) {
+                    setNewProjectCursor(newProjectInput.length);
+                } else {
+                    setNewProjectCursor((prev) => Math.min(newProjectInput.length, prev + 1));
+                }
+                return;
+            }
+
+            // Ignore up/down arrows
+            if (key.name === "up" || key.name === "down") {
+                return;
+            }
+
+            // Backspace with modifiers
+            if (key.name === "backspace") {
+                if (key.meta || key.option) {
+                    // Meta/Option+Backspace: Delete word backward
+                    if (newProjectCursor > 0) {
+                        let newPos = newProjectCursor;
+                        while (newPos > 0 && newProjectInput[newPos - 1] === " ") newPos--;
+                        while (newPos > 0 && newProjectInput[newPos - 1] !== " ") newPos--;
+                        setNewProjectInput(
+                            newProjectInput.slice(0, newPos) + newProjectInput.slice(newProjectCursor),
+                        );
+                        setNewProjectCursor(newPos);
+                    }
+                } else {
+                    // Regular backspace: Delete one character
+                    if (newProjectCursor > 0) {
+                        setNewProjectInput(
+                            newProjectInput.slice(0, newProjectCursor - 1) +
+                            newProjectInput.slice(newProjectCursor),
+                        );
+                        setNewProjectCursor(newProjectCursor - 1);
+                    }
+                }
+                return;
+            }
+
+            // Delete key (forward delete)
+            if (key.name === "delete") {
+                if (newProjectCursor < newProjectInput.length) {
+                    setNewProjectInput(
+                        newProjectInput.slice(0, newProjectCursor) +
+                        newProjectInput.slice(newProjectCursor + 1),
+                    );
+                }
+                return;
+            }
+
+            // Ctrl+A: Jump to start
+            if (key.name === "a" && key.ctrl) {
+                setNewProjectCursor(0);
+                return;
+            }
+
+            // Ctrl+E: Jump to end
+            if (key.name === "e" && key.ctrl) {
+                setNewProjectCursor(newProjectInput.length);
+                return;
+            }
+
+            // Ctrl+U: Delete all
+            if (key.name === "u" && key.ctrl) {
+                setNewProjectInput("");
+                setNewProjectCursor(0);
+                return;
+            }
+
+            // Ctrl+W: Delete word backward
+            if (key.name === "w" && key.ctrl) {
+                if (newProjectCursor > 0) {
+                    let newPos = newProjectCursor;
+                    while (newPos > 0 && newProjectInput[newPos - 1] === " ") newPos--;
+                    while (newPos > 0 && newProjectInput[newPos - 1] !== " ") newPos--;
+                    setNewProjectInput(
+                        newProjectInput.slice(0, newPos) + newProjectInput.slice(newProjectCursor),
+                    );
+                    setNewProjectCursor(newPos);
+                }
+                return;
+            }
+
+            // Meta+B (Option+Left): Jump word backward
+            if (key.name === "b" && key.meta) {
+                let pos = newProjectCursor;
+                while (pos > 0 && newProjectInput[pos - 1] === " ") pos--;
+                while (pos > 0 && newProjectInput[pos - 1] !== " ") pos--;
+                setNewProjectCursor(pos);
+                return;
+            }
+
+            // Meta+F (Option+Right): Jump word forward
+            if (key.name === "f" && key.meta) {
+                let pos = newProjectCursor;
+                while (pos < newProjectInput.length && newProjectInput[pos] !== " ") pos++;
+                while (pos < newProjectInput.length && newProjectInput[pos] === " ") pos++;
+                setNewProjectCursor(pos);
+                return;
+            }
+
+            // Meta+D (Option+Delete): Delete word forward
+            if (key.name === "d" && key.meta) {
+                let endPos = newProjectCursor;
+                while (endPos < newProjectInput.length && newProjectInput[endPos] === " ") endPos++;
+                while (endPos < newProjectInput.length && newProjectInput[endPos] !== " ") endPos++;
+                setNewProjectInput(newProjectInput.slice(0, newProjectCursor) + newProjectInput.slice(endPos));
+                return;
+            }
+
+            // Regular typing (30 char limit)
+            if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
+                if (newProjectInput.length < 30) {
+                    setNewProjectInput(
+                        newProjectInput.slice(0, newProjectCursor) +
+                        key.sequence +
+                        newProjectInput.slice(newProjectCursor),
+                    );
+                    setNewProjectCursor(newProjectCursor + 1);
+                }
+                return;
+            }
+
+            // Ignore all other keys
+            return;
+        }
+
+        // Inline edit/rename handling
+        if (editingProject) {
+            // Helper: Terminal sends Option as meta+ESC sequence
+            const isOptionKey = key.meta && key.sequence === "\x1b";
+
+            // Escape or up/down arrows cancel editing
+            if (key.name === "escape" || key.name === "up" || key.name === "down") {
+                setEditingProject(null);
+                setEditProjectInput("");
+                setEditProjectCursor(0);
+                return;
+            }
+
+            // Enter saves the edit
+            if (key.name === "return") {
+                const trimmed = editProjectInput.trim();
+                if (trimmed && trimmed !== editingProject.originalName) {
+                    runTask(`Renaming project to "${trimmed}"...`, async () => {
+                        await new Promise((resolve) => setTimeout(resolve, 1000));
+                    }).then(() => {
+                        showSuccess(`Project renamed to "${trimmed}"`);
+                        setEditingProject(null);
+                        setEditProjectInput("");
+                        setEditProjectCursor(0);
+                    });
+                } else {
+                    setEditingProject(null);
+                    setEditProjectInput("");
+                    setEditProjectCursor(0);
+                }
+                return;
+            }
+
+            // Arrow left with modifiers
+            if (key.name === "left") {
+                if (isOptionKey || key.option) {
+                    // Option+Left: Jump word backward
+                    let pos = editProjectCursor;
+                    while (pos > 0 && editProjectInput[pos - 1] === " ") pos--;
+                    while (pos > 0 && editProjectInput[pos - 1] !== " ") pos--;
+                    setEditProjectCursor(pos);
+                } else if (key.meta) {
+                    // Cmd+Left: Jump to start
+                    setEditProjectCursor(0);
+                } else {
+                    // Regular left
+                    setEditProjectCursor((prev) => Math.max(0, prev - 1));
+                }
+                return;
+            }
+
+            // Arrow right with modifiers
+            if (key.name === "right") {
+                if (isOptionKey || key.option) {
+                    // Option+Right: Jump word forward
+                    let pos = editProjectCursor;
+                    while (pos < editProjectInput.length && editProjectInput[pos] !== " ") pos++;
+                    while (pos < editProjectInput.length && editProjectInput[pos] === " ") pos++;
+                    setEditProjectCursor(pos);
+                } else if (key.meta) {
+                    // Cmd+Right: Jump to end
+                    setEditProjectCursor(editProjectInput.length);
+                } else {
+                    // Regular right
+                    setEditProjectCursor((prev) => Math.min(editProjectInput.length, prev + 1));
+                }
+                return;
+            }
+
+            // Backspace with modifiers
+            if (key.name === "backspace") {
+                if (key.meta || key.option) {
+                    // Meta/Option+Backspace: Delete word backward
+                    if (editProjectCursor > 0) {
+                        let newPos = editProjectCursor;
+                        while (newPos > 0 && editProjectInput[newPos - 1] === " ") newPos--;
+                        while (newPos > 0 && editProjectInput[newPos - 1] !== " ") newPos--;
+                        setEditProjectInput(editProjectInput.slice(0, newPos) + editProjectInput.slice(editProjectCursor));
+                        setEditProjectCursor(newPos);
+                    }
+                } else {
+                    // Regular backspace: Delete one character
+                    if (editProjectCursor > 0) {
+                        setEditProjectInput(
+                            editProjectInput.slice(0, editProjectCursor - 1) + editProjectInput.slice(editProjectCursor),
+                        );
+                        setEditProjectCursor(editProjectCursor - 1);
+                    }
+                }
+                return;
+            }
+
+            // Delete key (forward delete)
+            if (key.name === "delete") {
+                if (editProjectCursor < editProjectInput.length) {
+                    setEditProjectInput(
+                        editProjectInput.slice(0, editProjectCursor) + editProjectInput.slice(editProjectCursor + 1),
+                    );
+                }
+                return;
+            }
+
+            // Ctrl+A: Jump to start
+            if (key.name === "a" && key.ctrl) {
+                setEditProjectCursor(0);
+                return;
+            }
+
+            // Ctrl+E: Jump to end
+            if (key.name === "e" && key.ctrl) {
+                setEditProjectCursor(editProjectInput.length);
+                return;
+            }
+
+            // Ctrl+U: Delete all
+            if (key.name === "u" && key.ctrl) {
+                setEditProjectInput("");
+                setEditProjectCursor(0);
+                return;
+            }
+
+            // Ctrl+W: Delete word backward
+            if (key.name === "w" && key.ctrl) {
+                if (editProjectCursor > 0) {
+                    let newPos = editProjectCursor;
+                    while (newPos > 0 && editProjectInput[newPos - 1] === " ") newPos--;
+                    while (newPos > 0 && editProjectInput[newPos - 1] !== " ") newPos--;
+                    setEditProjectInput(
+                        editProjectInput.slice(0, newPos) + editProjectInput.slice(editProjectCursor),
+                    );
+                    setEditProjectCursor(newPos);
+                }
+                return;
+            }
+
+            // Meta+B (Option+Left): Jump word backward
+            if (key.name === "b" && key.meta) {
+                let pos = editProjectCursor;
+                while (pos > 0 && editProjectInput[pos - 1] === " ") pos--;
+                while (pos > 0 && editProjectInput[pos - 1] !== " ") pos--;
+                setEditProjectCursor(pos);
+                return;
+            }
+
+            // Meta+F (Option+Right): Jump word forward
+            if (key.name === "f" && key.meta) {
+                let pos = editProjectCursor;
+                while (pos < editProjectInput.length && editProjectInput[pos] !== " ") pos++;
+                while (pos < editProjectInput.length && editProjectInput[pos] === " ") pos++;
+                setEditProjectCursor(pos);
+                return;
+            }
+
+            // Meta+D (Option+Delete): Delete word forward
+            if (key.name === "d" && key.meta) {
+                let endPos = editProjectCursor;
+                while (endPos < editProjectInput.length && editProjectInput[endPos] === " ") endPos++;
+                while (endPos < editProjectInput.length && editProjectInput[endPos] !== " ") endPos++;
+                setEditProjectInput(editProjectInput.slice(0, editProjectCursor) + editProjectInput.slice(endPos));
+                return;
+            }
+
+            // Regular typing (30 char limit)
+            if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta && !key.option) {
+                if (editProjectInput.length < 30) {
+                    setEditProjectInput(
+                        editProjectInput.slice(0, editProjectCursor) +
+                        key.sequence +
+                        editProjectInput.slice(editProjectCursor),
+                    );
+                    setEditProjectCursor(editProjectCursor + 1);
+                }
+                return;
+            }
+
+            return;
+        }
+
+        if (activeModal === "logout") {
+            if (key.name === "y") {
+                confirmLogout();
+            } else if (key.name === "n" || key.name === "escape") {
+                closeModal();
+            }
+            return;
+        }
+
+        if (activeModal === "password") {
+            // PasswordForm handles its own keyboard
+            if (key.name === "escape") {
+                closeModal();
+            }
+            return;
+        }
+
+        if (activeModal === "commandPalette") {
+            if (key.name === "escape") {
+                closeModal();
+            } else if (key.name === "up" || key.name === "k") {
+                setCommandPaletteIndex((prev) => (prev > 0 ? prev - 1 : getAllCommands().length - 1));
+            } else if (key.name === "down" || key.name === "j") {
+                setCommandPaletteIndex((prev) => (prev < getAllCommands().length - 1 ? prev + 1 : 0));
+            } else if (key.name === "return") {
+                const commands = getAllCommands();
+                const cmd = commands[commandPaletteIndex];
+                if (cmd) {
+                    closeModal();
+                    executeCommand(cmd.key);
+                }
+            } else if (key.name === "p") {
+                closeModal();
+                executeCommand("p");
+            } else if ((key.name === "l" && key.ctrl) || key.sequence === "\x0C") {
+                closeModal();
+                executeCommand("^l");
+            }
+            return;
+        }
+
+        if (key.name === "k" || key.name === "up") {
+            moveUp();
+            setConfirmingDelete(null);
+        } else if (key.name === "j" || key.name === "down") {
+            moveDown();
+            setConfirmingDelete(null);
+        } else if (key.name === "return") {
+            selectProject();
+        } else if (key.name === "d") {
+            const project = projects[selectedIndex];
+            if (project && project.status !== "restricted" && project.status !== "archived") {
+                setConfirmingDelete({ id: project.id, name: project.name });
+            }
+        } else if (key.name === "n" && !confirmingDelete && !editingProject) {
+            setCreatingProject(true);
+            setNewProjectInput("");
+            setNewProjectCursor(0);
+        } else if (key.name === "u" && !confirmingDelete && !creatingProject) {
+            // Rename project
+            const project = projects[selectedIndex];
+            if (project && project.status !== "restricted" && project.status !== "archived") {
+                setEditingProject({ id: project.id, originalName: project.name });
+                setEditProjectInput(project.name);
+                setEditProjectCursor(project.name.length);
+            }
+        } else if (key.name === "p" && !confirmingDelete) {
+            setActiveModal("password");
+        } else if ((key.name === "l" && key.ctrl) || key.sequence === "\x0C") {
+            setActiveModal("logout");
+        } else if (key.sequence === "?") {
+            setCommandPaletteIndex(0);
+            setActiveModal("commandPalette");
+        } else if (key.name === "q") {
+            process.exit(0);
+        }
     });
-  };
 
-  const moveDown = () => {
-    if (projects.length === 0) return;
-    setSelectedIndex((prev) => {
-      const next = prev < projects.length - 1 ? prev + 1 : 0;
-      if (next >= scrollOffset + PAGE_SIZE) {
-        setScrollOffset(next - PAGE_SIZE + 1);
-      } else if (next < scrollOffset) {
-        setScrollOffset(0);
-      }
-      return next;
+    // Delete confirmation keyboard handler (outside main handler so it runs in modal-like state)
+    useKeyboard((key) => {
+        if (!confirmingDelete) return;
+
+        if (key.name === "y") {
+            runTask(`Archiving "${confirmingDelete.name}"...`, async () => {
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+            }).then(() => {
+                showSuccess(`"${confirmingDelete.name}" archived`);
+                setConfirmingDelete(null);
+            });
+        } else if (key.name === "n" || key.name === "escape") {
+            setConfirmingDelete(null);
+        }
     });
-  };
 
-  const selectProject = () => {
-    const project = projects[selectedIndex];
-    if (project) {
-      onSelectProject(project.id, project.name, project.status);
-    }
-  };
+    const getShortcutGroups = () => {
+        if (creatingProject) {
+            return {
+                primary: [
+                    {
+                        shortcuts: [
+                            { key: "↵", description: "create" },
+                            { key: "esc", description: "cancel" },
+                        ],
+                    },
+                ],
+                secondary: [],
+            };
+        }
+        if (editingProject) {
+            return {
+                primary: [
+                    {
+                        shortcuts: [
+                            { key: "↵", description: "save" },
+                            { key: "esc", description: "cancel" },
+                        ],
+                    },
+                ],
+                secondary: [],
+            };
+        }
+        return {
+            primary: [
+                {
+                    shortcuts: [
+                        { key: "n", description: "create project" },
+                        { key: "u", description: "rename project" },
+                    ],
+                },
+            ],
+            secondary: [],
+        };
+    };
 
-  const closeModal = () => {
-    setActiveModal("none");
-    projectNameInput.reset();
-  };
-
-  const confirmLogout = () => {
-    onLogout();
-  };
-
-  useKeyboard((key) => {
-    setCursorVisible(true);
-
-    if (activeModal === "create") {
-      if (key.name === "escape") {
-        closeModal();
-      } else if (!projectNameInput.handleKey(key)) {
-        return;
-      }
-      return;
-    }
-
-    if (activeModal === "logout") {
-      if (key.name === "y") {
-        confirmLogout();
-      } else if (key.name === "n" || key.name === "escape") {
-        closeModal();
-      }
-      return;
-    }
-
-    if (key.name === "k" || key.name === "up") {
-      moveUp();
-    } else if (key.name === "j" || key.name === "down") {
-      moveDown();
-    } else if (key.name === "return") {
-      selectProject();
-    } else if (key.name === "n") {
-      setActiveModal("create");
-    } else if ((key.name === "l" && key.ctrl) || key.sequence === "\x0C") {
-      setActiveModal("logout");
-    } else if (key.name === "q") {
-      process.exit(0);
-    }
-  });
-
-  const getShortcutGroups = () => ({
-    primary: [
-      {
-        shortcuts: [
-          { key: "n", description: "new project" },
-          { key: "^l", description: "logout" },
-        ],
-      },
-    ],
-    secondary: [],
-  });
-
-  return (
-    <box
-      flexDirection="column"
-      width={width}
-      height={height}
-      backgroundColor={THEME_COLORS.background}
-    >
-      <box
-        flexDirection="column"
-        justifyContent="center"
-        alignItems="center"
-        flexGrow={1}
-        backgroundColor={THEME_COLORS.background}
-      >
+    return (
         <box
-          flexDirection="column"
-          alignItems="center"
-          backgroundColor={THEME_COLORS.header}
-          width={50}
-          paddingTop={1}
-          paddingBottom={1}
-          paddingLeft={2}
-          paddingRight={2}
-        >
-          {/* ASCII relic logo */}
-          <box height={7} justifyContent="center" alignItems="center">
-            <ascii-font text="relic" font="block" />
-          </box>
-
-          <box height={1} marginBottom={1}>
-            <text fg={THEME_COLORS.textMuted}>Zero-knowledge secret management</text>
-          </box>
-
-          {/* Projects heading with count */}
-          <box
-            height={1}
-            width={44}
-            marginTop={1}
-            marginBottom={1}
-            flexDirection="row"
-            justifyContent="space-between"
-            alignItems="center"
-          >
-            <text fg={THEME_COLORS.textMuted}>Projects</text>
-            <text fg={THEME_COLORS.textDim}>{projects.length} / 10</text>
-          </box>
-
-          {/* Project List */}
-          <box
             flexDirection="column"
-            width={44}
-            height={projects.length === 0 ? 1 : Math.min(projects.length, PAGE_SIZE)}
-          >
-            {projects.length === 0 ? (
-              <box height={1}>
-                <text fg={THEME_COLORS.textDim}>No projects yet. Press 'n' to create one.</text>
-              </box>
-            ) : (
-              projects.slice(scrollOffset, scrollOffset + PAGE_SIZE).map((project, index) => {
-                const actualIndex = index + scrollOffset;
-                const isSelected = actualIndex === selectedIndex;
-                const statusColor = STATUS_COLORS[project.status];
-                const statusIcon = STATUS_ICONS[project.status];
+            width={width}
+            height={height}
+            backgroundColor={THEME_COLORS.background}
+        >
+            <box
+                flexDirection="column"
+                justifyContent="center"
+                alignItems="center"
+                flexGrow={1}
+                backgroundColor={THEME_COLORS.background}
+            >
+                <box
+                    flexDirection="column"
+                    backgroundColor={THEME_COLORS.header}
+                    width={56}
+                    paddingTop={1}
+                    paddingBottom={1}
+                    paddingLeft={2}
+                    paddingRight={2}
+                >
+                    {/* ASCII relic logo */}
+                    <box height={7} justifyContent="center" alignItems="center">
+                        <ascii-font text="relic" font="block" />
+                    </box>
 
-                return (
-                  <box
-                    key={project.id}
-                    height={1}
-                    width={44}
-                    flexDirection="row"
-                    justifyContent="space-between"
-                    alignItems="center"
-                  >
-                    <text fg={isSelected ? THEME_COLORS.text : THEME_COLORS.textMuted}>
-                      <span fg={isSelected ? THEME_COLORS.primary : THEME_COLORS.textDim}>
-                        {isSelected ? "› " : "  "}
-                      </span>
-                      {project.name}
-                    </text>
-                    <text>
-                      {isSelected && <span fg={THEME_COLORS.textDim}>[{project.status}] </span>}
-                      <span fg={statusColor}>{statusIcon}</span>
-                    </text>
-                  </box>
-                );
-              })
-            )}
-          </box>
+                    <box height={1} marginBottom={1} justifyContent="center" alignItems="center">
+                        <text fg={THEME_COLORS.textMuted}>Zero-knowledge secret management</text>
+                    </box>
 
-          {/* Shortcuts - inside card, minimal style */}
-          {activeModal === "none" && (
-            <box marginTop={1}>
-              <GuideBar groups={getShortcutGroups()} customWidth={44} minimal={true} />
+                    {/* Projects heading with count */}
+                    <box
+                        height={1}
+                        width={52}
+                        marginTop={1}
+                        marginBottom={1}
+                        flexDirection="row"
+                        justifyContent="space-between"
+                        alignItems="center"
+                    >
+                        <text fg={THEME_COLORS.textMuted}>Projects</text>
+                        <text fg={THEME_COLORS.textDim}>{projects.length} / 10</text>
+                    </box>
+
+                    {/* Project List */}
+                    <box
+                        flexDirection="column"
+                        width={52}
+                        height={
+                            projects.length === 0 && !creatingProject
+                                ? 1
+                                : Math.min(
+                                    projects.length + (creatingProject ? 1 : 0) + (confirmingDelete ? 1 : 0),
+                                    PAGE_SIZE + (confirmingDelete ? 1 : 0)
+                                )
+                        }
+                    >
+                        {projects.length === 0 && !creatingProject ? (
+                            <box height={1}>
+                                <text fg={THEME_COLORS.textDim}>No projects yet. Press 'n' to create one.</text>
+                            </box>
+                        ) : (
+                            <>
+                                {projects.slice(scrollOffset, scrollOffset + PAGE_SIZE).map((project, index) => {
+                                    const actualIndex = index + scrollOffset;
+                                    const isSelected = actualIndex === selectedIndex && !creatingProject && !editingProject;
+                                    const statusColor = STATUS_COLORS[project.status];
+                                    const statusIcon = STATUS_ICONS[project.status];
+                                    const isEditing = editingProject?.id === project.id;
+
+                                    return (
+                                        <box key={project.id} flexDirection="column">
+                                            {isEditing ? (
+                                                <InlineInput
+                                                    value={editProjectInput}
+                                                    cursor={editProjectCursor}
+                                                    cursorVisible={cursorVisible}
+                                                    maxWidth={40}
+                                                    maxLength={30}
+                                                    width={52}
+                                                    isFocused={true}
+                                                    icon="[~]"
+                                                    iconColor={THEME_COLORS.accent}
+                                                />
+                                            ) : (
+                                                <box
+                                                    height={1}
+                                                    width={52}
+                                                    flexDirection="row"
+                                                    justifyContent="space-between"
+                                                    alignItems="center"
+                                                >
+                                                    <text fg={isSelected ? THEME_COLORS.text : THEME_COLORS.textMuted}>
+                                                        <span fg={isSelected ? THEME_COLORS.primary : THEME_COLORS.textDim}>
+                                                            {isSelected ? "› " : "  "}
+                                                        </span>
+                                                        {project.name}
+                                                    </text>
+                                                    <text>
+                                                        {isSelected && <span fg={THEME_COLORS.textDim}>[{project.status}] </span>}
+                                                        <span fg={statusColor}>{statusIcon}</span>
+                                                    </text>
+                                                </box>
+                                            )}
+                                            <DeleteConfirmation
+                                                itemType="project"
+                                                itemName={project.name}
+                                                visible={confirmingDelete?.id === project.id}
+                                            />
+                                        </box>
+                                    );
+                                })}
+                                {creatingProject && (() => {
+                                    const maxWidth = 28; // Visible text area width
+                                    const maxLength = 30;
+                                    const charCount = `${newProjectInput.length}/${maxLength}`;
+                                    const isEmpty = newProjectInput.length === 0;
+
+                                    // Calculate visible text with scrolling
+                                    let displayText = newProjectInput;
+                                    let displayCursor = newProjectCursor;
+                                    let scrollLeft = "";
+                                    let scrollRight = "";
+
+                                    if (newProjectInput.length > maxWidth) {
+                                        // Scroll to keep cursor visible
+                                        const padding = 3;
+                                        let start = 0;
+                                        if (newProjectCursor > maxWidth - padding) {
+                                            start = Math.min(newProjectCursor - maxWidth + padding, newProjectInput.length - maxWidth);
+                                        }
+                                        start = Math.max(0, start);
+                                        displayText = newProjectInput.slice(start, start + maxWidth);
+                                        displayCursor = newProjectCursor - start;
+                                        if (start > 0) scrollLeft = "◀ ";
+                                        if (start + maxWidth < newProjectInput.length) scrollRight = " ▶";
+                                    }
+
+                                    return (
+                                        <box height={1} width={52} flexDirection="row" justifyContent="space-between">
+                                            <text>
+                                                <span fg={THEME_COLORS.primary}>› </span>
+                                                <span fg={THEME_COLORS.success}>[+]</span>
+                                                <span fg={THEME_COLORS.text}> </span>
+                                                {isEmpty ? (
+                                                    <>
+                                                        {cursorVisible ? (
+                                                            <span bg={THEME_COLORS.primary} fg={THEME_COLORS.header}> </span>
+                                                        ) : (
+                                                            <span> </span>
+                                                        )}
+                                                        <span fg={THEME_COLORS.textDim}>e.g. my-project</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <span fg={THEME_COLORS.textDim}>{scrollLeft}</span>
+                                                        <span fg={THEME_COLORS.text}>
+                                                            {displayText.slice(0, displayCursor)}
+                                                        </span>
+                                                        {cursorVisible ? (
+                                                            <span bg={THEME_COLORS.primary} fg={THEME_COLORS.header}>
+                                                                {displayText[displayCursor] || " "}
+                                                            </span>
+                                                        ) : (
+                                                            <span fg={THEME_COLORS.text}>
+                                                                {displayText[displayCursor] || " "}
+                                                            </span>
+                                                        )}
+                                                        <span fg={THEME_COLORS.text}>
+                                                            {displayText.slice(displayCursor + 1)}
+                                                        </span>
+                                                        <span fg={THEME_COLORS.textDim}>{scrollRight}</span>
+                                                    </>
+                                                )}
+                                            </text>
+                                            <text fg={THEME_COLORS.textDim}>{charCount}</text>
+                                        </box>
+                                    );
+                                })()}
+                            </>
+                        )}
+                    </box>
+
+                    {/* Shortcuts - inside card, minimal style */}
+                    {(activeModal === "none" || creatingProject || activeModal === "commandPalette") && (
+                        <box marginTop={1}>
+                            <GuideBar groups={getShortcutGroups()} customWidth={52} minimal={true} showHelp={!creatingProject} />
+                        </box>
+                    )}
+                </box>
             </box>
-          )}
-        </box>
-      </box>
 
-      <Modal
-        visible={activeModal === "create"}
-        title="Create New Project"
-        width={50}
-        height={9}
-        shortcuts={[
-          { key: "↵", description: "create" },
-          { key: "esc", description: "cancel" },
-        ]}
-      >
-        <box flexDirection="column" alignItems="center">
-          <TextInput
-            value={projectNameInput.value}
-            cursor={projectNameInput.cursor}
-            cursorVisible={cursorVisible}
-            width={40}
-            maxLength={PROJECT_NAME_MAX_LENGTH}
-            label="Project name:"
-          />
-        </box>
-      </Modal>
+            <Modal
+                visible={activeModal === "logout"}
+                title="Logout"
+                width={45}
+                height={8}
+                shortcuts={[
+                    { key: "y", description: "yes" },
+                    { key: "n", description: "no" },
+                ]}
+            >
+                <box flexDirection="column" alignItems="flex-start">
+                    <text fg={THEME_COLORS.textDim}>Are you sure you want to logout?</text>
+                </box>
+            </Modal>
 
-      <Modal
-        visible={activeModal === "logout"}
-        title="Logout"
-        width={45}
-        height={8}
-        shortcuts={[
-          { key: "y", description: "yes" },
-          { key: "n", description: "no" },
-        ]}
-      >
-        <box flexDirection="column" alignItems="center" gap={1}>
-          <text fg={THEME_COLORS.text}>Are you sure you want to logout?</text>
+            <ChangePasswordModal
+                visible={activeModal === "password"}
+                onClose={closeModal}
+                onSuccess={(_newPassword: string) => {
+                    // TODO: Re-encrypt secrets with new password
+                    closeModal();
+                }}
+                verifyCurrentPassword={(_password: string) => {
+                    // TODO: Verify against stored hash
+                    return true;
+                }}
+            />
+
+            <CommandPaletteModal
+                visible={activeModal === "commandPalette"}
+                commands={getAllCommands()}
+                selectedIndex={commandPaletteIndex}
+                onClose={closeModal}
+            />
         </box>
-      </Modal>
-    </box>
-  );
+    );
 }

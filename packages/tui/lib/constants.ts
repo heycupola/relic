@@ -14,6 +14,7 @@ export const STATUS_COLORS = {
   owned: "#9ece6a",
   shared: "#7aa2f7",
   archived: "#565f89",
+  restricted: "#f7768e",
 } as const;
 
 export const THEME_COLORS = {
