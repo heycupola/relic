@@ -27,13 +27,22 @@ export function CommandPaletteModal({
   const modalWidth = 50;
 
   // Group commands by category with pre-computed indices
-  const categoriesOrder = ["Create", "Manage", "View"];
+  const categoriesOrder = ["Navigate", "Create", "Manage", "View", "Account"];
   const categorizedCommands: Array<
     { type: "header"; category: string } | { type: "command"; command: Command; index: number }
   > = [];
 
+  // First, get all unique categories from commands
+  const allCategories = Array.from(new Set(commands.map((c) => c.category).filter(Boolean)));
+
+  // Merge with predefined order, keeping predefined order first, then add any new categories
+  const finalCategoriesOrder = [
+    ...categoriesOrder,
+    ...allCategories.filter((cat) => !categoriesOrder.includes(cat as string))
+  ];
+
   let currentIndex = 0;
-  for (const category of categoriesOrder) {
+  for (const category of finalCategoriesOrder) {
     const cmds = commands.filter((c) => c.category === category);
     if (cmds.length > 0) {
       categorizedCommands.push({ type: "header", category });

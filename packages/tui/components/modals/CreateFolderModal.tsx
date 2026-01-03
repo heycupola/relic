@@ -36,6 +36,7 @@ export function CreateFolderModal({
           width={40}
           maxLength={CHAR_LIMITS.folderName}
           label="Folder name:"
+          placeholder="e.g. aws, database"
         />
       </box>
     </Modal>

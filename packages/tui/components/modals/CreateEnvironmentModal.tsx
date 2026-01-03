@@ -36,6 +36,7 @@ export function CreateEnvironmentModal({
           width={40}
           maxLength={CHAR_LIMITS.envName}
           label="Environment name:"
+          placeholder="e.g. production, staging"
         />
       </box>
     </Modal>

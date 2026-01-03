@@ -1,10 +1,12 @@
 import { CHAR_LIMITS, THEME_COLORS } from "../../lib/constants";
+import type { SecretScope } from "../../lib/types";
 import { Modal } from "../Modal";
 import { TextInput } from "../TextInput";
 
 export type SecretValueType = "string" | "number" | "boolean";
 
 const VALUE_TYPES: SecretValueType[] = ["string", "number", "boolean"];
+const SCOPES: SecretScope[] = ["client", "server", "shared"];
 
 interface CreateSecretModalProps {
   visible: boolean;
@@ -13,8 +15,9 @@ interface CreateSecretModalProps {
   secretValue: string;
   secretCursor: number;
   cursorVisible: boolean;
-  focusedField: "key" | "value" | "type";
+  focusedField: "key" | "value" | "type" | "scope";
   valueType: SecretValueType;
+  scope: SecretScope;
   onClose: () => void;
 }
 
@@ -27,6 +30,7 @@ export function CreateSecretModal({
   cursorVisible,
   focusedField,
   valueType,
+  scope,
   onClose: _onClose,
 }: CreateSecretModalProps) {
   return (
@@ -34,7 +38,7 @@ export function CreateSecretModal({
       visible={visible}
       title="Create Secret"
       width={50}
-      height={15}
+      height={17}
       shortcuts={[
         { key: "↵", description: "create" },
         { key: "tab", description: "next" },
@@ -49,6 +53,7 @@ export function CreateSecretModal({
           width={40}
           maxLength={CHAR_LIMITS.secretKey}
           label="Secret Key:"
+          placeholder="e.g. API_KEY"
           focused={focusedField === "key"}
         />
         <TextInput
@@ -58,6 +63,7 @@ export function CreateSecretModal({
           width={40}
           maxLength={CHAR_LIMITS.secretValue}
           label="Secret Value:"
+          placeholder="Enter secret value"
           focused={focusedField === "value"}
         />
         <box flexDirection="column" width={40}>
@@ -74,6 +80,26 @@ export function CreateSecretModal({
                   <span fg={isSelected && isFocused ? THEME_COLORS.text : THEME_COLORS.textMuted}>
                     {" "}
                     {type}
+                  </span>
+                </text>
+              );
+            })}
+          </box>
+        </box>
+        <box flexDirection="column" width={40}>
+          <text fg={THEME_COLORS.textMuted}>Scope:</text>
+          <box flexDirection="row" gap={2} marginTop={0}>
+            {SCOPES.map((s) => {
+              const isSelected = s === scope;
+              const isFocused = focusedField === "scope";
+              return (
+                <text key={s}>
+                  <span fg={isSelected ? THEME_COLORS.primary : THEME_COLORS.textDim}>
+                    {isSelected ? "◉" : "○"}
+                  </span>
+                  <span fg={isSelected && isFocused ? THEME_COLORS.text : THEME_COLORS.textMuted}>
+                    {" "}
+                    {s}
                   </span>
                 </text>
               );

@@ -1,3 +1,4 @@
+export { BulkImportModal } from "./BulkImportModal";
 export { CommandPaletteModal } from "./CommandPaletteModal";
 export { CreateEnvironmentModal } from "./CreateEnvironmentModal";
 export { CreateFolderModal } from "./CreateFolderModal";
