@@ -850,27 +850,12 @@ export function ProjectPage({
           }
         } else {
           // JSON to .env - convert back
-          const fs = require("node:fs");
-          fs.writeFileSync(
-            "/tmp/tui_debug.log",
-            `Converting JSON to ENV\ncurrentContent length: ${currentContent.length}\ncurrentContent: ${currentContent.substring(0, 300)}\n`,
-          );
-
           const envContent = jsonToEnv(currentContent);
-          fs.appendFileSync(
-            "/tmp/tui_debug.log",
-            `envContent result: "${envContent}"\nenvContent length: ${envContent.length}\n`,
-          );
 
           if (envContent && envContent.trim() !== "") {
-            fs.appendFileSync(
-              "/tmp/tui_debug.log",
-              "SUCCESS: Setting value and switching format\n",
-            );
             bulkImportInput.setValue(envContent);
             setBulkImportFormat("env");
           } else {
-            fs.appendFileSync("/tmp/tui_debug.log", "FAILED: Conversion returned empty\n");
             showSuccess("Could not convert - check JSON syntax");
           }
         }
@@ -1089,8 +1074,6 @@ REDIS_URL=redis://localhost:6379
         // If secret is selected, do nothing - use Ctrl+U for bulk edit
       }
       // folder level: 'u' does nothing, use Ctrl+U for bulk edit
-    } else if (key.name === "w") {
-      console.log("Opening web dashboard for project:", _projectId);
     } else if (key.name === "v") {
       setShowSecrets((prev) => !prev);
     } else if (key.sequence === "?") {

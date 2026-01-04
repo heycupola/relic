@@ -11,7 +11,6 @@ import { TaskBar } from "./components/shared";
 import { TaskProvider } from "./hooks/useTaskQueue";
 import { RouterProvider, useRouter } from "./router";
 import type { ProjectStatus } from "./types";
-import { debugLog } from "./utils/debugLog";
 import { hasPassword, savePassword } from "./utils/passwordStorage";
 
 function AppRouter() {
@@ -34,11 +33,8 @@ function AppRouter() {
   };
 
   const handlePasswordSetup = (password: string) => {
-    debugLog("handlePasswordSetup called with password:", password);
     savePassword(password);
-    debugLog("Password saved, navigating to home");
     navigate({ name: "home" });
-    debugLog("navigate called");
   };
 
   const handlePasswordUnlock = () => {
