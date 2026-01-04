@@ -154,7 +154,7 @@ http.route({
         type: string;
         data?: {
           email_id?: string;
-          tags?: Array<{ name: string; value: string }>;
+          tags?: Record<string, string>;
         };
       };
 
@@ -162,12 +162,12 @@ http.route({
       console.log(`[Resend Webhook] Received: ${eventType} (ID: ${svixId})`);
 
       if (eventType === "email.delivered") {
-        const tags = payload.data?.tags || [];
+        const tags = payload.data?.tags || {};
 
         // NOTE: extract the custom data from tags
-        const userId = tags.find((t) => t.name === "userId")?.value;
-        const emailKind = tags.find((t) => t.name === "kind")?.value as EmailKind;
-        const emailId = tags.find((t) => t.name === "emailId")?.value;
+        const userId = tags.userId;
+        const emailKind = tags.kind as EmailKind;
+        const emailId = tags.emailId;
 
         if (userId && emailKind) {
           await ctx.runMutation(internal.user._handleEmailDelivered, {
@@ -181,9 +181,9 @@ http.route({
 
       // NOTE: it's for the other events (bounced, failed, etc.)
       if (eventType === "email.bounced" || eventType === "email.delivery_delayed") {
-        const tags = payload.data?.tags || [];
-        const userId = tags.find((t) => t.name === "userId")?.value;
-        const emailKind = tags.find((t) => t.name === "kind")?.value as EmailKind;
+        const tags = payload.data?.tags || {};
+        const userId = tags.userId;
+        const emailKind = tags.kind as EmailKind;
 
         if (userId && emailKind) {
           await ctx.runMutation(internal.user._handleEmailFailed, {

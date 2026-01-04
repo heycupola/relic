@@ -4,7 +4,6 @@ import { betterAuth } from "better-auth";
 import { deviceAuthorization } from "better-auth/plugins";
 import { components, internal } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
-import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
 import authSchema from "./betterAuth/schema";
 
 const siteUrl = process.env.SITE_URL || "";
@@ -20,7 +19,7 @@ export const authComponent = createClient<DataModel, typeof authSchema>(componen
     user: {
       onCreate: async (ctx, doc) => {
         await ctx.scheduler.runAfter(0, internal.user._sendWelcomeEmail, {
-          userId: doc._id as BetterAuthId<"user">,
+          userId: doc._id,
         });
       },
     },

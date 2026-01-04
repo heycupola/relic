@@ -25,6 +25,7 @@ export const createSecret = protectedMutation({
     key: v.string(),
     encryptedValue: v.string(),
     valueType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
+    scope: v.optional(v.union(v.literal("client"), v.literal("server"), v.literal("shared"))),
     // description: v.optional(v.string()),
     encryptionKeyVersion: v.number(),
     // tags: v.optional(v.array(v.string())),
@@ -70,6 +71,7 @@ export const createSecret = protectedMutation({
       environmentId: args.environmentId,
       key: args.key,
       valueType: args.valueType,
+      scope: args.scope ? args.scope : "shared",
       projectId: project._id,
       folderId: args.folderId,
     });
@@ -124,6 +126,7 @@ export const getSecret = protectedQuery({
       key: secretInstance.key,
       encryptedValue: secretInstance.encryptedValue,
       valueType: secretInstance.valueType,
+      scope: secretInstance.scope,
       description: secretInstance.description,
       encryptionKeyVersion: secretInstance.encryptionKeyVersion,
       tags: secretInstance.tags,
@@ -148,6 +151,7 @@ export const updateSecret = protectedMutation({
         v.literal(SecretValueType.Number),
         v.literal(SecretValueType.Boolean),
       ),
+      scope: v.optional(v.union(v.literal("client"), v.literal("server"), v.literal("shared"))),
     }),
     // description: v.optional(v.string()),
     // tags: v.optional(v.array(v.string())),
@@ -186,6 +190,7 @@ export const updateSecret = protectedMutation({
         encryptedValue: args.updates.encryptedValue,
         encryptionKeyVersion: args.updates.encryptionKeyVersion,
         valueType: args.updates.valueType,
+        scope: args.updates.scope,
       },
     });
 
@@ -405,6 +410,7 @@ export const _insertSecret = internalMutation({
     // description: v.string(),
     encryptionKeyVersion: v.number(),
     valueType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
+    scope: v.union(v.literal("client"), v.literal("server"), v.literal("shared")),
     // tags: v.array(v.string()),
     createdBy: v.id("user"),
   },
@@ -422,6 +428,7 @@ export const _insertSecret = internalMutation({
       encryptionKeyVersion: args.encryptionKeyVersion,
       valueType: args.valueType,
       // tags: args.tags,
+      scope: args.scope,
       isDeleted: false,
       createdBy: args.createdBy,
       createdAt: now,
@@ -448,6 +455,7 @@ export const _updateSecret = internalMutation({
           v.literal(SecretValueType.Boolean),
         ),
       ),
+      scope: v.optional(v.union(v.literal("client"), v.literal("server"), v.literal("shared"))),
       isDeleted: v.optional(v.boolean()),
       // description: v.optional(v.string()),
       // tags: v.optional(v.array(v.string())),
@@ -463,6 +471,7 @@ export const _updateSecret = internalMutation({
       encryptedValue?: string;
       encryptionKeyVersion?: number;
       valueType?: SecretValueType;
+      scope?: "client" | "server" | "shared";
       isDeleted?: boolean;
       // description?: string;
       // tags?: string[];
@@ -477,6 +486,7 @@ export const _updateSecret = internalMutation({
     if (args.updates.encryptionKeyVersion !== undefined)
       updates.encryptionKeyVersion = args.updates.encryptionKeyVersion;
     if (args.updates.valueType !== undefined) updates.valueType = args.updates.valueType;
+    if (args.updates.scope !== undefined) updates.scope = args.updates.scope;
     if (args.updates.isDeleted !== undefined) updates.isDeleted = args.updates.isDeleted;
     // if (args.updates.description !== undefined) updates.description = args.updates.description;
     // if (args.updates.tags !== undefined) updates.tags = args.updates.tags;
