@@ -1,7 +1,7 @@
-import { CHAR_LIMITS, THEME_COLORS } from "../../lib/constants";
-import type { SecretScope } from "../../lib/types";
-import { Modal } from "../Modal";
-import { TextInput } from "../TextInput";
+import type { SecretScope } from "../../types";
+import { CHAR_LIMITS, THEME_COLORS } from "../../utils/constants";
+import { TextInput } from "../forms/TextInput";
+import { Modal } from "../shared/Modal";
 
 export type SecretValueType = "string" | "number" | "boolean";
 

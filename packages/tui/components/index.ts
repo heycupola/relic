@@ -1,7 +1,9 @@
-export { GuideBar } from "./GuideBar";
-export { HomePage } from "./HomePage";
-export { LoginPage } from "./LoginPage";
-export { Modal } from "./Modal";
+// Shared components
+
+// Form components
+export * from "./forms";
+// Modal components
 export * from "./modals";
-export { ProjectPage } from "./ProjectPage";
-export { TextInput } from "./TextInput";
+// Page components
+export * from "./pages";
+export * from "./shared";
