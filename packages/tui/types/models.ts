@@ -1,3 +1,6 @@
+// Re-export API types to avoid duplication
+export type { ProjectStatus, SecretScope, SecretValueType } from "../convex/api/types";
+
 export interface Project {
   id: string;
   name: string;
@@ -19,7 +22,7 @@ export interface Secret {
   id: string;
   key: string;
   value?: string;
-  type?: "string" | "number" | "boolean" | "json";
+  type?: SecretValueType;
   folderId?: string;
   environmentId: string;
 }
@@ -39,6 +42,7 @@ export interface LogEntry {
 
 export type ViewLevel = "environments" | "environment" | "folder";
 
+// Unified ModalType that includes all modal types used across the app
 export type ModalType =
   | "none"
   | "createEnv"
@@ -46,8 +50,6 @@ export type ModalType =
   | "createSecret"
   | "manageCollaborators"
   | "commandPalette"
-  | "bulkImport";
-
-export type ProjectStatus = "owned" | "shared" | "archived" | "restricted";
-
-export type SecretScope = "client" | "server" | "shared";
+  | "bulkImport"
+  | "logout"
+  | "password";
