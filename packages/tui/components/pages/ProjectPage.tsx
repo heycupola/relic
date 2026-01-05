@@ -1,5 +1,6 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useCallback, useEffect, useState } from "react";
+import { useCursorBlink } from "../../hooks/useCursorBlink";
 import { useMultilineInput } from "../../hooks/useMultilineInput";
 import { usePaste } from "../../hooks/usePaste";
 import { useTaskQueue } from "../../hooks/useTaskQueue";
@@ -122,7 +123,6 @@ export function ProjectPage({
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
-  const [cursorVisible, setCursorVisible] = useState(true);
   const [activeModal, setActiveModal] = useState<ModalType>("none");
   const [showSecrets, setShowSecrets] = useState(false);
 
@@ -152,13 +152,8 @@ export function ProjectPage({
   const [bulkImportCollisions, setBulkImportCollisions] = useState<CollisionInfo[]>([]);
   const [bulkImportMode, setBulkImportMode] = useState<"import" | "update">("import");
 
-  useEffect(() => {
-    if (activeModal === "none" && !creatingItem && !editingItem) return;
-    const interval = setInterval(() => {
-      setCursorVisible((prev) => !prev);
-    }, 530);
-    return () => clearInterval(interval);
-  }, [activeModal, creatingItem, editingItem]);
+  const shouldBlinkCursor = activeModal !== "none" || creatingItem !== null || editingItem !== null;
+  const cursorVisible = useCursorBlink(shouldBlinkCursor);
 
   useEffect(() => {
     if (activeModal !== "bulkImport") return;
@@ -202,7 +197,6 @@ export function ProjectPage({
 
   const handlePaste = useCallback(
     (text: string) => {
-      setCursorVisible(true);
       if (activeModal === "bulkImport") {
         bulkImportInput.handlePaste(text);
       } else if (creatingItem) {
@@ -351,8 +345,6 @@ export function ProjectPage({
   };
 
   useKeyboard((key) => {
-    setCursorVisible(true);
-
     const isRestricted = projectStatus === "restricted" || projectStatus === "archived";
     if (isRestricted) {
       // Block modification shortcuts

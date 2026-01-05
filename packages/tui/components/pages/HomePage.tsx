@@ -1,8 +1,10 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useCursorBlink } from "../../hooks/useCursorBlink";
 import { usePaste } from "../../hooks/usePaste";
+import { useProjects } from "../../hooks/useProjects";
 import { useTaskQueue } from "../../hooks/useTaskQueue";
-import type { Project, ProjectStatus } from "../../types";
+import type { ModalType, Project, ProjectStatus } from "../../types";
 import { STATUS_COLORS, THEME_COLORS } from "../../utils/constants";
 import { InlineInput } from "../forms/InlineInput";
 import { ChangePasswordModal } from "../modals/ChangePasswordModal";
@@ -11,20 +13,11 @@ import { DeleteConfirmation } from "../shared/DeleteConfirmation";
 import { GuideBar } from "../shared/GuideBar";
 import { Modal } from "../shared/Modal";
 
-type ModalType = "none" | "logout" | "password" | "commandPalette";
-
 interface HomePageProps {
   userName: string;
   onSelectProject: (projectId: string, projectName: string, projectStatus: ProjectStatus) => void;
   onLogout: () => void;
 }
-
-const MOCK_PROJECTS: Project[] = [
-  { id: "1", name: "api-gateway", status: "owned" },
-  { id: "2", name: "user-service", status: "shared" },
-  { id: "3", name: "payment-service", status: "archived" },
-  { id: "4", name: "legacy-api", status: "restricted" },
-];
 
 const STATUS_ICONS: Record<ProjectStatus, string> = {
   owned: "●",
@@ -39,11 +32,16 @@ export function HomePage({ onSelectProject, onLogout }: HomePageProps) {
   const { width, height } = useTerminalDimensions();
   const { runTask, showSuccess } = useTaskQueue();
 
-  const [projects] = useState<Project[]>(MOCK_PROJECTS);
+  // Fetch real projects from API
+  const {
+    projects,
+    isLoading: isLoadingProjects,
+    error: projectsError,
+    refetch: refetchProjects,
+  } = useProjects();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [activeModal, setActiveModal] = useState<ModalType>("none");
-  const [cursorVisible, setCursorVisible] = useState(true);
   const [commandPaletteIndex, setCommandPaletteIndex] = useState(0);
 
   const [creatingProject, setCreatingProject] = useState(false);
@@ -101,13 +99,8 @@ export function HomePage({ onSelectProject, onLogout }: HomePageProps) {
 
   usePaste(handlePaste);
 
-  useEffect(() => {
-    if (activeModal === "none" && !creatingProject && !editingProject) return;
-    const interval = setInterval(() => {
-      setCursorVisible((prev) => !prev);
-    }, 530);
-    return () => clearInterval(interval);
-  }, [activeModal, creatingProject, editingProject]);
+  const shouldBlinkCursor = activeModal !== "none" || creatingProject || editingProject;
+  const cursorVisible = useCursorBlink(shouldBlinkCursor);
 
   const PAGE_SIZE = 5;
 
@@ -192,8 +185,6 @@ export function HomePage({ onSelectProject, onLogout }: HomePageProps) {
   };
 
   useKeyboard((key) => {
-    setCursorVisible(true);
-
     // Inline input handling with cursor support
     if (creatingProject) {
       // Option key sends Meta+ESC sequence
@@ -210,14 +201,28 @@ export function HomePage({ onSelectProject, onLogout }: HomePageProps) {
       if (key.name === "return") {
         const trimmed = newProjectInput.trim();
         if (trimmed) {
+          // TODO: Generate proper encrypted project key using client-side encryption
+          // For now, we use a placeholder - this will be replaced with real encryption
+          const placeholderKey = "encrypted-key-placeholder";
+
           runTask(`Creating project "${trimmed}"...`, async () => {
-            await new Promise((resolve) => setTimeout(resolve, 1500));
-          }).then(() => {
-            showSuccess(`Project "${trimmed}" created`);
-            setCreatingProject(false);
-            setNewProjectInput("");
-            setNewProjectCursor(0);
-          });
+            const { getProtectedApi } = await import("../../convex/api/protected");
+            const { ensureValidJwt } = await import("../../convex/services/jwt");
+            const jwt = await ensureValidJwt();
+            const api = getProtectedApi(jwt);
+            await api.createProject({ name: trimmed, encryptedProjectKey: placeholderKey });
+          })
+            .then(() => {
+              showSuccess(`Project "${trimmed}" created`);
+              setCreatingProject(false);
+              setNewProjectInput("");
+              setNewProjectCursor(0);
+              refetchProjects(); // Refresh the project list
+            })
+            .catch((err) => {
+              // Handle error - project creation failed
+              console.error("Failed to create project:", err);
+            });
         }
         return;
       }
@@ -392,14 +397,24 @@ export function HomePage({ onSelectProject, onLogout }: HomePageProps) {
       if (key.name === "return") {
         const trimmed = editProjectInput.trim();
         if (trimmed && trimmed !== editingProject.originalName) {
+          const projectId = editingProject.id;
           runTask(`Renaming project to "${trimmed}"...`, async () => {
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-          }).then(() => {
-            showSuccess(`Project renamed to "${trimmed}"`);
-            setEditingProject(null);
-            setEditProjectInput("");
-            setEditProjectCursor(0);
-          });
+            const { getProtectedApi } = await import("../../convex/api/protected");
+            const { ensureValidJwt } = await import("../../convex/services/jwt");
+            const jwt = await ensureValidJwt();
+            const api = getProtectedApi(jwt);
+            await api.updateProject({ projectId, name: trimmed });
+          })
+            .then(() => {
+              showSuccess(`Project renamed to "${trimmed}"`);
+              setEditingProject(null);
+              setEditProjectInput("");
+              setEditProjectCursor(0);
+              refetchProjects(); // Refresh the project list
+            })
+            .catch((err) => {
+              console.error("Failed to rename project:", err);
+            });
         } else {
           setEditingProject(null);
           setEditProjectInput("");
@@ -643,12 +658,23 @@ export function HomePage({ onSelectProject, onLogout }: HomePageProps) {
     if (!confirmingDelete) return;
 
     if (key.name === "y") {
-      runTask(`Archiving "${confirmingDelete.name}"...`, async () => {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }).then(() => {
-        showSuccess(`"${confirmingDelete.name}" archived`);
-        setConfirmingDelete(null);
-      });
+      const projectId = confirmingDelete.id;
+      const projectName = confirmingDelete.name;
+      runTask(`Archiving "${projectName}"...`, async () => {
+        const { getProtectedApi } = await import("../../convex/api/protected");
+        const { ensureValidJwt } = await import("../../convex/services/jwt");
+        const jwt = await ensureValidJwt();
+        const api = getProtectedApi(jwt);
+        await api.archiveProject(projectId);
+      })
+        .then(() => {
+          showSuccess(`"${projectName}" archived`);
+          setConfirmingDelete(null);
+          refetchProjects(); // Refresh the project list
+        })
+        .catch((err) => {
+          console.error("Failed to archive project:", err);
+        });
     } else if (key.name === "n" || key.name === "escape") {
       setConfirmingDelete(null);
     }
@@ -735,7 +761,9 @@ export function HomePage({ onSelectProject, onLogout }: HomePageProps) {
             alignItems="center"
           >
             <text fg={THEME_COLORS.textMuted}>Projects</text>
-            <text fg={THEME_COLORS.textDim}>{projects.length} / 10</text>
+            <text fg={THEME_COLORS.textDim}>
+              {isLoadingProjects ? "..." : `${projects.length} / 10`}
+            </text>
           </box>
 
           <box
@@ -750,7 +778,15 @@ export function HomePage({ onSelectProject, onLogout }: HomePageProps) {
                   )
             }
           >
-            {projects.length === 0 && !creatingProject ? (
+            {projectsError ? (
+              <box height={1}>
+                <text fg={THEME_COLORS.error || "#ff0000"}>Failed to load projects</text>
+              </box>
+            ) : isLoadingProjects ? (
+              <box height={1}>
+                <text fg={THEME_COLORS.textDim}>Loading projects...</text>
+              </box>
+            ) : projects.length === 0 && !creatingProject ? (
               <box height={1}>
                 <text fg={THEME_COLORS.textDim}>No projects yet. Press 'n' to create one.</text>
               </box>

@@ -7,19 +7,12 @@ interface LoginButtonProps {
 
 export function LoginButton({ label, selected }: LoginButtonProps) {
   return (
-    <box
-      width={40}
-      height={3}
-      borderStyle={selected ? "double" : "single"}
-      borderColor={selected ? THEME_COLORS.primary : THEME_COLORS.textMuted}
-      backgroundColor={selected ? THEME_COLORS.inputBg : THEME_COLORS.header}
-      justifyContent="center"
-      alignItems="center"
-    >
-      <text fg={selected ? THEME_COLORS.primary : THEME_COLORS.textMuted}>
-        {selected ? "› " : "  "}
-        {label}
-        {selected ? " ‹" : "  "}
+    <box height={1} width={52}>
+      <text>
+        <span fg={selected ? THEME_COLORS.primary : THEME_COLORS.textDim}>
+          {selected ? "› " : "  "}
+        </span>
+        <span fg={selected ? THEME_COLORS.text : THEME_COLORS.textMuted}>{label}</span>
       </text>
     </box>
   );

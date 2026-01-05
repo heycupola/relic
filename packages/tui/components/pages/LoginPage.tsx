@@ -1,20 +1,34 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type DeviceAuthStatus, useDeviceAuth } from "../../convex";
 import { THEME_COLORS } from "../../utils/constants";
+import { createHyperlink } from "../../utils/hyperlink";
 import { GuideBar } from "../shared/GuideBar";
+import { LoginButton } from "../shared/LoginButton";
 import { Modal } from "../shared/Modal";
 
 const SHORTCUT_GROUPS = {
   primary: [{ shortcuts: [{ key: "↵", description: "sign in" }] }],
-  secondary: [],
+  secondary: [{ shortcuts: [{ key: "↑↓", description: "navigate" }] }],
 };
+
+type Provider = "google" | "github";
 
 interface LoginPageProps {
   onLogin: () => void;
 }
 
-function getStatusMessage(status: DeviceAuthStatus | "idle"): string {
+function getStatusMessage(
+  status: DeviceAuthStatus | "idle",
+  hasCode: boolean,
+  isLoading: boolean,
+): string {
+  if (isLoading && !hasCode) {
+    return "Requesting code from server...";
+  }
+  if (hasCode && status === "pending") {
+    return "Code received! Waiting for authorization...";
+  }
   switch (status) {
     case "pending":
       return "Waiting for authorization...";
@@ -31,7 +45,14 @@ function getStatusMessage(status: DeviceAuthStatus | "idle"): string {
   }
 }
 
-function getStatusColor(status: DeviceAuthStatus | "idle"): string {
+function getStatusColor(
+  status: DeviceAuthStatus | "idle",
+  hasCode: boolean,
+  isLoading: boolean,
+): string {
+  if (hasCode && status === "pending") {
+    return THEME_COLORS.success;
+  }
   switch (status) {
     case "approved":
       return THEME_COLORS.success;
@@ -40,49 +61,117 @@ function getStatusColor(status: DeviceAuthStatus | "idle"): string {
     case "error":
       return THEME_COLORS.error;
     default:
-      return THEME_COLORS.textDim;
+      return isLoading ? THEME_COLORS.primary : THEME_COLORS.textDim;
   }
 }
 
 export function LoginPage({ onLogin }: LoginPageProps) {
   const { width, height } = useTerminalDimensions();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedProviderIndex, setSelectedProviderIndex] = useState(0);
+  const providers: Provider[] = ["google", "github"];
 
-  const { status, userCode, startAuth, cancel } = useDeviceAuth({
+  const { status, userCode, verificationUri, isLoading, error, startAuth, cancel } = useDeviceAuth({
     onSuccess: () => {
       setTimeout(() => {
         onLogin();
       }, 500);
     },
+    onError: (err) => {
+      console.error("Device auth error:", err);
+    },
   });
+
+  const hyperlinkWrittenRef = useRef<string | null>(null);
+
+  // Write hyperlink escape sequences directly to terminal for Cmd+Click support
+  // The TUI library sanitizes escape sequences in text components, so we need to
+  // write them directly to stdout after the TUI renders
+  useEffect(() => {
+    if (verificationUri && isModalOpen && hyperlinkWrittenRef.current !== verificationUri) {
+      // Wait for TUI to render, then output hyperlink escape sequences
+      const timer = setTimeout(() => {
+        // Create hyperlink with empty display text - we'll show the URL separately in the TUI
+        // The escape sequences will make the URL clickable even though it's rendered by TUI
+        const hyperlink = createHyperlink(verificationUri, verificationUri);
+        // Write directly to stdout - this should work even with TUI running
+        // The escape sequences will be processed by the terminal
+        try {
+          process.stdout.write(hyperlink);
+          hyperlinkWrittenRef.current = verificationUri;
+        } catch {
+          // Ignore write errors
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [verificationUri, isModalOpen]);
+
+  const openBrowser = (url: string) => {
+    try {
+      const platform = process.platform;
+      const command =
+        platform === "darwin"
+          ? ["open", url]
+          : platform === "win32"
+            ? ["cmd", "/c", "start", url]
+            : ["xdg-open", url];
+
+      Bun.spawn(command);
+    } catch {
+      // ignore browser open failures
+    }
+  };
 
   const closeModal = () => {
     cancel();
     setIsModalOpen(false);
+    setSelectedProviderIndex(0);
   };
 
-  const handleLogin = async () => {
+  const handleLogin = async (provider?: Provider) => {
     if (isModalOpen) return;
     setIsModalOpen(true);
-    await startAuth();
+    try {
+      await startAuth();
+    } catch (err) {
+      console.error("Failed to start auth:", err);
+    }
   };
 
   useKeyboard((key) => {
     if (isModalOpen) {
       if (key.name === "escape") {
         closeModal();
+      } else if (key.name === "return" && verificationUri) {
+        // Open browser when Enter is pressed
+        openBrowser(verificationUri);
       }
       return;
     }
 
-    if (key.name === "return") {
-      handleLogin();
+    if (key.name === "up" || key.name === "k") {
+      setSelectedProviderIndex((prev) => (prev > 0 ? prev - 1 : providers.length - 1));
+    } else if (key.name === "down" || key.name === "j") {
+      setSelectedProviderIndex((prev) => (prev < providers.length - 1 ? prev + 1 : 0));
+    } else if (key.name === "return") {
+      handleLogin(providers[selectedProviderIndex]);
     } else if (key.name === "q") {
       process.exit(0);
     }
   });
 
-  const formattedCode = userCode ? userCode.split("").join(" ") : "...";
+  const formattedCode = userCode
+    ? userCode.includes("-")
+      ? userCode
+      : userCode.length === 8
+        ? `${userCode.slice(0, 4)}-${userCode.slice(4)}`
+        : userCode
+    : "...";
+  const providerLabels: Record<Provider, string> = {
+    google: "Sign in with Google",
+    github: "Sign in with GitHub",
+  };
 
   return (
     <box
@@ -111,17 +200,18 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             <ascii-font text="relic" font="block" />
           </box>
 
-          <box height={1} marginBottom={1} justifyContent="center" alignItems="center">
+          <box height={1} marginBottom={0} justifyContent="center" alignItems="center">
             <text fg={THEME_COLORS.textMuted}>Zero-knowledge secret management</text>
           </box>
 
-          <box flexDirection="column" width={52} marginTop={1}>
-            <box height={1} width={52} justifyContent="center">
-              <text>
-                <span fg={THEME_COLORS.primary}>{"› "}</span>
-                <span fg={THEME_COLORS.text}>Sign in to continue</span>
-              </text>
-            </box>
+          <box flexDirection="column" width={52} marginTop={1} gap={0}>
+            {providers.map((provider, index) => (
+              <LoginButton
+                key={provider}
+                label={providerLabels[provider]}
+                selected={selectedProviderIndex === index}
+              />
+            ))}
           </box>
 
           {!isModalOpen && (
@@ -132,20 +222,52 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         </box>
       </box>
 
-      <Modal visible={isModalOpen} title="Device Authorization" width={55}>
-        <box flexDirection="column" gap={1}>
-          <text fg={THEME_COLORS.textMuted}>A browser window has been opened.</text>
-          <text fg={THEME_COLORS.textMuted}>Enter this code to sign in:</text>
+      <Modal
+        visible={isModalOpen}
+        title="Device Authorization"
+        width={verificationUri ? Math.min(Math.max(verificationUri.length + 10, 50), 80) : 60}
+      >
+        <box flexDirection="column" gap={0}>
+          {userCode ? (
+            <>
+              <text fg={THEME_COLORS.textMuted}>
+                Visit the URL below and verify this code matches:
+              </text>
+              <box height={1} marginTop={0} justifyContent="center">
+                <text fg={THEME_COLORS.primary}>
+                  <strong>{formattedCode}</strong>
+                </text>
+              </box>
+              {verificationUri && (
+                <box flexDirection="column" marginTop={1} gap={0}>
+                  <box height={1} marginTop={0}>
+                    <text fg={THEME_COLORS.textMuted}>
+                      {verificationUri.length > 70
+                        ? verificationUri.substring(0, 70) + "..."
+                        : verificationUri}
+                    </text>
+                  </box>
+                  <text fg={THEME_COLORS.textDim}>Press Enter to open in browser</text>
+                </box>
+              )}
+            </>
+          ) : (
+            <text fg={THEME_COLORS.textMuted}>Connecting to server...</text>
+          )}
           <box height={1} marginTop={1}>
-            <text fg={THEME_COLORS.primary}>
-              <strong>{formattedCode}</strong>
+            <text fg={getStatusColor(status, !!userCode, isLoading)}>
+              {getStatusMessage(status, !!userCode, isLoading)}
             </text>
           </box>
-          <box height={1} marginTop={1}>
-            <text fg={getStatusColor(status)}>{getStatusMessage(status)}</text>
-          </box>
-          {(status === "expired" || status === "error" || status === "denied") && (
-            <box height={1} marginTop={1}>
+          {error && (
+            <box height={1} marginTop={0}>
+              <text fg={THEME_COLORS.error}>
+                Error: {error.message || "Failed to connect to server"}
+              </text>
+            </box>
+          )}
+          {(status === "expired" || status === "error" || status === "denied" || error) && (
+            <box height={1} marginTop={0}>
               <text fg={THEME_COLORS.textDim}>Press ESC to close</text>
             </box>
           )}
