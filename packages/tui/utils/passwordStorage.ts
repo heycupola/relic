@@ -1,25 +1,27 @@
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { unlink } from "node:fs/promises";
 
-const PASSWORD_FILE = join(homedir(), ".relic_password");
+const PASSWORD_FILE = `${Bun.env.HOME}/.relic_password`;
 
-export function hasPassword(): boolean {
-  return existsSync(PASSWORD_FILE);
+export async function hasPassword(): Promise<boolean> {
+  return await Bun.file(PASSWORD_FILE).exists();
 }
 
-export function savePassword(password: string): void {
-  writeFileSync(PASSWORD_FILE, password, "utf-8");
+export async function savePassword(password: string): Promise<void> {
+  await Bun.write(PASSWORD_FILE, password);
 }
 
-export function verifyPassword(password: string): boolean {
-  if (!hasPassword()) return false;
-  const stored = readFileSync(PASSWORD_FILE, "utf-8");
+export async function verifyPassword(password: string): Promise<boolean> {
+  if (!(await hasPassword())) return false;
+  const stored = await Bun.file(PASSWORD_FILE).text();
   return stored === password;
 }
 
-export function clearPassword(): void {
-  if (hasPassword()) {
-    unlinkSync(PASSWORD_FILE);
+export async function clearPassword(): Promise<void> {
+  if (await hasPassword()) {
+    try {
+      await unlink(PASSWORD_FILE);
+    } catch {
+      // ignore
+    }
   }
 }

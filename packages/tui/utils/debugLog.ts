@@ -1,13 +1,13 @@
-import { appendFileSync } from "node:fs";
-import { join } from "node:path";
+const LOG_FILE = `${process.cwd()}/debug.log`;
 
-const LOG_FILE = join(process.cwd(), "debug.log");
-
-export function debugLog(...args: unknown[]): void {
+export async function debugLog(...args: unknown[]): Promise<void> {
   const timestamp = new Date().toISOString();
   const message = args
     .map((arg) => (typeof arg === "object" ? JSON.stringify(arg) : String(arg)))
     .join(" ");
 
-  appendFileSync(LOG_FILE, `[${timestamp}] ${message}\n`);
+  const logLine = `[${timestamp}] ${message}\n`;
+  const file = Bun.file(LOG_FILE);
+  const existingContent = (await file.exists()) ? await file.text() : "";
+  await Bun.write(LOG_FILE, existingContent + logLine);
 }
