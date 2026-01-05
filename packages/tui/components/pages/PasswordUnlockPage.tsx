@@ -39,13 +39,13 @@ export function PasswordUnlockPage({ onUnlock }: PasswordUnlockPageProps) {
     setError(null);
   }, []);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (passwordInput.value.length === 0) {
       setError("Password required");
       return;
     }
 
-    if (!verifyPassword(passwordInput.value)) {
+    if (!(await verifyPassword(passwordInput.value))) {
       setError("Incorrect password");
       return;
     }
