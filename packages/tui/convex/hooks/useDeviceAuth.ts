@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { deviceAuth } from "../services/deviceAuth";
-import type { DeviceAuthStatus, DeviceCodeResponse } from "../types";
+import { debugLog } from "../../utils";
+import type { DeviceCodeResponse } from "../api";
+import { type DeviceAuthStatus, deviceAuth } from "../services/deviceAuth";
 
 interface UseDeviceAuthOptions {
   onSuccess?: () => void;

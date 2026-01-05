@@ -1,205 +1,107 @@
-import { useCallback, useState } from "react";
-import { apiClient } from "../services/api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { getProtectedApi, type ProtectedApi } from "../api/protected";
+import { ensureValidJwt } from "../services/jwt";
 
-function useApiCall<T, A extends unknown[]>(
-  fn: (...args: A) => Promise<T>,
-): [
-  state: { data: T | null; isLoading: boolean; error: Error | null },
-  execute: (...args: A) => Promise<T | null>,
-] {
-  const [state, setState] = useState<{ data: T | null; isLoading: boolean; error: Error | null }>({
-    data: null,
-    isLoading: false,
-    error: null,
-  });
+interface UseApiReturn {
+  api: ProtectedApi | null;
+  isLoading: boolean;
+  error: Error | null;
+  refreshApi: () => Promise<void>;
+}
+
+export function useApi(): UseApiReturn {
+  const [api, setApi] = useState<ProtectedApi | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const initializeApi = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const jwtToken = await ensureValidJwt();
+      const protectedApi = getProtectedApi(jwtToken);
+      setApi(protectedApi);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error("Failed to initialize API"));
+      setApi(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    initializeApi();
+  }, [initializeApi]);
+
+  return {
+    api,
+    isLoading,
+    error,
+    refreshApi: initializeApi,
+  };
+}
+
+// Convenience hook for making API calls with automatic loading/error state
+interface UseApiCallOptions<T> {
+  onSuccess?: (data: T) => void;
+  onError?: (error: Error) => void;
+}
+
+interface UseApiCallReturn<T, Args extends unknown[]> {
+  execute: (...args: Args) => Promise<T | undefined>;
+  data: T | undefined;
+  isLoading: boolean;
+  error: Error | null;
+  reset: () => void;
+}
+
+export function useApiCall<T, Args extends unknown[]>(
+  apiCall: (api: ProtectedApi, ...args: Args) => Promise<T>,
+  options: UseApiCallOptions<T> = {},
+): UseApiCallReturn<T, Args> {
+  const { api } = useApi();
+  const [data, setData] = useState<T | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
   const execute = useCallback(
-    async (...args: A): Promise<T | null> => {
-      setState({ data: null, isLoading: true, error: null });
+    async (...args: Args): Promise<T | undefined> => {
+      if (!api) {
+        setError(new Error("API not initialized"));
+        return undefined;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
       try {
-        const data = await fn(...args);
-        setState({ data, isLoading: false, error: null });
-        return data;
+        const result = await apiCall(api, ...args);
+        setData(result);
+        options.onSuccess?.(result);
+        return result;
       } catch (err) {
-        const error = err instanceof Error ? err : new Error("Unknown error");
-        setState({ data: null, isLoading: false, error });
-        return null;
+        const error = err instanceof Error ? err : new Error("API call failed");
+        setError(error);
+        options.onError?.(error);
+        return undefined;
+      } finally {
+        setIsLoading(false);
       }
     },
-    [fn],
+    [api, apiCall, options],
   );
 
-  return [state, execute];
-}
+  const reset = useCallback(() => {
+    setData(undefined);
+    setError(null);
+    setIsLoading(false);
+  }, []);
 
-export function useCurrentUser() {
-  return useApiCall(() => apiClient.getCurrentUser());
-}
-
-export function useProjects() {
-  return useApiCall(() => apiClient.listProjects());
-}
-
-export function useProject() {
-  return useApiCall((projectId: string) => apiClient.getProject(projectId));
-}
-
-export function useEnvironmentData() {
-  return useApiCall((environmentId: string) => apiClient.getEnvironmentData(environmentId));
-}
-
-export function useCreateProject() {
-  return useApiCall((args: { name: string; encryptedProjectKey: string }) =>
-    apiClient.createProject(args),
-  );
-}
-
-export function useUpdateProject() {
-  return useApiCall((args: { projectId: string; name: string }) => apiClient.updateProject(args));
-}
-
-export function useArchiveProject() {
-  return useApiCall((projectId: string) => apiClient.archiveProject(projectId));
-}
-
-export function useUnarchiveProject() {
-  return useApiCall((projectId: string) => apiClient.unarchiveProject(projectId));
-}
-
-export function useCreateEnvironment() {
-  return useApiCall((args: { projectId: string; name: string; color?: string }) =>
-    apiClient.createEnvironment(args),
-  );
-}
-
-export function useUpdateEnvironment() {
-  return useApiCall((args: { environmentId: string; name: string; color?: string }) =>
-    apiClient.updateEnvironment(args),
-  );
-}
-
-export function useDeleteEnvironment() {
-  return useApiCall((environmentId: string) => apiClient.deleteEnvironment(environmentId));
-}
-
-export function useCreateFolder() {
-  return useApiCall((args: { environmentId: string; name: string }) =>
-    apiClient.createFolder(args),
-  );
-}
-
-export function useUpdateFolder() {
-  return useApiCall((args: { folderId: string; name: string }) => apiClient.updateFolder(args));
-}
-
-export function useDeleteFolder() {
-  return useApiCall((folderId: string) => apiClient.deleteFolder(folderId));
-}
-
-export function useCreateSecret() {
-  return useApiCall(
-    (args: {
-      environmentId: string;
-      folderId?: string;
-      key: string;
-      encryptedValue: string;
-      valueType?: "string" | "number" | "boolean";
-      scope?: "client" | "server" | "shared";
-      description?: string;
-    }) => apiClient.createSecret(args),
-  );
-}
-
-export function useGetSecret() {
-  return useApiCall((secretId: string) => apiClient.getSecret(secretId));
-}
-
-export function useUpdateSecret() {
-  return useApiCall(
-    (args: {
-      secretId: string;
-      key?: string;
-      encryptedValue?: string;
-      valueType?: "string" | "number" | "boolean";
-      scope?: "client" | "server" | "shared";
-      description?: string;
-    }) => apiClient.updateSecret(args),
-  );
-}
-
-export function useDeleteSecret() {
-  return useApiCall((secretId: string) => apiClient.deleteSecret(secretId));
-}
-
-export function useShareProject() {
-  return useApiCall((args: { projectId: string; email: string; encryptedProjectKey: string }) =>
-    apiClient.shareProject(args),
-  );
-}
-
-export function useRevokeShare() {
-  return useApiCall((shareId: string) => apiClient.revokeShare(shareId));
-}
-
-export function useListProjectShares() {
-  return useApiCall((projectId: string) => apiClient.listProjectShares(projectId));
-}
-
-export function useHasUserKeys() {
-  return useApiCall(() => apiClient.hasUserKeys());
-}
-
-export function useStoreUserKeys() {
-  return useApiCall((args: { publicKey: string; encryptedPrivateKey: string; salt: string }) =>
-    apiClient.storeUserKeys(args),
-  );
-}
-
-export function useUpdatePassword() {
-  return useApiCall((args: { encryptedPrivateKey: string; salt: string }) =>
-    apiClient.updatePassword(args),
-  );
-}
-
-// Pro Plan Hooks
-export function useGetProPlan() {
-  return useApiCall(() => apiClient.getProPlan());
-}
-
-export function useCheckProPlan() {
-  return useApiCall(() => apiClient.checkProPlan());
-}
-
-// User Key Rotation Hook
-export function useRotateUserKeys() {
-  return useApiCall(
-    (args: {
-      newPublicKey: string;
-      newEncryptedPrivateKey: string;
-      newSalt: string;
-      rewrappedShares: Array<{ shareId: string; newEncryptedProjectKey: string }>;
-      rewrappedOwnedProjects: Array<{ projectId: string; newEncryptedProjectKey: string }>;
-    }) => apiClient.rotateUserKeys(args),
-  );
-}
-
-// Shared Projects Hooks
-export function useListSharedProjects() {
-  return useApiCall(() => apiClient.listSharedProjects());
-}
-
-export function useGetProjectShare() {
-  return useApiCall((projectId: string) => apiClient.getProjectShare(projectId));
-}
-
-// Revoke with Key Rotation Hook
-export function useRevokeShareWithRotation() {
-  return useApiCall(
-    (args: {
-      shareId: string;
-      newEncryptedProjectKey: string;
-      rewrappedShares: Array<{ shareId: string; newEncryptedProjectKey: string }>;
-      reEncryptedSecrets: Array<{ secretId: string; newEncryptedValue: string }>;
-    }) => apiClient.revokeShareWithRotation(args),
-  );
+  return {
+    execute,
+    data,
+    isLoading,
+    error,
+    reset,
+  };
 }
