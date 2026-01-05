@@ -13,6 +13,8 @@
   "dependencies": {
     "@opentui/core": "^0.1.65",
     "@opentui/react": "^0.1.65",
+    "@repo/backend": "*",
+    "convex": "catalog:",
     "react": "^19.2.3"
   }
 }

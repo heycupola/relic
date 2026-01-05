@@ -1,5 +1,10 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@repo/backend": ["../backend/index.ts"],
+      "@repo/backend/*": ["../backend/*"]
+    },
     "lib": ["ESNext", "DOM"],
     "target": "ESNext",
     "module": "ESNext",
