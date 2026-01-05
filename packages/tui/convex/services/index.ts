@@ -1,7 +1,5 @@
-export { apiClient } from "./api";
-export type { DeviceAuthCallbacks, DeviceAuthResult } from "./deviceAuth";
+export type { DeviceAuthCallbacks, DeviceAuthResult, DeviceAuthStatus } from "./deviceAuth";
 export { DeviceAuthService, deviceAuth } from "./deviceAuth";
-
 export {
   ensureValidJwt,
   fetchJwtToken,

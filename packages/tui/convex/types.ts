@@ -1,7 +1,3 @@
-export { ErrorCode, ErrorSeverity } from "@repo/backend";
-
-import { ErrorCode } from "@repo/backend";
-
 export interface DeviceCodeResponse {
   device_code: string;
   user_code: string;
@@ -38,31 +34,58 @@ export function isConvexError(error: unknown): error is { data?: { code?: string
 }
 
 export function isAuthorizationPending(error: unknown): boolean {
-  if (isConvexError(error) && error.data?.code === ErrorCode.AUTHORIZATION_PENDING) {
+  if (isConvexError(error) && error.data?.code === "AUTHORIZATION_PENDING") {
     return true;
   }
-  if (error instanceof Error && error.message.includes(ErrorCode.AUTHORIZATION_PENDING)) {
+  if (error instanceof Error && error.message.includes("AUTHORIZATION_PENDING")) {
     return true;
   }
   return false;
 }
 
 export function isAuthorizationDenied(error: unknown): boolean {
-  if (isConvexError(error) && error.data?.code === ErrorCode.DEVICE_AUTH_DENIED) {
+  if (isConvexError(error) && error.data?.code === "DEVICE_AUTH_DENIED") {
     return true;
   }
-  if (error instanceof Error && error.message.includes(ErrorCode.DEVICE_AUTH_DENIED)) {
+  if (error instanceof Error && error.message.includes("DEVICE_AUTH_DENIED")) {
     return true;
   }
   return false;
 }
 
 export function isDeviceCodeExpired(error: unknown): boolean {
-  if (isConvexError(error) && error.data?.code === ErrorCode.DEVICE_CODE_EXPIRED) {
+  if (isConvexError(error) && error.data?.code === "DEVICE_CODE_EXPIRED") {
     return true;
   }
-  if (error instanceof Error && error.message.includes(ErrorCode.DEVICE_CODE_EXPIRED)) {
+  if (error instanceof Error && error.message.includes("DEVICE_CODE_EXPIRED")) {
     return true;
+  }
+  return false;
+}
+
+/**
+ * Checks if an error is a Convex system function timeout.
+ * This can occur when Convex tries to discover components (e.g., Autumn components)
+ * but the system function times out. This is typically non-critical and can be safely ignored
+ * if the TUI app doesn't use those components.
+ */
+export function isSystemFunctionTimeout(error: unknown): boolean {
+  if (error instanceof Error) {
+    // Check for the specific system function timeout error
+    if (
+      error.message.includes("_system/frontend/modules:listForAllComponents") ||
+      error.message.includes("Function execution timed out") ||
+      error.message.includes("maximum duration: 1s")
+    ) {
+      return true;
+    }
+  }
+  if (isConvexError(error)) {
+    // Check for timeout-related error codes
+    const errorCode = error.data?.code;
+    if (errorCode === "TIMEOUT" || errorCode === "FUNCTION_TIMEOUT") {
+      return true;
+    }
   }
   return false;
 }

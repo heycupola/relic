@@ -1,14 +1,14 @@
-import { config } from "../config";
 import { getJwtToken, getSessionToken, updateSessionJwt } from "./session";
 
-const JWT_EXPIRY_SECONDS = 15 * 60; // 15 minutes (Better Auth default)
+const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
+const JWT_EXPIRY_SECONDS = 15 * 60;
 
 export interface JwtTokenResponse {
   token: string;
 }
 
 export async function fetchJwtToken(sessionToken: string): Promise<string> {
-  const tokenUrl = `${config.siteUrl}/api/auth/convex/token`;
+  const tokenUrl = `${SITE_URL}/api/auth/convex/token`;
 
   const response = await fetch(tokenUrl, {
     method: "GET",

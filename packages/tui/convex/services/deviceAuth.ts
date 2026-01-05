@@ -1,9 +1,9 @@
-import { api } from "@repo/backend";
-import type { ConvexHttpClient } from "convex/browser";
-import { createConvexClient } from "../config";
-import type { DeviceAuthStatus, DeviceCodeResponse, DeviceTokenResponse } from "../types";
+import type { DeviceCodeResponse, DeviceTokenResponse } from "../api";
+import { publicApi } from "../api";
 import { isAuthorizationDenied, isAuthorizationPending, isDeviceCodeExpired } from "../types";
 import { saveSession } from "./session";
+
+export type DeviceAuthStatus = "pending" | "approved" | "denied" | "expired" | "error";
 
 export interface DeviceAuthCallbacks {
   onCodeReceived?: (code: DeviceCodeResponse) => void;
@@ -19,18 +19,12 @@ export interface DeviceAuthResult {
 }
 
 export class DeviceAuthService {
-  private client: ConvexHttpClient;
   private pollingInterval: number = 5000;
   private isPolling: boolean = false;
   private abortController: AbortController | null = null;
 
-  constructor() {
-    this.client = createConvexClient();
-  }
-
   async requestDeviceCode(): Promise<DeviceCodeResponse> {
-    const response = await this.client.mutation(api.deviceAuth.requestDeviceCode, {});
-    return response as DeviceCodeResponse;
+    return publicApi.requestDeviceCode();
   }
 
   async pollForToken(
@@ -47,11 +41,9 @@ export class DeviceAuthService {
         }
 
         try {
-          const response = await this.client.mutation(api.deviceAuth.pollDeviceToken, {
+          const tokenResponse = await publicApi.pollDeviceToken({
             device_code: deviceCode,
           });
-
-          const tokenResponse = response as DeviceTokenResponse;
 
           const expiresAt = Date.now() + tokenResponse.expires_in * 1000;
           await saveSession({
@@ -112,12 +104,16 @@ export class DeviceAuthService {
       callbacks?.onCodeReceived?.(codeResponse);
       callbacks?.onStatusChange?.("pending");
 
-      this.openBrowser(codeResponse.verification_uri_complete);
+      // Small delay to let users see the code before browser opens
+      setTimeout(() => {
+        this.openBrowser(codeResponse.verification_uri_complete);
+      }, 500);
 
       return await this.pollForToken(codeResponse.device_code, callbacks);
     } catch (error) {
       const err = error instanceof Error ? error : new Error("Failed to start auth");
       callbacks?.onError?.(err);
+      callbacks?.onStatusChange?.("error");
       return { success: false, error: err };
     }
   }
@@ -139,7 +135,7 @@ export class DeviceAuthService {
 
       Bun.spawn(command);
     } catch {
-      // ignore
+      // ignore browser open failures
     }
   }
 

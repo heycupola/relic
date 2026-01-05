@@ -1,42 +1,26 @@
-export { config, createAuthenticatedClient, createConvexClient } from "./config";
+export type {
+  DeviceCodeRequest,
+  DeviceCodeResponse,
+  DeviceTokenRequest,
+  DeviceTokenResponse,
+  Environment,
+  EnvironmentData,
+  Folder,
+  Project,
+  ProjectListItem,
+  ProjectShare,
+  ProjectStatus,
+  Secret,
+  SecretScope,
+  SecretValueType,
+  SharedUser,
+  User,
+} from "./api";
+export { clearProtectedApi, getProtectedApi, ProtectedApi, PublicApi, publicApi } from "./api";
 export { AuthProvider, useAuth } from "./context";
+export { useDeviceAuth, useSession } from "./hooks";
+export type { DeviceAuthCallbacks, DeviceAuthResult, DeviceAuthStatus } from "./services";
 export {
-  useArchiveProject,
-  useCheckProPlan,
-  useCreateEnvironment,
-  useCreateFolder,
-  useCreateProject,
-  useCreateSecret,
-  useCurrentUser,
-  useDeleteEnvironment,
-  useDeleteFolder,
-  useDeleteSecret,
-  useDeviceAuth,
-  useEnvironmentData,
-  useGetProjectShare,
-  useGetProPlan,
-  useGetSecret,
-  useHasUserKeys,
-  useListProjectShares,
-  useListSharedProjects,
-  useProject,
-  useProjects,
-  useRevokeShare,
-  useRevokeShareWithRotation,
-  useRotateUserKeys,
-  useSession,
-  useShareProject,
-  useStoreUserKeys,
-  useUnarchiveProject,
-  useUpdateEnvironment,
-  useUpdateFolder,
-  useUpdatePassword,
-  useUpdateProject,
-  useUpdateSecret,
-} from "./hooks";
-export type { DeviceAuthCallbacks, DeviceAuthResult } from "./services";
-export {
-  apiClient,
   clearSession,
   DeviceAuthService,
   deviceAuth,
@@ -51,16 +35,11 @@ export {
   updateSessionJwt,
   validateSession,
 } from "./services";
-export type {
-  DeviceAuthStatus,
-  DeviceCodeResponse,
-  DeviceTokenResponse,
-  Session,
-  SessionValidation,
-} from "./types";
+export type { Session, SessionValidation } from "./types";
 export {
   isAuthorizationDenied,
   isAuthorizationPending,
   isConvexError,
   isDeviceCodeExpired,
+  isSystemFunctionTimeout,
 } from "./types";
