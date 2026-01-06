@@ -2,5 +2,6 @@ node_modules
 dist
 .DS_Store
 *.log
+debug.log
 .env
 .env.local

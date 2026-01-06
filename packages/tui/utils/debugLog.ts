@@ -5,6 +5,15 @@ const logFile = Bun.file(LOG_FILE_PATH);
 
 let writer: ReturnType<typeof logFile.writer> | null = null;
 
+// Export originals for direct use when needed (initialized in initLogger)
+export const originalConsole = {
+  log: console.log,
+  error: console.error,
+  warn: console.warn,
+  info: console.info,
+  debug: console.debug,
+};
+
 function serialize(obj: unknown, indent = 2): string {
   const cache = new Set();
 
@@ -73,11 +82,12 @@ export async function initLogger() {
     // Ignore initialization errors
   }
 
-  const _originalLog = console.log;
-  const _originalError = console.error;
-  const _originalWarn = console.warn;
-  const _originalInfo = console.info;
-  const _originalDebug = console.debug;
+  // Capture originals before overriding
+  originalConsole.log = console.log;
+  originalConsole.error = console.error;
+  originalConsole.warn = console.warn;
+  originalConsole.info = console.info;
+  originalConsole.debug = console.debug;
 
   const handleLog = (level: string, ...args: unknown[]) => {
     debugLog(`[${level}]`, ...args);

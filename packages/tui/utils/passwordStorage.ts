@@ -1,5 +1,6 @@
 import { secrets } from "bun";
 import { unlink } from "node:fs/promises";
+import { debugLog } from "./debugLog";
 
 // NOTE: The password is stored in the OS keychain on macOS, Windows, and Linux.
 // As a fallback, the password is stored in a file in the user's home directory.
@@ -17,7 +18,9 @@ async function getPasswordFromStorage(): Promise<string | null> {
     if (password !== null && password.length > 0) {
       return password;
     }
-  } catch {}
+  } catch (error) {
+    debugLog("Keychain access failed:", error);
+  }
 
   try {
     const file = Bun.file(PASSWORD_FILE);
@@ -25,7 +28,9 @@ async function getPasswordFromStorage(): Promise<string | null> {
       const password = await file.text();
       return password.length > 0 ? password : null;
     }
-  } catch {}
+  } catch (error) {
+    debugLog("File system access failed:", error);
+  }
 
   return null;
 }
@@ -42,9 +47,13 @@ async function savePasswordToStorage(password: string): Promise<void> {
       if (await file.exists()) {
         await unlink(PASSWORD_FILE);
       }
-    } catch {}
+    } catch (error) {
+      debugLog("Failed to remove fallback password file:", error);
+    }
     return;
-  } catch {}
+  } catch (error) {
+    debugLog("Keychain save failed:", error);
+  }
 
   try {
     await Bun.write(PASSWORD_FILE, password);
@@ -59,14 +68,18 @@ async function deletePasswordFromStorage(): Promise<void> {
       service: SECRETS_SERVICE,
       name: SECRETS_NAME,
     });
-  } catch {}
+  } catch (error) {
+    debugLog("Keychain delete failed:", error);
+  }
 
   try {
     const file = Bun.file(PASSWORD_FILE);
     if (await file.exists()) {
       await unlink(PASSWORD_FILE);
     }
-  } catch {}
+  } catch (error) {
+    debugLog("Failed to delete fallback password file:", error);
+  }
 }
 
 export async function hasPassword(): Promise<boolean> {
