@@ -1,5 +1,8 @@
-// Re-export API types to avoid duplication
-export type { ProjectStatus, SecretScope, SecretValueType } from "../convex/api/types";
+// Import API types for use in this file
+import type { ProjectStatus, SecretScope, SecretValueType } from "../convex/api/types";
+
+// Re-export for consumers
+export type { ProjectStatus, SecretScope, SecretValueType };
 
 export interface Project {
   id: string;
