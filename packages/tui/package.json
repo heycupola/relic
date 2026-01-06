@@ -3,9 +3,15 @@
   "module": "index.tsx",
   "type": "module",
   "private": true,
+  "scripts": {
+    "start": "bun --hot ./index.tsx",
+    "debug": "DEV=true bun --hot ./index.tsx",
+    "log:watch": "tail -f debug.log"
+  },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/react": "^19.2.7"
+    "@types/react": "^19.2.7",
+    "react-devtools-core": "7"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -13,6 +19,7 @@
   "dependencies": {
     "@opentui/core": "^0.1.65",
     "@opentui/react": "^0.1.65",
+    "convex": "catalog:",
     "react": "^19.2.3"
   }
 }

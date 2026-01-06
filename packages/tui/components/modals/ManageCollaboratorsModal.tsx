@@ -1,3 +1,8 @@
+import { useKeyboard } from "@opentui/react";
+import { useState } from "react";
+import { useCursorBlink } from "../../hooks/useCursorBlink";
+import { useInlineInput } from "../../hooks/useInlineInput";
+import { usePaste } from "../../hooks/usePaste";
 import { COLLABORATOR_LIMIT, THEME_COLORS } from "../../utils/constants";
 import { InlineInput } from "../forms/InlineInput";
 import { Modal } from "../shared/Modal";
@@ -50,8 +55,236 @@ function RevokeConfirmation({ collaboratorEmail, visible }: RevokeConfirmationPr
   );
 }
 
-interface ManageCollaboratorsModalProps {
+/**
+ * Props for controlled mode - parent manages all state
+ */
+interface ControlledProps {
+  /** Currently selected collaborator index */
+  selectedIndex: number;
+  /** Whether user is adding a new collaborator */
+  creatingCollab: boolean;
+  /** New collaborator email input */
+  newCollabInput: string;
+  /** Cursor position in input */
+  newCollabCursor: number;
+  /** Whether cursor is visible */
+  cursorVisible: boolean;
+  /** Currently confirming delete for which collaborator */
+  confirmingDelete?: { type: string; id: string; name: string } | null;
+  /** Callbacks for smart mode */
+  onAdd?: never;
+  onRevoke?: never;
+  onRevokeWithRotation?: never;
+}
+
+/**
+ * Props for smart mode - component manages own state
+ */
+interface SmartProps {
+  /** Currently selected collaborator index */
+  selectedIndex?: never;
+  /** Whether user is adding a new collaborator */
+  creatingCollab?: never;
+  /** New collaborator email input */
+  newCollabInput?: never;
+  /** Cursor position in input */
+  newCollabCursor?: never;
+  /** Whether cursor is visible */
+  cursorVisible?: never;
+  /** Currently confirming delete for which collaborator */
+  confirmingDelete?: never;
+  /** Called when user adds a new collaborator */
+  onAdd?: (email: string) => void;
+  /** Called when user revokes a collaborator (without rotation) */
+  onRevoke?: (collaborator: Collaborator) => void;
+  /** Called when user revokes with key rotation */
+  onRevokeWithRotation?: (collaborator: Collaborator) => void;
+}
+
+interface CommonProps {
+  /** Whether the modal is visible */
   visible: boolean;
+  /** Name of the project */
+  projectName: string;
+  /** List of current collaborators */
+  collaborators: Collaborator[];
+  /** Called when modal should close */
+  onClose: () => void;
+}
+
+type ManageCollaboratorsModalProps = CommonProps & (ControlledProps | SmartProps);
+
+/**
+ * Determines if props are for controlled mode
+ */
+function isControlled(
+  props: ManageCollaboratorsModalProps,
+): props is CommonProps & ControlledProps {
+  return "selectedIndex" in props && props.selectedIndex !== undefined;
+}
+
+/**
+ * ManageCollaboratorsModal - A modal for managing project collaborators
+ *
+ * Supports two modes:
+ * 1. **Controlled mode**: Pass all state props - parent manages state
+ * 2. **Smart mode**: Pass callbacks - component manages own state
+ *
+ * Smart mode handles:
+ * - Navigation (up/down, j/k)
+ * - Adding collaborators ('a' key, then type email)
+ * - Revoking ('d' key, then y/n/r confirmation)
+ * - Escape to close or cancel
+ *
+ * @example
+ * // Smart mode (recommended)
+ * <ManageCollaboratorsModal
+ *   visible={showModal}
+ *   projectName="my-project"
+ *   collaborators={collaboratorsList}
+ *   onAdd={(email) => addCollaborator(email)}
+ *   onRevoke={(collab) => revokeAccess(collab.id)}
+ *   onRevokeWithRotation={(collab) => revokeAndRotate(collab.id)}
+ *   onClose={() => setShowModal(false)}
+ * />
+ */
+export function ManageCollaboratorsModal(props: ManageCollaboratorsModalProps) {
+  const { visible, projectName, collaborators, onClose } = props;
+
+  if (!visible) return null;
+
+  if (!isControlled(props)) {
+    return <SmartManageCollaboratorsModal {...props} />;
+  }
+
+  return (
+    <ManageCollaboratorsDisplay
+      projectName={projectName}
+      collaborators={collaborators}
+      selectedIndex={props.selectedIndex}
+      creatingCollab={props.creatingCollab}
+      newCollabInput={props.newCollabInput}
+      newCollabCursor={props.newCollabCursor}
+      cursorVisible={props.cursorVisible}
+      confirmingDelete={props.confirmingDelete}
+    />
+  );
+}
+
+/**
+ * Smart mode implementation
+ */
+function SmartManageCollaboratorsModal({
+  projectName,
+  collaborators,
+  onClose,
+  onAdd,
+  onRevoke,
+  onRevokeWithRotation,
+}: CommonProps & SmartProps) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [creatingCollab, setCreatingCollab] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState<Collaborator | null>(null);
+
+  const input = useInlineInput({ maxLength: 50 });
+  const cursorVisible = useCursorBlink(creatingCollab);
+
+  // Handle paste when creating
+  usePaste((text) => {
+    if (!creatingCollab) return;
+    const cleanText = text.replace(/\s/g, "").slice(0, 50);
+    input.handlePaste(cleanText);
+  });
+
+  useKeyboard((key) => {
+    // When confirming delete
+    if (confirmingDelete) {
+      if (key.name === "y") {
+        onRevoke?.(confirmingDelete);
+        setConfirmingDelete(null);
+      } else if (key.name === "r") {
+        onRevokeWithRotation?.(confirmingDelete);
+        setConfirmingDelete(null);
+      } else if (key.name === "n" || key.name === "escape") {
+        setConfirmingDelete(null);
+      }
+      return;
+    }
+
+    // When creating new collaborator
+    if (creatingCollab) {
+      if (key.name === "escape") {
+        setCreatingCollab(false);
+        input.reset();
+        return;
+      }
+
+      if (key.name === "return") {
+        const trimmed = input.value.trim();
+        if (trimmed) {
+          onAdd?.(trimmed);
+          setCreatingCollab(false);
+          input.reset();
+        }
+        return;
+      }
+
+      // Delegate to input hook
+      input.handleKey(key);
+      return;
+    }
+
+    // Normal navigation
+    if (key.name === "escape") {
+      onClose();
+      return;
+    }
+
+    if (key.name === "a") {
+      setCreatingCollab(true);
+      input.reset();
+      return;
+    }
+
+    if (key.name === "d") {
+      const collab = collaborators[selectedIndex];
+      if (collab) {
+        setConfirmingDelete(collab);
+      }
+      return;
+    }
+
+    if (key.name === "up" || key.name === "k") {
+      setSelectedIndex((prev) => (prev > 0 ? prev - 1 : collaborators.length - 1));
+      setConfirmingDelete(null);
+      return;
+    }
+
+    if (key.name === "down" || key.name === "j") {
+      setSelectedIndex((prev) => (prev < collaborators.length - 1 ? prev + 1 : 0));
+      setConfirmingDelete(null);
+      return;
+    }
+  });
+
+  return (
+    <ManageCollaboratorsDisplay
+      projectName={projectName}
+      collaborators={collaborators}
+      selectedIndex={selectedIndex}
+      creatingCollab={creatingCollab}
+      newCollabInput={input.value}
+      newCollabCursor={input.cursor}
+      cursorVisible={cursorVisible}
+      confirmingDelete={confirmingDelete ? { type: "collab", id: confirmingDelete.id, name: confirmingDelete.email } : null}
+    />
+  );
+}
+
+/**
+ * Pure display component
+ */
+interface ManageCollaboratorsDisplayProps {
   projectName: string;
   collaborators: Collaborator[];
   selectedIndex: number;
@@ -60,11 +293,9 @@ interface ManageCollaboratorsModalProps {
   newCollabCursor: number;
   cursorVisible: boolean;
   confirmingDelete?: { type: string; id: string; name: string } | null;
-  onClose: () => void;
 }
 
-export function ManageCollaboratorsModal({
-  visible,
+function ManageCollaboratorsDisplay({
   projectName,
   collaborators,
   selectedIndex,
@@ -73,10 +304,7 @@ export function ManageCollaboratorsModal({
   newCollabCursor,
   cursorVisible,
   confirmingDelete,
-  onClose: _onClose,
-}: ManageCollaboratorsModalProps) {
-  if (!visible) return null;
-
+}: ManageCollaboratorsDisplayProps) {
   const shortcuts = creatingCollab
     ? [
         { key: "↵", description: "add" },
@@ -89,7 +317,7 @@ export function ManageCollaboratorsModal({
       ];
 
   return (
-    <Modal visible={visible} width={50} height={11} shortcuts={shortcuts}>
+    <Modal visible={true} width={50} height={11} shortcuts={shortcuts}>
       <box flexDirection="column" width={44}>
         <box flexDirection="row" alignItems="center">
           <text>

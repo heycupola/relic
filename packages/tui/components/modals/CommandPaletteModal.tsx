@@ -1,4 +1,5 @@
-import { useTerminalDimensions } from "@opentui/react";
+import { useKeyboard, useTerminalDimensions } from "@opentui/react";
+import { useState } from "react";
 import { THEME_COLORS } from "../../utils/constants";
 
 interface Command {
@@ -8,22 +9,158 @@ interface Command {
   disabled?: boolean;
 }
 
-interface CommandPaletteModalProps {
+/**
+ * Props for controlled mode - parent manages selection
+ */
+interface ControlledProps {
+  /** Currently selected command index (controlled) */
+  selectedIndex: number;
+  /** Called when user executes a command */
+  onExecute?: never;
+}
+
+/**
+ * Props for smart mode - component manages own state
+ */
+interface SmartProps {
+  /** Currently selected command index (controlled) */
+  selectedIndex?: never;
+  /** Called when user executes a command (by pressing Enter or direct key) */
+  onExecute?: (command: Command) => void;
+}
+
+interface CommonProps {
+  /** Whether the modal is visible */
   visible: boolean;
+  /** List of available commands */
+  commands: Command[];
+  /** Called when modal should close */
+  onClose: () => void;
+}
+
+type CommandPaletteModalProps = CommonProps & (ControlledProps | SmartProps);
+
+/**
+ * Determines if props are for controlled mode
+ */
+function isControlled(props: CommandPaletteModalProps): props is CommonProps & ControlledProps {
+  return "selectedIndex" in props && props.selectedIndex !== undefined;
+}
+
+/**
+ * CommandPaletteModal - A modal showing available keyboard commands
+ *
+ * Supports two modes:
+ * 1. **Controlled mode**: Pass `selectedIndex` - parent manages selection state
+ * 2. **Smart mode**: Pass `onExecute` - component manages selection and keyboard
+ *
+ * Smart mode handles:
+ * - Up/Down or j/k navigation
+ * - Enter to execute selected command
+ * - Escape to close
+ * - Skips disabled commands
+ *
+ * @example
+ * // Smart mode (recommended)
+ * <CommandPaletteModal
+ *   visible={showPalette}
+ *   commands={commands}
+ *   onExecute={(cmd) => executeCommand(cmd.key)}
+ *   onClose={() => setShowPalette(false)}
+ * />
+ *
+ * @example
+ * // Controlled mode (legacy)
+ * <CommandPaletteModal
+ *   visible={showPalette}
+ *   commands={commands}
+ *   selectedIndex={selectedIdx}
+ *   onClose={handleClose}
+ * />
+ */
+export function CommandPaletteModal(props: CommandPaletteModalProps) {
+  const { visible, commands, onClose } = props;
+
+  if (!visible) return null;
+
+  if (!isControlled(props)) {
+    return <SmartCommandPaletteModal {...props} />;
+  }
+
+  return (
+    <CommandPaletteDisplay
+      commands={commands}
+      selectedIndex={props.selectedIndex}
+      onClose={onClose}
+    />
+  );
+}
+
+/**
+ * Smart mode implementation
+ */
+function SmartCommandPaletteModal({
+  commands,
+  onClose,
+  onExecute,
+}: CommonProps & SmartProps) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  // Find next non-disabled index
+  const findNextIndex = (current: number, direction: 1 | -1): number => {
+    let next = current;
+    let attempts = commands.length;
+
+    do {
+      next = direction === 1 ? (next + 1) % commands.length : (next - 1 + commands.length) % commands.length;
+      attempts--;
+    } while (commands[next]?.disabled && attempts > 0);
+
+    return next;
+  };
+
+  useKeyboard((key) => {
+    if (key.name === "escape") {
+      onClose();
+      return;
+    }
+
+    if (key.name === "up" || key.name === "k") {
+      setSelectedIndex((prev) => findNextIndex(prev, -1));
+      return;
+    }
+
+    if (key.name === "down" || key.name === "j") {
+      setSelectedIndex((prev) => findNextIndex(prev, 1));
+      return;
+    }
+
+    if (key.name === "return") {
+      const cmd = commands[selectedIndex];
+      if (cmd && !cmd.disabled) {
+        onClose();
+        onExecute?.(cmd);
+      }
+      return;
+    }
+  });
+
+  return (
+    <CommandPaletteDisplay commands={commands} selectedIndex={selectedIndex} onClose={onClose} />
+  );
+}
+
+/**
+ * Pure display component
+ */
+interface CommandPaletteDisplayProps {
   commands: Command[];
   selectedIndex: number;
   onClose: () => void;
 }
 
-export function CommandPaletteModal({
-  visible,
-  commands,
-  selectedIndex,
-  onClose: _onClose,
-}: CommandPaletteModalProps) {
+function CommandPaletteDisplay({ commands, selectedIndex, onClose: _onClose }: CommandPaletteDisplayProps) {
   const { width, height } = useTerminalDimensions();
-
-  if (!visible) return null;
 
   const modalWidth = 50;
 
@@ -93,7 +230,7 @@ export function CommandPaletteModal({
         </box>
 
         <box flexDirection="column">
-          {categorizedCommands.map((item, _idx) => {
+          {categorizedCommands.map((item) => {
             if (item.type === "header") {
               return (
                 <box key={`header-${item.category}`} height={1}>
@@ -108,11 +245,9 @@ export function CommandPaletteModal({
 
             // Determine colors based on state
             let descriptionColor: string = THEME_COLORS.text;
-            if (isDisabled)
-              descriptionColor = THEME_COLORS.textDim; // Muted if disabled
-            else if (isSelected)
-              descriptionColor = THEME_COLORS.text; // Bright if selected
-            else descriptionColor = THEME_COLORS.textMuted; // Normal unselected
+            if (isDisabled) descriptionColor = THEME_COLORS.textDim;
+            else if (isSelected) descriptionColor = THEME_COLORS.text;
+            else descriptionColor = THEME_COLORS.textMuted;
 
             let keyColor: string = THEME_COLORS.textMuted;
             if (isDisabled) keyColor = THEME_COLORS.textDim;

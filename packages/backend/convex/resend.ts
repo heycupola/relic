@@ -8,7 +8,7 @@ import {
   GracePeriodStartedEmail,
   PlanUpgradedEmail,
   WelcomeEmail,
-} from "./lib/emails/index.ts";
+} from "./lib/emails/index";
 import { EmailKind } from "./lib/types";
 
 export const resendSdk = new Resend(process.env.RESEND_API_KEY);

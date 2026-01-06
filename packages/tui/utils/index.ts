@@ -4,6 +4,7 @@ export * from "./constants";
 export { debugLog } from "./debugLog";
 export * from "./envParser";
 export * from "./formatConverter";
+export * from "./hyperlink";
 export * from "./passwordStorage";
 export * from "./passwordValidator";
 export * from "./syntaxHighlight";

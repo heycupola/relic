@@ -10,8 +10,8 @@ import {
   passwordsMatch,
   validatePassword,
 } from "../../utils/passwordValidator";
-import { InlineInput } from "../forms/InlineInput";
 import { GuideBar } from "../shared/GuideBar";
+import { InlineInput } from "./InlineInput";
 
 interface PasswordFormProps {
   mode: "setup" | "change";

@@ -1,9 +1,7 @@
-import type { SecretScope } from "../../types";
+import type { SecretScope, SecretValueType } from "../../types";
 import { CHAR_LIMITS, THEME_COLORS } from "../../utils/constants";
 import { TextInput } from "../forms/TextInput";
 import { Modal } from "../shared/Modal";
-
-export type SecretValueType = "string" | "number" | "boolean";
 
 const VALUE_TYPES: SecretValueType[] = ["string", "number", "boolean"];
 const SCOPES: SecretScope[] = ["client", "server", "shared"];

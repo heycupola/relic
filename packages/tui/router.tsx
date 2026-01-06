@@ -2,7 +2,6 @@ import { createContext, type ReactNode, useContext, useState } from "react";
 import type { ProjectStatus } from "./types";
 
 export type Route =
-  | { name: "initial" }
   | { name: "login" }
   | { name: "password-setup" }
   | { name: "password-unlock" }
@@ -12,8 +11,7 @@ export type Route =
       projectId: string;
       projectName: string;
       projectStatus: ProjectStatus;
-    }
-  | { name: "settings" };
+    };
 
 interface RouterContextType {
   route: Route;
@@ -38,7 +36,7 @@ interface RouterProviderProps {
 
 export function RouterProvider({
   children,
-  initialRoute = { name: "initial" },
+  initialRoute = { name: "login" },
 }: RouterProviderProps) {
   const [route, setRoute] = useState<Route>(initialRoute);
   const [history, setHistory] = useState<Route[]>([]);

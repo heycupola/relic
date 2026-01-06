@@ -1,6 +1,6 @@
 import { useTerminalDimensions } from "@opentui/react";
-import { THEME_COLORS } from "../../utils/constants";
-import { PasswordForm } from "./PasswordForm";
+import { PasswordForm } from "../components/forms/PasswordForm";
+import { THEME_COLORS } from "../utils/constants";
 
 interface PasswordSetupPageProps {
   onComplete: (password: string) => void;

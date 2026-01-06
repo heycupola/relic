@@ -7,5 +7,5 @@ export {
 export { ChangePasswordModal } from "./ChangePasswordModal";
 export { CommandPaletteModal } from "./CommandPaletteModal";
 export { CreateEnvironmentModal, CreateFolderModal, CreateItemModal } from "./CreateItemModal";
-export { CreateSecretModal, type SecretValueType } from "./CreateSecretModal";
+export { CreateSecretModal } from "./CreateSecretModal";
 export { ManageCollaboratorsModal } from "./ManageCollaboratorsModal";
