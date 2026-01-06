@@ -6,16 +6,13 @@ import { CommandPaletteModal } from "../components/modals/CommandPaletteModal";
 import { DeleteConfirmation } from "../components/shared/DeleteConfirmation";
 import { GuideBar } from "../components/shared/GuideBar";
 import { Modal } from "../components/shared/Modal";
+import { useAppSession } from "../hooks/useAppSession";
 import { useProjects } from "../hooks/useProjects";
 import { useTaskQueue } from "../hooks/useTaskQueue";
-import type { ModalType, ProjectStatus } from "../types";
+import { useRouter } from "../router";
+import type { ModalType } from "../types";
 import { STATUS_COLORS, THEME_COLORS } from "../utils/constants";
-
-interface HomePageProps {
-  userName: string;
-  onSelectProject: (projectId: string, projectName: string, projectStatus: ProjectStatus) => void;
-  onLogout: () => void;
-}
+import type { ProjectStatus } from "../types";
 
 const STATUS_ICONS: Record<ProjectStatus, string> = {
   owned: "●",
@@ -26,8 +23,10 @@ const STATUS_ICONS: Record<ProjectStatus, string> = {
 
 const PAGE_SIZE = 5;
 
-export function HomePage({ onSelectProject, onLogout }: HomePageProps) {
+export function HomePage() {
   const { width, height } = useTerminalDimensions();
+  const { navigate } = useRouter();
+  const { logout } = useAppSession();
   const { runTask, showSuccess } = useTaskQueue();
 
   // Fetch real projects from API
@@ -67,6 +66,10 @@ export function HomePage({ onSelectProject, onLogout }: HomePageProps) {
       else if (next < scrollOffset) setScrollOffset(0);
       return next;
     });
+  };
+
+  const selectProject = (projectId: string, projectName: string, projectStatus: ProjectStatus) => {
+    navigate({ name: "project", projectId, projectName, projectStatus });
   };
 
   // Action handlers
@@ -127,6 +130,10 @@ export function HomePage({ onSelectProject, onLogout }: HomePageProps) {
     }
   };
 
+  const handleLogout = async () => {
+    await logout();
+  };
+
   // Command palette
   const commands = [
     { key: "n", description: "Create project", category: "Create" },
@@ -159,14 +166,14 @@ export function HomePage({ onSelectProject, onLogout }: HomePageProps) {
     }
   };
 
-  // Main keyboard handler - only handles navigation and modal triggers
+  // Main keyboard handler
   useKeyboard((key) => {
-    // Skip if inline editing is active (InlineInput handles its own keys)
+    // Skip if inline editing is active
     if (creatingProject || editingProject) return;
 
     // Modal handlers
     if (activeModal === "logout") {
-      if (key.name === "y") onLogout();
+      if (key.name === "y") handleLogout();
       else if (key.name === "n" || key.name === "escape") setActiveModal("none");
       return;
     }
@@ -176,7 +183,6 @@ export function HomePage({ onSelectProject, onLogout }: HomePageProps) {
       return;
     }
 
-    // Command palette is handled by the smart modal
     if (activeModal === "commandPalette") return;
 
     // Delete confirmation
@@ -195,7 +201,7 @@ export function HomePage({ onSelectProject, onLogout }: HomePageProps) {
       setConfirmingDelete(null);
     } else if (key.name === "return") {
       const project = projects[selectedIndex];
-      if (project) onSelectProject(project.id, project.name, project.status);
+      if (project) selectProject(project.id, project.name, project.status);
     } else if (key.name === "d") {
       const project = projects[selectedIndex];
       if (project && project.status !== "restricted" && project.status !== "archived") {

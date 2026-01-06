@@ -7,6 +7,7 @@ import { GuideBar } from "../components/shared/GuideBar";
 import { useMultilineInput } from "../hooks/useMultilineInput";
 import { usePaste } from "../hooks/usePaste";
 import { useTaskQueue } from "../hooks/useTaskQueue";
+import { useRouter } from "../router";
 import type {
   Environment,
   Folder,
@@ -27,7 +28,6 @@ interface ProjectPageProps {
   projectId: string;
   projectName: string;
   projectStatus: ProjectStatus;
-  onBack: () => void;
 }
 
 // Mock data (will be replaced with real API)
@@ -67,8 +67,9 @@ const MOCK_LOGS: LogEntry[] = [
 
 const PAGE_SIZE = 10;
 
-export function ProjectPage({ projectId: _projectId, projectName, projectStatus, onBack }: ProjectPageProps) {
+export function ProjectPage({ projectId: _projectId, projectName, projectStatus }: ProjectPageProps) {
   const { width, height } = useTerminalDimensions();
+  const { goBack: routerGoBack } = useRouter();
   const { runTask, showSuccess } = useTaskQueue();
 
   // Data state (will come from API)
@@ -201,7 +202,7 @@ export function ProjectPage({ projectId: _projectId, projectName, projectStatus,
       setSelectedEnvId(null);
       setViewLevel("environments");
     } else {
-      onBack();
+      routerGoBack();
     }
     setSelectedIndex(0);
     setScrollOffset(0);

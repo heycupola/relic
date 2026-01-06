@@ -6,10 +6,6 @@ await initLogger();
 // Manual React DevTools connection
 if (process.env.DEV === "true") {
   try {
-    // We use import() to avoid bundling it in production if possible,
-    // though this is an app, so peer deps are fine.
-    // Specifying the specific path to avoid issues with some bundlers
-    // but standard package import should work.
     const devtools = await import("react-devtools-core");
     devtools.connectToDevTools({
       host: "localhost",
@@ -23,7 +19,12 @@ if (process.env.DEV === "true") {
 
 import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { TaskBar } from "./components/shared";
+import { AuthProvider, useAuth } from "./convex";
+import { AppSessionContext } from "./hooks/useAppSession";
+import { useCurrentUser } from "./hooks/useCurrentUser";
+import { TaskProvider } from "./hooks/useTaskQueue";
 import {
   HomePage,
   LoginPage,
@@ -31,21 +32,15 @@ import {
   PasswordUnlockPage,
   ProjectPage,
 } from "./pages";
-import { TaskBar } from "./components/shared";
-import { AuthProvider, useAuth } from "./convex";
-import { useCurrentUser } from "./hooks/useCurrentUser";
-import { TaskProvider } from "./hooks/useTaskQueue";
 import { RouterProvider, useRouter } from "./router";
-import type { ProjectStatus } from "./types";
 import { hasPassword, savePassword } from "./utils/passwordStorage";
 
 function AppRouter() {
-  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
-  const { route, navigate, goBack } = useRouter();
-  const { refreshAuth, logout } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, refreshAuth, logout: authLogout } = useAuth();
+  const { route, navigate } = useRouter();
   const { displayName } = useCurrentUser();
 
-  // Track if password has been verified this session
+  // Password session state
   const [isPasswordUnlocked, setIsPasswordUnlocked] = useState(false);
   const [passwordStatus, setPasswordStatus] = useState<{ has: boolean; loading: boolean }>({
     has: false,
@@ -60,24 +55,14 @@ function AppRouter() {
     checkPassword();
   }, []);
 
-  const handleLogout = async () => {
-    await logout();
+  // Session logout handler - used by pages via useAppSession hook
+  const handleLogout = useCallback(async () => {
+    await authLogout();
     setIsPasswordUnlocked(false);
     navigate({ name: "login" });
-  };
+  }, [authLogout, navigate]);
 
-  const handleSelectProject = (
-    projectId: string,
-    projectName: string,
-    projectStatus: ProjectStatus,
-  ) => {
-    navigate({ name: "project", projectId, projectName, projectStatus });
-  };
-
-  const handleBackFromProject = () => {
-    goBack();
-  };
-
+  // Password flow handlers
   const handlePasswordSetup = async (password: string) => {
     await savePassword(password);
     setPasswordStatus({ has: true, loading: false });
@@ -114,48 +99,44 @@ function AppRouter() {
   if (!isPasswordUnlocked) {
     if (passwordStatus.has) {
       return <PasswordUnlockPage onUnlock={handlePasswordUnlock} />;
-    } else {
-      return <PasswordSetupPage onComplete={handlePasswordSetup} />;
     }
+    return <PasswordSetupPage onComplete={handlePasswordSetup} />;
   }
 
+  // Provide session context for pages
+  const sessionContext = {
+    logout: handleLogout,
+    displayName,
+  };
+
   // Authenticated and password unlocked - normal routing
-  switch (route.name) {
-    case "login":
-      // If already authenticated and unlocked, go to home
-      navigate({ name: "home" });
-      return null;
-    case "password-setup":
-    case "password-unlock":
-      // Already unlocked, go to home
-      navigate({ name: "home" });
-      return null;
-    case "home":
-      return (
-        <HomePage
-          userName={displayName}
-          onLogout={handleLogout}
-          onSelectProject={handleSelectProject}
-        />
-      );
-    case "project":
-      return (
-        <ProjectPage
-          projectId={route.projectId}
-          projectName={route.projectName}
-          projectStatus={route.projectStatus}
-          onBack={handleBackFromProject}
-        />
-      );
-    default:
-      return (
-        <HomePage
-          userName={displayName}
-          onLogout={handleLogout}
-          onSelectProject={handleSelectProject}
-        />
-      );
-  }
+  const renderPage = () => {
+    switch (route.name) {
+      case "login":
+      case "password-setup":
+      case "password-unlock":
+        // Already authenticated and unlocked, redirect to home
+        navigate({ name: "home" });
+        return null;
+      case "project":
+        return (
+          <ProjectPage
+            projectId={route.projectId}
+            projectName={route.projectName}
+            projectStatus={route.projectStatus}
+          />
+        );
+      case "home":
+      default:
+        return <HomePage />;
+    }
+  };
+
+  return (
+    <AppSessionContext.Provider value={sessionContext}>
+      {renderPage()}
+    </AppSessionContext.Provider>
+  );
 }
 
 function App() {
