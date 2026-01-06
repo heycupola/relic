@@ -30,7 +30,7 @@ import {
   PasswordSetupPage,
   PasswordUnlockPage,
   ProjectPage,
-} from "./components/pages";
+} from "./pages";
 import { TaskBar } from "./components/shared";
 import { AuthProvider, useAuth } from "./convex";
 import { useCurrentUser } from "./hooks/useCurrentUser";

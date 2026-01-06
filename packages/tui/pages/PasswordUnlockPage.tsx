@@ -1,17 +1,17 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useEffect, useState } from "react";
-import { useTextInput } from "../../hooks/useTextInput";
-import { THEME_COLORS } from "../../utils/constants";
-import { verifyPassword } from "../../utils/passwordStorage";
-import { InlineInput } from "../forms/InlineInput";
-import { GuideBar } from "../shared/GuideBar";
+import { InlineInput } from "../components/forms/InlineInput";
+import { GuideBar } from "../components/shared/GuideBar";
+import { useTextInput } from "../hooks/useTextInput";
+import { THEME_COLORS } from "../utils/constants";
+import { verifyPassword } from "../utils/passwordStorage";
 
 interface PasswordUnlockPageProps {
   onUnlock: () => void;
 }
 
 /**
- * usePasswordInput inlined here since it's only used in this component.
+ * usePasswordInput - combines text input with password visibility toggle
  */
 function usePasswordInput() {
   const textInput = useTextInput({ maxLength: 64 });

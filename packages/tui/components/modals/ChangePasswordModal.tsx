@@ -1,5 +1,5 @@
 import { THEME_COLORS } from "../../utils/constants";
-import { PasswordForm } from "../pages/PasswordForm";
+import { PasswordForm } from "../forms/PasswordForm";
 import { Modal } from "../shared/Modal";
 
 interface ChangePasswordModalProps {

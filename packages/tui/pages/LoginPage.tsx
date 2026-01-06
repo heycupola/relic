@@ -1,11 +1,11 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useEffect, useRef, useState } from "react";
-import { type DeviceAuthStatus, useDeviceAuth } from "../../convex";
-import { THEME_COLORS } from "../../utils/constants";
-import { createHyperlink } from "../../utils/hyperlink";
-import { GuideBar } from "../shared/GuideBar";
-import { LoginButton } from "../shared/LoginButton";
-import { Modal } from "../shared/Modal";
+import { GuideBar } from "../components/shared/GuideBar";
+import { LoginButton } from "../components/shared/LoginButton";
+import { Modal } from "../components/shared/Modal";
+import { type DeviceAuthStatus, useDeviceAuth } from "../convex";
+import { THEME_COLORS } from "../utils/constants";
+import { createHyperlink } from "../utils/hyperlink";
 
 const SHORTCUT_GROUPS = {
   primary: [{ shortcuts: [{ key: "↵", description: "sign in" }] }],
@@ -129,7 +129,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     setSelectedProviderIndex(0);
   };
 
-  const handleLogin = async (provider?: Provider) => {
+  const handleLogin = async (_provider?: Provider) => {
     if (isModalOpen) return;
     setIsModalOpen(true);
     try {
@@ -243,7 +243,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                   <box height={1} marginTop={0}>
                     <text fg={THEME_COLORS.textMuted}>
                       {verificationUri.length > 70
-                        ? verificationUri.substring(0, 70) + "..."
+                        ? `${verificationUri.substring(0, 70)}...`
                         : verificationUri}
                     </text>
                   </box>
