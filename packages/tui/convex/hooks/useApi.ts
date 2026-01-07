@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { logger } from "../../utils/debugLog";
 import { getProtectedApi, type ProtectedApi } from "../api/protected";
 import { ensureValidJwt } from "../services/jwt";
 
@@ -18,10 +19,12 @@ export function useApi(): UseApiReturn {
     setIsLoading(true);
     setError(null);
     try {
-      const jwtToken = await ensureValidJwt();
-      const protectedApi = getProtectedApi(jwtToken);
+      await ensureValidJwt();
+      const protectedApi = getProtectedApi();
+      await protectedApi.ensureAuth();
       setApi(protectedApi);
     } catch (err) {
+      logger.error("Failed to initialize API:", err);
       setError(err instanceof Error ? err : new Error("Failed to initialize API"));
       setApi(null);
     } finally {

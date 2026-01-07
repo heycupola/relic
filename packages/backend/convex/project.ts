@@ -22,6 +22,31 @@ import {
 } from "./lib/types";
 import schema from "./schema";
 
+export const getLimits = protectedAction({
+  args: {},
+  returns: v.object({
+    usage: v.number(),
+    included_usage: v.number(),
+  }),
+  handler: async (ctx) => {
+    const result = await ctx.autumn.check(ctx, {
+      featureId: "projects",
+    });
+
+    if (result.error || !result.data) {
+      return {
+        usage: 0,
+        included_usage: 0,
+      };
+    }
+
+    return {
+      usage: result.data.usage ?? 0,
+      included_usage: result.data.included_usage ?? 0,
+    };
+  },
+});
+
 export const createProject = protectedAction({
   args: {
     name: v.string(),

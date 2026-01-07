@@ -6,7 +6,7 @@
   "scripts": {
     "start": "bun --hot ./index.tsx",
     "debug": "DEV=true bun --hot ./index.tsx",
-    "log:watch": "tail -f debug.log"
+    "log:watch": "bun run ./scripts/watchLog.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",

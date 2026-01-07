@@ -1,48 +1,22 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::{ffi::CStr, os::raw::c_char};
 
-use crate::{
-    telemetry::{panic::setup_panic_handler, tracing::initialize_logging},
-    util::app_config::AppConfig,
-};
+mod telemetry;
 
 pub mod util {
     pub mod app_config;
-    pub mod crypto;
 }
 
 pub mod service {
     pub mod auth;
-    pub mod organization;
-    pub mod user;
-}
-
-pub mod helper {
-    pub mod device_cache;
-    pub mod function;
-    pub mod master_password;
-    pub mod scope_guard;
-    pub mod session;
 }
 
 pub mod cli {
     pub mod app;
 }
 
-pub mod tui {
-    pub mod app;
-    pub(crate) mod components;
-    pub(crate) mod modals;
-    pub(crate) mod screens;
-    pub(crate) mod state;
-}
-
-pub mod telemetry {
-    pub mod core;
-    pub mod macros;
-    pub mod panic;
-    pub mod tracing;
-}
+use telemetry::{initialize_logging, setup_panic_handler};
+use util::app_config::AppConfig;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn run_app(args_json: *const c_char) {
@@ -53,33 +27,27 @@ pub extern "C" fn run_app(args_json: *const c_char) {
 }
 
 async fn run_app_async(args_json: *const c_char) -> Result<()> {
-    if color_eyre::install().is_err() {
-        anyhow::bail!("Unable to install color_eyre");
-    }
-
-    if initialize_logging().is_err() {
-        anyhow::bail!("Unable to initialize logging");
-    }
-
-    tracing::info!("The app has started.");
-
+    // Create app config first to get the sentry reporter
     let app_config = AppConfig::new().await?;
-
-    setup_panic_handler(app_config.sentry_reporter.clone());
-
+    
+    // Initialize logging with sentry reporter
+    initialize_logging(Some(app_config.sentry_reporter.clone()))?;
+    
+    // Parse the JSON string from C (handle null pointer)
     let args: Vec<String> = if args_json.is_null() {
         vec![]
     } else {
-        unsafe {
-            let json_str = CStr::from_ptr(args_json).to_string_lossy();
-            serde_json::from_str(&json_str).unwrap_or_default()
-        }
+        let c_str = unsafe {
+            CStr::from_ptr(args_json)
+                .to_str()
+                .context("Failed to parse C string")?
+        };
+        serde_json::from_str(c_str).unwrap_or_default()
     };
-
-    if args.is_empty() {
-        tui::app::start_tui(app_config);
-        Ok(())
-    } else {
-        cli::app::run_cli_from_args(args, app_config).await
-    }
+    
+    // Setup panic handler
+    setup_panic_handler(app_config.sentry_reporter.clone());
+    
+    // Run CLI with args (empty args will show help)
+    cli::app::run_cli_from_args(args, app_config).await
 }

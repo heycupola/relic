@@ -10,9 +10,9 @@ import { useAppSession } from "../hooks/useAppSession";
 import { useProjects } from "../hooks/useProjects";
 import { useTaskQueue } from "../hooks/useTaskQueue";
 import { useRouter } from "../router";
-import type { ModalType } from "../types";
-import { STATUS_COLORS, THEME_COLORS } from "../utils/constants";
-import type { ProjectStatus } from "../types";
+import type { ModalType, ProjectStatus } from "../types";
+import { KEY_SYMBOLS, STATUS_COLORS, THEME_COLORS } from "../utils/constants";
+import { logger } from "../utils/debugLog";
 
 const STATUS_ICONS: Record<ProjectStatus, string> = {
   owned: "●",
@@ -33,7 +33,8 @@ export function HomePage() {
   const {
     projects,
     isLoading: isLoadingProjects,
-    error: projectsError,
+    limits,
+    isLoadingLimits,
     refetch: refetchProjects,
   } = useProjects();
 
@@ -45,7 +46,9 @@ export function HomePage() {
   // Inline editing state
   const [creatingProject, setCreatingProject] = useState(false);
   const [editingProject, setEditingProject] = useState<{ id: string; name: string } | null>(null);
-  const [confirmingDelete, setConfirmingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState<{ id: string; name: string } | null>(
+    null,
+  );
 
   // Navigation helpers
   const moveUp = () => {
@@ -53,7 +56,8 @@ export function HomePage() {
     setSelectedIndex((prev) => {
       const next = prev > 0 ? prev - 1 : projects.length - 1;
       if (next < scrollOffset) setScrollOffset(next);
-      else if (next >= scrollOffset + PAGE_SIZE) setScrollOffset(Math.max(0, projects.length - PAGE_SIZE));
+      else if (next >= scrollOffset + PAGE_SIZE)
+        setScrollOffset(Math.max(0, projects.length - PAGE_SIZE));
       return next;
     });
   };
@@ -78,16 +82,14 @@ export function HomePage() {
     try {
       await runTask(`Creating project "${name}"...`, async () => {
         const { getProtectedApi } = await import("../convex/api/protected");
-        const { ensureValidJwt } = await import("../convex/services/jwt");
-        const jwt = await ensureValidJwt();
-        const api = getProtectedApi(jwt);
+        const api = getProtectedApi();
         await api.createProject({ name, encryptedProjectKey: placeholderKey });
       });
       showSuccess(`Project "${name}" created`);
       setCreatingProject(false);
       refetchProjects();
     } catch (err) {
-      console.error("Failed to create project:", err);
+      logger.error("Failed to create project:", err);
     }
   };
 
@@ -99,16 +101,14 @@ export function HomePage() {
     try {
       await runTask(`Renaming project to "${name}"...`, async () => {
         const { getProtectedApi } = await import("../convex/api/protected");
-        const { ensureValidJwt } = await import("../convex/services/jwt");
-        const jwt = await ensureValidJwt();
-        const api = getProtectedApi(jwt);
+        const api = getProtectedApi();
         await api.updateProject({ projectId: editingProject.id, name });
       });
       showSuccess(`Project renamed to "${name}"`);
       setEditingProject(null);
       refetchProjects();
     } catch (err) {
-      console.error("Failed to rename project:", err);
+      logger.error("Failed to rename project:", err);
     }
   };
 
@@ -117,16 +117,14 @@ export function HomePage() {
     try {
       await runTask(`Archiving "${confirmingDelete.name}"...`, async () => {
         const { getProtectedApi } = await import("../convex/api/protected");
-        const { ensureValidJwt } = await import("../convex/services/jwt");
-        const jwt = await ensureValidJwt();
-        const api = getProtectedApi(jwt);
+        const api = getProtectedApi();
         await api.archiveProject(confirmingDelete.id);
       });
       showSuccess(`"${confirmingDelete.name}" archived`);
       setConfirmingDelete(null);
       refetchProjects();
     } catch (err) {
-      console.error("Failed to archive project:", err);
+      logger.error("Failed to archive project:", err);
     }
   };
 
@@ -228,18 +226,67 @@ export function HomePage() {
   // Dynamic shortcuts for guide bar
   const getShortcuts = () => {
     if (creatingProject) {
-      return { primary: [{ shortcuts: [{ key: "↵", description: "create" }, { key: "esc", description: "cancel" }] }], secondary: [] };
+      return {
+        primary: [
+          {
+            shortcuts: [
+              { key: KEY_SYMBOLS.enter, description: "create" },
+              { key: "esc", description: "cancel" },
+            ],
+          },
+        ],
+        secondary: [],
+      };
     }
     if (editingProject) {
-      return { primary: [{ shortcuts: [{ key: "↵", description: "save" }, { key: "esc", description: "cancel" }] }], secondary: [] };
+      return {
+        primary: [
+          {
+            shortcuts: [
+              { key: KEY_SYMBOLS.enter, description: "save" },
+              { key: "esc", description: "cancel" },
+            ],
+          },
+        ],
+        secondary: [],
+      };
     }
-    return { primary: [{ shortcuts: [{ key: "n", description: "create project" }, { key: "u", description: "rename project" }] }], secondary: [] };
+    return {
+      primary: [
+        {
+          shortcuts: [
+            { key: "n", description: "create project" },
+            { key: "u", description: "rename project" },
+          ],
+        },
+      ],
+      secondary: [],
+    };
   };
 
   return (
-    <box flexDirection="column" width={width} height={height} backgroundColor={THEME_COLORS.background}>
-      <box flexDirection="column" justifyContent="center" alignItems="center" flexGrow={1} backgroundColor={THEME_COLORS.background}>
-        <box flexDirection="column" backgroundColor={THEME_COLORS.header} width={56} paddingTop={1} paddingBottom={1} paddingLeft={2} paddingRight={2}>
+    <box
+      flexDirection="column"
+      width={width}
+      height={height}
+      backgroundColor={THEME_COLORS.background}
+    >
+      <box
+        flexDirection="column"
+        justifyContent="center"
+        alignItems="center"
+        flexGrow={1}
+        backgroundColor={THEME_COLORS.background}
+      >
+        <box
+          flexDirection="column"
+          backgroundColor={THEME_COLORS.header}
+          width={56}
+          paddingTop={1}
+          paddingBottom={1}
+          paddingLeft={2}
+          paddingRight={2}
+        >
           {/* Logo */}
           <box height={7} justifyContent="center" alignItems="center">
             <ascii-font text="relic" font="block" />
@@ -249,24 +296,48 @@ export function HomePage() {
           </box>
 
           {/* Projects header */}
-          <box height={1} width={52} marginTop={1} marginBottom={1} flexDirection="row" justifyContent="space-between" alignItems="center">
+          <box
+            height={1}
+            width={52}
+            marginTop={1}
+            marginBottom={1}
+            flexDirection="row"
+            justifyContent="space-between"
+            alignItems="center"
+          >
             <text fg={THEME_COLORS.textMuted}>Projects</text>
-            <text fg={THEME_COLORS.textDim}>{isLoadingProjects ? "..." : `${projects.length} / 10`}</text>
+            <text fg={THEME_COLORS.textDim}>
+              {isLoadingProjects || isLoadingLimits
+                ? "..."
+                : limits !== null && limits.included_usage !== undefined
+                  ? `${limits.usage} / ${limits.included_usage}`
+                  : `${projects.length}`}
+            </text>
           </box>
 
           {/* Project list */}
-          <box flexDirection="column" width={52} height={projects.length === 0 && !creatingProject ? 1 : Math.min(projects.length + (creatingProject ? 1 : 0) + (confirmingDelete ? 1 : 0), PAGE_SIZE + (confirmingDelete ? 1 : 0))}>
-            {projectsError ? (
-              <text fg={THEME_COLORS.error}>Failed to load projects</text>
-            ) : isLoadingProjects ? (
+          <box
+            flexDirection="column"
+            width={52}
+            height={
+              projects.length === 0 && !creatingProject
+                ? 1
+                : Math.min(
+                    projects.length + (creatingProject ? 1 : 0) + (confirmingDelete ? 1 : 0),
+                    PAGE_SIZE + (confirmingDelete ? 1 : 0),
+                  )
+            }
+          >
+            {isLoadingProjects ? (
               <text fg={THEME_COLORS.textDim}>Loading projects...</text>
             ) : projects.length === 0 && !creatingProject ? (
-              <text fg={THEME_COLORS.textDim}>No projects yet. Press 'n' to create one.</text>
+              <text fg={THEME_COLORS.textDim}>No projects created. Press 'n' to create one.</text>
             ) : (
               <>
                 {projects.slice(scrollOffset, scrollOffset + PAGE_SIZE).map((project, index) => {
                   const actualIndex = index + scrollOffset;
-                  const isSelected = actualIndex === selectedIndex && !creatingProject && !editingProject;
+                  const isSelected =
+                    actualIndex === selectedIndex && !creatingProject && !editingProject;
                   const isEditing = editingProject?.id === project.id;
 
                   return (
@@ -284,18 +355,34 @@ export function HomePage() {
                           iconColor={THEME_COLORS.accent}
                         />
                       ) : (
-                        <box height={1} width={52} flexDirection="row" justifyContent="space-between" alignItems="center">
+                        <box
+                          height={1}
+                          width={52}
+                          flexDirection="row"
+                          justifyContent="space-between"
+                          alignItems="center"
+                        >
                           <text fg={isSelected ? THEME_COLORS.text : THEME_COLORS.textMuted}>
-                            <span fg={isSelected ? THEME_COLORS.primary : THEME_COLORS.textDim}>{isSelected ? "› " : "  "}</span>
+                            <span fg={isSelected ? THEME_COLORS.primary : THEME_COLORS.textDim}>
+                              {isSelected ? "› " : "  "}
+                            </span>
                             {project.name}
                           </text>
                           <text>
-                            {isSelected && <span fg={THEME_COLORS.textDim}>[{project.status}] </span>}
-                            <span fg={STATUS_COLORS[project.status]}>{STATUS_ICONS[project.status]}</span>
+                            {isSelected && (
+                              <span fg={THEME_COLORS.textDim}>[{project.status}] </span>
+                            )}
+                            <span fg={STATUS_COLORS[project.status]}>
+                              {STATUS_ICONS[project.status]}
+                            </span>
                           </text>
                         </box>
                       )}
-                      <DeleteConfirmation itemType="project" itemName={project.name} visible={confirmingDelete?.id === project.id} />
+                      <DeleteConfirmation
+                        itemType="project"
+                        itemName={project.name}
+                        visible={confirmingDelete?.id === project.id}
+                      />
                     </box>
                   );
                 })}
@@ -319,14 +406,28 @@ export function HomePage() {
           {/* Guide bar */}
           {(activeModal === "none" || creatingProject || activeModal === "commandPalette") && (
             <box marginTop={1}>
-              <GuideBar groups={getShortcuts()} customWidth={52} minimal={true} showHelp={!creatingProject && !editingProject} />
+              <GuideBar
+                groups={getShortcuts()}
+                customWidth={52}
+                minimal={true}
+                showHelp={!creatingProject && !editingProject}
+              />
             </box>
           )}
         </box>
       </box>
 
       {/* Modals */}
-      <Modal visible={activeModal === "logout"} title="Logout" width={45} height={8} shortcuts={[{ key: "y", description: "yes" }, { key: "n", description: "no" }]}>
+      <Modal
+        visible={activeModal === "logout"}
+        title="Logout"
+        width={45}
+        height={8}
+        shortcuts={[
+          { key: "y", description: "yes" },
+          { key: "n", description: "no" },
+        ]}
+      >
         <text fg={THEME_COLORS.textDim}>Are you sure you want to logout?</text>
       </Modal>
 

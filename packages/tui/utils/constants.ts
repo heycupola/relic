@@ -31,3 +31,8 @@ export const THEME_COLORS = {
   inputBg: "#292e42",
   inputBgInactive: "#1f2335",
 } as const;
+
+// Keyboard key symbols for display
+export const KEY_SYMBOLS = {
+  enter: "↵", // DOWNWARDS ARROW WITH CORNER LEFTWARDS (U+21B5)
+} as const;

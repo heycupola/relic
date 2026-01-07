@@ -2,7 +2,7 @@ import { useKeyboard } from "@opentui/react";
 import { useCallback, useEffect, useState } from "react";
 import { usePaste } from "../../hooks/usePaste";
 import { useTextInput } from "../../hooks/useTextInput";
-import { THEME_COLORS } from "../../utils/constants";
+import { KEY_SYMBOLS, THEME_COLORS } from "../../utils/constants";
 import {
   checkPasswordRequirements,
   getStrengthColor,
@@ -239,7 +239,7 @@ export function PasswordForm({
                 shortcuts: [
                   { key: "^v", description: showPassword ? "hide" : "show" },
                   { key: "tab", description: "next field" },
-                  { key: "↵", description: mode === "setup" ? "continue" : "save" },
+                  { key: KEY_SYMBOLS.enter, description: mode === "setup" ? "continue" : "save" },
                 ],
               },
             ],

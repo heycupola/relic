@@ -64,8 +64,6 @@ export const getDeviceCodeInfo = query({
     user_code: v.string(),
   },
   handler: async (ctx, args) => {
-    await checkRateLimit(ctx, "read");
-
     const deviceCodeEntry = await ctx.runQuery(components.betterAuth.deviceAuth.getDeviceCodeInfo, {
       user_code: args.user_code,
     });
