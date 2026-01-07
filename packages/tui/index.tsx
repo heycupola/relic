@@ -25,15 +25,9 @@ import { AuthProvider, useAuth } from "./convex";
 import { AppSessionContext } from "./hooks/useAppSession";
 import { useCurrentUser } from "./hooks/useCurrentUser";
 import { TaskProvider } from "./hooks/useTaskQueue";
-import {
-  HomePage,
-  LoginPage,
-  PasswordSetupPage,
-  PasswordUnlockPage,
-  ProjectPage,
-} from "./pages";
+import { HomePage, LoginPage, PasswordSetupPage, PasswordUnlockPage, ProjectPage } from "./pages";
 import { RouterProvider, useRouter } from "./router";
-import { hasPassword, savePassword } from "./utils/passwordStorage";
+import { clearPassword, hasPassword, savePassword } from "./utils/passwordStorage";
 
 function AppRouter() {
   const { isAuthenticated, isLoading: isAuthLoading, refreshAuth, logout: authLogout } = useAuth();
@@ -58,6 +52,7 @@ function AppRouter() {
   // Session logout handler - used by pages via useAppSession hook
   const handleLogout = useCallback(async () => {
     await authLogout();
+    await clearPassword();
     setIsPasswordUnlocked(false);
     navigate({ name: "login" });
   }, [authLogout, navigate]);
@@ -133,9 +128,7 @@ function AppRouter() {
   };
 
   return (
-    <AppSessionContext.Provider value={sessionContext}>
-      {renderPage()}
-    </AppSessionContext.Provider>
+    <AppSessionContext.Provider value={sessionContext}>{renderPage()}</AppSessionContext.Provider>
   );
 }
 
