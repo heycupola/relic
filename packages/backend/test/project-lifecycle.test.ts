@@ -40,6 +40,20 @@ describe("Project Lifecycle", () => {
       mockAutumn.setFeature(collaborator.userId, "projects", 2);
     });
 
+    test("should get project limits successfully", async () => {
+      mockAutumn.setFeature(owner.userId, "projects", 10);
+
+      await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey: "#",
+        name: "#",
+      });
+
+      const limits = await owner.asUser.action(api.project.getLimits, {});
+
+      expect(limits.included_usage).toBe(10);
+      expect(limits.usage).toBe(1);
+    });
+
     test("fails when project limit is exceeded", async () => {
       mockAutumn.setFeature(owner.userId, "projects", 0);
 
