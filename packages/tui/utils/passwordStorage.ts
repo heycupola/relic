@@ -1,13 +1,35 @@
-import { secrets } from "bun";
 import { unlink } from "node:fs/promises";
-import { debugLog } from "./debugLog";
-
-// NOTE: The password is stored in the OS keychain on macOS, Windows, and Linux.
-// As a fallback, the password is stored in a file in the user's home directory.
+import { resolve } from "node:path";
+import { secrets } from "bun";
+import { logger } from "./debugLog";
+import { ensureRelicDir, RELIC_PASSWORD_FILE } from "./paths";
 
 const SECRETS_SERVICE = "com.relic.tui";
 const SECRETS_NAME = "master-password";
-const PASSWORD_FILE = `${Bun.env.HOME}/.relic_password`;
+// Cross-platform legacy password file location
+const HOME = process.env.HOME || process.env.USERPROFILE || "~";
+const LEGACY_PASSWORD_FILE = resolve(HOME, ".relic_password");
+
+async function migrateLegacyPassword(): Promise<void> {
+  try {
+    const legacyFile = Bun.file(LEGACY_PASSWORD_FILE);
+    if (await legacyFile.exists()) {
+      const password = await legacyFile.text();
+      if (password.length > 0) {
+        await ensureRelicDir();
+        await Bun.write(RELIC_PASSWORD_FILE, password);
+        try {
+          await unlink(LEGACY_PASSWORD_FILE);
+        } catch {
+          // Ignore if file doesn't exist
+        }
+        logger.log("Migrated password from legacy location to ~/.relic/password");
+      }
+    }
+  } catch (error) {
+    logger.error("Failed to migrate legacy password:", error);
+  }
+}
 
 async function getPasswordFromStorage(): Promise<string | null> {
   try {
@@ -19,17 +41,19 @@ async function getPasswordFromStorage(): Promise<string | null> {
       return password;
     }
   } catch (error) {
-    debugLog("Keychain access failed:", error);
+    logger.debug("Keychain access failed:", error);
   }
 
+  await migrateLegacyPassword();
+
   try {
-    const file = Bun.file(PASSWORD_FILE);
+    const file = Bun.file(RELIC_PASSWORD_FILE);
     if (await file.exists()) {
       const password = await file.text();
       return password.length > 0 ? password : null;
     }
   } catch (error) {
-    debugLog("File system access failed:", error);
+    logger.debug("File system access failed:", error);
   }
 
   return null;
@@ -43,20 +67,21 @@ async function savePasswordToStorage(password: string): Promise<void> {
       value: password,
     });
     try {
-      const file = Bun.file(PASSWORD_FILE);
+      const file = Bun.file(RELIC_PASSWORD_FILE);
       if (await file.exists()) {
-        await unlink(PASSWORD_FILE);
+        await unlink(RELIC_PASSWORD_FILE);
       }
     } catch (error) {
-      debugLog("Failed to remove fallback password file:", error);
+      logger.debug("Failed to remove fallback password file:", error);
     }
     return;
   } catch (error) {
-    debugLog("Keychain save failed:", error);
+    logger.debug("Keychain save failed:", error);
   }
 
   try {
-    await Bun.write(PASSWORD_FILE, password);
+    await ensureRelicDir();
+    await Bun.write(RELIC_PASSWORD_FILE, password);
   } catch (error) {
     throw new Error(`Failed to save password: ${error}`);
   }
@@ -69,16 +94,25 @@ async function deletePasswordFromStorage(): Promise<void> {
       name: SECRETS_NAME,
     });
   } catch (error) {
-    debugLog("Keychain delete failed:", error);
+    logger.debug("Keychain delete failed:", error);
   }
 
   try {
-    const file = Bun.file(PASSWORD_FILE);
+    const file = Bun.file(RELIC_PASSWORD_FILE);
     if (await file.exists()) {
-      await unlink(PASSWORD_FILE);
+      await Bun.$`rm ${RELIC_PASSWORD_FILE}`.quiet();
     }
   } catch (error) {
-    debugLog("Failed to delete fallback password file:", error);
+    logger.debug("Failed to delete password file:", error);
+  }
+
+  try {
+    const legacyFile = Bun.file(LEGACY_PASSWORD_FILE);
+    if (await legacyFile.exists()) {
+      await unlink(LEGACY_PASSWORD_FILE);
+    }
+  } catch (_) {
+    return;
   }
 }
 

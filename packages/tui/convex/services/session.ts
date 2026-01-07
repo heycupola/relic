@@ -1,8 +1,15 @@
 import { chmod, mkdir, unlink } from "node:fs/promises";
+import { resolve } from "node:path";
 import type { Session, SessionValidation } from "../types";
 
-const CONFIG_DIR = `${Bun.env.HOME}/.config/relic`;
-const SESSION_FILE = `${CONFIG_DIR}/session.json`;
+// Use cross-platform home directory
+const HOME = process.env.HOME || process.env.USERPROFILE || "~";
+// Windows: AppData\Roaming\relic, Unix: ~/.config/relic
+const CONFIG_DIR =
+  process.platform === "win32"
+    ? resolve(HOME, "AppData", "Roaming", "relic")
+    : resolve(HOME, ".config", "relic");
+const SESSION_FILE = resolve(CONFIG_DIR, "session.json");
 
 async function ensureConfigDir(): Promise<void> {
   try {
