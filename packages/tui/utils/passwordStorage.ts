@@ -100,7 +100,7 @@ async function deletePasswordFromStorage(): Promise<void> {
   try {
     const file = Bun.file(RELIC_PASSWORD_FILE);
     if (await file.exists()) {
-      await Bun.$`rm ${RELIC_PASSWORD_FILE}`.quiet();
+      await unlink(RELIC_PASSWORD_FILE);
     }
   } catch (error) {
     logger.debug("Failed to delete password file:", error);
