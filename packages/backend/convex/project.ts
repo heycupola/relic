@@ -29,11 +29,11 @@ export const getLimits = protectedAction({
     included_usage: v.number(),
   }),
   handler: async (ctx) => {
-    const { data, error } = await ctx.autumn.check(ctx, {
+    const result = await ctx.autumn.check(ctx, {
       featureId: "projects",
     });
 
-    if (error || !data) {
+    if (result.error || !result.data) {
       return {
         usage: 0,
         included_usage: 0,
@@ -41,8 +41,8 @@ export const getLimits = protectedAction({
     }
 
     return {
-      usage: data.usage ?? 0,
-      included_usage: data.included_usage ?? 0,
+      usage: result.data.usage ?? 0,
+      included_usage: result.data.included_usage ?? 0,
     };
   },
 });
