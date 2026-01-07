@@ -1,9 +1,11 @@
-import { initLogger } from "./utils/debugLog";
+import { initLogger, logger } from "./utils/debugLog";
 
-// Initialize logger first
-await initLogger();
+console.log("DEBUG: Before initLogger");
+initLogger();
+console.log("DEBUG: After initLogger");
+logger.log("App starting - logger initialized");
+console.log("DEBUG: After first logger.log");
 
-// Manual React DevTools connection
 if (process.env.DEV === "true") {
   try {
     const devtools = await import("react-devtools-core");
@@ -11,9 +13,9 @@ if (process.env.DEV === "true") {
       host: "localhost",
       port: 8097,
     });
-    console.log("Attempted to connect to React DevTools");
+    logger.log("Attempted to connect to React DevTools");
   } catch (err) {
-    console.error("Failed to connect to React DevTools", err);
+    logger.error("Failed to connect to React DevTools", err);
   }
 }
 
@@ -30,11 +32,13 @@ import { RouterProvider, useRouter } from "./router";
 import { clearPassword, hasPassword, savePassword } from "./utils/passwordStorage";
 
 function AppRouter() {
+  logger.log("AppRouter rendered");
   const { isAuthenticated, isLoading: isAuthLoading, refreshAuth, logout: authLogout } = useAuth();
   const { route, navigate } = useRouter();
   const { displayName } = useCurrentUser();
 
-  // Password session state
+  logger.log("AppRouter state:", { isAuthenticated, isAuthLoading });
+
   const [isPasswordUnlocked, setIsPasswordUnlocked] = useState(false);
   const [passwordStatus, setPasswordStatus] = useState<{ has: boolean; loading: boolean }>({
     has: false,
@@ -49,7 +53,6 @@ function AppRouter() {
     checkPassword();
   }, []);
 
-  // Session logout handler - used by pages via useAppSession hook
   const handleLogout = useCallback(async () => {
     await authLogout();
     await clearPassword();
@@ -57,7 +60,6 @@ function AppRouter() {
     navigate({ name: "login" });
   }, [authLogout, navigate]);
 
-  // Password flow handlers
   const handlePasswordSetup = async (password: string) => {
     await savePassword(password);
     setPasswordStatus({ has: true, loading: false });
@@ -73,6 +75,7 @@ function AppRouter() {
   const handleLogin = async () => {
     await refreshAuth();
     const has = await hasPassword();
+    setPasswordStatus({ has, loading: false });
     if (has) {
       navigate({ name: "password-unlock" });
     } else {
@@ -80,37 +83,34 @@ function AppRouter() {
     }
   };
 
-  // Show loading while checking auth or password status
   if (isAuthLoading || passwordStatus.loading) {
     return null;
   }
 
-  // Not authenticated - show login page
   if (!isAuthenticated) {
+    logger.log("AppRouter: Not authenticated, showing LoginPage");
     return <LoginPage onLogin={handleLogin} />;
   }
 
-  // Authenticated but password not yet unlocked
   if (!isPasswordUnlocked) {
+    logger.log("AppRouter: Password not unlocked, passwordStatus:", passwordStatus);
     if (passwordStatus.has) {
-      return <PasswordUnlockPage onUnlock={handlePasswordUnlock} />;
+      return <PasswordUnlockPage onUnlock={handlePasswordUnlock} onLogout={handleLogout} />;
     }
-    return <PasswordSetupPage onComplete={handlePasswordSetup} />;
+    return <PasswordSetupPage onComplete={handlePasswordSetup} onLogout={handleLogout} />;
   }
 
-  // Provide session context for pages
   const sessionContext = {
     logout: handleLogout,
     displayName,
   };
 
-  // Authenticated and password unlocked - normal routing
+  logger.log("AppRouter: Authenticated and unlocked, route:", route.name);
   const renderPage = () => {
     switch (route.name) {
       case "login":
       case "password-setup":
       case "password-unlock":
-        // Already authenticated and unlocked, redirect to home
         navigate({ name: "home" });
         return null;
       case "project":
@@ -133,6 +133,8 @@ function AppRouter() {
 }
 
 function App() {
+  console.log("DEBUG: App component rendered");
+  logger.log("App component rendered");
   return (
     <AuthProvider>
       <TaskProvider>
@@ -149,4 +151,6 @@ const renderer = await createCliRenderer({
   exitOnCtrlC: true,
 });
 
+logger.log("About to render App component");
 createRoot(renderer).render(<App />);
+logger.log("App component rendered to root");
