@@ -1,10 +1,7 @@
 use anyhow::{Context, Result};
 use std::{ffi::CStr, os::raw::c_char};
 
-use crate::{
-    telemetry::{panic::setup_panic_handler, tracing::initialize_logging},
-    util::app_config::AppConfig,
-};
+mod telemetry;
 
 pub mod util {
     pub mod app_config;
@@ -18,12 +15,8 @@ pub mod cli {
     pub mod app;
 }
 
-pub mod telemetry {
-    pub mod core;
-    pub mod macros;
-    pub mod panic;
-    pub mod tracing;
-}
+use telemetry::{initialize_logging, setup_panic_handler};
+use util::app_config::AppConfig;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn run_app(args_json: *const c_char) {
@@ -34,25 +27,27 @@ pub extern "C" fn run_app(args_json: *const c_char) {
 }
 
 async fn run_app_async(args_json: *const c_char) -> Result<()> {
-    // Parse the JSON string from C
-    let c_str = unsafe {
-        CStr::from_ptr(args_json)
-            .to_str()
-            .context("Failed to parse C string")?
-    };
-    
-    let args: Vec<String> = serde_json::from_str(c_str)
-        .context("Failed to parse JSON args")?;
-    
-    // Initialize logging
-    initialize_logging().map_err(|e| anyhow::anyhow!("Failed to initialize logging: {}", e))?;
-    
-    // Create app config
+    // Create app config first to get the sentry reporter
     let app_config = AppConfig::new().await?;
+    
+    // Initialize logging with sentry reporter
+    initialize_logging(Some(app_config.sentry_reporter.clone()))?;
+    
+    // Parse the JSON string from C (handle null pointer)
+    let args: Vec<String> = if args_json.is_null() {
+        vec![]
+    } else {
+        let c_str = unsafe {
+            CStr::from_ptr(args_json)
+                .to_str()
+                .context("Failed to parse C string")?
+        };
+        serde_json::from_str(c_str).unwrap_or_default()
+    };
     
     // Setup panic handler
     setup_panic_handler(app_config.sentry_reporter.clone());
     
-    // Run CLI with args
+    // Run CLI with args (empty args will show help)
     cli::app::run_cli_from_args(args, app_config).await
 }
