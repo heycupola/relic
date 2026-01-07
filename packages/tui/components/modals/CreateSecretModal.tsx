@@ -1,5 +1,5 @@
 import type { SecretScope, SecretValueType } from "../../types";
-import { CHAR_LIMITS, THEME_COLORS } from "../../utils/constants";
+import { CHAR_LIMITS, KEY_SYMBOLS, THEME_COLORS } from "../../utils/constants";
 import { TextInput } from "../forms/TextInput";
 import { Modal } from "../shared/Modal";
 
@@ -38,7 +38,7 @@ export function CreateSecretModal({
       width={50}
       height={17}
       shortcuts={[
-        { key: "↵", description: "create" },
+        { key: KEY_SYMBOLS.enter, description: "create" },
         { key: "tab", description: "next" },
         { key: "esc", description: "cancel" },
       ]}

@@ -1,3 +1,4 @@
+import { logger } from "../../utils/debugLog";
 import { getJwtToken, getSessionToken, updateSessionJwt } from "./session";
 
 const SITE_URL = process.env.SITE_URL ?? "http://localhost:3000";
@@ -43,7 +44,7 @@ export async function getOrRefreshJwtToken(): Promise<string | null> {
     await updateSessionJwt(jwtToken, jwtExpiresAt);
     return jwtToken;
   } catch (error) {
-    console.error("Failed to refresh JWT token:", error);
+    logger.error("Failed to refresh JWT token:", error);
     return null;
   }
 }

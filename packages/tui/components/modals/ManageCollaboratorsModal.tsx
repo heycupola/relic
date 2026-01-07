@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useCursorBlink } from "../../hooks/useCursorBlink";
 import { useInlineInput } from "../../hooks/useInlineInput";
 import { usePaste } from "../../hooks/usePaste";
-import { COLLABORATOR_LIMIT, THEME_COLORS } from "../../utils/constants";
+import { COLLABORATOR_LIMIT, KEY_SYMBOLS, THEME_COLORS } from "../../utils/constants";
 import { InlineInput } from "../forms/InlineInput";
 import { Modal } from "../shared/Modal";
 
@@ -149,7 +149,7 @@ function isControlled(
  * />
  */
 export function ManageCollaboratorsModal(props: ManageCollaboratorsModalProps) {
-  const { visible, projectName, collaborators, onClose } = props;
+  const { visible, projectName, collaborators } = props;
 
   if (!visible) return null;
 
@@ -276,7 +276,11 @@ function SmartManageCollaboratorsModal({
       newCollabInput={input.value}
       newCollabCursor={input.cursor}
       cursorVisible={cursorVisible}
-      confirmingDelete={confirmingDelete ? { type: "collab", id: confirmingDelete.id, name: confirmingDelete.email } : null}
+      confirmingDelete={
+        confirmingDelete
+          ? { type: "collab", id: confirmingDelete.id, name: confirmingDelete.email }
+          : null
+      }
     />
   );
 }
@@ -307,7 +311,7 @@ function ManageCollaboratorsDisplay({
 }: ManageCollaboratorsDisplayProps) {
   const shortcuts = creatingCollab
     ? [
-        { key: "↵", description: "add" },
+        { key: KEY_SYMBOLS.enter, description: "add" },
         { key: "esc", description: "cancel" },
       ]
     : [

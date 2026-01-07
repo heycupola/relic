@@ -1,4 +1,4 @@
-import { CHAR_LIMITS } from "../../utils/constants";
+import { CHAR_LIMITS, KEY_SYMBOLS } from "../../utils/constants";
 import { TextInput } from "../forms/TextInput";
 import { Modal } from "../shared/Modal";
 
@@ -53,7 +53,7 @@ export function CreateItemModal({
       width={50}
       height={9}
       shortcuts={[
-        { key: "↵", description: "create" },
+        { key: KEY_SYMBOLS.enter, description: "create" },
         { key: "esc", description: "cancel" },
       ]}
     >
