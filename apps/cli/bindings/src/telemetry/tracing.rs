@@ -1,59 +1,62 @@
 use std::path::PathBuf;
 
-use color_eyre::eyre::Result;
+use anyhow::Result;
 use directories::ProjectDirs;
-use lazy_static::lazy_static;
 use tracing_error::ErrorLayer;
-use tracing_subscriber::{self, Layer, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
-lazy_static! {
-    pub static ref PROJECT_NAME: String = env!("CARGO_CRATE_NAME").to_uppercase().to_string();
-    pub static ref DATA_FOLDER: Option<PathBuf> =
-        std::env::var(format!("{}_DATA", PROJECT_NAME.clone()))
-            .ok()
-            .map(PathBuf::from);
-    pub static ref LOG_ENV: String = format!("{}_LOGLEVEL", PROJECT_NAME.clone());
-    pub static ref LOG_FILE: String = format!("{}.log", env!("CARGO_PKG_NAME"));
-}
+use super::core::SentryReporter;
+use super::sentry_layer::SentryLayer;
+
+const LOG_FILE: &str = "relic.log";
 
 fn project_directory() -> Option<ProjectDirs> {
     ProjectDirs::from("com", "cupolalabs", env!("CARGO_PKG_NAME"))
 }
 
 pub fn get_data_dir() -> PathBuf {
-    let directory = if let Some(s) = DATA_FOLDER.clone() {
-        s
-    } else if let Some(proj_dirs) = project_directory() {
-        proj_dirs.data_local_dir().to_path_buf()
-    } else {
-        PathBuf::from(".").join(".data")
-    };
-    directory
+    std::env::var("RELIC_DATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            project_directory()
+                .map(|p| p.data_local_dir().to_path_buf())
+                .unwrap_or_else(|| PathBuf::from(".").join(".data"))
+        })
 }
 
-pub fn initialize_logging() -> Result<()> {
+pub fn initialize_logging(sentry_reporter: Option<SentryReporter>) -> Result<()> {
     let directory = get_data_dir();
-    std::fs::create_dir_all(directory.clone())?;
-    let log_path = directory.join(LOG_FILE.clone());
+    std::fs::create_dir_all(&directory)?;
+
+    let log_path = directory.join(LOG_FILE);
     let log_file = std::fs::File::create(log_path)?;
-    unsafe {
-        std::env::set_var(
-            "RUST_LOG",
-            std::env::var("RUST_LOG")
-                .or_else(|_| std::env::var(LOG_ENV.clone()))
-                .unwrap_or_else(|_| format!("{}=info", env!("CARGO_CRATE_NAME"))),
-        );
-    }
-    let file_subscriber = tracing_subscriber::fmt::layer()
+
+    let env_filter = tracing_subscriber::filter::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::filter::EnvFilter::new("info"));
+
+    let file_layer = tracing_subscriber::fmt::layer()
         .with_file(true)
         .with_line_number(true)
         .with_writer(log_file)
         .with_target(false)
         .with_ansi(false)
-        .with_filter(tracing_subscriber::filter::EnvFilter::from_default_env());
+        .with_filter(env_filter);
+
+    // Sentry layer only in release builds
+    #[cfg(not(debug_assertions))]
+    let sentry_layer = sentry_reporter.map(|r| SentryLayer::new(r, "relic-cli"));
+
+    #[cfg(debug_assertions)]
+    let sentry_layer: Option<SentryLayer> = {
+        let _ = sentry_reporter;
+        None
+    };
+
     tracing_subscriber::registry()
-        .with(file_subscriber)
+        .with(file_layer)
         .with(ErrorLayer::default())
+        .with(sentry_layer)
         .init();
+
     Ok(())
 }

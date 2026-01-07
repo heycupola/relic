@@ -3,7 +3,7 @@ use std::process::Command;
 
 use convex::ConvexClient;
 
-use crate::telemetry::core::SentryReporter;
+use crate::telemetry::SentryReporter;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const NAME: &str = env!("CARGO_PKG_NAME");
@@ -13,7 +13,7 @@ pub const DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 pub struct AppConfig {
     pub client_id: String,
     pub convex_client: ConvexClient,
-    pub convex_deployment_url: String,
+    pub convex_url: String,
     pub version: String,
     pub name: String,
     pub authors: String,
@@ -21,8 +21,7 @@ pub struct AppConfig {
     pub git_hash: String,
     pub sentry_proxy_url: String,
     pub sentry_reporter: SentryReporter,
-    pub relic_web_url: String,
-    pub better_auth_url: String,
+    pub relic_site_url: String,
     pub runtime_handle: tokio::runtime::Handle,
 }
 
@@ -31,7 +30,7 @@ impl std::fmt::Debug for AppConfig {
         f.debug_struct("AppConfig")
             .field("client_id", &self.client_id)
             .field("convex_client", &"<ConvexClient>")
-            .field("convex_deployment_url", &self.convex_deployment_url)
+            .field("convex_url", &self.convex_url)
             .field("version", &self.version)
             .field("name", &self.name)
             .field("authors", &self.authors)
@@ -39,8 +38,7 @@ impl std::fmt::Debug for AppConfig {
             .field("git_hash", &self.git_hash)
             .field("sentry_proxy_url", &self.sentry_proxy_url)
             .field("sentry_reporter", &"<SentryReporter>")
-            .field("relic_web_url", &self.relic_web_url)
-            .field("better_auth_url", &self.better_auth_url)
+            .field("relic_site_url", &self.relic_site_url)
             .field("runtime_handle", &"RuntimeHandle")
             .finish()
     }
@@ -60,10 +58,10 @@ impl AppConfig {
             dotenvy::from_filename(env_path).ok();
         }
 
-        let convex_deployment_url =
+        let convex_url =
             std::env::var("CONVEX_URL").unwrap_or_else(|_| "http://127.0.0.1:3210".to_string());
 
-        let convex_client = ConvexClient::new(&convex_deployment_url)
+        let convex_client = ConvexClient::new(&convex_url)
             .await
             .context("Failed to create Convex client")?;
 
@@ -74,16 +72,13 @@ impl AppConfig {
 
         let sentry_reporter = SentryReporter::new(sentry_proxy_url.clone());
 
-        let relic_web_url =
-            std::env::var("RELIC_WEB_URL").unwrap_or_else(|_| "https://relic.so".to_string());
-
-        let better_auth_url =
-            std::env::var("BETTER_AUTH_URL").unwrap_or_else(|_| relic_web_url.clone());
+        let relic_site_url =
+            std::env::var("RELIC_SITE_URL").unwrap_or_else(|_| "https://relic.so".to_string());
 
         Ok(Self {
-            client_id: std::env::var("CLIENT_ID").unwrap_or_else(|_| "relic-tui".to_string()),
+            client_id: std::env::var("CLIENT_ID").unwrap_or_else(|_| "relic-cli".to_string()),
             convex_client,
-            convex_deployment_url,
+            convex_url,
             version: VERSION.to_string(),
             name: NAME.to_string(),
             authors: AUTHORS.to_string(),
@@ -91,8 +86,7 @@ impl AppConfig {
             git_hash,
             sentry_proxy_url,
             sentry_reporter,
-            relic_web_url,
-            better_auth_url,
+            relic_site_url,
             runtime_handle: tokio::runtime::Handle::current(),
         })
     }
