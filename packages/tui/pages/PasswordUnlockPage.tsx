@@ -2,12 +2,14 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useEffect, useState } from "react";
 import { InlineInput } from "../components/forms/InlineInput";
 import { GuideBar } from "../components/shared/GuideBar";
+import { Modal } from "../components/shared/Modal";
 import { useTextInput } from "../hooks/useTextInput";
-import { THEME_COLORS } from "../utils/constants";
+import { KEY_SYMBOLS, THEME_COLORS } from "../utils/constants";
 import { verifyPassword } from "../utils/passwordStorage";
 
 interface PasswordUnlockPageProps {
   onUnlock: () => void;
+  onLogout: () => Promise<void>;
 }
 
 /**
@@ -24,11 +26,12 @@ function usePasswordInput() {
   };
 }
 
-export function PasswordUnlockPage({ onUnlock }: PasswordUnlockPageProps) {
+export function PasswordUnlockPage({ onUnlock, onLogout }: PasswordUnlockPageProps) {
   const { width, height } = useTerminalDimensions();
   const passwordInput = usePasswordInput();
   const [error, setError] = useState<string | null>(null);
   const [cursorVisible, setCursorVisible] = useState(true);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => setCursorVisible((prev) => !prev), 530);
@@ -53,13 +56,32 @@ export function PasswordUnlockPage({ onUnlock }: PasswordUnlockPageProps) {
     onUnlock();
   };
 
+  const handleLogout = async () => {
+    await onLogout();
+  };
+
   useKeyboard((key) => {
+    // Logout confirmation modal handlers
+    if (showLogoutModal) {
+      if (key.name === "y") {
+        handleLogout();
+        return;
+      } else if (key.name === "n" || key.name === "escape") {
+        setShowLogoutModal(false);
+        return;
+      }
+    }
+
     if (key.name === "v" && key.ctrl) {
       passwordInput.toggleVisibility();
       return;
     }
     if (key.name === "return") {
       handleSubmit();
+      return;
+    }
+    if ((key.name === "l" && key.ctrl) || key.sequence === "\x0C") {
+      setShowLogoutModal(true);
       return;
     }
     if (key.name === "q") {
@@ -121,7 +143,8 @@ export function PasswordUnlockPage({ onUnlock }: PasswordUnlockPageProps) {
                   {
                     shortcuts: [
                       { key: "^v", description: passwordInput.showPassword ? "hide" : "show" },
-                      { key: "↵", description: "unlock" },
+                      { key: KEY_SYMBOLS.enter, description: "unlock" },
+                      { key: "^l", description: "logout" },
                     ],
                   },
                 ],
@@ -133,6 +156,20 @@ export function PasswordUnlockPage({ onUnlock }: PasswordUnlockPageProps) {
           </box>
         </box>
       </box>
+
+      {/* Logout confirmation modal */}
+      <Modal
+        visible={showLogoutModal}
+        title="Logout"
+        width={45}
+        height={8}
+        shortcuts={[
+          { key: "y", description: "yes" },
+          { key: "n", description: "no" },
+        ]}
+      >
+        <text fg={THEME_COLORS.textDim}>Are you sure you want to logout?</text>
+      </Modal>
     </box>
   );
 }

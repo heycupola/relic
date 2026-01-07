@@ -4,11 +4,12 @@ import { GuideBar } from "../components/shared/GuideBar";
 import { LoginButton } from "../components/shared/LoginButton";
 import { Modal } from "../components/shared/Modal";
 import { type DeviceAuthStatus, useDeviceAuth } from "../convex";
-import { THEME_COLORS } from "../utils/constants";
+import { KEY_SYMBOLS, THEME_COLORS } from "../utils/constants";
+import { logger } from "../utils/debugLog";
 import { createHyperlink } from "../utils/hyperlink";
 
 const SHORTCUT_GROUPS = {
-  primary: [{ shortcuts: [{ key: "↵", description: "sign in" }] }],
+  primary: [{ shortcuts: [{ key: KEY_SYMBOLS.enter, description: "sign in" }] }],
   secondary: [{ shortcuts: [{ key: "↑↓", description: "navigate" }] }],
 };
 
@@ -78,7 +79,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       }, 500);
     },
     onError: (err) => {
-      console.error("Device auth error:", err);
+      logger.error("Device auth error:", err);
     },
   });
 
@@ -135,7 +136,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     try {
       await startAuth();
     } catch (err) {
-      console.error("Failed to start auth:", err);
+      logger.error("Failed to start auth:", err);
     }
   };
 
