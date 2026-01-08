@@ -9,3 +9,4 @@ export { CommandPaletteModal } from "./CommandPaletteModal";
 export { CreateEnvironmentModal, CreateFolderModal, CreateItemModal } from "./CreateItemModal";
 export { CreateSecretModal } from "./CreateSecretModal";
 export { ManageCollaboratorsModal } from "./ManageCollaboratorsModal";
+export { PasswordChangeWarningModal } from "./PasswordChangeWarningModal";
