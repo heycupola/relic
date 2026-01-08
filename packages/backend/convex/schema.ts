@@ -98,7 +98,7 @@ export default defineSchema({
     projectName: v.optional(v.string()),
     environmentId: v.optional(v.id("environment")),
     environmentName: v.optional(v.string()),
-    userId: v.id("user"),
+    userId: v.string(),
     action: v.union(
       v.literal("user.keys_created"),
       v.literal("user.password_changed"),

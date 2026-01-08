@@ -12,7 +12,7 @@ import type { ProtectedActionCtx } from "./lib/types";
 export const _insertActionLog = internalMutation({
   args: {
     projectId: v.optional(v.id("project")),
-    userId: v.id("user"),
+    userId: v.string(),
     action: v.union(
       v.literal("user.keys_created"),
       v.literal("user.password_changed"),
@@ -87,7 +87,7 @@ export const _logSecretAction = internalMutation({
     secretId: v.optional(v.id("secret")),
     key: v.optional(v.string()),
     newKey: v.optional(v.string()),
-    userId: v.id("user"),
+    userId: v.string(),
     secretAction: v.union(
       v.literal("secret.created"),
       v.literal("secret.updated"),

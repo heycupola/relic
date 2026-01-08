@@ -305,13 +305,13 @@ export const _loadProjectById = internalQuery({
 
 export const _loadActiveProjectsByOwner = internalQuery({
   args: {
-    ownerId: v.id("user"),
+    ownerId: v.string(),
   },
   returns: v.array(doc(schema, "project")),
   handler: async (ctx, args) => {
     const projects = await ctx.db
       .query("project")
-      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId.toString()))
+      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
       .filter((q) => q.eq(q.field("isArchived"), false))
       .collect();
 
@@ -323,9 +323,9 @@ export const _insertProject = internalMutation({
   args: {
     name: v.string(),
     // description: v.optional(v.string()),
-    ownerId: v.id("user"),
+    ownerId: v.string(),
     encryptedProjectKey: v.string(),
-    createdBy: v.id("user"),
+    createdBy: v.string(),
   },
   returns: v.object({ success: v.boolean(), projectId: v.id("project") }),
   handler: async (ctx, args) => {
@@ -334,7 +334,7 @@ export const _insertProject = internalMutation({
 
     const existingProjects = await ctx.db
       .query("project")
-      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId.toString()))
+      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
       .filter((q) => q.eq(q.field("isArchived"), false))
       .filter((q) => q.eq(q.field("slug"), slug))
       .collect();
@@ -347,7 +347,7 @@ export const _insertProject = internalMutation({
       name: args.name,
       slug,
       // description: args.description,
-      ownerId: args.ownerId.toString(),
+      ownerId: args.ownerId,
       encryptedProjectKey: args.encryptedProjectKey,
       keyVersion: 1,
       share_usage_count: 0,

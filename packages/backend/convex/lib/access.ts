@@ -75,7 +75,7 @@ export async function syncUserPlanStatus(
   }
 
   const projects = await ctx.runQuery(internal.project._loadActiveProjectsByOwner, {
-    ownerId: user._id as BetterAuthId<"user">,
+    ownerId: ctx.userId,
   });
 
   return {
@@ -172,7 +172,7 @@ export async function isProjectAccessible(
     // Only check restriction if owner has been downgraded (planDowngradedAt exists)
     if (owner.planDowngradedAt && !owner.hasPro && !ownerInGracePeriod) {
       const ownerProjects = await ctx.runQuery(internal.project._loadActiveProjectsByOwner, {
-        ownerId: owner._id as BetterAuthId<"user">,
+        ownerId: project.ownerId,
       });
 
       const accessibleProjectIds = getAccessibleProjectIds(ownerProjects);

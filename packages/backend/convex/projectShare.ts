@@ -108,7 +108,7 @@ export const shareProject = protectedAction({
 
     const { shareId } = await ctx.runMutation(internal.projectShare._insertProjectShare, {
       projectId: args.projectId,
-      userId: targetUser._id as BetterAuthId<"user">,
+      userId: targetUser._id,
       encryptedProjectKey: args.encryptedProjectKey,
       sharedBy: ctx.userId,
     });
@@ -585,13 +585,13 @@ export const _loadActiveSharesByProject = internalQuery({
 
 export const _loadActiveSharesByUser = internalQuery({
   args: {
-    userId: v.id("user"),
+    userId: v.string(),
   },
   returns: v.array(doc(schema, "projectShare")),
   handler: async (ctx, args) => {
     const shares = await ctx.db
       .query("projectShare")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId.toString()))
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .filter((q) => q.eq(q.field("revokedAt"), undefined))
       .collect();
 
@@ -602,14 +602,14 @@ export const _loadActiveSharesByUser = internalQuery({
 export const _loadActiveShareByProjectAndUser = internalQuery({
   args: {
     projectId: v.id("project"),
-    userId: v.id("user"),
+    userId: v.string(),
   },
   returns: v.union(doc(schema, "projectShare"), v.null()),
   handler: async (ctx, args) => {
     const shares = await ctx.db
       .query("projectShare")
       .withIndex("by_project_user", (q) =>
-        q.eq("projectId", args.projectId).eq("userId", args.userId.toString()),
+        q.eq("projectId", args.projectId).eq("userId", args.userId),
       )
       .filter((q) => q.eq(q.field("revokedAt"), undefined))
       .collect();
@@ -621,9 +621,9 @@ export const _loadActiveShareByProjectAndUser = internalQuery({
 export const _insertProjectShare = internalMutation({
   args: {
     projectId: v.id("project"),
-    userId: v.id("user"),
+    userId: v.string(),
     encryptedProjectKey: v.string(),
-    sharedBy: v.id("user"),
+    sharedBy: v.string(),
   },
   returns: v.object({ success: v.boolean(), shareId: v.id("projectShare") }),
   handler: async (ctx, args) => {
@@ -631,9 +631,9 @@ export const _insertProjectShare = internalMutation({
 
     const shareId = await ctx.db.insert("projectShare", {
       projectId: args.projectId,
-      userId: args.userId.toString(),
+      userId: args.userId,
       encryptedProjectKey: args.encryptedProjectKey,
-      sharedBy: args.sharedBy.toString(),
+      sharedBy: args.sharedBy,
       sharedAt: now,
       createdAt: now,
       updatedAt: now,
