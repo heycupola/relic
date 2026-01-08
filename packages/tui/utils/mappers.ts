@@ -21,7 +21,7 @@ import type {
  */
 export function mapApiProject(apiProject: ApiProject): Project {
   return {
-    id: apiProject._id,
+    id: apiProject.id,
     name: apiProject.name,
     status: apiProject.status,
   };
