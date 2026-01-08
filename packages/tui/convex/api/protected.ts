@@ -74,7 +74,8 @@ export class ProtectedApi {
 
   // User Keys
   async hasUserKeys(): Promise<boolean> {
-    return this.withAuth(() => this.client.query("userKey:hasUserKeys", {}));
+    const result = await this.withAuth(() => this.client.query("userKey:hasUserKeys", {}));
+    return result.hasKeys;
   }
 
   async storeUserKeys(args: {
@@ -86,7 +87,12 @@ export class ProtectedApi {
   }
 
   async updatePassword(args: { encryptedPrivateKey: string; salt: string }): Promise<void> {
-    return this.withAuth(() => this.client.mutation("userKey:updatePassword", args));
+    return this.withAuth(() =>
+      this.client.mutation("userKey:updatePassword", {
+        newEncryptedPrivateKey: args.encryptedPrivateKey,
+        newSalt: args.salt,
+      }),
+    );
   }
 
   async rotateUserKeys(args: {
@@ -101,7 +107,8 @@ export class ProtectedApi {
 
   // Projects
   async listProjects(): Promise<ProjectListItem[]> {
-    return this.withAuth(() => this.client.query("project:listUserProjects", {}));
+    const result = await this.withAuth(() => this.client.query("project:listUserProjects", {}));
+    return result.projects;
   }
 
   async getProject(projectId: string): Promise<Project> {

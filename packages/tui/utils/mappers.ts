@@ -7,21 +7,14 @@ import type {
   SharedUser as ApiSharedUser,
   User as ApiUser,
 } from "../convex/api/types";
-import type {
-  Environment,
-  Folder,
-  Project,
-  ProjectStatus,
-  Secret,
-  SharedUser,
-} from "../types/models";
+import type { Environment, Folder, Project, Secret, SharedUser } from "../types/models";
 
 /**
  * Maps API ProjectListItem to TUI Project type
  */
 export function mapApiProject(apiProject: ApiProject): Project {
   return {
-    id: apiProject.id,
+    id: apiProject._id,
     name: apiProject.name,
     status: apiProject.status,
   };

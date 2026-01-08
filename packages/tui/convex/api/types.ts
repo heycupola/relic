@@ -55,7 +55,7 @@ export interface Project {
 }
 
 export interface ProjectListItem {
-  id: string;
+  _id: string;
   name: string;
   slug: string;
   status: ProjectStatus;

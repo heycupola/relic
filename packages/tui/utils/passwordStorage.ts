@@ -2,11 +2,11 @@ import { unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import { secrets } from "bun";
 import { logger } from "./debugLog";
+import { clearMasterKeyCache } from "./masterKeyCache";
 import { ensureRelicDir, RELIC_PASSWORD_FILE } from "./paths";
 
 const SECRETS_SERVICE = "com.relic.tui";
 const SECRETS_NAME = "master-password";
-// Cross-platform legacy password file location
 const HOME = process.env.HOME || process.env.USERPROFILE || "~";
 const LEGACY_PASSWORD_FILE = resolve(HOME, ".relic_password");
 
@@ -21,7 +21,7 @@ async function migrateLegacyPassword(): Promise<void> {
         try {
           await unlink(LEGACY_PASSWORD_FILE);
         } catch {
-          // Ignore if file doesn't exist
+          // Intentionally ignore - file may not exist
         }
         logger.log("Migrated password from legacy location to ~/.relic/password");
       }
@@ -123,6 +123,7 @@ export async function hasPassword(): Promise<boolean> {
 
 export async function savePassword(password: string): Promise<void> {
   await savePasswordToStorage(password);
+  clearMasterKeyCache();
 }
 
 export async function verifyPassword(password: string): Promise<boolean> {
@@ -132,4 +133,5 @@ export async function verifyPassword(password: string): Promise<boolean> {
 
 export async function clearPassword(): Promise<void> {
   await deletePasswordFromStorage();
+  clearMasterKeyCache();
 }
