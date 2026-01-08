@@ -1,10 +1,10 @@
+import { createProjectKey } from "@repo/crypto";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, components, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { ErrorCode } from "../convex/lib/errors.ts";
 import schema from "../convex/schema";
-import { createProjectKey } from "./helpers/crypto";
 import {
   betterAuthModules,
   expectConvexError,

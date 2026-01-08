@@ -1,9 +1,3 @@
-import { convexTest, type TestConvex } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { api, internal } from "../convex/_generated/api";
-import { ErrorCode } from "../convex/lib/errors.ts";
-import * as projectShareModule from "../convex/projectShare";
-import schema from "../convex/schema";
 import {
   createProjectKey,
   decryptSecret,
@@ -11,7 +5,13 @@ import {
   importPublicKey,
   unwrapAESKeyWithRSA,
   wrapAESKeyWithRSA,
-} from "./helpers/crypto";
+} from "@repo/crypto";
+import { convexTest, type TestConvex } from "convex-test";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { api, internal } from "../convex/_generated/api";
+import { ErrorCode } from "../convex/lib/errors.ts";
+import * as projectShareModule from "../convex/projectShare";
+import schema from "../convex/schema";
 import {
   betterAuthModules,
   expectConvexError,

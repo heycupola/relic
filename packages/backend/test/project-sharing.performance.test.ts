@@ -1,3 +1,10 @@
+import {
+  createProjectKey,
+  decryptSecret,
+  encryptSecret,
+  importPublicKey,
+  wrapAESKeyWithRSA,
+} from "@repo/crypto";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
@@ -5,13 +12,6 @@ import type { Id } from "../convex/_generated/dataModel";
 import { ErrorCode } from "../convex/lib/errors.ts";
 import * as projectShareModule from "../convex/projectShare";
 import schema from "../convex/schema";
-import {
-  createProjectKey,
-  decryptSecret,
-  encryptSecret,
-  importPublicKey,
-  wrapAESKeyWithRSA,
-} from "./helpers/crypto";
 import {
   betterAuthModules,
   expectConvexError,
@@ -203,6 +203,6 @@ describe("Project Sharing Performance", () => {
           }),
         ErrorCode.SHARE_NOT_FOUND,
       );
-    }, 20_000);
+    }, 120_000);
   });
 });

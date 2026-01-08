@@ -32,6 +32,7 @@
     "@convex-dev/resend": "^0.2.3",
     "@react-email/components": "^1.0.2",
     "@react-email/render": "^2.0.0",
+    "@repo/crypto": "*",
     "@useautumn/convex": "^0.0.12",
     "better-auth": "catalog:",
     "convex": "catalog:",

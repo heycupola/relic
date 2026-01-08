@@ -1,15 +1,16 @@
-# tui
+# @repo/tui
 
-To install dependencies:
+Terminal UI application for Relic built with React and Bun. Provides an interactive command-line interface for managing secrets and projects.
 
-```bash
-bun install
-```
-
-To run:
+## Usage
 
 ```bash
-bun run index.tsx
+bun start
 ```
 
-This project was created using `bun init` in bun v1.3.2. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+## Development
+
+```bash
+bun start        # Start with hot reload
+bun run debug    # Start with debug logging
+```
