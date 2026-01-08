@@ -115,7 +115,6 @@ export function TextInput(props: TextInputProps) {
     showPassword = false,
   } = props;
 
-  // Smart/uncontrolled mode
   if (!isControlled(props)) {
     return (
       <SmartTextInput
@@ -131,7 +130,6 @@ export function TextInput(props: TextInputProps) {
     );
   }
 
-  // Controlled mode - just render
   const { value, cursor, cursorVisible } = props;
 
   return (
@@ -170,28 +168,23 @@ function SmartTextInput({
   const input = useTextInput({ maxLength: maxLength ?? 1000, initialValue });
   const cursorVisible = useCursorBlink(active);
 
-  // Track if we've already submitted to prevent double-submit
   const submittedRef = useRef(false);
 
-  // Reset submitted flag when becoming active again
   useEffect(() => {
     if (active) {
       submittedRef.current = false;
     }
   }, [active]);
 
-  // Notify parent of value changes
   useEffect(() => {
     onChange?.(input.value);
   }, [input.value, onChange]);
 
-  // Handle paste
   usePaste((text) => {
     if (!active) return;
     input.handlePaste(text);
   });
 
-  // Handle keyboard
   useKeyboard((key) => {
     if (!active) return;
 
@@ -212,7 +205,6 @@ function SmartTextInput({
       return;
     }
 
-    // Delegate to input hook
     input.handleKey(key);
   });
 
@@ -260,10 +252,13 @@ function TextInputDisplay({
   isPassword,
   showPassword,
 }: TextInputDisplayProps) {
-  // Mask password if needed
   const displayValue = isPassword && !showPassword ? "•".repeat(value.length) : value;
 
-  const { displayText, displayCursorPos } = getDisplayTextWithCursor(displayValue, cursor, width - 2);
+  const { displayText, displayCursorPos } = getDisplayTextWithCursor(
+    displayValue,
+    cursor,
+    width - 2,
+  );
   const before = displayText.slice(0, displayCursorPos);
   const charAtCursor = displayText[displayCursorPos] || " ";
   const after = displayText.slice(displayCursorPos + 1);

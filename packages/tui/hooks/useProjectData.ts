@@ -5,43 +5,33 @@ import type { Environment, Folder, Secret, SharedUser } from "../types/models";
 import { mapApiEnvironment, mapApiFolder, mapApiSecret, mapApiSharedUser } from "../utils/mappers";
 
 interface UseProjectDataReturn {
-  // Project info
   project: ApiProject | null;
 
-  // Environments
   environments: Environment[];
 
-  // Current environment data
   currentEnvironmentData: {
     folders: Folder[];
     secrets: Secret[];
   } | null;
 
-  // Shared users
   sharedUsers: SharedUser[];
 
-  // Loading states
   isLoading: boolean;
   isLoadingEnvironmentData: boolean;
 
-  // Error states
   error: Error | null;
 
-  // Actions
   refetch: () => Promise<void>;
   loadEnvironmentData: (environmentId: string) => Promise<void>;
 
-  // Environment CRUD
   createEnvironment: (name: string, color?: string) => Promise<string | undefined>;
   updateEnvironment: (environmentId: string, name: string, color?: string) => Promise<void>;
   deleteEnvironment: (environmentId: string) => Promise<void>;
 
-  // Folder CRUD
   createFolder: (environmentId: string, name: string) => Promise<string | undefined>;
   updateFolder: (folderId: string, name: string) => Promise<void>;
   deleteFolder: (folderId: string) => Promise<void>;
 
-  // Secret CRUD (encrypted values handled by caller)
   createSecret: (args: {
     environmentId: string;
     folderId?: string;
@@ -61,7 +51,6 @@ interface UseProjectDataReturn {
   }) => Promise<void>;
   deleteSecret: (secretId: string) => Promise<void>;
 
-  // Sharing
   shareProject: (email: string, encryptedProjectKey: string) => Promise<void>;
   revokeShare: (shareId: string) => Promise<void>;
 }
@@ -98,13 +87,8 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
         const shares = await api.listProjectShares(projectId);
         setSharedUsers(shares.map(mapApiSharedUser));
       } catch {
-        // User may not have permission to list shares
         setSharedUsers([]);
       }
-
-      // Note: We need to fetch environments from the project data
-      // Since the API returns project with environments, we extract them
-      // For now, we'll fetch environment data when user selects one
     } catch (err) {
       setError(err instanceof Error ? err : new Error("Failed to fetch project data"));
     } finally {
@@ -118,7 +102,6 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
     }
   }, [api, isApiLoading, fetchProjectData]);
 
-  // Load environment data (folders + secrets)
   const loadEnvironmentData = useCallback(
     async (environmentId: string) => {
       if (!api) return;
@@ -128,10 +111,8 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
       try {
         const envData = await api.getEnvironmentData(environmentId);
 
-        // Map the environment to our local format
         const mappedEnv = mapApiEnvironment(envData.environment);
 
-        // Update environments list if not already there
         setEnvironments((prev) => {
           const exists = prev.some((e) => e.id === mappedEnv.id);
           if (!exists) {
@@ -200,7 +181,6 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
     [api, fetchProjectData],
   );
 
-  // Folder CRUD
   const createFolder = useCallback(
     async (environmentId: string, name: string): Promise<string | undefined> => {
       if (!api) return undefined;
@@ -223,7 +203,6 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
 
       try {
         await api.updateFolder({ folderId, name });
-        // Refresh current environment data if we have one
         if (currentEnvironmentData) {
           const folder = currentEnvironmentData.folders.find((f) => f.id === folderId);
           if (folder) {
@@ -243,7 +222,6 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
       if (!api) return;
 
       try {
-        // Get environment ID before deleting
         const folder = currentEnvironmentData?.folders.find((f) => f.id === folderId);
         const environmentId = folder?.environmentId;
 
@@ -260,7 +238,6 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
     [api, currentEnvironmentData, loadEnvironmentData],
   );
 
-  // Secret CRUD
   const createSecret = useCallback(
     async (args: {
       environmentId: string;
@@ -298,7 +275,6 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
 
       try {
         await api.updateSecret(args);
-        // Find the secret's environment to refresh
         const secret = currentEnvironmentData?.secrets.find((s) => s.id === args.secretId);
         if (secret) {
           await loadEnvironmentData(secret.environmentId);
@@ -316,7 +292,6 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
       if (!api) return;
 
       try {
-        // Get environment ID before deleting
         const secret = currentEnvironmentData?.secrets.find((s) => s.id === secretId);
         const environmentId = secret?.environmentId;
 
@@ -333,7 +308,6 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
     [api, currentEnvironmentData, loadEnvironmentData],
   );
 
-  // Sharing
   const shareProject = useCallback(
     async (email: string, encryptedProjectKey: string): Promise<void> => {
       if (!api) return;

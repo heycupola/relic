@@ -44,7 +44,6 @@ export function useApi(): UseApiReturn {
   };
 }
 
-// Convenience hook for making API calls with automatic loading/error state
 interface UseApiCallOptions<T> {
   onSuccess?: (data: T) => void;
   onError?: (error: Error) => void;

@@ -34,7 +34,6 @@ interface ProjectPageProps {
   projectStatus: ProjectStatus;
 }
 
-// Mock data (will be replaced with real API)
 const MOCK_ENVIRONMENTS: Environment[] = [
   { id: "env1", name: "production" },
   { id: "env2", name: "staging" },
@@ -118,14 +117,12 @@ export function ProjectPage({
   const { goBack: routerGoBack } = useRouter();
   const { runTask, showSuccess } = useTaskQueue();
 
-  // Data state (will come from API)
   const [environments] = useState<Environment[]>(MOCK_ENVIRONMENTS);
   const [folders] = useState<Folder[]>(MOCK_FOLDERS);
   const [secrets] = useState<Secret[]>(MOCK_SECRETS);
   const [sharedUsers] = useState<SharedUser[]>(MOCK_SHARED_USERS);
   const [logs] = useState<LogEntry[]>(MOCK_LOGS);
 
-  // Navigation state
   const [viewLevel, setViewLevel] = useState<ViewLevel>("environments");
   const [selectedEnvId, setSelectedEnvId] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -133,10 +130,8 @@ export function ProjectPage({
   const [scrollOffset, setScrollOffset] = useState(0);
   const [showSecrets, setShowSecrets] = useState(false);
 
-  // Modal state
   const [activeModal, setActiveModal] = useState<ModalType>("none");
 
-  // Inline editing state
   const [creatingItem, setCreatingItem] = useState<"env" | "folder" | null>(null);
   const [editingItem, setEditingItem] = useState<{
     type: "env" | "folder";
@@ -149,7 +144,6 @@ export function ProjectPage({
     name: string;
   } | null>(null);
 
-  // Bulk import state
   const bulkImportInput = useMultilineInput({ maxLines: 50 });
   const [bulkImportFormat, setBulkImportFormat] = useState<BulkImportFormat>("env");
   const [bulkImportCollisions, setBulkImportCollisions] = useState<CollisionInfo[]>([]);
@@ -157,7 +151,6 @@ export function ProjectPage({
 
   const isRestricted = projectStatus === "restricted" || projectStatus === "archived";
 
-  // Computed values
   const selectedEnv = environments.find((e) => e.id === selectedEnvId);
   const selectedFolder = folders.find((f) => f.id === selectedFolderId);
 
@@ -195,7 +188,6 @@ export function ProjectPage({
 
   const items = getCurrentItems();
 
-  // Bulk import collision detection
   useEffect(() => {
     if (activeModal !== "bulkImport") return;
     const trimmed = bulkImportInput.value.trim();
@@ -223,14 +215,12 @@ export function ProjectPage({
     }
   }, [bulkImportInput.value, bulkImportFormat, activeModal, secrets]);
 
-  // Paste handler for bulk import
   usePaste((text) => {
     if (activeModal === "bulkImport") {
       bulkImportInput.handlePaste(text);
     }
   });
 
-  // Navigation
   const moveUp = () => {
     if (items.length === 0) return;
     setSelectedIndex((prev) => {
@@ -282,7 +272,6 @@ export function ProjectPage({
     setScrollOffset(0);
   };
 
-  // Action handlers
   const handleCreateItem = async (name: string) => {
     if (!creatingItem) return;
     const itemType = creatingItem === "env" ? "environment" : "folder";
@@ -332,7 +321,6 @@ export function ProjectPage({
     showSuccess(`${collab.email} revoked`);
   };
 
-  // Commands
   const getAllCommands = () => {
     const cmds = [];
     if (viewLevel === "environments") {
@@ -470,12 +458,9 @@ export function ProjectPage({
     setActiveModal("bulkImport");
   };
 
-  // Main keyboard handler
   useKeyboard((key) => {
-    // Skip if inline editing is active
     if (creatingItem || editingItem) return;
 
-    // Bulk import modal
     if (activeModal === "bulkImport") {
       if (key.name === "escape") {
         setActiveModal("none");
@@ -516,7 +501,7 @@ export function ProjectPage({
           setActiveModal("none");
           bulkImportInput.reset();
         } catch {
-          /* ignore */
+          // ignore
         }
         return;
       }
@@ -524,17 +509,14 @@ export function ProjectPage({
       return;
     }
 
-    // Other modals handled by smart components
     if (activeModal === "commandPalette" || activeModal === "manageCollaborators") return;
 
-    // Delete confirmation
     if (confirmingDelete) {
       if (key.name === "y") handleDeleteItem();
       else if (key.name === "n" || key.name === "escape") setConfirmingDelete(null);
       return;
     }
 
-    // Navigation & actions
     if (key.name === "escape" || key.name === "backspace") {
       goBack();
       setConfirmingDelete(null);
@@ -575,7 +557,6 @@ export function ProjectPage({
     else if (key.sequence === "?") setActiveModal("commandPalette");
   });
 
-  // Dynamic shortcuts
   const getShortcuts = () => {
     if (creatingItem || editingItem) {
       return {
@@ -645,7 +626,6 @@ export function ProjectPage({
           paddingLeft={2}
           paddingRight={2}
         >
-          {/* Breadcrumb */}
           <box
             height={1}
             width={66}
@@ -681,7 +661,6 @@ export function ProjectPage({
             </text>
           </box>
 
-          {/* Item list */}
           <box
             flexDirection="column"
             width={66}
@@ -784,7 +763,6 @@ export function ProjectPage({
             )}
           </box>
 
-          {/* Footer info */}
           <box flexDirection="column" marginTop={1}>
             {viewLevel === "environments" && logs.length > 0 && (
               <box height={1} width={66}>
@@ -808,7 +786,6 @@ export function ProjectPage({
             </box>
           </box>
 
-          {/* Guide bar */}
           {(activeModal === "none" || activeModal === "commandPalette") && (
             <box marginTop={1}>
               <GuideBar
@@ -823,7 +800,6 @@ export function ProjectPage({
         </box>
       </box>
 
-      {/* Modals */}
       <ManageCollaboratorsModal
         visible={activeModal === "manageCollaborators"}
         projectName={projectName}

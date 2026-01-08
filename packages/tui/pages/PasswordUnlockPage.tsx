@@ -61,7 +61,6 @@ export function PasswordUnlockPage({ onUnlock, onLogout }: PasswordUnlockPagePro
   };
 
   useKeyboard((key) => {
-    // Logout confirmation modal handlers
     if (showLogoutModal) {
       if (key.name === "y") {
         handleLogout();
@@ -157,7 +156,6 @@ export function PasswordUnlockPage({ onUnlock, onLogout }: PasswordUnlockPagePro
         </box>
       </box>
 
-      {/* Logout confirmation modal */}
       <Modal
         visible={showLogoutModal}
         title="Logout"

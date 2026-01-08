@@ -6,6 +6,7 @@ import { CommandPaletteModal } from "../components/modals/CommandPaletteModal";
 import { DeleteConfirmation } from "../components/shared/DeleteConfirmation";
 import { GuideBar } from "../components/shared/GuideBar";
 import { Modal } from "../components/shared/Modal";
+import { useUserKeys } from "../convex/hooks/useUserKeys";
 import { useAppSession } from "../hooks/useAppSession";
 import { useProjects } from "../hooks/useProjects";
 import { useTaskQueue } from "../hooks/useTaskQueue";
@@ -13,7 +14,6 @@ import { useRouter } from "../router";
 import type { ModalType, ProjectStatus } from "../types";
 import { KEY_SYMBOLS, STATUS_COLORS, THEME_COLORS } from "../utils/constants";
 import { logger } from "../utils/debugLog";
-import { useUserKeys } from "../convex/hooks/useUserKeys";
 
 const STATUS_ICONS: Record<ProjectStatus, string> = {
   owned: "●",
@@ -30,7 +30,6 @@ export function HomePage() {
   const { logout } = useAppSession();
   const { runTask, showSuccess } = useTaskQueue();
 
-  // Fetch real projects from API
   const {
     projects,
     isLoading: isLoadingProjects,
@@ -39,37 +38,31 @@ export function HomePage() {
     refetch: refetchProjects,
   } = useProjects();
 
-  // Get user's public key for project creation
   const { publicKey, hasKeys, isLoading: isLoadingKeys } = useUserKeys();
 
-  // UI state
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [activeModal, setActiveModal] = useState<ModalType>("none");
 
-  // Inline editing state - always start as null
   const [creatingProject, setCreatingProject] = useState(false);
   const [editingProject, setEditingProject] = useState<{ id: string; name: string } | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState<{ id: string; name: string } | null>(
     null,
   );
 
-  // Computed validated states - only consider states valid if project still exists
-  const validatedEditingProject = editingProject && projects.some(p => p.id === editingProject.id)
-    ? editingProject
-    : null;
-  const validatedConfirmingDelete = confirmingDelete && projects.some(p => p.id === confirmingDelete.id)
-    ? confirmingDelete
-    : null;
+  const validatedEditingProject =
+    editingProject && projects.some((p) => p.id === editingProject.id) ? editingProject : null;
+  const validatedConfirmingDelete =
+    confirmingDelete && projects.some((p) => p.id === confirmingDelete.id)
+      ? confirmingDelete
+      : null;
 
-  // Validate selectedIndex separately
   useEffect(() => {
     if (!isLoadingProjects && projects.length > 0 && selectedIndex >= projects.length) {
       setSelectedIndex(0);
     }
   }, [isLoadingProjects, projects.length, selectedIndex]);
 
-  // Navigation helpers
   const moveUp = () => {
     if (projects.length === 0) return;
     setSelectedIndex((prev) => {
@@ -95,7 +88,6 @@ export function HomePage() {
     navigate({ name: "project", projectId, projectName, projectStatus });
   };
 
-  // Action handlers
   const handleCreateProject = async (name: string) => {
     if (!hasKeys || !publicKey) {
       logger.error("Cannot create project: User has no keys");
@@ -159,7 +151,6 @@ export function HomePage() {
     await logout();
   };
 
-  // Command palette
   const commands = [
     { key: "n", description: "Create project", category: "Create" },
     { key: "u", description: "Rename project", category: "Manage" },
@@ -193,12 +184,9 @@ export function HomePage() {
     }
   };
 
-  // Main keyboard handler
   useKeyboard((key) => {
-    // Skip if inline editing is active
     if (creatingProject || editingProject) return;
 
-    // Modal handlers
     if (activeModal === "logout") {
       if (key.name === "y") handleLogout();
       else if (key.name === "n" || key.name === "escape") setActiveModal("none");
@@ -212,14 +200,12 @@ export function HomePage() {
 
     if (activeModal === "commandPalette") return;
 
-    // Delete confirmation
     if (confirmingDelete) {
       if (key.name === "y") handleArchiveProject();
       else if (key.name === "n" || key.name === "escape") setConfirmingDelete(null);
       return;
     }
 
-    // Navigation
     if (key.name === "k" || key.name === "up") {
       moveUp();
       setConfirmingDelete(null);
@@ -238,7 +224,9 @@ export function HomePage() {
       if (!isLoadingKeys && hasKeys && publicKey) {
         setCreatingProject(true);
       } else if (!isLoadingKeys && !hasKeys) {
-        logger.error("Cannot create project: User has no encryption keys. Please set up your password first.");
+        logger.error(
+          "Cannot create project: User has no encryption keys. Please set up your password first.",
+        );
       }
     } else if (key.name === "u") {
       const project = projects[selectedIndex];
@@ -256,7 +244,6 @@ export function HomePage() {
     }
   });
 
-  // Dynamic shortcuts for guide bar
   const getShortcuts = () => {
     if (creatingProject) {
       return {
@@ -320,7 +307,6 @@ export function HomePage() {
           paddingLeft={2}
           paddingRight={2}
         >
-          {/* Logo */}
           <box height={7} justifyContent="center" alignItems="center">
             <ascii-font text="relic" font="block" />
           </box>
@@ -328,7 +314,6 @@ export function HomePage() {
             <text fg={THEME_COLORS.textMuted}>Zero-knowledge secret management</text>
           </box>
 
-          {/* Projects header */}
           <box
             height={1}
             width={52}
@@ -348,7 +333,6 @@ export function HomePage() {
             </text>
           </box>
 
-          {/* Project list */}
           <box
             flexDirection="column"
             width={52}
@@ -356,9 +340,11 @@ export function HomePage() {
               projects.length === 0 && !creatingProject
                 ? 1
                 : Math.min(
-                  projects.length + (creatingProject ? 1 : 0) + (validatedConfirmingDelete ? 1 : 0),
-                  PAGE_SIZE + (validatedConfirmingDelete ? 1 : 0),
-                )
+                    projects.length +
+                      (creatingProject ? 1 : 0) +
+                      (validatedConfirmingDelete ? 1 : 0),
+                    PAGE_SIZE + (validatedConfirmingDelete ? 1 : 0),
+                  )
             }
           >
             {isLoadingProjects ? (
@@ -371,8 +357,11 @@ export function HomePage() {
                   const actualIndex = index + scrollOffset;
                   const isSelected =
                     actualIndex === selectedIndex && !creatingProject && !validatedEditingProject;
-                  const isEditing = validatedEditingProject !== null && validatedEditingProject?.id === project.id;
-                  const isDeleting = validatedConfirmingDelete !== null && validatedConfirmingDelete?.id === project.id;
+                  const isEditing =
+                    validatedEditingProject !== null && validatedEditingProject?.id === project.id;
+                  const isDeleting =
+                    validatedConfirmingDelete !== null &&
+                    validatedConfirmingDelete?.id === project.id;
 
                   return (
                     <box key={project.id} flexDirection="column">
@@ -437,7 +426,6 @@ export function HomePage() {
             )}
           </box>
 
-          {/* Guide bar */}
           {(activeModal === "none" || creatingProject || activeModal === "commandPalette") && (
             <box marginTop={1}>
               <GuideBar
@@ -451,7 +439,6 @@ export function HomePage() {
         </box>
       </box>
 
-      {/* Modals */}
       <Modal
         visible={activeModal === "logout"}
         title="Logout"

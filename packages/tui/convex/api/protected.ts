@@ -67,12 +67,10 @@ export class ProtectedApi {
     await this.ensureAuth();
   }
 
-  // User
   async getCurrentUser(): Promise<User> {
     return this.withAuth(() => this.client.query("user:getCurrentUser", {}));
   }
 
-  // User Keys
   async hasUserKeys(): Promise<boolean> {
     const result = await this.withAuth(() => this.client.query("userKey:hasUserKeys", {}));
     return result.hasKeys;
@@ -105,7 +103,6 @@ export class ProtectedApi {
     return this.withAuth(() => this.client.mutation("userKey:rotateUserKeys", args));
   }
 
-  // Projects
   async listProjects(): Promise<ProjectListItem[]> {
     const result = await this.withAuth(() => this.client.query("project:listUserProjects", {}));
     return result.projects;
@@ -135,7 +132,6 @@ export class ProtectedApi {
     return this.withAuth(() => this.client.action("project:getLimits", {}));
   }
 
-  // Environments
   async getEnvironmentData(environmentId: string): Promise<EnvironmentData> {
     return this.withAuth(() =>
       this.client.query("environment:getEnvironmentData", { environmentId }),
@@ -164,7 +160,6 @@ export class ProtectedApi {
     );
   }
 
-  // Folders
   async createFolder(args: { environmentId: string; name: string }): Promise<string> {
     return this.withAuth(() => this.client.mutation("folder:createFolder", args));
   }
@@ -177,7 +172,6 @@ export class ProtectedApi {
     return this.withAuth(() => this.client.mutation("folder:deleteFolder", { folderId }));
   }
 
-  // Secrets
   async createSecret(args: {
     environmentId: string;
     folderId?: string;
@@ -209,7 +203,6 @@ export class ProtectedApi {
     return this.withAuth(() => this.client.mutation("secret:deleteSecret", { secretId }));
   }
 
-  // Project Sharing
   async shareProject(args: {
     projectId: string;
     email: string;
@@ -249,7 +242,6 @@ export class ProtectedApi {
     return this.withAuth(() => this.client.action("projectShare:revokeShareWithRotation", args));
   }
 
-  // Pro Plan
   async getProPlan(): Promise<{ url: string }> {
     return this.withAuth(() => this.client.action("user:getProPlan", {}));
   }
