@@ -1,5 +1,5 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { InlineInput } from "../components/forms/InlineInput";
 import { ChangePasswordModal } from "../components/modals/ChangePasswordModal";
 import { CommandPaletteModal } from "../components/modals/CommandPaletteModal";
@@ -13,6 +13,7 @@ import { useRouter } from "../router";
 import type { ModalType, ProjectStatus } from "../types";
 import { KEY_SYMBOLS, STATUS_COLORS, THEME_COLORS } from "../utils/constants";
 import { logger } from "../utils/debugLog";
+import { useUserKeys } from "../convex/hooks/useUserKeys";
 
 const STATUS_ICONS: Record<ProjectStatus, string> = {
   owned: "●",
@@ -38,17 +39,35 @@ export function HomePage() {
     refetch: refetchProjects,
   } = useProjects();
 
+  // Get user's public key for project creation
+  const { publicKey, hasKeys, isLoading: isLoadingKeys } = useUserKeys();
+
   // UI state
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [activeModal, setActiveModal] = useState<ModalType>("none");
 
-  // Inline editing state
+  // Inline editing state - always start as null
   const [creatingProject, setCreatingProject] = useState(false);
   const [editingProject, setEditingProject] = useState<{ id: string; name: string } | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState<{ id: string; name: string } | null>(
     null,
   );
+
+  // Computed validated states - only consider states valid if project still exists
+  const validatedEditingProject = editingProject && projects.some(p => p.id === editingProject.id)
+    ? editingProject
+    : null;
+  const validatedConfirmingDelete = confirmingDelete && projects.some(p => p.id === confirmingDelete.id)
+    ? confirmingDelete
+    : null;
+
+  // Validate selectedIndex separately
+  useEffect(() => {
+    if (!isLoadingProjects && projects.length > 0 && selectedIndex >= projects.length) {
+      setSelectedIndex(0);
+    }
+  }, [isLoadingProjects, projects.length, selectedIndex]);
 
   // Navigation helpers
   const moveUp = () => {
@@ -78,18 +97,26 @@ export function HomePage() {
 
   // Action handlers
   const handleCreateProject = async (name: string) => {
-    const placeholderKey = "encrypted-key-placeholder";
+    if (!hasKeys || !publicKey) {
+      logger.error("Cannot create project: User has no keys");
+      return;
+    }
+
     try {
       await runTask(`Creating project "${name}"...`, async () => {
+        const { createProjectKey } = await import("@repo/crypto");
+        const { encryptedProjectKey } = await createProjectKey(publicKey);
+
         const { getProtectedApi } = await import("../convex/api/protected");
         const api = getProtectedApi();
-        await api.createProject({ name, encryptedProjectKey: placeholderKey });
+        await api.createProject({ name, encryptedProjectKey });
       });
       showSuccess(`Project "${name}" created`);
       setCreatingProject(false);
       refetchProjects();
     } catch (err) {
       logger.error("Failed to create project:", err);
+      throw err;
     }
   };
 
@@ -146,7 +173,9 @@ export function HomePage() {
   const executeCommand = (cmd: { key: string }) => {
     switch (cmd.key) {
       case "n":
-        setCreatingProject(true);
+        if (!isLoadingKeys && hasKeys && publicKey) {
+          setCreatingProject(true);
+        }
         break;
       case "u": {
         const project = projects[selectedIndex];
@@ -206,7 +235,11 @@ export function HomePage() {
         setConfirmingDelete({ id: project.id, name: project.name });
       }
     } else if (key.name === "n") {
-      setCreatingProject(true);
+      if (!isLoadingKeys && hasKeys && publicKey) {
+        setCreatingProject(true);
+      } else if (!isLoadingKeys && !hasKeys) {
+        logger.error("Cannot create project: User has no encryption keys. Please set up your password first.");
+      }
     } else if (key.name === "u") {
       const project = projects[selectedIndex];
       if (project && project.status !== "restricted" && project.status !== "archived") {
@@ -238,7 +271,7 @@ export function HomePage() {
         secondary: [],
       };
     }
-    if (editingProject) {
+    if (validatedEditingProject) {
       return {
         primary: [
           {
@@ -323,9 +356,9 @@ export function HomePage() {
               projects.length === 0 && !creatingProject
                 ? 1
                 : Math.min(
-                    projects.length + (creatingProject ? 1 : 0) + (confirmingDelete ? 1 : 0),
-                    PAGE_SIZE + (confirmingDelete ? 1 : 0),
-                  )
+                  projects.length + (creatingProject ? 1 : 0) + (validatedConfirmingDelete ? 1 : 0),
+                  PAGE_SIZE + (validatedConfirmingDelete ? 1 : 0),
+                )
             }
           >
             {isLoadingProjects ? (
@@ -337,8 +370,9 @@ export function HomePage() {
                 {projects.slice(scrollOffset, scrollOffset + PAGE_SIZE).map((project, index) => {
                   const actualIndex = index + scrollOffset;
                   const isSelected =
-                    actualIndex === selectedIndex && !creatingProject && !editingProject;
-                  const isEditing = editingProject?.id === project.id;
+                    actualIndex === selectedIndex && !creatingProject && !validatedEditingProject;
+                  const isEditing = validatedEditingProject !== null && validatedEditingProject?.id === project.id;
+                  const isDeleting = validatedConfirmingDelete !== null && validatedConfirmingDelete?.id === project.id;
 
                   return (
                     <box key={project.id} flexDirection="column">
@@ -381,7 +415,7 @@ export function HomePage() {
                       <DeleteConfirmation
                         itemType="project"
                         itemName={project.name}
-                        visible={confirmingDelete?.id === project.id}
+                        visible={isDeleting}
                       />
                     </box>
                   );
@@ -410,7 +444,7 @@ export function HomePage() {
                 groups={getShortcuts()}
                 customWidth={52}
                 minimal={true}
-                showHelp={!creatingProject && !editingProject}
+                showHelp={!creatingProject && !validatedEditingProject}
               />
             </box>
           )}
