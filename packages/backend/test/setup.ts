@@ -6,11 +6,6 @@ import { expect } from "vitest";
 import { components } from "../convex/_generated/api";
 import type { Id as BetterAuthId } from "../convex/betterAuth/_generated/dataModel";
 import type { ErrorCode } from "../convex/lib/errors";
-import {
-  createUserKeys,
-  decryptPrivateKeyWithPassword,
-  deriveKeyFromPassword,
-} from "./helpers/crypto";
 
 export const modules = import.meta.glob([
   "../convex/**/*.ts",
@@ -89,6 +84,9 @@ const createTestUser = async (
   if (args.hasKeys) {
     const password = "password".concat(randomString());
 
+    const { createUserKeys, decryptPrivateKeyWithPassword, deriveKeyFromPassword } = await import(
+      "@repo/crypto"
+    );
     const { encryptedPrivateKey, publicKey, salt } = await createUserKeys(password);
 
     await asUser.mutation(components.betterAuth.user.setKeysAndSalt, {
