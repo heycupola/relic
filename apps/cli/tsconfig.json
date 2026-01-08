@@ -1,11 +1,3 @@
 {
-  "compilerOptions": {
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "Node",
-    "lib": ["ESNext"],
-    "allowJs": true,
-    "verbatimModuleSyntax": true,
-    "noEmit": true
-  }
+  "extends": "@repo/typescript-config/bundler.json"
 }

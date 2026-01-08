@@ -9,6 +9,7 @@
     "log:watch": "bun run ./scripts/watchLog.ts"
   },
   "devDependencies": {
+    "@repo/typescript-config": "*",
     "@types/bun": "latest",
     "@types/react": "^19.2.7",
     "react-devtools-core": "7"
