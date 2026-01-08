@@ -126,6 +126,7 @@
         "react": "^19.2.3",
       },
       "devDependencies": {
+        "@repo/crypto": "*",
         "@repo/typescript-config": "*",
         "@types/bun": "latest",
         "@types/react": "^19.2.7",
