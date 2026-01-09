@@ -28,7 +28,7 @@ export const getLimits = protectedAction({
     usage: v.number(),
     included_usage: v.number(),
   }),
-  handler: async (ctx) => {
+  handler: async (ctx: ProtectedActionCtx) => {
     const result = await ctx.autumn.check(ctx, {
       featureId: "projects",
     });
@@ -53,7 +53,7 @@ export const createProject = protectedAction({
     // description: v.optional(v.string()),
     encryptedProjectKey: v.string(),
   },
-  handler: async (ctx: ProtectedActionCtx, args) => {
+  handler: async (ctx: ProtectedActionCtx, args: { name: string; encryptedProjectKey: string }) => {
     await checkRateLimit(ctx, "write");
 
     const { data, error } = await ctx.autumn.check(ctx, {
@@ -171,7 +171,7 @@ export const updateProject = protectedMutation({
     name: v.optional(v.string()),
     // description: v.optional(v.string()),
   },
-  handler: async (ctx: ProtectedMutationCtx, args) => {
+  handler: async (ctx: ProtectedMutationCtx, args: { projectId: Id<"project">; name?: string }) => {
     const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: args.projectId,
     });
@@ -204,7 +204,7 @@ export const archiveProject = protectedAction({
   args: {
     projectId: v.id("project"),
   },
-  handler: async (ctx: ProtectedActionCtx, args) => {
+  handler: async (ctx: ProtectedActionCtx, args: { projectId: Id<"project"> }) => {
     const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: args.projectId,
     });
@@ -251,7 +251,7 @@ export const unarchiveProject = protectedAction({
   args: {
     projectId: v.id("project"),
   },
-  handler: async (ctx: ProtectedActionCtx, args) => {
+  handler: async (ctx: ProtectedActionCtx, args: { projectId: Id<"project"> }) => {
     const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: args.projectId,
     });

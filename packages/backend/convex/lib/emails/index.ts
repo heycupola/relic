@@ -1,4 +1,4 @@
-export { default as AccessRestrictedEmail } from "./access_restricted.tsx";
-export { default as GracePeriodStartedEmail } from "./grace_period_started.tsx";
-export { default as PlanUpgradedEmail } from "./plan_upgraded.tsx";
-export { default as WelcomeEmail } from "./welcome.tsx";
+export { default as AccessRestrictedEmail } from "./access_restricted.js";
+export { default as GracePeriodStartedEmail } from "./grace_period_started.js";
+export { default as PlanUpgradedEmail } from "./plan_upgraded.js";
+export { default as WelcomeEmail } from "./welcome.js";

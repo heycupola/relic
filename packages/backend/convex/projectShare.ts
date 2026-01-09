@@ -28,7 +28,10 @@ export const shareProject = protectedAction({
     userEmail: v.string(),
     encryptedProjectKey: v.string(),
   },
-  handler: async (ctx: ProtectedActionCtx, args) => {
+  handler: async (
+    ctx: ProtectedActionCtx,
+    args: { projectId: Id<"project">; userEmail: string; encryptedProjectKey: string },
+  ) => {
     await checkRateLimit(ctx, "write");
 
     const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
@@ -138,7 +141,7 @@ export const revokeShare = protectedAction({
   args: {
     shareId: v.id("projectShare"),
   },
-  handler: async (ctx: ProtectedActionCtx, args) => {
+  handler: async (ctx: ProtectedActionCtx, args: { shareId: Id<"projectShare"> }) => {
     await checkRateLimit(ctx, "write");
 
     const share: Doc<"projectShare"> = await ctx.runQuery(internal.projectShare._loadShareById, {
@@ -235,7 +238,15 @@ export const revokeShareWithRotation = protectedAction({
       }),
     ),
   },
-  handler: async (ctx: ProtectedActionCtx, args) => {
+  handler: async (
+    ctx: ProtectedActionCtx,
+    args: {
+      shareId: Id<"projectShare">;
+      newEncryptedProjectKey: string;
+      rewrappedShares: Array<{ shareId: Id<"projectShare">; newEncryptedProjectKey: string }>;
+      reEncryptedSecrets: Array<{ secretId: Id<"secret">; newEncryptedValue: string }>;
+    },
+  ) => {
     const share: Doc<"projectShare"> = await ctx.runQuery(internal.projectShare._loadShareById, {
       shareId: args.shareId,
     });
@@ -262,7 +273,9 @@ export const revokeShareWithRotation = protectedAction({
 
     if (args.reEncryptedSecrets.length > 0) {
       const secretValidation = await ctx.runQuery(internal.secret._validateSecretsForRotation, {
-        secretIds: args.reEncryptedSecrets.map((s) => s.secretId),
+        secretIds: args.reEncryptedSecrets.map(
+          (s: { secretId: Id<"secret">; newEncryptedValue: string }) => s.secretId,
+        ),
         projectId: share.projectId,
       });
 
@@ -335,11 +348,13 @@ export const revokeShareWithRotation = protectedAction({
       const { totalEncrypted } = await ctx.runMutation(
         internal.secret._reEncryptSecretsForKeyRotation,
         {
-          secrets: args.reEncryptedSecrets.map((s) => ({
-            secretId: s.secretId,
-            newEncryptedValue: s.newEncryptedValue,
-            newEncryptionKeyVersion: newKeyVersion,
-          })),
+          secrets: args.reEncryptedSecrets.map(
+            (s: { secretId: Id<"secret">; newEncryptedValue: string }) => ({
+              secretId: s.secretId,
+              newEncryptedValue: s.newEncryptedValue,
+              newEncryptionKeyVersion: newKeyVersion,
+            }),
+          ),
           userId: ctx.userId,
         },
       );
@@ -519,7 +534,7 @@ export const getProjectShareByProjectForCurrentUser = protectedQuery({
   },
   handler: async (
     ctx: ProtectedQueryCtx,
-    args,
+    args: { projectId: Id<"project"> },
   ): Promise<{
     id: Id<"projectShare">;
     projectId: Id<"project">;

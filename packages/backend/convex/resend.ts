@@ -105,7 +105,7 @@ export const sendEmail = async (
   const emailId = await resend.sendEmailManually(
     ctx,
     { from: FROM_EMAIL_ADDRESS, to, subject },
-    async (idempotencyKey) => {
+    async (idempotencyKey: string) => {
       const { data: resendData, error } = await resendSdk.emails.send({
         from: FROM_EMAIL_ADDRESS,
         to,

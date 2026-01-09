@@ -102,7 +102,13 @@ export const rotateUserKeys = protectedMutation({
       }),
     ),
   },
-  handler: async (ctx: ProtectedMutationCtx, args) => {
+  handler: async (
+    ctx: ProtectedMutationCtx,
+    args: {
+      rewrappedShares: Array<{ shareId: Id<"projectShare">; newEncryptedProjectKey: string }>;
+      rewrappedProjects: Array<{ projectId: Id<"project">; newEncryptedProjectKey: string }>;
+    },
+  ) => {
     await checkRateLimit(ctx, "write");
 
     for (const rewrapped of args.rewrappedShares) {
