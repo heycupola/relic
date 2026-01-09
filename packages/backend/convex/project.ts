@@ -28,7 +28,7 @@ export const getLimits = protectedAction({
     usage: v.number(),
     included_usage: v.number(),
   }),
-  handler: async (ctx) => {
+  handler: async (ctx: ProtectedActionCtx) => {
     const result = await ctx.autumn.check(ctx, {
       featureId: "projects",
     });
@@ -53,7 +53,7 @@ export const createProject = protectedAction({
     // description: v.optional(v.string()),
     encryptedProjectKey: v.string(),
   },
-  handler: async (ctx: ProtectedActionCtx, args) => {
+  handler: async (ctx: ProtectedActionCtx, args: { name: string; encryptedProjectKey: string }) => {
     await checkRateLimit(ctx, "write");
 
     const { data, error } = await ctx.autumn.check(ctx, {
@@ -95,33 +95,44 @@ export const createProject = protectedAction({
 export const listUserProjects = protectedQuery({
   args: {},
   handler: async (ctx: ProtectedQueryCtx) => {
-    const { accessibleProjects, restrictedProjects, isInGracePeriod, gracePeriodDaysRemaining } =
+    const { restrictedProjects, isInGracePeriod, gracePeriodDaysRemaining } =
       await getUserProjectsWithRestrictions(ctx);
 
-    // NOTE: combine accessible and restricted projects
-    const allProjects = [
-      ...accessibleProjects.map((p) => ({
+    const allOwnedProjects = await ctx.db
+      .query("project")
+      .withIndex("by_owner", (q) => q.eq("ownerId", ctx.userId))
+      .collect();
+
+    const restrictedProjectIds = new Set(restrictedProjects.map((p) => p._id));
+
+    const projects = allOwnedProjects.map((p) => {
+      let status: "owned" | "archived" | "restricted";
+      const isRestricted = restrictedProjectIds.has(p._id);
+
+      if (p.isArchived) {
+        status = "archived";
+      } else if (isRestricted) {
+        status = "restricted";
+      } else {
+        status = "owned";
+      }
+
+      return {
         id: p._id,
         name: p.name,
         slug: p.slug,
         description: p.description,
         createdAt: p.createdAt,
         updatedAt: p.updatedAt,
-        isRestricted: false,
-      })),
-      ...restrictedProjects.map((p) => ({
-        id: p._id,
-        name: p.name,
-        slug: p.slug,
-        description: p.description,
-        createdAt: p.createdAt,
-        updatedAt: p.updatedAt,
-        isRestricted: true,
-      })),
-    ];
+        isRestricted,
+        isArchived: p.isArchived,
+        status,
+        ownerId: p.ownerId,
+      };
+    });
 
     return {
-      projects: allProjects,
+      projects,
       isInGracePeriod,
       gracePeriodDaysRemaining: isInGracePeriod ? gracePeriodDaysRemaining : undefined,
     };
@@ -160,7 +171,7 @@ export const updateProject = protectedMutation({
     name: v.optional(v.string()),
     // description: v.optional(v.string()),
   },
-  handler: async (ctx: ProtectedMutationCtx, args) => {
+  handler: async (ctx: ProtectedMutationCtx, args: { projectId: Id<"project">; name?: string }) => {
     const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: args.projectId,
     });
@@ -193,7 +204,7 @@ export const archiveProject = protectedAction({
   args: {
     projectId: v.id("project"),
   },
-  handler: async (ctx: ProtectedActionCtx, args) => {
+  handler: async (ctx: ProtectedActionCtx, args: { projectId: Id<"project"> }) => {
     const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: args.projectId,
     });
@@ -240,7 +251,7 @@ export const unarchiveProject = protectedAction({
   args: {
     projectId: v.id("project"),
   },
-  handler: async (ctx: ProtectedActionCtx, args) => {
+  handler: async (ctx: ProtectedActionCtx, args: { projectId: Id<"project"> }) => {
     const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: args.projectId,
     });
@@ -305,14 +316,29 @@ export const _loadProjectById = internalQuery({
 
 export const _loadActiveProjectsByOwner = internalQuery({
   args: {
-    ownerId: v.id("user"),
+    ownerId: v.string(),
   },
   returns: v.array(doc(schema, "project")),
   handler: async (ctx, args) => {
     const projects = await ctx.db
       .query("project")
-      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId.toString()))
+      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
       .filter((q) => q.eq(q.field("isArchived"), false))
+      .collect();
+
+    return projects;
+  },
+});
+
+export const _loadAllProjectsByOwner = internalQuery({
+  args: {
+    ownerId: v.string(),
+  },
+  returns: v.array(doc(schema, "project")),
+  handler: async (ctx, args) => {
+    const projects = await ctx.db
+      .query("project")
+      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
       .collect();
 
     return projects;
@@ -323,9 +349,9 @@ export const _insertProject = internalMutation({
   args: {
     name: v.string(),
     // description: v.optional(v.string()),
-    ownerId: v.id("user"),
+    ownerId: v.string(),
     encryptedProjectKey: v.string(),
-    createdBy: v.id("user"),
+    createdBy: v.string(),
   },
   returns: v.object({ success: v.boolean(), projectId: v.id("project") }),
   handler: async (ctx, args) => {
@@ -334,7 +360,7 @@ export const _insertProject = internalMutation({
 
     const existingProjects = await ctx.db
       .query("project")
-      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId.toString()))
+      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
       .filter((q) => q.eq(q.field("isArchived"), false))
       .filter((q) => q.eq(q.field("slug"), slug))
       .collect();
@@ -347,7 +373,7 @@ export const _insertProject = internalMutation({
       name: args.name,
       slug,
       // description: args.description,
-      ownerId: args.ownerId.toString(),
+      ownerId: args.ownerId,
       encryptedProjectKey: args.encryptedProjectKey,
       keyVersion: 1,
       share_usage_count: 0,

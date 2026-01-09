@@ -4,13 +4,26 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],
-      "@repo/ui/*": ["../../packages/ui/src/*"]
+      "@repo/ui/*": ["../../packages/ui/src/*"],
+      "@/convex/_generated/*": ["./types/convex-stub.d.ts"]
     },
     /* Fix: Bun 1.3.0+ jose type portability error - declaration files disabled */
     "declaration": false,
-    "declarationMap": false
+    "declarationMap": false,
+    "skipLibCheck": true
     /* ============================== */
   },
-  "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", "next.config.js", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "lib/**/*.ts",
+    "lib/**/*.tsx",
+    "types/**/*.ts",
+    "next-env.d.ts",
+    "next.config.js",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": ["node_modules", "convex", "convex/**", "**/convex/**"]
 }

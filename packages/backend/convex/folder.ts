@@ -20,7 +20,7 @@ export const createFolder = protectedMutation({
   returns: v.object({ success: v.boolean(), folderId: v.id("folder"), path: v.string() }),
   handler: async (
     ctx: ProtectedMutationCtx,
-    args,
+    args: { environmentId: Id<"environment">; name: string },
   ): Promise<{ success: boolean; folderId: Id<"folder">; path: string }> => {
     const environment: Doc<"environment"> = await ctx.runQuery(
       internal.environment._loadEnvironmentById,
@@ -67,7 +67,7 @@ export const updateFolder = protectedMutation({
     folderId: v.id("folder"),
     name: v.optional(v.string()),
   },
-  handler: async (ctx: ProtectedMutationCtx, args) => {
+  handler: async (ctx: ProtectedMutationCtx, args: { folderId: Id<"folder">; name?: string }) => {
     const folder = await ctx.runQuery(internal.folder._loadFolderId, {
       folderId: args.folderId,
     });
@@ -110,7 +110,7 @@ export const deleteFolder = protectedMutation({
   args: {
     folderId: v.id("folder"),
   },
-  handler: async (ctx: ProtectedMutationCtx, args) => {
+  handler: async (ctx: ProtectedMutationCtx, args: { folderId: Id<"folder"> }) => {
     const folder = await ctx.runQuery(internal.folder._loadFolderId, {
       folderId: args.folderId,
     });
@@ -197,7 +197,7 @@ export const _loadFoldersByEnvironmentId = internalQuery({
 
 export const _insertFolder = internalMutation({
   args: {
-    createdBy: v.id("user"),
+    createdBy: v.string(),
     environmentId: v.id("environment"),
     projectId: v.id("project"),
     name: v.string(),

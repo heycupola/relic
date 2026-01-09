@@ -121,7 +121,6 @@ function AppRouter() {
             projectStatus={route.projectStatus}
           />
         );
-      case "home":
       default:
         return <HomePage />;
     }

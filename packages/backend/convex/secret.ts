@@ -30,7 +30,18 @@ export const createSecret = protectedMutation({
     encryptionKeyVersion: v.number(),
     // tags: v.optional(v.array(v.string())),
   },
-  handler: async (ctx: ProtectedMutationCtx, args) => {
+  handler: async (
+    ctx: ProtectedMutationCtx,
+    args: {
+      environmentId: Id<"environment">;
+      folderId?: Id<"folder">;
+      key: string;
+      encryptedValue: string;
+      valueType: "string" | "number" | "boolean";
+      scope?: "client" | "server" | "shared";
+      encryptionKeyVersion: number;
+    },
+  ) => {
     const environment = await ctx.runQuery(internal.environment._loadEnvironmentById, {
       environmentId: args.environmentId,
     });
@@ -156,7 +167,20 @@ export const updateSecret = protectedMutation({
     // description: v.optional(v.string()),
     // tags: v.optional(v.array(v.string())),
   },
-  handler: async (ctx: ProtectedMutationCtx, args) => {
+  handler: async (
+    ctx: ProtectedMutationCtx,
+    args: {
+      secretId: Id<"secret">;
+      updates: {
+        key?: string;
+        encryptedValue?: string;
+        encryptionKeyVersion?: number;
+        valueType?: SecretValueType;
+        scope?: "client" | "server" | "shared";
+        isDeleted?: boolean;
+      };
+    },
+  ) => {
     const secret = await ctx.runQuery(internal.secret._loadSecretById, {
       secretId: args.secretId,
     });
@@ -228,7 +252,7 @@ export const deleteSecret = protectedMutation({
   args: {
     secretId: v.id("secret"),
   },
-  handler: async (ctx: ProtectedMutationCtx, args) => {
+  handler: async (ctx: ProtectedMutationCtx, args: { secretId: Id<"secret"> }) => {
     const secret = await ctx.runQuery(internal.secret._loadSecretById, {
       secretId: args.secretId,
     });
@@ -295,7 +319,7 @@ export const _loadSecretById = internalQuery({
     secretId: v.id("secret"),
   },
   returns: v.union(v.null(), doc(schema, "secret")),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args: { secretId: Id<"secret"> }) => {
     return await ctx.db.get(args.secretId);
   },
 });
@@ -307,7 +331,10 @@ export const _loadSecretByKeyAndEnvironmentIdAndFolderId = internalQuery({
     folderId: v.optional(v.id("folder")),
   },
   returns: v.union(doc(schema, "secret"), v.null()),
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args: { key: string; environmentId: Id<"environment">; folderId?: Id<"folder"> },
+  ) => {
     const secret = await ctx.db
       .query("secret")
       .withIndex("by_env_and_key", (q) =>
@@ -327,7 +354,7 @@ export const _loadSecretsByEnvironmentId = internalQuery({
     environmentId: v.id("environment"),
   },
   returns: v.array(doc(schema, "secret")),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args: { environmentId: Id<"environment"> }) => {
     return await ctx.db
       .query("secret")
       .withIndex("by_environment", (q) => q.eq("environmentId", args.environmentId))
@@ -341,7 +368,7 @@ export const _loadSecretsByFolderId = internalQuery({
     folderId: v.id("folder"),
   },
   returns: v.array(doc(schema, "secret")),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args: { folderId: Id<"folder"> }) => {
     return await ctx.db
       .query("secret")
       .withIndex("by_folder", (q) => q.eq("folderId", args.folderId))
@@ -361,7 +388,7 @@ export const _validateSecretsForRotation = internalQuery({
     wrongProjectSecretIds: v.array(v.id("secret")),
     totalExpected: v.number(),
   }),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args: { secretIds: Id<"secret">[]; projectId: Id<"project"> }) => {
     if (args.secretIds.length === 0) {
       return {
         valid: true,
@@ -412,10 +439,23 @@ export const _insertSecret = internalMutation({
     valueType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
     scope: v.union(v.literal("client"), v.literal("server"), v.literal("shared")),
     // tags: v.array(v.string()),
-    createdBy: v.id("user"),
+    createdBy: v.string(),
   },
   returns: v.object({ success: v.boolean(), secretId: v.id("secret") }),
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args: {
+      projectId: Id<"project">;
+      environmentId: Id<"environment">;
+      folderId?: Id<"folder">;
+      key: string;
+      encryptedValue: string;
+      encryptionKeyVersion: number;
+      valueType: "string" | "number" | "boolean";
+      scope: "client" | "server" | "shared";
+      createdBy: string;
+    },
+  ) => {
     const now = Date.now();
 
     const secretId = await ctx.db.insert("secret", {
@@ -444,7 +484,7 @@ export const _updateSecret = internalMutation({
   args: {
     secretId: v.id("secret"),
     updates: v.object({
-      updatedBy: v.id("user"),
+      updatedBy: v.string(),
       key: v.optional(v.string()),
       encryptedValue: v.optional(v.string()),
       encryptionKeyVersion: v.optional(v.number()),
@@ -462,10 +502,24 @@ export const _updateSecret = internalMutation({
     }),
   },
   returns: v.object({ success: v.boolean() }),
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args: {
+      secretId: Id<"secret">;
+      updates: {
+        updatedBy: string;
+        key?: string;
+        encryptedValue?: string;
+        encryptionKeyVersion?: number;
+        valueType?: SecretValueType;
+        scope?: "client" | "server" | "shared";
+        isDeleted?: boolean;
+      };
+    },
+  ) => {
     const now = Date.now();
     const updates: {
-      updatedBy: BetterAuthId<"user">;
+      updatedBy: string;
       updatedAt: number;
       key?: string;
       encryptedValue?: string;
@@ -499,7 +553,7 @@ export const _updateSecret = internalMutation({
 
 export const _reEncryptSecretsForKeyRotation = internalMutation({
   args: {
-    userId: v.id("user"),
+    userId: v.string(),
     secrets: v.array(
       v.object({
         secretId: v.id("secret"),
@@ -512,7 +566,17 @@ export const _reEncryptSecretsForKeyRotation = internalMutation({
     success: v.boolean(),
     totalEncrypted: v.number(),
   }),
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args: {
+      userId: string;
+      secrets: Array<{
+        secretId: Id<"secret">;
+        newEncryptedValue: string;
+        newEncryptionKeyVersion: number;
+      }>;
+    },
+  ) => {
     // NOTE: Caller MUST validate secrets via _validateSecretsForRotation before calling this.
     // This mutation assumes all secretIds are valid to maintain atomicity.
     if (args.secrets.length === 0) {

@@ -90,18 +90,13 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   // write them directly to stdout after the TUI renders
   useEffect(() => {
     if (verificationUri && isModalOpen && hyperlinkWrittenRef.current !== verificationUri) {
-      // Wait for TUI to render, then output hyperlink escape sequences
       const timer = setTimeout(() => {
-        // Create hyperlink with empty display text - we'll show the URL separately in the TUI
-        // The escape sequences will make the URL clickable even though it's rendered by TUI
         const hyperlink = createHyperlink(verificationUri, verificationUri);
-        // Write directly to stdout - this should work even with TUI running
-        // The escape sequences will be processed by the terminal
         try {
           process.stdout.write(hyperlink);
           hyperlinkWrittenRef.current = verificationUri;
         } catch {
-          // Ignore write errors
+          // ignore
         }
       }, 100);
       return () => clearTimeout(timer);
@@ -120,7 +115,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
       Bun.spawn(command);
     } catch {
-      // ignore browser open failures
+      // ignore
     }
   };
 
@@ -145,7 +140,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       if (key.name === "escape") {
         closeModal();
       } else if (key.name === "return" && verificationUri) {
-        // Open browser when Enter is pressed
         openBrowser(verificationUri);
       }
       return;

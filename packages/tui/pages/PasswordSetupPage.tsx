@@ -18,7 +18,6 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
   };
 
   useKeyboard((key) => {
-    // Logout confirmation modal handlers
     if (showLogoutModal) {
       if (key.name === "y") {
         handleLogout();
@@ -29,7 +28,6 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
       }
     }
 
-    // Logout shortcut - only handle if modal is not open
     if (!showLogoutModal && ((key.name === "l" && key.ctrl) || key.sequence === "\x0C")) {
       setShowLogoutModal(true);
       return;
@@ -75,7 +73,6 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
         </box>
       </box>
 
-      {/* Logout confirmation modal */}
       <Modal
         visible={showLogoutModal}
         title="Logout"

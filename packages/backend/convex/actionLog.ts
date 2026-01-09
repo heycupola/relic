@@ -1,8 +1,8 @@
-import type { PaginationResult } from "convex/server";
+import type { PaginationOptions, PaginationResult } from "convex/server";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { assertProjectAccess } from "./lib/access";
 import { protectedAction } from "./lib/middleware";
@@ -12,7 +12,7 @@ import type { ProtectedActionCtx } from "./lib/types";
 export const _insertActionLog = internalMutation({
   args: {
     projectId: v.optional(v.id("project")),
-    userId: v.id("user"),
+    userId: v.string(),
     action: v.union(
       v.literal("user.keys_created"),
       v.literal("user.password_changed"),
@@ -87,7 +87,7 @@ export const _logSecretAction = internalMutation({
     secretId: v.optional(v.id("secret")),
     key: v.optional(v.string()),
     newKey: v.optional(v.string()),
-    userId: v.id("user"),
+    userId: v.string(),
     secretAction: v.union(
       v.literal("secret.created"),
       v.literal("secret.updated"),
@@ -166,7 +166,10 @@ export const loadActionLogsByProject = protectedAction({
     projectId: v.id("project"),
     paginationOpts: paginationOptsValidator,
   },
-  handler: async (ctx: ProtectedActionCtx, args): Promise<PaginationResult<Doc<"actionLog">>> => {
+  handler: async (
+    ctx: ProtectedActionCtx,
+    args: { projectId: Id<"project">; paginationOpts: PaginationOptions },
+  ): Promise<PaginationResult<Doc<"actionLog">>> => {
     await checkRateLimit(ctx, "read");
 
     const project = await ctx.runQuery(internal.project._loadProjectById, {
@@ -187,7 +190,10 @@ export const loadActionLogsByEnvironment = protectedAction({
     environmentId: v.id("environment"),
     paginationOpts: paginationOptsValidator,
   },
-  handler: async (ctx: ProtectedActionCtx, args): Promise<PaginationResult<Doc<"actionLog">>> => {
+  handler: async (
+    ctx: ProtectedActionCtx,
+    args: { environmentId: Id<"environment">; paginationOpts: PaginationOptions },
+  ): Promise<PaginationResult<Doc<"actionLog">>> => {
     await checkRateLimit(ctx, "read");
 
     const environment = await ctx.runQuery(internal.environment._loadEnvironmentById, {

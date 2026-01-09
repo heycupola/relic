@@ -84,9 +84,7 @@ type InlineInputProps = CommonProps & (ControlledProps | UncontrolledProps);
 /**
  * Determines if props are for controlled mode
  */
-function isControlled(
-  props: InlineInputProps,
-): props is CommonProps & ControlledProps {
+function isControlled(props: InlineInputProps): props is CommonProps & ControlledProps {
   return "value" in props && props.value !== undefined;
 }
 
@@ -137,7 +135,6 @@ export function InlineInput(props: InlineInputProps) {
     width,
   } = props;
 
-  // Smart/uncontrolled mode
   if (!isControlled(props)) {
     return (
       <SmartInlineInput
@@ -158,7 +155,6 @@ export function InlineInput(props: InlineInputProps) {
     );
   }
 
-  // Controlled mode - just render
   const { value, cursor, cursorVisible } = props;
 
   return (
@@ -207,22 +203,18 @@ function SmartInlineInput({
   const input = useInlineInput({ maxLength, initialValue });
   const cursorVisible = useCursorBlink(active);
 
-  // Track if we've already submitted to prevent double-submit
   const submittedRef = useRef(false);
 
-  // Reset submitted flag when becoming active again
   useEffect(() => {
     if (active) {
       submittedRef.current = false;
     }
   }, [active]);
 
-  // Notify parent of value changes
   useEffect(() => {
     onChange?.(input.value);
   }, [input.value, onChange]);
 
-  // Handle paste
   usePaste((text) => {
     if (!active) return;
     const cleanText = text.replace(/\s/g, "").slice(0, maxLength);
@@ -250,7 +242,6 @@ function SmartInlineInput({
       return;
     }
 
-    // Delegate to input hook
     input.handleKey(key);
   });
 

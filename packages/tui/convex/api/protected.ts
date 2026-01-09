@@ -67,14 +67,13 @@ export class ProtectedApi {
     await this.ensureAuth();
   }
 
-  // User
   async getCurrentUser(): Promise<User> {
     return this.withAuth(() => this.client.query("user:getCurrentUser", {}));
   }
 
-  // User Keys
   async hasUserKeys(): Promise<boolean> {
-    return this.withAuth(() => this.client.query("userKey:hasUserKeys", {}));
+    const result = await this.withAuth(() => this.client.query("userKey:hasUserKeys", {}));
+    return result.hasKeys;
   }
 
   async storeUserKeys(args: {
@@ -86,7 +85,12 @@ export class ProtectedApi {
   }
 
   async updatePassword(args: { encryptedPrivateKey: string; salt: string }): Promise<void> {
-    return this.withAuth(() => this.client.mutation("userKey:updatePassword", args));
+    return this.withAuth(() =>
+      this.client.mutation("userKey:updatePassword", {
+        newEncryptedPrivateKey: args.encryptedPrivateKey,
+        newSalt: args.salt,
+      }),
+    );
   }
 
   async rotateUserKeys(args: {
@@ -99,9 +103,9 @@ export class ProtectedApi {
     return this.withAuth(() => this.client.mutation("userKey:rotateUserKeys", args));
   }
 
-  // Projects
   async listProjects(): Promise<ProjectListItem[]> {
-    return this.withAuth(() => this.client.query("project:listUserProjects", {}));
+    const result = await this.withAuth(() => this.client.query("project:listUserProjects", {}));
+    return result.projects;
   }
 
   async getProject(projectId: string): Promise<Project> {
@@ -128,7 +132,6 @@ export class ProtectedApi {
     return this.withAuth(() => this.client.action("project:getLimits", {}));
   }
 
-  // Environments
   async getEnvironmentData(environmentId: string): Promise<EnvironmentData> {
     return this.withAuth(() =>
       this.client.query("environment:getEnvironmentData", { environmentId }),
@@ -157,7 +160,6 @@ export class ProtectedApi {
     );
   }
 
-  // Folders
   async createFolder(args: { environmentId: string; name: string }): Promise<string> {
     return this.withAuth(() => this.client.mutation("folder:createFolder", args));
   }
@@ -170,7 +172,6 @@ export class ProtectedApi {
     return this.withAuth(() => this.client.mutation("folder:deleteFolder", { folderId }));
   }
 
-  // Secrets
   async createSecret(args: {
     environmentId: string;
     folderId?: string;
@@ -202,7 +203,6 @@ export class ProtectedApi {
     return this.withAuth(() => this.client.mutation("secret:deleteSecret", { secretId }));
   }
 
-  // Project Sharing
   async shareProject(args: {
     projectId: string;
     email: string;
@@ -222,9 +222,21 @@ export class ProtectedApi {
   }
 
   async listSharedProjects(): Promise<ProjectListItem[]> {
-    return this.withAuth(() =>
+    const result = await this.withAuth(() =>
       this.client.query("projectShare:listActiveSharedProjectsForCurrentUser", {}),
     );
+    return result.shares.map((share: any) => ({
+      id: share.projectId,
+      _id: share.projectId,
+      name: share.projectName,
+      slug: share.projectSlug,
+      status: share.status,
+      isRestricted: share.isRestricted,
+      isArchived: share.isArchived,
+      ownerId: share.ownerId,
+      createdAt: 0,
+      updatedAt: 0,
+    }));
   }
 
   async getProjectShare(projectId: string): Promise<{ encryptedProjectKey: string } | null> {
@@ -242,7 +254,6 @@ export class ProtectedApi {
     return this.withAuth(() => this.client.action("projectShare:revokeShareWithRotation", args));
   }
 
-  // Pro Plan
   async getProPlan(): Promise<{ url: string }> {
     return this.withAuth(() => this.client.action("user:getProPlan", {}));
   }

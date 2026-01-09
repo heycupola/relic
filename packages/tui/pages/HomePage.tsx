@@ -1,11 +1,12 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { InlineInput } from "../components/forms/InlineInput";
 import { ChangePasswordModal } from "../components/modals/ChangePasswordModal";
 import { CommandPaletteModal } from "../components/modals/CommandPaletteModal";
 import { DeleteConfirmation } from "../components/shared/DeleteConfirmation";
 import { GuideBar } from "../components/shared/GuideBar";
 import { Modal } from "../components/shared/Modal";
+import { useUserKeys } from "../convex/hooks/useUserKeys";
 import { useAppSession } from "../hooks/useAppSession";
 import { useProjects } from "../hooks/useProjects";
 import { useTaskQueue } from "../hooks/useTaskQueue";
@@ -29,28 +30,41 @@ export function HomePage() {
   const { logout } = useAppSession();
   const { runTask, showSuccess } = useTaskQueue();
 
-  // Fetch real projects from API
   const {
     projects,
     isLoading: isLoadingProjects,
     limits,
     isLoadingLimits,
     refetch: refetchProjects,
+    refetchLimits,
   } = useProjects();
 
-  // UI state
+  const { publicKey, hasKeys, isLoading: isLoadingKeys } = useUserKeys();
+
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [activeModal, setActiveModal] = useState<ModalType>("none");
 
-  // Inline editing state
   const [creatingProject, setCreatingProject] = useState(false);
   const [editingProject, setEditingProject] = useState<{ id: string; name: string } | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState<{ id: string; name: string } | null>(
     null,
   );
 
-  // Navigation helpers
+  const validatedEditingProject =
+    editingProject && projects.some((p) => p.id === editingProject.id) ? editingProject : null;
+  const validatedConfirmingDelete =
+    confirmingDelete && projects.some((p) => p.id === confirmingDelete.id)
+      ? confirmingDelete
+      : null;
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: selectedIndex intentionally excluded to avoid unnecessary re-renders when navigating
+  useEffect(() => {
+    if (!isLoadingProjects && projects.length > 0 && selectedIndex >= projects.length) {
+      setSelectedIndex(0);
+    }
+  }, [isLoadingProjects, projects.length]);
+
   const moveUp = () => {
     if (projects.length === 0) return;
     setSelectedIndex((prev) => {
@@ -76,25 +90,44 @@ export function HomePage() {
     navigate({ name: "project", projectId, projectName, projectStatus });
   };
 
-  // Action handlers
   const handleCreateProject = async (name: string) => {
-    const placeholderKey = "encrypted-key-placeholder";
+    if (!hasKeys || !publicKey) {
+      logger.error("Cannot create project: User has no keys");
+      return;
+    }
+
     try {
       await runTask(`Creating project "${name}"...`, async () => {
+        const { createProjectKey } = await import("@repo/crypto");
+        const { encryptedProjectKey } = await createProjectKey(publicKey);
+
         const { getProtectedApi } = await import("../convex/api/protected");
         const api = getProtectedApi();
-        await api.createProject({ name, encryptedProjectKey: placeholderKey });
+        await api.createProject({ name, encryptedProjectKey });
       });
       showSuccess(`Project "${name}" created`);
       setCreatingProject(false);
-      refetchProjects();
+      await Promise.all([refetchProjects(), refetchLimits()]);
     } catch (err) {
       logger.error("Failed to create project:", err);
+      throw err;
     }
   };
 
-  const handleRenameProject = async (name: string) => {
-    if (!editingProject || name === editingProject.name) {
+  const handleRenameProject = async (name: string, projectId: string) => {
+    logger.debug("handleRenameProject called", { name, projectId, type: typeof projectId });
+    if (!projectId) {
+      logger.error("Cannot rename project: no projectId provided", {
+        name,
+        projectId,
+        editingProject,
+      });
+      setEditingProject(null);
+      return;
+    }
+    // Check if name changed (compare with current project name from list)
+    const currentProject = projects.find((p) => p.id === projectId);
+    if (currentProject && name === currentProject.name) {
       setEditingProject(null);
       return;
     }
@@ -102,7 +135,7 @@ export function HomePage() {
       await runTask(`Renaming project to "${name}"...`, async () => {
         const { getProtectedApi } = await import("../convex/api/protected");
         const api = getProtectedApi();
-        await api.updateProject({ projectId: editingProject.id, name });
+        await api.updateProject({ projectId, name });
       });
       showSuccess(`Project renamed to "${name}"`);
       setEditingProject(null);
@@ -122,7 +155,7 @@ export function HomePage() {
       });
       showSuccess(`"${confirmingDelete.name}" archived`);
       setConfirmingDelete(null);
-      refetchProjects();
+      await Promise.all([refetchProjects(), refetchLimits()]);
     } catch (err) {
       logger.error("Failed to archive project:", err);
     }
@@ -132,7 +165,6 @@ export function HomePage() {
     await logout();
   };
 
-  // Command palette
   const commands = [
     { key: "n", description: "Create project", category: "Create" },
     { key: "u", description: "Rename project", category: "Manage" },
@@ -146,11 +178,14 @@ export function HomePage() {
   const executeCommand = (cmd: { key: string }) => {
     switch (cmd.key) {
       case "n":
-        setCreatingProject(true);
+        if (!isLoadingKeys && hasKeys && publicKey) {
+          setCreatingProject(true);
+        }
         break;
       case "u": {
         const project = projects[selectedIndex];
         if (project && project.status !== "restricted" && project.status !== "archived") {
+          logger.debug("Setting editingProject from command", { project, projectId: project.id });
           setEditingProject({ id: project.id, name: project.name });
         }
         break;
@@ -164,12 +199,9 @@ export function HomePage() {
     }
   };
 
-  // Main keyboard handler
   useKeyboard((key) => {
-    // Skip if inline editing is active
     if (creatingProject || editingProject) return;
 
-    // Modal handlers
     if (activeModal === "logout") {
       if (key.name === "y") handleLogout();
       else if (key.name === "n" || key.name === "escape") setActiveModal("none");
@@ -183,14 +215,12 @@ export function HomePage() {
 
     if (activeModal === "commandPalette") return;
 
-    // Delete confirmation
     if (confirmingDelete) {
       if (key.name === "y") handleArchiveProject();
       else if (key.name === "n" || key.name === "escape") setConfirmingDelete(null);
       return;
     }
 
-    // Navigation
     if (key.name === "k" || key.name === "up") {
       moveUp();
       setConfirmingDelete(null);
@@ -206,10 +236,30 @@ export function HomePage() {
         setConfirmingDelete({ id: project.id, name: project.name });
       }
     } else if (key.name === "n") {
-      setCreatingProject(true);
+      if (!isLoadingKeys && hasKeys && publicKey) {
+        setCreatingProject(true);
+      } else if (!isLoadingKeys && !hasKeys) {
+        logger.error(
+          "Cannot create project: User has no encryption keys. Please set up your password first.",
+        );
+      }
     } else if (key.name === "u") {
       const project = projects[selectedIndex];
       if (project && project.status !== "restricted" && project.status !== "archived") {
+        logger.debug("Setting editingProject from keyboard", {
+          project,
+          projectId: project.id,
+          hasId: !!project.id,
+          allKeys: Object.keys(project),
+        });
+        if (!project.id) {
+          logger.error("Cannot edit project: project.id is missing!", {
+            project,
+            selectedIndex,
+            projects,
+          });
+          return;
+        }
         setEditingProject({ id: project.id, name: project.name });
       }
     } else if (key.name === "p") {
@@ -223,7 +273,6 @@ export function HomePage() {
     }
   });
 
-  // Dynamic shortcuts for guide bar
   const getShortcuts = () => {
     if (creatingProject) {
       return {
@@ -238,7 +287,7 @@ export function HomePage() {
         secondary: [],
       };
     }
-    if (editingProject) {
+    if (validatedEditingProject) {
       return {
         primary: [
           {
@@ -287,7 +336,6 @@ export function HomePage() {
           paddingLeft={2}
           paddingRight={2}
         >
-          {/* Logo */}
           <box height={7} justifyContent="center" alignItems="center">
             <ascii-font text="relic" font="block" />
           </box>
@@ -295,7 +343,6 @@ export function HomePage() {
             <text fg={THEME_COLORS.textMuted}>Zero-knowledge secret management</text>
           </box>
 
-          {/* Projects header */}
           <box
             height={1}
             width={52}
@@ -315,7 +362,6 @@ export function HomePage() {
             </text>
           </box>
 
-          {/* Project list */}
           <box
             flexDirection="column"
             width={52}
@@ -323,8 +369,10 @@ export function HomePage() {
               projects.length === 0 && !creatingProject
                 ? 1
                 : Math.min(
-                    projects.length + (creatingProject ? 1 : 0) + (confirmingDelete ? 1 : 0),
-                    PAGE_SIZE + (confirmingDelete ? 1 : 0),
+                    projects.length +
+                      (creatingProject ? 1 : 0) +
+                      (validatedConfirmingDelete ? 1 : 0),
+                    PAGE_SIZE + (validatedConfirmingDelete ? 1 : 0),
                   )
             }
           >
@@ -337,8 +385,12 @@ export function HomePage() {
                 {projects.slice(scrollOffset, scrollOffset + PAGE_SIZE).map((project, index) => {
                   const actualIndex = index + scrollOffset;
                   const isSelected =
-                    actualIndex === selectedIndex && !creatingProject && !editingProject;
-                  const isEditing = editingProject?.id === project.id;
+                    actualIndex === selectedIndex && !creatingProject && !validatedEditingProject;
+                  const isEditing =
+                    validatedEditingProject !== null && validatedEditingProject?.id === project.id;
+                  const isDeleting =
+                    validatedConfirmingDelete !== null &&
+                    validatedConfirmingDelete?.id === project.id;
 
                   return (
                     <box key={project.id} flexDirection="column">
@@ -346,7 +398,29 @@ export function HomePage() {
                         <InlineInput
                           active={true}
                           initialValue={project.name}
-                          onSubmit={handleRenameProject}
+                          onSubmit={(name) => {
+                            const projectId = project.id;
+                            logger.debug("InlineInput onSubmit called", {
+                              name,
+                              projectId,
+                              project,
+                              projectKeys: Object.keys(project),
+                              projectIdType: typeof project.id,
+                              validatedEditingProject,
+                              editingProject,
+                            });
+                            if (!projectId) {
+                              logger.error("Project ID is missing!", {
+                                project,
+                                projectKeys: Object.keys(project),
+                                projectId,
+                                validatedEditingProject,
+                                editingProject,
+                              });
+                              return;
+                            }
+                            handleRenameProject(name, projectId);
+                          }}
                           onCancel={() => setEditingProject(null)}
                           maxWidth={40}
                           maxLength={30}
@@ -381,7 +455,7 @@ export function HomePage() {
                       <DeleteConfirmation
                         itemType="project"
                         itemName={project.name}
-                        visible={confirmingDelete?.id === project.id}
+                        visible={isDeleting}
                       />
                     </box>
                   );
@@ -403,21 +477,19 @@ export function HomePage() {
             )}
           </box>
 
-          {/* Guide bar */}
           {(activeModal === "none" || creatingProject || activeModal === "commandPalette") && (
             <box marginTop={1}>
               <GuideBar
                 groups={getShortcuts()}
                 customWidth={52}
                 minimal={true}
-                showHelp={!creatingProject && !editingProject}
+                showHelp={!creatingProject && !validatedEditingProject}
               />
             </box>
           )}
         </box>
       </box>
 
-      {/* Modals */}
       <Modal
         visible={activeModal === "logout"}
         title="Logout"

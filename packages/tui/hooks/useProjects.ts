@@ -11,6 +11,7 @@ interface UseProjectsReturn {
   limits: { usage: number; included_usage: number } | null;
   isLoadingLimits: boolean;
   refetch: () => Promise<void>;
+  refetchLimits: () => Promise<void>;
   createProject: (name: string, encryptedProjectKey: string) => Promise<string | undefined>;
   renameProject: (projectId: string, name: string) => Promise<void>;
   archiveProject: (projectId: string) => Promise<void>;
@@ -31,8 +32,51 @@ export function useProjects(): UseProjectsReturn {
     setError(null);
 
     try {
-      const apiProjects = await api.listProjects();
-      setProjects(mapApiProjects(apiProjects));
+      const [ownedProjects, sharedProjects] = await Promise.all([
+        api.listProjects(),
+        api.listSharedProjects().catch((err) => {
+          logger.error("Failed to fetch shared projects:", err);
+          return [];
+        }),
+      ]);
+
+      const projectMap = new Map<string, (typeof ownedProjects)[0]>();
+
+      ownedProjects.forEach((project) => {
+        const projectId = (project as any).id || (project as any)._id;
+        if (projectId) {
+          projectMap.set(projectId, project);
+        }
+      });
+
+      sharedProjects.forEach((project) => {
+        const projectId = (project as any).id || (project as any)._id;
+        if (projectId && !projectMap.has(projectId)) {
+          projectMap.set(projectId, project);
+        }
+      });
+
+      const allProjects = Array.from(projectMap.values());
+      const mappedProjects = mapApiProjects(allProjects);
+
+      const sortedProjects = mappedProjects.sort((a, b) => {
+        const getSortOrder = (status: string) => {
+          if (status === "archived") return 3;
+          if (status === "restricted") return 2;
+          return 1;
+        };
+
+        const orderA = getSortOrder(a.status);
+        const orderB = getSortOrder(b.status);
+
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
+
+        return a.name.localeCompare(b.name);
+      });
+
+      setProjects(sortedProjects);
     } catch (err) {
       logger.error("Failed to fetch projects:", err);
       setError(err instanceof Error ? err : new Error("Failed to fetch projects"));
@@ -139,6 +183,7 @@ export function useProjects(): UseProjectsReturn {
     limits,
     isLoadingLimits,
     refetch: fetchProjects,
+    refetchLimits: fetchLimits,
     createProject,
     renameProject,
     archiveProject,

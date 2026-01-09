@@ -189,7 +189,6 @@ function SmartManageCollaboratorsModal({
   const input = useInlineInput({ maxLength: 50 });
   const cursorVisible = useCursorBlink(creatingCollab);
 
-  // Handle paste when creating
   usePaste((text) => {
     if (!creatingCollab) return;
     const cleanText = text.replace(/\s/g, "").slice(0, 50);
@@ -197,7 +196,6 @@ function SmartManageCollaboratorsModal({
   });
 
   useKeyboard((key) => {
-    // When confirming delete
     if (confirmingDelete) {
       if (key.name === "y") {
         onRevoke?.(confirmingDelete);
@@ -211,7 +209,6 @@ function SmartManageCollaboratorsModal({
       return;
     }
 
-    // When creating new collaborator
     if (creatingCollab) {
       if (key.name === "escape") {
         setCreatingCollab(false);
@@ -229,12 +226,10 @@ function SmartManageCollaboratorsModal({
         return;
       }
 
-      // Delegate to input hook
       input.handleKey(key);
       return;
     }
 
-    // Normal navigation
     if (key.name === "escape") {
       onClose();
       return;
