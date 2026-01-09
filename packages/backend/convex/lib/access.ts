@@ -1,6 +1,6 @@
 import { components, internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
-import type { Doc as BetterAuthDoc, Id as BetterAuthId } from "../betterAuth/_generated/dataModel";
+import type { Doc as BetterAuthDoc } from "../betterAuth/_generated/dataModel";
 import { createError, ErrorCode, notFoundError, permissionError } from "./errors";
 import type { ProtectedActionCtx, ProtectedMutationCtx, ProtectedQueryCtx } from "./types";
 import { ErrorSeverity } from "./types";

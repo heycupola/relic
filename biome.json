@@ -113,6 +113,11 @@
     },
     "globals": ["Bun"]
   },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
   "overrides": [
     {
       "includes": ["**/*.css"],
