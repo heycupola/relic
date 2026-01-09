@@ -38,23 +38,38 @@ export const autumn = new Autumn(components.autumn, {
   },
 });
 
-export const {
-  track,
-  cancel,
-  query,
-  attach,
-  check,
-  checkout,
-  usage,
-  setupPayment,
-  createCustomer,
-  listProducts,
-  billingPortal,
-  createReferralCode,
-  redeemReferralCode,
-  createEntity,
-  getEntity,
-} = autumn.api();
+const autumnApi = autumn.api();
+
+// biome-ignore lint/suspicious/noExplicitAny: Type portability requirement for exported functions
+export const track = autumnApi.track as any;
+// biome-ignore lint/suspicious/noExplicitAny: Type portability requirement for exported functions
+export const cancel = autumnApi.cancel as any;
+// biome-ignore lint/suspicious/noExplicitAny: Type portability requirement for exported functions
+export const query = autumnApi.query as any;
+// biome-ignore lint/suspicious/noExplicitAny: Type portability requirement for exported functions
+export const attach = autumnApi.attach as any;
+// biome-ignore lint/suspicious/noExplicitAny: Type portability requirement for exported functions
+export const check = autumnApi.check as any;
+// biome-ignore lint/suspicious/noExplicitAny: Type portability requirement for exported functions
+export const checkout = autumnApi.checkout as any;
+// biome-ignore lint/suspicious/noExplicitAny: Type portability requirement for exported functions
+export const usage = autumnApi.usage as any;
+// biome-ignore lint/suspicious/noExplicitAny: Type portability requirement for exported functions
+export const setupPayment = autumnApi.setupPayment as any;
+// biome-ignore lint/suspicious/noExplicitAny: Type portability requirement for exported functions
+export const createCustomer = autumnApi.createCustomer as any;
+// biome-ignore lint/suspicious/noExplicitAny: Type portability requirement for exported functions
+export const listProducts = autumnApi.listProducts as any;
+// biome-ignore lint/suspicious/noExplicitAny: Type portability requirement for exported functions
+export const billingPortal = autumnApi.billingPortal as any;
+// biome-ignore lint/suspicious/noExplicitAny: Type portability requirement for exported functions
+export const createReferralCode = autumnApi.createReferralCode as any;
+// biome-ignore lint/suspicious/noExplicitAny: Type portability requirement for exported functions
+export const redeemReferralCode = autumnApi.redeemReferralCode as any;
+// biome-ignore lint/suspicious/noExplicitAny: Type portability requirement for exported functions
+export const createEntity = autumnApi.createEntity as any;
+// biome-ignore lint/suspicious/noExplicitAny: Type portability requirement for exported functions
+export const getEntity = autumnApi.getEntity as any;
 
 // NOTE: attemptCount must start at 1 to ensure everything works correctly
 export const _retryAutumnTracking = internalMutation({

@@ -44,9 +44,11 @@ export async function verifyResendSignature(
   };
 
   const secretBytes = base64ToBytes(secretWithoutPrefix);
+  const secretBuffer = new ArrayBuffer(secretBytes.length);
+  new Uint8Array(secretBuffer).set(secretBytes);
   const key = await crypto.subtle.importKey(
     "raw",
-    secretBytes,
+    secretBuffer,
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
@@ -58,7 +60,8 @@ export async function verifyResendSignature(
     new TextEncoder().encode(signedContent),
   );
 
-  const expectedSignatureBase64 = btoa(String.fromCharCode(...new Uint8Array(signatureBytes)));
+  const signatureArray = new Uint8Array(signatureBytes);
+  const expectedSignatureBase64 = btoa(String.fromCharCode(...Array.from(signatureArray)));
 
   const signatures = svixSignature.split(" ");
 

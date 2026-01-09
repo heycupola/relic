@@ -1,7 +1,10 @@
 {
+  "extends": "../tsconfig.json",
   "compilerOptions": {
-    "skipLibCheck": true,
-    "noEmit": true
-  },
-  "files": []
+    "jsx": "react-jsx",
+    "moduleResolution": "bundler",
+    "downlevelIteration": true,
+    "resolvePackageJsonExports": true,
+    "resolvePackageJsonImports": true
+  }
 }
