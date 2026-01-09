@@ -11,6 +11,7 @@ interface UseProjectsReturn {
   limits: { usage: number; included_usage: number } | null;
   isLoadingLimits: boolean;
   refetch: () => Promise<void>;
+  refetchLimits: () => Promise<void>;
   createProject: (name: string, encryptedProjectKey: string) => Promise<string | undefined>;
   renameProject: (projectId: string, name: string) => Promise<void>;
   archiveProject: (projectId: string) => Promise<void>;
@@ -139,6 +140,7 @@ export function useProjects(): UseProjectsReturn {
     limits,
     isLoadingLimits,
     refetch: fetchProjects,
+    refetchLimits: fetchLimits,
     createProject,
     renameProject,
     archiveProject,

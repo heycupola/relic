@@ -9,14 +9,12 @@ interface CachedMasterKey {
 
 let cachedMasterKey: CachedMasterKey | null = null;
 
-function hashPassword(password: string): string {
-  let hash = 0;
-  for (let i = 0; i < password.length; i++) {
-    const char = password.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash;
-  }
-  return hash.toString(36);
+async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 export async function getMasterKey(
@@ -28,7 +26,7 @@ export async function getMasterKey(
     return null;
   }
 
-  const passwordHash = hashPassword(password);
+  const passwordHash = await hashPassword(password);
 
   if (
     cachedMasterKey &&
@@ -59,10 +57,13 @@ export function clearMasterKeyCache(): void {
   cachedMasterKey = null;
 }
 
-export function isMasterKeyCached(password: string | null, salt: string | null): boolean {
+export async function isMasterKeyCached(
+  password: string | null,
+  salt: string | null,
+): Promise<boolean> {
   if (!cachedMasterKey || !password || !salt) {
     return false;
   }
-  const passwordHash = hashPassword(password);
+  const passwordHash = await hashPassword(password);
   return cachedMasterKey.salt === salt && cachedMasterKey.passwordHash === passwordHash;
 }

@@ -36,6 +36,7 @@ export function HomePage() {
     limits,
     isLoadingLimits,
     refetch: refetchProjects,
+    refetchLimits,
   } = useProjects();
 
   const { publicKey, hasKeys, isLoading: isLoadingKeys } = useUserKeys();
@@ -57,11 +58,12 @@ export function HomePage() {
       ? confirmingDelete
       : null;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: selectedIndex intentionally excluded to avoid unnecessary re-renders when navigating
   useEffect(() => {
     if (!isLoadingProjects && projects.length > 0 && selectedIndex >= projects.length) {
       setSelectedIndex(0);
     }
-  }, [isLoadingProjects, projects.length, selectedIndex]);
+  }, [isLoadingProjects, projects.length]);
 
   const moveUp = () => {
     if (projects.length === 0) return;
@@ -105,15 +107,27 @@ export function HomePage() {
       });
       showSuccess(`Project "${name}" created`);
       setCreatingProject(false);
-      refetchProjects();
+      await Promise.all([refetchProjects(), refetchLimits()]);
     } catch (err) {
       logger.error("Failed to create project:", err);
       throw err;
     }
   };
 
-  const handleRenameProject = async (name: string) => {
-    if (!editingProject || name === editingProject.name) {
+  const handleRenameProject = async (name: string, projectId: string) => {
+    logger.debug("handleRenameProject called", { name, projectId, type: typeof projectId });
+    if (!projectId) {
+      logger.error("Cannot rename project: no projectId provided", {
+        name,
+        projectId,
+        editingProject,
+      });
+      setEditingProject(null);
+      return;
+    }
+    // Check if name changed (compare with current project name from list)
+    const currentProject = projects.find((p) => p.id === projectId);
+    if (currentProject && name === currentProject.name) {
       setEditingProject(null);
       return;
     }
@@ -121,7 +135,7 @@ export function HomePage() {
       await runTask(`Renaming project to "${name}"...`, async () => {
         const { getProtectedApi } = await import("../convex/api/protected");
         const api = getProtectedApi();
-        await api.updateProject({ projectId: editingProject.id, name });
+        await api.updateProject({ projectId, name });
       });
       showSuccess(`Project renamed to "${name}"`);
       setEditingProject(null);
@@ -141,7 +155,7 @@ export function HomePage() {
       });
       showSuccess(`"${confirmingDelete.name}" archived`);
       setConfirmingDelete(null);
-      refetchProjects();
+      await Promise.all([refetchProjects(), refetchLimits()]);
     } catch (err) {
       logger.error("Failed to archive project:", err);
     }
@@ -171,6 +185,7 @@ export function HomePage() {
       case "u": {
         const project = projects[selectedIndex];
         if (project && project.status !== "restricted" && project.status !== "archived") {
+          logger.debug("Setting editingProject from command", { project, projectId: project.id });
           setEditingProject({ id: project.id, name: project.name });
         }
         break;
@@ -231,6 +246,20 @@ export function HomePage() {
     } else if (key.name === "u") {
       const project = projects[selectedIndex];
       if (project && project.status !== "restricted" && project.status !== "archived") {
+        logger.debug("Setting editingProject from keyboard", {
+          project,
+          projectId: project.id,
+          hasId: !!project.id,
+          allKeys: Object.keys(project),
+        });
+        if (!project.id) {
+          logger.error("Cannot edit project: project.id is missing!", {
+            project,
+            selectedIndex,
+            projects,
+          });
+          return;
+        }
         setEditingProject({ id: project.id, name: project.name });
       }
     } else if (key.name === "p") {
@@ -369,7 +398,30 @@ export function HomePage() {
                         <InlineInput
                           active={true}
                           initialValue={project.name}
-                          onSubmit={handleRenameProject}
+                          onSubmit={(name) => {
+                            // Use project.id directly from the map - it's guaranteed to exist
+                            const projectId = project.id;
+                            logger.debug("InlineInput onSubmit called", {
+                              name,
+                              projectId,
+                              project,
+                              projectKeys: Object.keys(project),
+                              projectIdType: typeof project.id,
+                              validatedEditingProject,
+                              editingProject,
+                            });
+                            if (!projectId) {
+                              logger.error("Project ID is missing!", {
+                                project,
+                                projectKeys: Object.keys(project),
+                                projectId,
+                                validatedEditingProject,
+                                editingProject,
+                              });
+                              return;
+                            }
+                            handleRenameProject(name, projectId);
+                          }}
                           onCancel={() => setEditingProject(null)}
                           maxWidth={40}
                           maxLength={30}

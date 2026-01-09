@@ -13,8 +13,14 @@ import type { Environment, Folder, Project, Secret, SharedUser } from "../types/
  * Maps API ProjectListItem to TUI Project type
  */
 export function mapApiProject(apiProject: ApiProject): Project {
+  // Backend returns 'id' field directly in listUserProjects, not '_id'
+  // But the type definition says _id, so we need to handle both
+  const projectId = (apiProject as any).id || (apiProject as any)._id;
+  if (!projectId) {
+    throw new Error(`Project ID is missing in API response: ${JSON.stringify(apiProject)}`);
+  }
   return {
-    id: apiProject._id,
+    id: projectId,
     name: apiProject.name,
     status: apiProject.status,
   };

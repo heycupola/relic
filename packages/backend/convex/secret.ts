@@ -412,7 +412,7 @@ export const _insertSecret = internalMutation({
     valueType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
     scope: v.union(v.literal("client"), v.literal("server"), v.literal("shared")),
     // tags: v.array(v.string()),
-    createdBy: v.id("user"),
+    createdBy: v.string(),
   },
   returns: v.object({ success: v.boolean(), secretId: v.id("secret") }),
   handler: async (ctx, args) => {
@@ -444,7 +444,7 @@ export const _updateSecret = internalMutation({
   args: {
     secretId: v.id("secret"),
     updates: v.object({
-      updatedBy: v.id("user"),
+      updatedBy: v.string(),
       key: v.optional(v.string()),
       encryptedValue: v.optional(v.string()),
       encryptionKeyVersion: v.optional(v.number()),
@@ -499,7 +499,7 @@ export const _updateSecret = internalMutation({
 
 export const _reEncryptSecretsForKeyRotation = internalMutation({
   args: {
-    userId: v.id("user"),
+    userId: v.string(),
     secrets: v.array(
       v.object({
         secretId: v.id("secret"),
