@@ -12,4 +12,24 @@ declare module "@/convex/_generated/api" {
     autumn: any;
     [key: string]: any;
   };
+
+  export const internal: {
+    actionLog: any;
+    auth: any;
+    autumn: any;
+    crons: any;
+    deviceAuth: any;
+    environment: any;
+    folder: any;
+    http: any;
+    project: any;
+    projectShare: any;
+    rateLimiter: any;
+    resend: any;
+    secret: any;
+    stripe: any;
+    user: any;
+    userKey: any;
+    [key: string]: any;
+  };
 }
