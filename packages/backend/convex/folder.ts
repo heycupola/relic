@@ -197,7 +197,7 @@ export const _loadFoldersByEnvironmentId = internalQuery({
 
 export const _insertFolder = internalMutation({
   args: {
-    createdBy: v.id("user"),
+    createdBy: v.string(),
     environmentId: v.id("environment"),
     projectId: v.id("project"),
     name: v.string(),

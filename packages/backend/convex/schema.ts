@@ -51,7 +51,7 @@ export default defineSchema({
     path: v.string(),
     description: v.optional(v.string()),
     parentFolderId: v.optional(v.id("folder")),
-    createdBy: v.id("user"),
+    createdBy: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -72,9 +72,9 @@ export default defineSchema({
     encryptionKeyVersion: v.number(),
     tags: v.optional(v.array(v.string())),
     isDeleted: v.boolean(),
-    createdBy: v.id("user"),
+    createdBy: v.string(),
     createdAt: v.number(),
-    updatedBy: v.id("user"),
+    updatedBy: v.string(),
     updatedAt: v.number(),
   })
     .index("by_project", ["projectId"])

@@ -323,7 +323,7 @@ export const _insertEnvironment = internalMutation({
     projectId: v.id("project"),
     name: v.string(),
     sortOrder: v.number(),
-    createdBy: v.id("user"),
+    createdBy: v.string(),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
