@@ -1,12 +1,15 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { authClient } from "@/lib/auth";
 import { isValidReturnUrl } from "@/lib/url";
 
-export default function Layout({ children }: { children: ReactNode }) {
+interface LayoutContentProps {
+  children: React.ReactNode;
+}
+
+function LayoutContent({ children }: LayoutContentProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -26,4 +29,16 @@ export default function Layout({ children }: { children: ReactNode }) {
   }, [router, returnUrl, pathname]);
 
   return <>{children}</>;
+}
+
+interface LayoutProps {
+  children: React.ReactNode;
+}
+
+export default function Layout({ children }: LayoutProps) {
+  return (
+    <Suspense fallback={null}>
+      <LayoutContent>{children}</LayoutContent>
+    </Suspense>
+  );
 }

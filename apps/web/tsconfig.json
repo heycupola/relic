@@ -4,7 +4,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],
-      "@repo/ui/*": ["../../packages/ui/src/*"]
+      "@repo/ui/*": ["../../packages/ui/src/*"],
+      "@/convex/_generated/*": ["./types/convex-stub.d.ts"]
     },
     /* Fix: Bun 1.3.0+ jose type portability error - declaration files disabled */
     "declaration": false,
