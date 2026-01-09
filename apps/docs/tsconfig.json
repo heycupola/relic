@@ -4,6 +4,6 @@
     "skipLibCheck": true,
     "jsx": "preserve"
   },
-  "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", "next.config.js"],
+  "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", "next.config.js", ".next/types/**/*.ts"],
   "exclude": ["node_modules", ".next"]
 }
