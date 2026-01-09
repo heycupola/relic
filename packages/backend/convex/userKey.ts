@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
 import { createError, ErrorCode, permissionError } from "./lib/errors";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
@@ -11,7 +12,10 @@ export const storeUserKeys = protectedMutation({
     encryptedPrivateKey: v.string(),
     salt: v.string(),
   },
-  handler: async (ctx: ProtectedMutationCtx, args) => {
+  handler: async (
+    ctx: ProtectedMutationCtx,
+    args: { publicKey: string; encryptedPrivateKey: string; salt: string },
+  ) => {
     await checkRateLimit(ctx, "write");
 
     const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
@@ -50,7 +54,10 @@ export const updatePassword = protectedMutation({
     newEncryptedPrivateKey: v.string(),
     newSalt: v.string(),
   },
-  handler: async (ctx: ProtectedMutationCtx, args) => {
+  handler: async (
+    ctx: ProtectedMutationCtx,
+    args: { newEncryptedPrivateKey: string; newSalt: string },
+  ) => {
     await checkRateLimit(ctx, "write");
 
     const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
@@ -105,6 +112,9 @@ export const rotateUserKeys = protectedMutation({
   handler: async (
     ctx: ProtectedMutationCtx,
     args: {
+      newPublicKey: string;
+      newEncryptedPrivateKey: string;
+      newSalt: string;
       rewrappedShares: Array<{ shareId: Id<"projectShare">; newEncryptedProjectKey: string }>;
       rewrappedProjects: Array<{ projectId: Id<"project">; newEncryptedProjectKey: string }>;
     },
@@ -114,11 +124,20 @@ export const rotateUserKeys = protectedMutation({
     for (const rewrapped of args.rewrappedShares) {
       const share = await ctx.db.get(rewrapped.shareId);
 
-      if (!share || share.userId !== ctx.userId) {
+      if (!share) {
+        throw createError({
+          code: ErrorCode.NOT_FOUND,
+          message: `Share not found: ${rewrapped.shareId}`,
+          severity: ErrorSeverity.High,
+        });
+      }
+
+      const shareDoc = share as Doc<"projectShare">;
+      if (shareDoc.userId !== ctx.userId) {
         throw permissionError("update this share");
       }
 
-      if (share.revokedAt !== undefined) {
+      if (shareDoc.revokedAt !== undefined) {
         throw createError({
           code: ErrorCode.INVALID_OPERATION,
           message: `Cannot rewrap revoked share: ${rewrapped.shareId}`,
@@ -128,14 +147,23 @@ export const rotateUserKeys = protectedMutation({
       }
     }
 
-    for (const rewrapped of args.rewrappedOwnedProjects) {
+    for (const rewrapped of args.rewrappedProjects) {
       const project = await ctx.db.get(rewrapped.projectId);
 
-      if (!project || project.ownerId !== ctx.userId) {
+      if (!project) {
+        throw createError({
+          code: ErrorCode.NOT_FOUND,
+          message: `Project not found: ${rewrapped.projectId}`,
+          severity: ErrorSeverity.High,
+        });
+      }
+
+      const projectDoc = project as Doc<"project">;
+      if (projectDoc.ownerId !== ctx.userId) {
         throw permissionError("update this project");
       }
 
-      if (project.isArchived) {
+      if (projectDoc.isArchived) {
         throw createError({
           code: ErrorCode.INVALID_OPERATION,
           message: `Cannot rewrap archived project: ${rewrapped.projectId}`,
@@ -164,8 +192,18 @@ export const rotateUserKeys = protectedMutation({
 
       const share = await ctx.db.get(rewrapped.shareId);
 
+      if (!share) {
+        throw createError({
+          code: ErrorCode.NOT_FOUND,
+          message: `Share not found after update: ${rewrapped.shareId}`,
+          severity: ErrorSeverity.High,
+        });
+      }
+
+      const shareDoc = share as Doc<"projectShare">;
+
       await ctx.runMutation(internal.actionLog._insertActionLog, {
-        projectId: share!.projectId,
+        projectId: shareDoc.projectId,
         userId: ctx.userId,
         action: "share.key_updated",
         metadata: {
@@ -177,7 +215,7 @@ export const rotateUserKeys = protectedMutation({
       sharesUpdatedCount++;
     }
 
-    for (const rewrapped of args.rewrappedOwnedProjects) {
+    for (const rewrapped of args.rewrappedProjects) {
       await ctx.db.patch(rewrapped.projectId, {
         encryptedProjectKey: rewrapped.newEncryptedProjectKey,
         updatedAt: now,
