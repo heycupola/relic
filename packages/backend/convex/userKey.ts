@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { createError, ErrorCode, permissionError } from "./lib/errors";
+import { createError, ErrorCode, notFoundError, permissionError } from "./lib/errors";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
 import { ErrorSeverity, type ProtectedMutationCtx, type ProtectedQueryCtx } from "./lib/types";
@@ -125,11 +125,7 @@ export const rotateUserKeys = protectedMutation({
       const share = await ctx.db.get(rewrapped.shareId);
 
       if (!share) {
-        throw createError({
-          code: ErrorCode.NOT_FOUND,
-          message: `Share not found: ${rewrapped.shareId}`,
-          severity: ErrorSeverity.High,
-        });
+        throw notFoundError("share");
       }
 
       const shareDoc = share as Doc<"projectShare">;
@@ -151,11 +147,7 @@ export const rotateUserKeys = protectedMutation({
       const project = await ctx.db.get(rewrapped.projectId);
 
       if (!project) {
-        throw createError({
-          code: ErrorCode.NOT_FOUND,
-          message: `Project not found: ${rewrapped.projectId}`,
-          severity: ErrorSeverity.High,
-        });
+        throw notFoundError("project");
       }
 
       const projectDoc = project as Doc<"project">;
@@ -193,11 +185,7 @@ export const rotateUserKeys = protectedMutation({
       const share = await ctx.db.get(rewrapped.shareId);
 
       if (!share) {
-        throw createError({
-          code: ErrorCode.NOT_FOUND,
-          message: `Share not found after update: ${rewrapped.shareId}`,
-          severity: ErrorSeverity.High,
-        });
+        throw notFoundError("share");
       }
 
       const shareDoc = share as Doc<"projectShare">;

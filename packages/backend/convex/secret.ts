@@ -37,6 +37,8 @@ export const createSecret = protectedMutation({
       folderId?: Id<"folder">;
       key: string;
       encryptedValue: string;
+      valueType: "string" | "number" | "boolean";
+      scope?: "client" | "server" | "shared";
       encryptionKeyVersion: number;
     },
   ) => {
