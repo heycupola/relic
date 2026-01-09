@@ -1,4 +1,5 @@
 import { Body, Button, Container, Head, Hr, Html, Section, Text } from "@react-email/components";
+import * as React from "react";
 
 interface AccessRestrictedEmailProps {
   userName?: string;
