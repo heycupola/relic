@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { logger } from "../../utils/debugLog";
 import { clearMasterKeyCache } from "../../utils/masterKeyCache";
 import { useApi } from "./useApi";
@@ -46,6 +46,12 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
   const [isRotating, setIsRotating] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
+  // Store the latest onError callback in a ref to avoid including options in dependency arrays
+  const onErrorRef = useRef<((error: Error) => void) | undefined>(options?.onError);
+  useEffect(() => {
+    onErrorRef.current = options?.onError;
+  }, [options?.onError]);
+
   const clearError = useCallback(() => {
     setError(null);
   }, []);
@@ -68,11 +74,11 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
       logger.error("Failed to fetch user keys:", err);
       const error = err instanceof Error ? err : new Error("Failed to fetch user keys");
       setError(error);
-      options?.onError?.(error);
+      onErrorRef.current?.(error);
     } finally {
       setIsLoading(false);
     }
-  }, [api, options]);
+  }, [api]);
 
   const checkHasKeys = useCallback(async (): Promise<boolean> => {
     if (!api) {
@@ -85,17 +91,17 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
       logger.error("Failed to check if user has keys:", err);
       const error = err instanceof Error ? err : new Error("Failed to check if user has keys");
       setError(error);
-      options?.onError?.(error);
+      onErrorRef.current?.(error);
       return false;
     }
-  }, [api, options]);
+  }, [api]);
 
   const storeUserKeys = useCallback(
     async (args: { publicKey: string; encryptedPrivateKey: string; salt: string }) => {
       if (!api) {
         const error = new Error("API not initialized");
         setError(error);
-        options?.onError?.(error);
+        onErrorRef.current?.(error);
         throw error;
       }
 
@@ -111,13 +117,13 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
         logger.error("Failed to store user keys:", err);
         const error = err instanceof Error ? err : new Error("Failed to store user keys");
         setError(error);
-        options?.onError?.(error);
+        onErrorRef.current?.(error);
         throw error;
       } finally {
         setIsStoring(false);
       }
     },
-    [api, options],
+    [api],
   );
 
   const updatePassword = useCallback(
@@ -125,7 +131,7 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
       if (!api) {
         const error = new Error("API not initialized");
         setError(error);
-        options?.onError?.(error);
+        onErrorRef.current?.(error);
         throw error;
       }
 
@@ -140,13 +146,13 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
         logger.error("Failed to update password:", err);
         const error = err instanceof Error ? err : new Error("Failed to update password");
         setError(error);
-        options?.onError?.(error);
+        onErrorRef.current?.(error);
         throw error;
       } finally {
         setIsUpdating(false);
       }
     },
-    [api, options],
+    [api],
   );
 
   const rotateUserKeys = useCallback(
@@ -160,7 +166,7 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
       if (!api) {
         const error = new Error("API not initialized");
         setError(error);
-        options?.onError?.(error);
+        onErrorRef.current?.(error);
         throw error;
       }
 
@@ -183,13 +189,13 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
         logger.error("Failed to rotate user keys:", err);
         const error = err instanceof Error ? err : new Error("Failed to rotate user keys");
         setError(error);
-        options?.onError?.(error);
+        onErrorRef.current?.(error);
         throw error;
       } finally {
         setIsRotating(false);
       }
     },
-    [api, options],
+    [api],
   );
 
   useEffect(() => {

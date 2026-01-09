@@ -57,11 +57,12 @@ export function HomePage() {
       ? confirmingDelete
       : null;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: selectedIndex intentionally excluded to avoid unnecessary re-renders when navigating
   useEffect(() => {
     if (!isLoadingProjects && projects.length > 0 && selectedIndex >= projects.length) {
       setSelectedIndex(0);
     }
-  }, [isLoadingProjects, projects.length, selectedIndex]);
+  }, [isLoadingProjects, projects.length]);
 
   const moveUp = () => {
     if (projects.length === 0) return;
