@@ -13,11 +13,17 @@ const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!, {
 });
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
+  const autumnApi = api?.autumn;
+
   return (
     <ConvexBetterAuthProvider client={convex} authClient={authClient}>
-      <AutumnProvider convex={convex} convexApi={api.autumn}>
-        {children}
-      </AutumnProvider>
+      {autumnApi ? (
+        <AutumnProvider convex={convex} convexApi={autumnApi}>
+          {children}
+        </AutumnProvider>
+      ) : (
+        children
+      )}
     </ConvexBetterAuthProvider>
   );
 }
