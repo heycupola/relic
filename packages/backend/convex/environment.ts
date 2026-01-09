@@ -61,7 +61,10 @@ export const createEnvironment = protectedMutation({
       });
     }
 
-    const maxSortOrder = projectEnvironments.reduce((max, env) => Math.max(max, env.sortOrder), -1);
+    const maxSortOrder = projectEnvironments.reduce(
+      (max: number, env: Doc<"environment">) => Math.max(max, env.sortOrder),
+      -1,
+    );
 
     const environmentId = await ctx.runMutation(internal.environment._insertEnvironment, {
       createdBy: ctx.userId,
@@ -169,7 +172,7 @@ export const getEnvironmentData = protectedQuery({
   args: {
     environmentId: v.id("environment"),
   },
-  handler: async (ctx: ProtectedQueryCtx, args) => {
+  handler: async (ctx: ProtectedQueryCtx, args: { environmentId: Id<"environment"> }) => {
     const environment: Doc<"environment"> = await ctx.runQuery(
       internal.environment._loadEnvironmentById,
       {
@@ -201,9 +204,9 @@ export const getEnvironmentData = protectedQuery({
       key: string;
       encryptedValue: string;
       valueType: string;
-      createdBy: BetterAuthId<"user">;
+      createdBy: string;
       createdAt: number;
-      updatedBy: BetterAuthId<"user">;
+      updatedBy: string;
       updatedAt: number;
     };
 

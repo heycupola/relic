@@ -1,8 +1,8 @@
-import type { PaginationResult } from "convex/server";
+import type { PaginationOptions, PaginationResult } from "convex/server";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { assertProjectAccess } from "./lib/access";
 import { protectedAction } from "./lib/middleware";
@@ -166,7 +166,10 @@ export const loadActionLogsByProject = protectedAction({
     projectId: v.id("project"),
     paginationOpts: paginationOptsValidator,
   },
-  handler: async (ctx: ProtectedActionCtx, args): Promise<PaginationResult<Doc<"actionLog">>> => {
+  handler: async (
+    ctx: ProtectedActionCtx,
+    args: { projectId: Id<"project">; paginationOpts: PaginationOptions },
+  ): Promise<PaginationResult<Doc<"actionLog">>> => {
     await checkRateLimit(ctx, "read");
 
     const project = await ctx.runQuery(internal.project._loadProjectById, {
@@ -187,7 +190,10 @@ export const loadActionLogsByEnvironment = protectedAction({
     environmentId: v.id("environment"),
     paginationOpts: paginationOptsValidator,
   },
-  handler: async (ctx: ProtectedActionCtx, args): Promise<PaginationResult<Doc<"actionLog">>> => {
+  handler: async (
+    ctx: ProtectedActionCtx,
+    args: { environmentId: Id<"environment">; paginationOpts: PaginationOptions },
+  ): Promise<PaginationResult<Doc<"actionLog">>> => {
     await checkRateLimit(ctx, "read");
 
     const environment = await ctx.runQuery(internal.environment._loadEnvironmentById, {
