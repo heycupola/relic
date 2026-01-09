@@ -95,33 +95,44 @@ export const createProject = protectedAction({
 export const listUserProjects = protectedQuery({
   args: {},
   handler: async (ctx: ProtectedQueryCtx) => {
-    const { accessibleProjects, restrictedProjects, isInGracePeriod, gracePeriodDaysRemaining } =
+    const { restrictedProjects, isInGracePeriod, gracePeriodDaysRemaining } =
       await getUserProjectsWithRestrictions(ctx);
 
-    // NOTE: combine accessible and restricted projects
-    const allProjects = [
-      ...accessibleProjects.map((p) => ({
+    const allOwnedProjects = await ctx.db
+      .query("project")
+      .withIndex("by_owner", (q) => q.eq("ownerId", ctx.userId))
+      .collect();
+
+    const restrictedProjectIds = new Set(restrictedProjects.map((p) => p._id));
+
+    const projects = allOwnedProjects.map((p) => {
+      let status: "owned" | "archived" | "restricted";
+      const isRestricted = restrictedProjectIds.has(p._id);
+
+      if (p.isArchived) {
+        status = "archived";
+      } else if (isRestricted) {
+        status = "restricted";
+      } else {
+        status = "owned";
+      }
+
+      return {
         id: p._id,
         name: p.name,
         slug: p.slug,
         description: p.description,
         createdAt: p.createdAt,
         updatedAt: p.updatedAt,
-        isRestricted: false,
-      })),
-      ...restrictedProjects.map((p) => ({
-        id: p._id,
-        name: p.name,
-        slug: p.slug,
-        description: p.description,
-        createdAt: p.createdAt,
-        updatedAt: p.updatedAt,
-        isRestricted: true,
-      })),
-    ];
+        isRestricted,
+        isArchived: p.isArchived,
+        status,
+        ownerId: p.ownerId,
+      };
+    });
 
     return {
-      projects: allProjects,
+      projects,
       isInGracePeriod,
       gracePeriodDaysRemaining: isInGracePeriod ? gracePeriodDaysRemaining : undefined,
     };
@@ -313,6 +324,21 @@ export const _loadActiveProjectsByOwner = internalQuery({
       .query("project")
       .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
       .filter((q) => q.eq(q.field("isArchived"), false))
+      .collect();
+
+    return projects;
+  },
+});
+
+export const _loadAllProjectsByOwner = internalQuery({
+  args: {
+    ownerId: v.string(),
+  },
+  returns: v.array(doc(schema, "project")),
+  handler: async (ctx, args) => {
+    const projects = await ctx.db
+      .query("project")
+      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
       .collect();
 
     return projects;

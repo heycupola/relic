@@ -13,16 +13,17 @@ import type { Environment, Folder, Project, Secret, SharedUser } from "../types/
  * Maps API ProjectListItem to TUI Project type
  */
 export function mapApiProject(apiProject: ApiProject): Project {
-  // Backend returns 'id' field directly in listUserProjects, not '_id'
-  // But the type definition says _id, so we need to handle both
   const projectId = (apiProject as any).id || (apiProject as any)._id;
   if (!projectId) {
     throw new Error(`Project ID is missing in API response: ${JSON.stringify(apiProject)}`);
   }
+
+  const status = apiProject.status || "owned";
+
   return {
     id: projectId,
     name: apiProject.name,
-    status: apiProject.status,
+    status,
   };
 }
 
@@ -56,13 +57,12 @@ export function mapApiFolder(apiFolder: ApiFolder): Folder {
 
 /**
  * Maps API Secret to TUI Secret type
- * Note: The actual value needs to be decrypted client-side
  */
 export function mapApiSecret(apiSecret: ApiSecret): Secret {
   return {
     id: apiSecret._id,
     key: apiSecret.key,
-    value: undefined, // Encrypted value needs to be decrypted
+    value: undefined,
     type:
       apiSecret.valueType === "string"
         ? "string"

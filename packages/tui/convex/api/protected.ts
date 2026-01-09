@@ -222,9 +222,21 @@ export class ProtectedApi {
   }
 
   async listSharedProjects(): Promise<ProjectListItem[]> {
-    return this.withAuth(() =>
+    const result = await this.withAuth(() =>
       this.client.query("projectShare:listActiveSharedProjectsForCurrentUser", {}),
     );
+    return result.shares.map((share: any) => ({
+      id: share.projectId,
+      _id: share.projectId,
+      name: share.projectName,
+      slug: share.projectSlug,
+      status: share.status,
+      isRestricted: share.isRestricted,
+      isArchived: share.isArchived,
+      ownerId: share.ownerId,
+      createdAt: 0,
+      updatedAt: 0,
+    }));
   }
 
   async getProjectShare(projectId: string): Promise<{ encryptedProjectKey: string } | null> {

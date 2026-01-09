@@ -399,7 +399,6 @@ export function HomePage() {
                           active={true}
                           initialValue={project.name}
                           onSubmit={(name) => {
-                            // Use project.id directly from the map - it's guaranteed to exist
                             const projectId = project.id;
                             logger.debug("InlineInput onSubmit called", {
                               name,

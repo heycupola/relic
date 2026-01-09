@@ -483,6 +483,15 @@ export const listActiveSharedProjectsForCurrentUser = protectedQuery({
           userId: project.ownerId as BetterAuthId<"user">,
         })) as BetterAuthDoc<"user"> | null;
 
+        let status: "shared" | "archived" | "restricted";
+        if (project.isArchived) {
+          status = "archived";
+        } else if (!accessible) {
+          status = "restricted";
+        } else {
+          status = "shared";
+        }
+
         return {
           id: share._id,
           projectId: share.projectId,
@@ -494,6 +503,8 @@ export const listActiveSharedProjectsForCurrentUser = protectedQuery({
           sharedAt: share.sharedAt,
           encryptedProjectKey: share.encryptedProjectKey,
           isRestricted: !accessible,
+          isArchived: project.isArchived,
+          status,
         };
       }),
     );
