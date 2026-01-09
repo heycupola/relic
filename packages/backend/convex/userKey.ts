@@ -116,7 +116,7 @@ export const rotateUserKeys = protectedMutation({
       newEncryptedPrivateKey: string;
       newSalt: string;
       rewrappedShares: Array<{ shareId: Id<"projectShare">; newEncryptedProjectKey: string }>;
-      rewrappedProjects: Array<{ projectId: Id<"project">; newEncryptedProjectKey: string }>;
+      rewrappedOwnedProjects: Array<{ projectId: Id<"project">; newEncryptedProjectKey: string }>;
     },
   ) => {
     await checkRateLimit(ctx, "write");
@@ -143,7 +143,7 @@ export const rotateUserKeys = protectedMutation({
       }
     }
 
-    for (const rewrapped of args.rewrappedProjects) {
+    for (const rewrapped of args.rewrappedOwnedProjects) {
       const project = await ctx.db.get(rewrapped.projectId);
 
       if (!project) {
@@ -203,7 +203,7 @@ export const rotateUserKeys = protectedMutation({
       sharesUpdatedCount++;
     }
 
-    for (const rewrapped of args.rewrappedProjects) {
+    for (const rewrapped of args.rewrappedOwnedProjects) {
       await ctx.db.patch(rewrapped.projectId, {
         encryptedProjectKey: rewrapped.newEncryptedProjectKey,
         updatedAt: now,
