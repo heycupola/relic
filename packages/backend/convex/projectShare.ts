@@ -430,7 +430,7 @@ export const listActiveProjectSharesByProject = protectedQuery({
   args: {
     projectId: v.id("project"),
   },
-  handler: async (ctx: ProtectedQueryCtx, args) => {
+  handler: async (ctx: ProtectedQueryCtx, args: { projectId: Id<"project"> }) => {
     const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: args.projectId,
     });
