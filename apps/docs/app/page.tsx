@@ -1,4 +1,5 @@
 import Image, { type ImageProps } from "next/image";
+import * as React from "react";
 import styles from "./page.module.css";
 
 type Props = Omit<ImageProps, "src"> & {
@@ -11,7 +12,9 @@ const ThemeImage = (props: Props) => {
 
   return (
     <>
+      {/* @ts-expect-error - React types version mismatch between Next.js and @types/react */}
       <Image {...rest} src={srcLight} className="imgLight" />
+      {/* @ts-expect-error - React types version mismatch between Next.js and @types/react */}
       <Image {...rest} src={srcDark} className="imgDark" />
     </>
   );
@@ -44,6 +47,7 @@ export default function Home() {
             target="_blank"
             rel="noopener noreferrer"
           >
+            {/* @ts-expect-error - React types version mismatch between Next.js and @types/react */}
             <Image
               className={styles.logo}
               src="/vercel.svg"
@@ -69,6 +73,7 @@ export default function Home() {
           target="_blank"
           rel="noopener noreferrer"
         >
+          {/* @ts-expect-error - React types version mismatch between Next.js and @types/react */}
           <Image aria-hidden src="/window.svg" alt="Window icon" width={16} height={16} />
           Examples
         </a>
@@ -77,6 +82,7 @@ export default function Home() {
           target="_blank"
           rel="noopener noreferrer"
         >
+          {/* @ts-expect-error - React types version mismatch between Next.js and @types/react */}
           <Image aria-hidden src="/globe.svg" alt="Globe icon" width={16} height={16} />
           Go to turborepo.com →
         </a>
