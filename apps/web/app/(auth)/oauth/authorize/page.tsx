@@ -5,7 +5,7 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { Check, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Component, type ReactNode, Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { AuthFooter } from "@/components/auth-footer";
 import { RelicLogo } from "@/components/relic-logo";
 import { api } from "@/convex/_generated/api";
@@ -13,57 +13,6 @@ import { authClient } from "@/lib/auth";
 import { authHeadingStyle, authSubtitleStyle } from "@/lib/styles";
 
 type AuthStatus = "loading" | "ready" | "approving" | "denying" | "approved" | "denied" | "error";
-
-function ExpiredView() {
-  return (
-    <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-      <div className="w-full py-16">
-        <div className="flex flex-col items-center gap-10">
-          <div className="flex flex-col items-center gap-8">
-            <Link href="/" className="flex items-center">
-              <RelicLogo className="h-12 text-foreground" />
-            </Link>
-            <div className="w-full max-w-sm">
-              <div className="text-center space-y-4">
-                <div className="w-12 h-12 rounded-full bg-soft-silver/10 flex items-center justify-center mx-auto">
-                  <X className="w-6 h-6 text-soft-silver" />
-                </div>
-                <div className="space-y-2">
-                  <h1 className="text-3xl font-medium text-foreground" style={authHeadingStyle}>
-                    code expired
-                  </h1>
-                  <p className="text-sm font-light text-soft-silver" style={authSubtitleStyle}>
-                    This code has expired or already been used. Please request a new code from the
-                    CLI.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <AuthFooter />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-class DeviceAuthErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
-  constructor(props: { children: ReactNode }) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return <ExpiredView />;
-    }
-    return this.props.children;
-  }
-}
 
 function AuthorizeContent() {
   const router = useRouter();
@@ -295,29 +244,27 @@ function AuthorizeContent() {
 
 export default function AuthorizePage() {
   return (
-    <DeviceAuthErrorBoundary>
-      <Suspense
-        fallback={
-          <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-            <div className="w-full py-16">
-              <div className="flex flex-col items-center gap-10">
-                <div className="flex flex-col items-center gap-8">
-                  <Link href="/" className="flex items-center">
-                    <RelicLogo className="h-12 text-foreground" />
-                  </Link>
-                  <div className="text-center space-y-3">
-                    <h1 className="text-3xl font-medium text-foreground" style={authHeadingStyle}>
-                      loading...
-                    </h1>
-                  </div>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+          <div className="w-full py-16">
+            <div className="flex flex-col items-center gap-10">
+              <div className="flex flex-col items-center gap-8">
+                <Link href="/" className="flex items-center">
+                  <RelicLogo className="h-12 text-foreground" />
+                </Link>
+                <div className="text-center space-y-3">
+                  <h1 className="text-3xl font-medium text-foreground" style={authHeadingStyle}>
+                    loading...
+                  </h1>
                 </div>
               </div>
             </div>
           </div>
-        }
-      >
-        <AuthorizeContent />
-      </Suspense>
-    </DeviceAuthErrorBoundary>
+        </div>
+      }
+    >
+      <AuthorizeContent />
+    </Suspense>
   );
 }
