@@ -20,6 +20,7 @@ interface PasswordFormProps {
   currentPasswordRequired?: boolean;
   onCurrentPasswordVerify?: (password: string) => boolean;
   width?: number;
+  disabled?: boolean;
 }
 
 type FocusedField = "current" | "password" | "confirm";
@@ -31,6 +32,7 @@ export function PasswordForm({
   currentPasswordRequired = false,
   onCurrentPasswordVerify,
   width = 46,
+  disabled = false,
 }: PasswordFormProps) {
   const [focusedField, setFocusedField] = useState<FocusedField>(
     currentPasswordRequired ? "current" : "password",
@@ -114,6 +116,8 @@ export function PasswordForm({
   };
 
   useKeyboard((key) => {
+    if (disabled) return;
+
     if (key.name === "v" && key.ctrl) {
       setShowPassword((prev) => !prev);
       return;
