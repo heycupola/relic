@@ -1,45 +1,70 @@
 import { useKeyboard } from "@opentui/react";
-import { useEffect, useState } from "react";
-import { THEME_COLORS } from "../../utils/constants";
+import { useCallback, useEffect, useState } from "react";
+import { usePaste } from "../../hooks/usePaste";
+import { useTextInput } from "../../hooks/useTextInput";
+import { KEY_SYMBOLS, THEME_COLORS } from "../../utils/constants";
+import { InlineInput } from "../forms/InlineInput";
+import { GuideBar } from "../shared/GuideBar";
 import { Modal } from "../shared/Modal";
 
 interface PasswordChangeWarningModalProps {
   visible: boolean;
-  onConfirm: () => void;
+  onConfirm: (oldPassword: string) => void;
   onCancel: () => void;
+  isLoading?: boolean;
+  error?: string | null;
 }
 
 export function PasswordChangeWarningModal({
   visible,
   onConfirm,
   onCancel,
+  isLoading = false,
+  error = null,
 }: PasswordChangeWarningModalProps) {
-  const [selectedOption, setSelectedOption] = useState<"confirm" | "cancel">("cancel");
+  const [cursorVisible, setCursorVisible] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
+  const passwordInput = useTextInput({ maxLength: 64 });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: passwordInput methods are stable
   useEffect(() => {
     if (visible) {
-      setSelectedOption("cancel");
+      passwordInput.setValue("");
+      passwordInput.setCursor(0);
     }
   }, [visible]);
 
+  useEffect(() => {
+    const interval = setInterval(() => setCursorVisible((prev) => !prev), 530);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handlePaste = useCallback(
+    (text: string) => {
+      if (isLoading) return;
+      const cleanText = text.replace(/\s/g, "");
+      const before = passwordInput.value.slice(0, passwordInput.cursor);
+      const after = passwordInput.value.slice(passwordInput.cursor);
+      const newValue = (before + cleanText + after).slice(0, 64);
+      passwordInput.setValue(newValue);
+      passwordInput.setCursor(Math.min(before.length + cleanText.length, 64));
+    },
+    [isLoading, passwordInput],
+  );
+
+  usePaste(handlePaste);
+
   useKeyboard((key) => {
-    if (!visible) return;
+    if (!visible || isLoading) return;
 
-    if (key.name === "left" || key.name === "h") {
-      setSelectedOption("cancel");
-      return;
-    }
-
-    if (key.name === "right" || key.name === "l") {
-      setSelectedOption("confirm");
+    if (key.name === "v" && key.ctrl) {
+      setShowPassword((prev) => !prev);
       return;
     }
 
     if (key.name === "return") {
-      if (selectedOption === "confirm") {
-        onConfirm();
-      } else {
-        onCancel();
+      if (passwordInput.value.length > 0) {
+        onConfirm(passwordInput.value);
       }
       return;
     }
@@ -48,6 +73,10 @@ export function PasswordChangeWarningModal({
       onCancel();
       return;
     }
+
+    if (key.sequence === " ") return;
+
+    passwordInput.handleKey(key);
   });
 
   if (!visible) {
@@ -55,63 +84,55 @@ export function PasswordChangeWarningModal({
   }
 
   return (
-    <Modal
-      visible={visible}
-      title="Password Change Warning"
-      width={60}
-      height={12}
-      shortcuts={[
-        { key: "←→", description: "navigate" },
-        { key: "enter", description: "select" },
-        { key: "esc", description: "cancel" },
-      ]}
-    >
+    <Modal visible={visible} title="Password Change Warning" width={60} height={12}>
       <box flexDirection="column" width={56} gap={1}>
         <box height={1}>
-          <text fg={THEME_COLORS.accent}>
-            [!] You entered a different password than your previous one
-          </text>
+          <text fg={THEME_COLORS.accent}>[!] New password detected</text>
         </box>
 
         <box height={1}>
-          <text fg={THEME_COLORS.text}>
-            This operation will need to rewrap all your owned project keys and shared project keys.
-          </text>
+          <text fg={THEME_COLORS.text}>Enter your old password to rewrap your private key</text>
         </box>
 
-        <box height={1} marginTop={1}>
-          <text fg={THEME_COLORS.textDim}>
-            If you cancel, you can return to the password setup screen and enter your old password.
-          </text>
+        <box>
+          <InlineInput
+            value={passwordInput.value}
+            cursor={passwordInput.cursor}
+            cursorVisible={cursorVisible}
+            maxWidth={28}
+            maxLength={64}
+            placeholder="Old password"
+            isFocused={true}
+            isPassword={true}
+            showPassword={showPassword}
+            showIcon={false}
+            showCount={false}
+            width={46}
+          />
         </box>
 
-        <box height={1} marginTop={1} flexDirection="row" gap={2} justifyContent="center">
-          <box
-            flexDirection="row"
-            paddingLeft={1}
-            paddingRight={1}
-            backgroundColor={
-              selectedOption === "cancel" ? THEME_COLORS.primary : THEME_COLORS.header
-            }
-          >
-            <text fg={selectedOption === "cancel" ? THEME_COLORS.background : THEME_COLORS.text}>
-              {selectedOption === "cancel" ? "> " : "  "}Cancel
-            </text>
+        {error && (
+          <box height={1}>
+            <text fg={THEME_COLORS.error}>[!] {error}</text>
           </box>
+        )}
 
-          <box
-            flexDirection="row"
-            paddingLeft={1}
-            paddingRight={1}
-            backgroundColor={
-              selectedOption === "confirm" ? THEME_COLORS.primary : THEME_COLORS.header
-            }
-          >
-            <text fg={selectedOption === "confirm" ? THEME_COLORS.background : THEME_COLORS.text}>
-              {selectedOption === "confirm" ? "> " : "  "}Continue
-            </text>
-          </box>
-        </box>
+        <GuideBar
+          groups={{
+            primary: [
+              {
+                shortcuts: [
+                  { key: "^v", description: showPassword ? "hide" : "show" },
+                  { key: KEY_SYMBOLS.enter, description: "confirm" },
+                  { key: "esc", description: "cancel" },
+                ],
+              },
+            ],
+            secondary: [],
+          }}
+          customWidth={56}
+          minimal={true}
+        />
       </box>
     </Modal>
   );
