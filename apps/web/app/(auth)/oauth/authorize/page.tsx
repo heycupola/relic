@@ -1,18 +1,47 @@
 "use client";
 
+import { api } from "@repo/backend";
 import { Button } from "@repo/ui/components/button";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { Check, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Component, type ReactNode, Suspense, useEffect, useState } from "react";
 import { AuthFooter } from "@/components/auth-footer";
 import { RelicLogo } from "@/components/relic-logo";
-import { api } from "@/convex/_generated/api";
 import { authClient } from "@/lib/auth";
 import { authHeadingStyle, authSubtitleStyle } from "@/lib/styles";
 
 type AuthStatus = "loading" | "ready" | "approving" | "denying" | "approved" | "denied" | "error";
+
+// Error boundary to catch Convex errors and display them gracefully
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallback: (error: Error) => ReactNode;
+}
+
+interface ErrorBoundaryState {
+  error: Error | null;
+}
+
+class ConvexErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return this.props.fallback(this.state.error);
+    }
+
+    return this.props.children;
+  }
+}
 
 function AuthorizeContent() {
   const router = useRouter();
@@ -24,7 +53,8 @@ function AuthorizeContent() {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [errorMessage, setErrorMessage] = useState<string>("");
 
-  const shouldQuery = userCode && status !== "approved" && status !== "denied";
+  const shouldQuery =
+    userCode && status !== "approved" && status !== "denied" && status !== "error";
   const deviceCodeInfo = useQuery(
     api.deviceAuth.getDeviceCodeInfo,
     shouldQuery ? { user_code: userCode } : "skip",
@@ -46,7 +76,7 @@ function AuthorizeContent() {
   }, [sessionChecked, hasSession, isAuthenticated, authLoading, router, userCode]);
 
   useEffect(() => {
-    if (status === "approved" || status === "denied") return;
+    if (status === "approved" || status === "denied" || status === "error") return;
 
     if (!userCode) {
       setStatus("error");
@@ -61,6 +91,9 @@ function AuthorizeContent() {
 
     if (deviceCodeInfo === undefined) {
       setStatus("loading");
+    } else if (deviceCodeInfo === null) {
+      setStatus("error");
+      setErrorMessage("Invalid or expired device code");
     } else if (deviceCodeInfo.status === "approved") {
       setStatus("approved");
     } else if (deviceCodeInfo.status === "denied") {
@@ -242,6 +275,54 @@ function AuthorizeContent() {
   );
 }
 
+function ErrorFallback({ error }: { error: Error }) {
+  // Parse error message from ConvexError
+  let displayMessage = "Invalid or expired device code";
+  try {
+    const parsed = JSON.parse(error.message);
+    if (parsed.message) {
+      displayMessage = parsed.message;
+    }
+  } catch {
+    if (error.message.includes("DEVICE_CODE_NOT_FOUND")) {
+      displayMessage = "Invalid or expired device code";
+    } else if (error.message) {
+      displayMessage = error.message;
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+      <div className="w-full py-16">
+        <div className="flex flex-col items-center gap-10">
+          <div className="flex flex-col items-center gap-8">
+            <Link href="/" className="flex items-center">
+              <RelicLogo className="h-12 text-foreground" />
+            </Link>
+            <div className="w-full max-w-sm">
+              <div className="text-center space-y-4">
+                <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
+                  <X className="w-6 h-6 text-destructive" />
+                </div>
+                <div className="space-y-2">
+                  <h1 className="text-3xl font-medium text-foreground" style={authHeadingStyle}>
+                    authorization failed
+                  </h1>
+                  <p className="text-sm font-light text-soft-silver" style={authSubtitleStyle}>
+                    {displayMessage}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <AuthFooter />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AuthorizePage() {
   return (
     <Suspense
@@ -264,7 +345,9 @@ export default function AuthorizePage() {
         </div>
       }
     >
-      <AuthorizeContent />
+      <ConvexErrorBoundary fallback={(error) => <ErrorFallback error={error} />}>
+        <AuthorizeContent />
+      </ConvexErrorBoundary>
     </Suspense>
   );
 }

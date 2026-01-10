@@ -1,11 +1,11 @@
 "use client";
 
 import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
+import { api } from "@repo/backend";
 import { AutumnProvider } from "autumn-js/react";
 import { ConvexReactClient } from "convex/react";
 import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from "next-themes";
 import type { ReactNode } from "react";
-import { api } from "@/convex/_generated/api";
 import { authClient } from "@/lib/auth";
 
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!, {
@@ -13,7 +13,8 @@ const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!, {
 });
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
-  const autumnApi = api?.autumn;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const autumnApi = (api as any)?.autumn;
 
   return (
     <ConvexBetterAuthProvider client={convex} authClient={authClient}>
