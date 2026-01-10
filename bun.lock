@@ -50,6 +50,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@convex-dev/better-auth": "catalog:",
+        "@repo/backend": "*",
         "@repo/ui": "*",
         "@tailwindcss/postcss": "catalog:",
         "autumn-js": "catalog:",
