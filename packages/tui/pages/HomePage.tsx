@@ -507,7 +507,6 @@ export function HomePage() {
         visible={activeModal === "password"}
         onClose={() => setActiveModal("none")}
         onSuccess={() => setActiveModal("none")}
-        verifyCurrentPassword={() => true}
       />
 
       <CommandPaletteModal
