@@ -7,6 +7,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { useUserKeys } from "../../convex/hooks/useUserKeys";
 import { usePaste } from "../../hooks/usePaste";
+import { useTaskQueue } from "../../hooks/useTaskQueue";
 import { useTextInput } from "../../hooks/useTextInput";
 import { KEY_SYMBOLS, THEME_COLORS } from "../../utils/constants";
 import { logger } from "../../utils/debugLog";
@@ -21,7 +22,6 @@ import { GuideBar } from "../shared/GuideBar";
 import { Modal } from "../shared/Modal";
 
 type FocusedField = "current" | "new" | "confirm";
-type TaskStatus = null | "verifying_password" | "rewrapping_key" | "updating_backend";
 
 interface ChangePasswordModalProps {
   visible: boolean;
@@ -31,11 +31,12 @@ interface ChangePasswordModalProps {
 
 export function ChangePasswordModal({ visible, onClose, onSuccess }: ChangePasswordModalProps) {
   const { encryptedPrivateKey, salt, updatePassword } = useUserKeys();
+  const { runTask, showSuccess } = useTaskQueue();
 
   const [focusedField, setFocusedField] = useState<FocusedField>("current");
   const [cursorVisible, setCursorVisible] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
-  const [taskStatus, setTaskStatus] = useState<TaskStatus>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const currentInput = useTextInput({ maxLength: 64 });
@@ -48,7 +49,7 @@ export function ChangePasswordModal({ visible, onClose, onSuccess }: ChangePassw
   const resetState = () => {
     setFocusedField("current");
     setShowPassword(false);
-    setTaskStatus(null);
+    setIsProcessing(false);
     setError(null);
     currentInput.setValue("");
     currentInput.setCursor(0);
@@ -72,7 +73,7 @@ export function ChangePasswordModal({ visible, onClose, onSuccess }: ChangePassw
 
   const handlePaste = useCallback(
     (text: string) => {
-      if (taskStatus) return;
+      if (isProcessing) return;
       const cleanText = text.replace(/\s/g, "");
       const activeInput =
         focusedField === "current"
@@ -86,7 +87,7 @@ export function ChangePasswordModal({ visible, onClose, onSuccess }: ChangePassw
       activeInput.setValue(newValue);
       activeInput.setCursor(Math.min(before.length + cleanText.length, 64));
     },
-    [taskStatus, focusedField, currentInput, newInput, confirmInput],
+    [isProcessing, focusedField, currentInput, newInput, confirmInput],
   );
 
   usePaste(handlePaste);
@@ -126,51 +127,58 @@ export function ChangePasswordModal({ visible, onClose, onSuccess }: ChangePassw
     }
 
     setError(null);
-    setTaskStatus("verifying_password");
-
-    let privateKey: CryptoKey;
-    try {
-      privateKey = await decryptPrivateKeyWithPassword(
-        encryptedPrivateKey,
-        currentInput.value,
-        salt,
-      );
-    } catch (error) {
-      logger.error("Failed to verify current password:", error);
-      setTaskStatus(null);
-      setError("Incorrect current password");
-      return;
-    }
-
-    setTaskStatus("rewrapping_key");
+    setIsProcessing(true);
 
     try {
+      // Step 1: Verify current password
+      let privateKey: CryptoKey;
+      try {
+        await runTask("Verifying current password...", async () => {
+          privateKey = await decryptPrivateKeyWithPassword(
+            encryptedPrivateKey,
+            currentInput.value,
+            salt,
+          );
+        });
+      } catch (error) {
+        logger.error("Failed to verify current password:", error);
+        setIsProcessing(false);
+        setError("Incorrect current password");
+        return;
+      }
+
+      // Step 2: Rewrap key
       const newSalt = generateSalt();
-      const newEncryptedPrivateKey = await encryptPrivateKeyWithPassword(
-        privateKey,
-        newInput.value,
-        newSalt,
-      );
-
-      setTaskStatus("updating_backend");
-
-      await updatePassword({
-        encryptedPrivateKey: newEncryptedPrivateKey,
-        salt: newSalt,
+      let newEncryptedPrivateKey: string;
+      await runTask("Rewrapping your private key...", async () => {
+        newEncryptedPrivateKey = await encryptPrivateKeyWithPassword(
+          privateKey!,
+          newInput.value,
+          newSalt,
+        );
       });
 
-      setTaskStatus(null);
+      // Step 3: Update backend
+      await runTask("Updating password...", async () => {
+        await updatePassword({
+          encryptedPrivateKey: newEncryptedPrivateKey,
+          salt: newSalt,
+        });
+      });
+
+      setIsProcessing(false);
+      showSuccess("Password updated successfully");
       onSuccess(newInput.value);
       onClose();
     } catch (error) {
       logger.error("Failed to change password:", error);
-      setTaskStatus(null);
+      setIsProcessing(false);
       setError("Failed to update password");
     }
   };
 
   useKeyboard((key) => {
-    if (!visible || taskStatus) return;
+    if (!visible || isProcessing) return;
 
     if (key.name === "v" && key.ctrl) {
       setShowPassword((prev) => !prev);
@@ -202,19 +210,6 @@ export function ChangePasswordModal({ visible, onClose, onSuccess }: ChangePassw
   if (!visible) {
     return null;
   }
-
-  const getTaskStatusMessage = (): string => {
-    switch (taskStatus) {
-      case "verifying_password":
-        return "Verifying current password...";
-      case "rewrapping_key":
-        return "Rewrapping your private key...";
-      case "updating_backend":
-        return "Updating password...";
-      default:
-        return "";
-    }
-  };
 
   const passwordsMatch = confirmInput.value.length > 0 && confirmInput.value === newInput.value;
   const showHint = focusedField === "new";
@@ -309,12 +304,6 @@ export function ChangePasswordModal({ visible, onClose, onSuccess }: ChangePassw
         {error && (
           <box height={1}>
             <text fg={THEME_COLORS.error}>[!] {error}</text>
-          </box>
-        )}
-
-        {taskStatus && (
-          <box height={1}>
-            <text fg={THEME_COLORS.accent}>{getTaskStatusMessage()}</text>
           </box>
         )}
 

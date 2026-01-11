@@ -170,6 +170,7 @@ export function HomePage() {
   const commands = [
     { key: "n", description: "Create project", category: "Create" },
     { key: "u", description: "Rename project", category: "Manage" },
+    { key: "d", description: "Delete project", category: "Manage" },
     { key: "p", description: "Change password", category: "Account" },
     { key: "^l", description: "Logout", category: "Account" },
   ].sort((a, b) => {
@@ -189,6 +190,13 @@ export function HomePage() {
         if (project && project.status !== "restricted" && project.status !== "archived") {
           logger.debug("Setting editingProject from command", { project, projectId: project.id });
           setEditingProject({ id: project.id, name: project.name });
+        }
+        break;
+      }
+      case "d": {
+        const project = projects[selectedIndex];
+        if (project && project.status !== "restricted" && project.status !== "archived") {
+          setConfirmingDelete({ id: project.id, name: project.name });
         }
         break;
       }
@@ -375,7 +383,9 @@ export function HomePage() {
                       (creatingProject ? 1 : 0) +
                       (validatedConfirmingDelete ? 1 : 0),
                     PAGE_SIZE + (validatedConfirmingDelete ? 1 : 0),
-                  )
+                  ) +
+                  (scrollOffset > 0 ? 1 : 0) +
+                  (scrollOffset + PAGE_SIZE < projects.length ? 1 : 0)
             }
           >
             {isLoadingProjects ? (
@@ -384,6 +394,11 @@ export function HomePage() {
               <text fg={THEME_COLORS.textDim}>No projects created. Press 'n' to create one.</text>
             ) : (
               <>
+                {scrollOffset > 0 && (
+                  <text fg={THEME_COLORS.textDim}>
+                    {"  "}... {scrollOffset} more item{scrollOffset > 1 ? "s" : ""} above
+                  </text>
+                )}
                 {projects.slice(scrollOffset, scrollOffset + PAGE_SIZE).map((project, index) => {
                   const actualIndex = index + scrollOffset;
                   const isSelected =
@@ -474,6 +489,12 @@ export function HomePage() {
                     icon="[+]"
                     iconColor={THEME_COLORS.success}
                   />
+                )}
+                {scrollOffset + PAGE_SIZE < projects.length && (
+                  <text fg={THEME_COLORS.textDim}>
+                    {"  "}... {projects.length - (scrollOffset + PAGE_SIZE)} more item
+                    {projects.length - (scrollOffset + PAGE_SIZE) > 1 ? "s" : ""} below
+                  </text>
                 )}
               </>
             )}
