@@ -1371,6 +1371,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         {
           emailKind:
             | "access-restricted"
+            | "collaborator-added"
             | "grace-period-started"
             | "plan-upgraded"
             | "welcome";
