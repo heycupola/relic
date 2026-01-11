@@ -1,3 +1,4 @@
+import { importPublicKey, wrapAESKeyWithRSA } from "@repo/crypto";
 import { useCallback, useEffect, useState } from "react";
 import type { Project as ApiProject } from "../convex/api/types";
 import { useApi } from "../convex/hooks/useApi";
@@ -77,7 +78,7 @@ interface UseProjectDataReturn {
   }) => Promise<void>;
   deleteSecret: (secretId: string) => Promise<void>;
 
-  shareProject: (email: string, encryptedProjectKey: string) => Promise<void>;
+  shareProject: (email: string) => Promise<void>;
   revokeShare: (shareId: string) => Promise<void>;
 }
 
@@ -498,18 +499,42 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
   );
 
   const shareProject = useCallback(
-    async (email: string, encryptedProjectKey: string): Promise<void> => {
+    async (email: string): Promise<void> => {
       if (!api) return;
 
       try {
-        await api.shareProject({ projectId, email, encryptedProjectKey });
+        // 1. Get the collaborator's public key
+        const collaboratorKeyResult = await api.getUserPublicKeyByEmail(email);
+        if (!collaboratorKeyResult) {
+          throw new Error("User not found or hasn't set up their account yet");
+        }
+
+        // 2. Get the decrypted project key
+        const projectKey = await getProjectKeyForProject();
+        if (!projectKey) {
+          throw new Error("Cannot share project: Project key not available");
+        }
+
+        // 3. Wrap the project key with the collaborator's public key
+        const collaboratorPublicKey = await importPublicKey(collaboratorKeyResult.publicKey);
+        const encryptedProjectKeyForCollaborator = await wrapAESKeyWithRSA(
+          projectKey,
+          collaboratorPublicKey,
+        );
+
+        // 4. Call the API to share the project
+        await api.shareProject({
+          projectId,
+          email,
+          encryptedProjectKey: encryptedProjectKeyForCollaborator,
+        });
         await fetchProjectData();
       } catch (err) {
         setError(err instanceof Error ? err : new Error("Failed to share project"));
         throw err;
       }
     },
-    [api, projectId, fetchProjectData],
+    [api, projectId, fetchProjectData, getProjectKeyForProject],
   );
 
   const revokeShare = useCallback(

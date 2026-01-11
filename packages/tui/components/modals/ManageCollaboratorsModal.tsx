@@ -7,6 +7,14 @@ import { COLLABORATOR_LIMIT, KEY_SYMBOLS, THEME_COLORS } from "../../utils/const
 import { InlineInput } from "../forms/InlineInput";
 import { Modal } from "../shared/Modal";
 
+/**
+ * Simple email validation
+ */
+function isValidEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+}
+
 interface Collaborator {
   id: string;
   email: string;
@@ -185,6 +193,7 @@ function SmartManageCollaboratorsModal({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [creatingCollab, setCreatingCollab] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState<Collaborator | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const input = useInlineInput({ maxLength: 50 });
   const cursorVisible = useCursorBlink(creatingCollab);
@@ -218,14 +227,24 @@ function SmartManageCollaboratorsModal({
 
       if (key.name === "return") {
         const trimmed = input.value.trim();
-        if (trimmed) {
-          onAdd?.(trimmed);
-          setCreatingCollab(false);
-          input.reset();
+        if (!trimmed) {
+          return;
         }
+        if (!isValidEmail(trimmed)) {
+          setEmailError("Invalid email address");
+          return;
+        }
+        setEmailError(null);
+        onAdd?.(trimmed);
+        setCreatingCollab(false);
+        input.reset();
         return;
       }
 
+      // Clear error when user types
+      if (emailError) {
+        setEmailError(null);
+      }
       input.handleKey(key);
       return;
     }
@@ -237,6 +256,7 @@ function SmartManageCollaboratorsModal({
 
     if (key.name === "a") {
       setCreatingCollab(true);
+      setEmailError(null);
       input.reset();
       return;
     }
@@ -276,6 +296,7 @@ function SmartManageCollaboratorsModal({
           ? { type: "collab", id: confirmingDelete.id, name: confirmingDelete.email }
           : null
       }
+      emailError={emailError}
     />
   );
 }
@@ -292,6 +313,7 @@ interface ManageCollaboratorsDisplayProps {
   newCollabCursor: number;
   cursorVisible: boolean;
   confirmingDelete?: { type: string; id: string; name: string } | null;
+  emailError?: string | null;
 }
 
 function ManageCollaboratorsDisplay({
@@ -303,6 +325,7 @@ function ManageCollaboratorsDisplay({
   newCollabCursor,
   cursorVisible,
   confirmingDelete,
+  emailError,
 }: ManageCollaboratorsDisplayProps) {
   const shortcuts = creatingCollab
     ? [
@@ -357,17 +380,20 @@ function ManageCollaboratorsDisplay({
                 );
               })}
               {creatingCollab && (
-                <InlineInput
-                  value={newCollabInput}
-                  cursor={newCollabCursor}
-                  cursorVisible={cursorVisible}
-                  maxWidth={28}
-                  maxLength={50}
-                  placeholder="e.g. user@example.com"
-                  isFocused={true}
-                  showIcon={false}
-                  showCount={true}
-                />
+                <box flexDirection="column">
+                  <InlineInput
+                    value={newCollabInput}
+                    cursor={newCollabCursor}
+                    cursorVisible={cursorVisible}
+                    maxWidth={28}
+                    maxLength={50}
+                    placeholder="e.g. user@example.com"
+                    isFocused={true}
+                    showIcon={false}
+                    showCount={true}
+                  />
+                  {emailError && <text fg={THEME_COLORS.error}> {emailError}</text>}
+                </box>
               )}
             </>
           )}

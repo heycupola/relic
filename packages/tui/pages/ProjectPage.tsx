@@ -13,7 +13,7 @@ import { usePaste } from "../hooks/usePaste";
 import { useProjectData } from "../hooks/useProjectData";
 import { useTaskQueue } from "../hooks/useTaskQueue";
 import { useRouter } from "../router";
-import type { LogEntry, ModalType, ProjectStatus, SharedUser, ViewLevel } from "../types";
+import type { ModalType, ProjectStatus, SharedUser, ViewLevel } from "../types";
 import type { BulkImportFormat, CollisionInfo } from "../utils/bulkImportTypes";
 import { validateBulkImportJson } from "../utils/bulkImportValidator";
 import { KEY_SYMBOLS, STATUS_COLORS, THEME_COLORS } from "../utils/constants";
@@ -54,7 +54,6 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
 
   const folders = currentEnvironmentData?.folders || [];
   const secrets = currentEnvironmentData?.secrets || [];
-  const logs: LogEntry[] = []; // TODO: Implement logs when available
 
   const [viewLevel, setViewLevel] = useState<ViewLevel>("environments");
   const [selectedEnvId, setSelectedEnvId] = useState<string | null>(null);
@@ -282,12 +281,9 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
   };
 
   const handleAddCollaborator = async (email: string) => {
-    if (!project?.encryptedProjectKey) {
-      return;
-    }
     try {
       await runTask(`Adding collaborator "${email}"...`, async () => {
-        await shareProject(email, project.encryptedProjectKey);
+        await shareProject(email);
       });
       showSuccess(`Collaborator "${email}" added`);
     } catch (_error) {
@@ -321,16 +317,16 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         category: "Manage",
         disabled: isRestricted,
       });
+      cmds.push({
+        key: "d",
+        description: "Delete environment",
+        category: "Manage",
+        disabled: isRestricted,
+      });
       cmds.push({ key: "esc", description: "Back to home", category: "Navigate" });
     } else if (viewLevel === "environment") {
       cmds.push({
         key: "n",
-        description: "Create secret",
-        category: "Create",
-        disabled: isRestricted,
-      });
-      cmds.push({
-        key: "⌥n",
         description: "Create folder",
         category: "Create",
         disabled: isRestricted,
@@ -349,11 +345,23 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         category: "Manage",
         disabled: isRestricted,
       });
+      cmds.push({
+        key: "d",
+        description: "Delete",
+        category: "Manage",
+        disabled: isRestricted,
+      });
       cmds.push({ key: "esc", description: "Go back", category: "Navigate" });
     } else {
       cmds.push({
         key: "⌥i",
         description: "Edit secrets",
+        category: "Manage",
+        disabled: isRestricted,
+      });
+      cmds.push({
+        key: "d",
+        description: "Delete secret",
         category: "Manage",
         disabled: isRestricted,
       });
@@ -540,7 +548,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
           id: item.id,
           name: item.name,
         });
-    } else if (key.name === "n" && !isRestricted)
+    } else if (key.name === "n" && !key.meta && !isRestricted)
       setCreatingItem(
         viewLevel === "environments" ? "env" : viewLevel === "environment" ? "folder" : null,
       );
@@ -673,13 +681,20 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
                 : Math.min(
                     items.length + (creatingItem ? 1 : 0) + (confirmingDelete ? 1 : 0),
                     PAGE_SIZE + (confirmingDelete ? 1 : 0),
-                  )
+                  ) +
+                  (scrollOffset > 0 ? 1 : 0) +
+                  (scrollOffset + PAGE_SIZE < items.length ? 1 : 0)
             }
           >
             {items.length === 0 && !creatingItem ? (
               <text fg={THEME_COLORS.textDim}>Empty. Use shortcuts below to create items.</text>
             ) : (
               <>
+                {scrollOffset > 0 && (
+                  <text fg={THEME_COLORS.textDim}>
+                    {"  "}... {scrollOffset} more item{scrollOffset > 1 ? "s" : ""} above
+                  </text>
+                )}
                 {items.slice(scrollOffset, scrollOffset + PAGE_SIZE).map((item, index) => {
                   const actualIndex = index + scrollOffset;
                   const isSelected = actualIndex === selectedIndex && !creatingItem && !editingItem;
@@ -762,21 +777,17 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
                     }
                   />
                 )}
+                {scrollOffset + PAGE_SIZE < items.length && (
+                  <text fg={THEME_COLORS.textDim}>
+                    {"  "}... {items.length - (scrollOffset + PAGE_SIZE)} more item
+                    {items.length - (scrollOffset + PAGE_SIZE) > 1 ? "s" : ""} below
+                  </text>
+                )}
               </>
             )}
           </box>
 
           <box flexDirection="column" marginTop={1}>
-            {viewLevel === "environments" && logs.length > 0 && (
-              <box height={1} width={66}>
-                <text fg={THEME_COLORS.textDim}>
-                  Latest Pulse:{" "}
-                  <span fg={THEME_COLORS.textMuted}>
-                    {logs[0]?.user || ""} {logs[0]?.action?.replace(".", " ") || ""}
-                  </span>
-                </text>
-              </box>
-            )}
             <box height={1} width={66} flexDirection="row" justifyContent="space-between">
               <text fg={THEME_COLORS.textDim}>Collaborators [{sharedUsers.length}]</text>
               <text fg={THEME_COLORS.textDim}>

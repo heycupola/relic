@@ -72,6 +72,10 @@ export class ProtectedApi {
     return this.withAuth(() => this.client.query("user:getCurrentUser", {}));
   }
 
+  async getUserPublicKeyByEmail(email: string): Promise<{ publicKey: string } | null> {
+    return this.withAuth(() => this.client.query("user:getUserPublicKeyByEmail", { email }));
+  }
+
   async hasUserKeys(): Promise<boolean> {
     const result = await this.withAuth(() => this.client.query("userKey:hasUserKeys", {}));
     return result.hasKeys;

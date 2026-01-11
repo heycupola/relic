@@ -15,7 +15,13 @@ import {
 } from "./lib/errors";
 import { protectedAction, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
-import { ErrorSeverity, type ProtectedActionCtx, type ProtectedQueryCtx } from "./lib/types";
+import {
+  EmailKind,
+  ErrorSeverity,
+  type ProtectedActionCtx,
+  type ProtectedQueryCtx,
+} from "./lib/types";
+import { sendEmail } from "./resend";
 import schema from "./schema";
 
 export const shareLimits = {
@@ -33,6 +39,15 @@ export const shareProject = protectedAction({
     args: { projectId: Id<"project">; userEmail: string; encryptedProjectKey: string },
   ) => {
     await checkRateLimit(ctx, "write");
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(args.userEmail)) {
+      throw createError({
+        code: ErrorCode.INVALID_OPERATION,
+        message: "Invalid email address format",
+        severity: ErrorSeverity.Medium,
+      });
+    }
 
     const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: args.projectId,
@@ -132,6 +147,21 @@ export const shareProject = protectedAction({
       projectId: project._id,
       value: 1,
     });
+
+    const owner = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: project.ownerId as BetterAuthId<"user">,
+    });
+
+    try {
+      await sendEmail(ctx, targetUser._id, targetUser.email, {
+        kind: EmailKind.CollaboratorAdded,
+        userName: targetUser.name || "there",
+        projectName: project.name,
+        ownerName: owner?.name || "someone",
+      });
+    } catch (error) {
+      console.error("[Email] Failed to send collaborator added email:", error);
+    }
 
     return { success: true, shareId: sId };
   },
