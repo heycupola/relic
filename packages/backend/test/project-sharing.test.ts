@@ -238,7 +238,6 @@ describe("Project Sharing", () => {
 
       const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         key,
-        encryptionKeyVersion: 1,
         encryptedValue,
         valueType: "string",
         environmentId,
@@ -494,7 +493,6 @@ describe("Project Sharing", () => {
       });
 
       const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
-        encryptionKeyVersion: 1,
         encryptedValue: await encryptSecret(projectKey, "value1"),
         environmentId,
         key: "key1",

@@ -85,7 +85,6 @@ describe("Project Sharing Performance", () => {
 
         for (const [index, secretKey] of secretKeys.entries()) {
           const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
-            encryptionKeyVersion: 1,
             encryptedValue: await encryptSecret(projectKey, secretValues[index]),
             environmentId,
             key: secretKey,

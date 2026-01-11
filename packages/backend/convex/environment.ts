@@ -13,6 +13,27 @@ import schema from "./schema";
 
 const MAX_ENV_COUNT = 32;
 
+export const getProjectEnvironments = protectedQuery({
+  args: {
+    projectId: v.id("project"),
+  },
+  returns: v.array(doc(schema, "environment")),
+  handler: async (ctx: ProtectedQueryCtx, args: { projectId: Id<"project"> }) => {
+    const project = await ctx.runQuery(internal.project._loadProjectById, {
+      projectId: args.projectId,
+    });
+
+    await assertProjectAccess(ctx, project, { skipArchivedCheck: true });
+
+    const environments = await ctx.db
+      .query("environment")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    return environments.sort((a, b) => a.sortOrder - b.sortOrder);
+  },
+});
+
 export const createEnvironment = protectedMutation({
   args: {
     projectId: v.id("project"),
@@ -198,52 +219,10 @@ export const getEnvironmentData = protectedQuery({
       },
     );
 
-    type SecretSummary = {
-      id: Id<"secret">;
-      key: string;
-      encryptedValue: string;
-      valueType: string;
-      createdBy: string;
-      createdAt: number;
-      updatedBy: string;
-      updatedAt: number;
-    };
-
-    const secretsByLocation = secrets.reduce<{
-      root: SecretSummary[];
-      byFolder: Record<string, SecretSummary[]>;
-    }>(
-      (
-        acc: { root: SecretSummary[]; byFolder: Record<string, SecretSummary[]> },
-        secret: Doc<"secret">,
-      ) => {
-        const summary: SecretSummary = {
-          id: secret._id,
-          key: secret.key,
-          encryptedValue: secret.encryptedValue,
-          valueType: secret.valueType,
-          createdBy: secret.createdBy,
-          createdAt: secret.createdAt,
-          updatedBy: secret.updatedBy,
-          updatedAt: secret.updatedAt,
-        };
-
-        if (secret.folderId) {
-          if (!acc.byFolder[secret.folderId]) {
-            acc.byFolder[secret.folderId] = [];
-          }
-          acc.byFolder[secret.folderId]?.push(summary);
-        } else {
-          acc.root.push(summary);
-        }
-        return acc;
-      },
-      { root: [], byFolder: {} },
-    );
-
     return {
       environment: {
-        id: environment._id,
+        _id: environment._id,
+        projectId: environment.projectId,
         name: environment.name,
         slug: environment.slug,
         description: environment.description,
@@ -254,19 +233,36 @@ export const getEnvironmentData = protectedQuery({
         updatedAt: environment.updatedAt,
       },
       folders: folders.map((folder: Doc<"folder">) => ({
-        id: folder._id,
+        _id: folder._id,
+        environmentId: folder.environmentId,
+        projectId: folder.projectId,
         name: folder.name,
         slug: folder.slug,
         path: folder.path,
+        description: folder.description,
+        parentFolderId: folder.parentFolderId,
+        createdBy: folder.createdBy,
         createdAt: folder.createdAt,
         updatedAt: folder.updatedAt,
-        secrets: secretsByLocation.byFolder[folder._id] || [],
       })),
-      rootSecrets: secretsByLocation.root,
-      stats: {
-        totalSecrets: secrets.length,
-        totalFolders: folders.length,
-      },
+      secrets: secrets.map((secret: Doc<"secret">) => ({
+        _id: secret._id,
+        projectId: secret.projectId,
+        environmentId: secret.environmentId,
+        folderId: secret.folderId,
+        key: secret.key,
+        encryptedValue: secret.encryptedValue,
+        valueType: secret.valueType,
+        scope: secret.scope,
+        description: secret.description,
+        encryptionKeyVersion: secret.encryptionKeyVersion,
+        tags: secret.tags,
+        isDeleted: secret.isDeleted,
+        createdBy: secret.createdBy,
+        createdAt: secret.createdAt,
+        updatedBy: secret.updatedBy,
+        updatedAt: secret.updatedAt,
+      })),
     };
   },
 });

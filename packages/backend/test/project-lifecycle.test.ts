@@ -347,4 +347,113 @@ describe("Project Lifecycle", () => {
       );
     });
   });
+
+  describe("Environment CRUD Operations", () => {
+    beforeEach(async () => {
+      mockAutumn.setFeature(owner.userId, "projects", 2);
+      mockAutumn.setFeature(collaborator.userId, "projects", 2);
+    });
+
+    test("should create an environment", async () => {
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const { projectId } = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project-name",
+      });
+
+      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        projectId,
+        name: "environment-name",
+      });
+
+      expect(environmentId).toBeDefined();
+
+      const environment = await owner.asUser.query(api.environment.getProjectEnvironments, {
+        projectId,
+      });
+
+      expect(environment.length).toBe(1);
+      expect(environment[0].name).toBe("environment-name");
+    });
+
+    test("should not create an environment if the project is archived", async () => {
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const { projectId } = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project-name",
+      });
+
+      await owner.asUser.action(api.project.archiveProject, { projectId });
+
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.environment.createEnvironment, {
+            projectId,
+            name: "environment-name",
+          }),
+        ErrorCode.PROJECT_INACCESSIBLE,
+        "archived",
+      );
+    });
+
+    test("should not get environments if the user has no access to the project", async () => {
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const { projectId } = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project-name",
+      });
+
+      await expectConvexError(
+        () =>
+          nonCollaborator.asUser.query(api.environment.getProjectEnvironments, {
+            projectId,
+          }),
+        ErrorCode.INSUFFICIENT_PERMISSION,
+        "You don't have permission",
+      );
+    });
+
+    test("should get environments if the user has project share access", async () => {
+      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
+
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const { projectId } = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project-name",
+      });
+
+      await owner.asUser.action(api.projectShare.shareProject, {
+        projectId,
+        userEmail: collaborator.email,
+        encryptedProjectKey,
+      });
+
+      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        projectId,
+        name: "environment-name",
+      });
+
+      const environment = await collaborator.asUser.query(api.environment.getProjectEnvironments, {
+        projectId,
+      });
+
+      expect(environment).toBeDefined();
+      expect(environmentId).toBeDefined();
+
+      const collaboratorEnvironment = await collaborator.asUser.query(
+        api.environment.getProjectEnvironments,
+        {
+          projectId,
+        },
+      );
+
+      expect(collaboratorEnvironment).toBeDefined();
+      expect(collaboratorEnvironment.length).toBe(1);
+      expect(collaboratorEnvironment[0].name).toBe("environment-name");
+    });
+  });
 });
