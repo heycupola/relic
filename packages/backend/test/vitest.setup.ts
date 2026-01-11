@@ -1,6 +1,8 @@
 /// <reference types="vite/client" />
 
+import type { GenericActionCtx } from "convex/server";
 import { vi } from "vitest";
+import type { DataModel } from "../convex/_generated/dataModel";
 
 // Mock rate limiter modules
 vi.mock("../convex/rateLimiter", () => ({
@@ -107,7 +109,7 @@ const { _mockAutumn } = vi.hoisted(() => {
       this.features.set(customerId, existing);
     }
 
-    async check(ctx: any, args: { entityId?: string; featureId: string }) {
+    async check(ctx: GenericActionCtx<DataModel>, args: { entityId?: string; featureId: string }) {
       const identity = await ctx.auth.getUserIdentity();
       if (!identity?.subject) throw new Error("Unable to get user");
 
@@ -140,7 +142,10 @@ const { _mockAutumn } = vi.hoisted(() => {
       };
     }
 
-    async track(ctx: any, args: { entityId?: string; featureId: string; value: number }) {
+    async track(
+      ctx: GenericActionCtx<DataModel>,
+      args: { entityId?: string; featureId: string; value: number },
+    ) {
       const identity = await ctx.auth.getUserIdentity();
       if (!identity?.subject) throw new Error("Unable to get user");
 
@@ -187,6 +192,7 @@ const { _mockAutumn } = vi.hoisted(() => {
 });
 
 // Export mock for tests to access via globalThis
+// biome-ignore lint/suspicious/noExplicitAny: Test mock needs to be accessible via globalThis
 (globalThis as any).__mockAutumn = _mockAutumn;
 
 vi.mock("../convex/autumn", () => ({
