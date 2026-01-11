@@ -6,11 +6,14 @@ import { THEME_COLORS } from "../../utils/constants";
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_INTERVAL = 80;
 
-const STATUS_CONFIG: Record<TaskStatus, { icon: string; color: string }> = {
-  idle: { icon: "", color: THEME_COLORS.textDim },
-  running: { icon: "", color: THEME_COLORS.primary },
-  success: { icon: "✓", color: THEME_COLORS.success },
-  error: { icon: "✗", color: THEME_COLORS.error },
+const STATUS_CONFIG: Record<
+  TaskStatus,
+  { icon: string; textColor: string; bgColor: string; prefix: string }
+> = {
+  idle: { icon: "", textColor: THEME_COLORS.textDim, bgColor: "#24283b", prefix: "" },
+  running: { icon: "", textColor: THEME_COLORS.primary, bgColor: "#24283b", prefix: "" },
+  success: { icon: "✓", textColor: "#1a1e2e", bgColor: "#9ece6a", prefix: "Success: " },
+  error: { icon: "✗", textColor: "#1a1e2e", bgColor: "#f7768e", prefix: "Error: " },
 };
 
 export function TaskBar() {
@@ -34,6 +37,7 @@ export function TaskBar() {
 
   const config = STATUS_CONFIG[task.status];
   const icon = task.status === "running" ? SPINNER_FRAMES[spinnerFrame] : config.icon;
+  const isResult = task.status === "success" || task.status === "error";
 
   return (
     <box
@@ -42,14 +46,25 @@ export function TaskBar() {
       top={height - 1}
       width={width}
       height={1}
-      backgroundColor="#24283b"
+      backgroundColor={isResult ? config.bgColor : "#24283b"}
       flexDirection="row"
       justifyContent="flex-start"
       paddingLeft={1}
     >
       <text>
-        <span fg={config.color}>{icon}</span>
-        <span fg={THEME_COLORS.textMuted}> {task.message}</span>
+        {isResult ? (
+          <>
+            <span fg={config.textColor} bold={true}>
+              {icon} {config.prefix}
+            </span>
+            <span fg={config.textColor}>{task.message}</span>
+          </>
+        ) : (
+          <>
+            <span fg={config.textColor}>{icon}</span>
+            <span fg={THEME_COLORS.textMuted}> {task.message}</span>
+          </>
+        )}
       </text>
     </box>
   );

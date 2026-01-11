@@ -2,7 +2,7 @@ export function envToJson(envContent: string): string {
   const lines = envContent.split("\n");
   const secrets: Array<{
     key: string;
-    value: string;
+    value: string | number | boolean;
     type: string;
     scope: string;
   }> = [];
@@ -34,10 +34,23 @@ export function envToJson(envContent: string): string {
       value = value.slice(1, -1);
     }
 
+    // Detect type and convert value
+    let typedValue: string | number | boolean = value;
+    let type = "string";
+
+    const lowerValue = value.toLowerCase().trim();
+    if (lowerValue === "true" || lowerValue === "false") {
+      type = "boolean";
+      typedValue = lowerValue === "true";
+    } else if (value !== "" && !Number.isNaN(Number(value)) && Number.isFinite(Number(value))) {
+      type = "number";
+      typedValue = Number(value);
+    }
+
     secrets.push({
       key,
-      value,
-      type: "string",
+      value: typedValue,
+      type,
       scope: "shared",
     });
   }
@@ -66,12 +79,15 @@ export function jsonToEnv(jsonContent: string): string {
 
         if (hasKey && hasValue) {
           const key = String(item.key);
+          // Convert value to string for .env format
           const value = item.value !== null && item.value !== undefined ? String(item.value) : "";
 
           if (key === "" && value === "") {
             continue;
           }
 
+          // For .env format, always use string representation
+          // But preserve the original value's string representation
           const needsQuotes = /[\s#"']/.test(value);
           const quotedValue = needsQuotes ? `"${value}"` : value;
 

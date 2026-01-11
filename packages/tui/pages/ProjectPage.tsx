@@ -10,21 +10,14 @@ import { DeleteConfirmation } from "../components/shared/DeleteConfirmation";
 import { GuideBar } from "../components/shared/GuideBar";
 import { useMultilineInput } from "../hooks/useMultilineInput";
 import { usePaste } from "../hooks/usePaste";
+import { useProjectData } from "../hooks/useProjectData";
 import { useTaskQueue } from "../hooks/useTaskQueue";
 import { useRouter } from "../router";
-import type {
-  Environment,
-  Folder,
-  LogEntry,
-  ModalType,
-  ProjectStatus,
-  Secret,
-  SharedUser,
-  ViewLevel,
-} from "../types";
+import type { LogEntry, ModalType, ProjectStatus, SharedUser, ViewLevel } from "../types";
 import type { BulkImportFormat, CollisionInfo } from "../utils/bulkImportTypes";
 import { validateBulkImportJson } from "../utils/bulkImportValidator";
 import { KEY_SYMBOLS, STATUS_COLORS, THEME_COLORS } from "../utils/constants";
+import { logger } from "../utils/debugLog";
 import { parseEnvContent } from "../utils/envParser";
 import { envToJson, jsonToEnv } from "../utils/formatConverter";
 
@@ -34,94 +27,34 @@ interface ProjectPageProps {
   projectStatus: ProjectStatus;
 }
 
-const MOCK_ENVIRONMENTS: Environment[] = [
-  { id: "env1", name: "production" },
-  { id: "env2", name: "staging" },
-  { id: "env3", name: "development" },
-];
-
-const MOCK_FOLDERS: Folder[] = [
-  { id: "f1", name: "database", environmentId: "env1" },
-  { id: "f2", name: "auth", environmentId: "env1" },
-  { id: "f3", name: "api", environmentId: "env2" },
-];
-
-const MOCK_SECRETS: Secret[] = [
-  {
-    id: "s1",
-    key: "DATABASE_URL",
-    value: "postgresql://user:pass@localhost:5432/db",
-    type: "string",
-    environmentId: "env1",
-  },
-  {
-    id: "s2",
-    key: "API_KEY",
-    value: "sk_test_4eC39HqLyjWDarjtT1zdp7dc",
-    type: "string",
-    environmentId: "env1",
-  },
-  {
-    id: "s3",
-    key: "JWT_SECRET",
-    value: "a-very-secret-signing-key",
-    type: "string",
-    environmentId: "env1",
-    folderId: "f1",
-  },
-  {
-    id: "s4",
-    key: "SMTP_PASSWORD",
-    value: "pass123",
-    type: "string",
-    environmentId: "env1",
-    folderId: "f1",
-  },
-  {
-    id: "s5",
-    key: "AWS_ACCESS_KEY",
-    value: "AKIAIOSFODNN7EXAMPLE",
-    type: "string",
-    environmentId: "env1",
-  },
-  {
-    id: "s6",
-    key: "REDIS_URL",
-    value: "redis://localhost:6379",
-    type: "string",
-    environmentId: "env1",
-  },
-  { id: "s7", key: "STRIPE_KEY", value: "sk_test_51Mz...", type: "string", environmentId: "env2" },
-  { id: "s8", key: "MAX_CONNECTIONS", value: "100", type: "number", environmentId: "env1" },
-  { id: "s9", key: "DEBUG_MODE", value: "true", type: "boolean", environmentId: "env1" },
-];
-
-const MOCK_SHARED_USERS: SharedUser[] = [
-  { id: "u1", email: "john@example.com", name: "John" },
-  { id: "u2", email: "jane@example.com", name: "Jane" },
-];
-
-const MOCK_LOGS: LogEntry[] = [
-  { id: "l1", action: "secret.created", timestamp: Date.now() - 3600000, user: "you" },
-  { id: "l2", action: "folder.created", timestamp: Date.now() - 7200000, user: "john@example.com" },
-];
-
 const PAGE_SIZE = 10;
 
-export function ProjectPage({
-  projectId: _projectId,
-  projectName,
-  projectStatus,
-}: ProjectPageProps) {
+export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPageProps) {
   const { width, height } = useTerminalDimensions();
   const { goBack: routerGoBack } = useRouter();
   const { runTask, showSuccess } = useTaskQueue();
 
-  const [environments] = useState<Environment[]>(MOCK_ENVIRONMENTS);
-  const [folders] = useState<Folder[]>(MOCK_FOLDERS);
-  const [secrets] = useState<Secret[]>(MOCK_SECRETS);
-  const [sharedUsers] = useState<SharedUser[]>(MOCK_SHARED_USERS);
-  const [logs] = useState<LogEntry[]>(MOCK_LOGS);
+  const {
+    project,
+    environments,
+    currentEnvironmentData,
+    sharedUsers,
+    loadEnvironmentData,
+    createEnvironment,
+    updateEnvironment,
+    deleteEnvironment,
+    createFolder,
+    updateFolder,
+    deleteFolder,
+    updateSecretBulk,
+    deleteSecret,
+    shareProject,
+    revokeShare,
+  } = useProjectData(projectId);
+
+  const folders = currentEnvironmentData?.folders || [];
+  const secrets = currentEnvironmentData?.secrets || [];
+  const logs: LogEntry[] = []; // TODO: Implement logs when available
 
   const [viewLevel, setViewLevel] = useState<ViewLevel>("environments");
   const [selectedEnvId, setSelectedEnvId] = useState<string | null>(null);
@@ -147,7 +80,6 @@ export function ProjectPage({
   const bulkImportInput = useMultilineInput({ maxLines: 50 });
   const [bulkImportFormat, setBulkImportFormat] = useState<BulkImportFormat>("env");
   const [bulkImportCollisions, setBulkImportCollisions] = useState<CollisionInfo[]>([]);
-  const [bulkImportMode, setBulkImportMode] = useState<"import" | "update">("import");
 
   const isRestricted = projectStatus === "restricted" || projectStatus === "archived";
 
@@ -242,7 +174,7 @@ export function ProjectPage({
     });
   };
 
-  const enter = () => {
+  const enter = async () => {
     const item = items[selectedIndex];
     if (!item) return;
     if (item.type === "env") {
@@ -250,6 +182,7 @@ export function ProjectPage({
       setViewLevel("environment");
       setSelectedIndex(0);
       setScrollOffset(0);
+      await loadEnvironmentData(item.id);
     } else if (item.type === "folder") {
       setSelectedFolderId(item.id);
       setViewLevel("folder");
@@ -274,13 +207,22 @@ export function ProjectPage({
 
   const handleCreateItem = async (name: string) => {
     if (!creatingItem) return;
-    const itemType = creatingItem === "env" ? "environment" : "folder";
-    await runTask(
-      `Creating ${itemType} "${name}"...`,
-      () => new Promise((r) => setTimeout(r, 1000)),
-    );
-    showSuccess(`${itemType.charAt(0).toUpperCase() + itemType.slice(1)} "${name}" created`);
-    setCreatingItem(null);
+    try {
+      if (creatingItem === "env") {
+        await runTask(`Creating environment "${name}"...`, async () => {
+          await createEnvironment(name);
+        });
+        showSuccess(`Environment "${name}" created`);
+      } else if (creatingItem === "folder" && selectedEnvId) {
+        await runTask(`Creating folder "${name}"...`, async () => {
+          await createFolder(selectedEnvId, name);
+        });
+        showSuccess(`Folder "${name}" created`);
+      }
+      setCreatingItem(null);
+    } catch (_error) {
+      // Error is handled by useProjectData
+    }
   };
 
   const handleRenameItem = async (name: string) => {
@@ -288,37 +230,80 @@ export function ProjectPage({
       setEditingItem(null);
       return;
     }
-    const itemType = editingItem.type === "env" ? "environment" : "folder";
-    await runTask(
-      `Renaming ${itemType} to "${name}"...`,
-      () => new Promise((r) => setTimeout(r, 1000)),
-    );
-    showSuccess(`${itemType.charAt(0).toUpperCase() + itemType.slice(1)} renamed to "${name}"`);
-    setEditingItem(null);
+    try {
+      if (editingItem.type === "env") {
+        await runTask(`Renaming environment to "${name}"...`, async () => {
+          await updateEnvironment(editingItem.id, name);
+        });
+        showSuccess(`Environment renamed to "${name}"`);
+      } else if (editingItem.type === "folder") {
+        await runTask(`Renaming folder to "${name}"...`, async () => {
+          await updateFolder(editingItem.id, name);
+        });
+        showSuccess(`Folder renamed to "${name}"`);
+      }
+      setEditingItem(null);
+    } catch (_error) {
+      // Error is handled by useProjectData
+    }
   };
 
   const handleDeleteItem = async () => {
     if (!confirmingDelete) return;
-    const itemType = confirmingDelete.type === "env" ? "environment" : confirmingDelete.type;
-    await runTask(
-      `Deleting ${itemType} "${confirmingDelete.name}"...`,
-      () => new Promise((r) => setTimeout(r, 1000)),
-    );
-    showSuccess(`${confirmingDelete.name} deleted`);
-    setConfirmingDelete(null);
+    try {
+      if (confirmingDelete.type === "env") {
+        await runTask(`Deleting environment "${confirmingDelete.name}"...`, async () => {
+          await deleteEnvironment(confirmingDelete.id);
+        });
+        showSuccess(`Environment "${confirmingDelete.name}" deleted`);
+        if (selectedEnvId === confirmingDelete.id) {
+          setSelectedEnvId(null);
+          setViewLevel("environments");
+        }
+      } else if (confirmingDelete.type === "folder") {
+        await runTask(`Deleting folder "${confirmingDelete.name}"...`, async () => {
+          await deleteFolder(confirmingDelete.id);
+        });
+        showSuccess(`Folder "${confirmingDelete.name}" deleted`);
+        if (selectedFolderId === confirmingDelete.id) {
+          setSelectedFolderId(null);
+          setViewLevel("environment");
+        }
+      } else if (confirmingDelete.type === "secret") {
+        await runTask(`Deleting secret "${confirmingDelete.name}"...`, async () => {
+          await deleteSecret(confirmingDelete.id);
+        });
+        showSuccess(`Secret "${confirmingDelete.name}" deleted`);
+      }
+      setConfirmingDelete(null);
+    } catch (_error) {
+      // Error is handled by useProjectData
+    }
   };
 
   const handleAddCollaborator = async (email: string) => {
-    await runTask(
-      `Adding collaborator "${email}"...`,
-      () => new Promise((r) => setTimeout(r, 1000)),
-    );
-    showSuccess(`Collaborator "${email}" added`);
+    if (!project?.encryptedProjectKey) {
+      return;
+    }
+    try {
+      await runTask(`Adding collaborator "${email}"...`, async () => {
+        await shareProject(email, project.encryptedProjectKey);
+      });
+      showSuccess(`Collaborator "${email}" added`);
+    } catch (_error) {
+      // Error is handled by useProjectData
+    }
   };
 
   const handleRevokeCollaborator = async (collab: SharedUser) => {
-    await runTask(`Revoking ${collab.email}...`, () => new Promise((r) => setTimeout(r, 1000)));
-    showSuccess(`${collab.email} revoked`);
+    try {
+      await runTask(`Revoking ${collab.email}...`, async () => {
+        await revokeShare(collab.id);
+      });
+      showSuccess(`${collab.email} revoked`);
+    } catch (_error) {
+      // Error is handled by useProjectData
+    }
   };
 
   const getAllCommands = () => {
@@ -340,6 +325,12 @@ export function ProjectPage({
     } else if (viewLevel === "environment") {
       cmds.push({
         key: "n",
+        description: "Create secret",
+        category: "Create",
+        disabled: isRestricted,
+      });
+      cmds.push({
+        key: "⌥n",
         description: "Create folder",
         category: "Create",
         disabled: isRestricted,
@@ -353,29 +344,17 @@ export function ProjectPage({
           disabled: isRestricted,
         });
       cmds.push({
-        key: "⌥u",
-        description: "Update secrets",
-        category: "Manage",
-        disabled: isRestricted,
-      });
-      cmds.push({
         key: "⌥i",
-        description: "Import secrets",
-        category: "Create",
+        description: "Edit secrets",
+        category: "Manage",
         disabled: isRestricted,
       });
       cmds.push({ key: "esc", description: "Go back", category: "Navigate" });
     } else {
       cmds.push({
-        key: "⌥u",
-        description: "Update secrets",
-        category: "Manage",
-        disabled: isRestricted,
-      });
-      cmds.push({
         key: "⌥i",
-        description: "Import secrets",
-        category: "Create",
+        description: "Edit secrets",
+        category: "Manage",
         disabled: isRestricted,
       });
       cmds.push({ key: "esc", description: "Go back", category: "Navigate" });
@@ -420,10 +399,8 @@ export function ProjectPage({
         goBack();
         break;
       case "⌥i":
-        openBulkImport("import");
-        break;
       case "⌥u":
-        openBulkImport("update");
+        openBulkImport();
         break;
       case "c":
         setActiveModal("manageCollaborators");
@@ -434,27 +411,30 @@ export function ProjectPage({
     }
   };
 
-  const openBulkImport = (mode: "import" | "update") => {
-    if (mode === "import") {
-      bulkImportInput.setValue("# Paste your .env file here\nAPI_KEY=your_key_here");
-      setBulkImportFormat("env");
+  const openBulkImport = () => {
+    const secretItems = items.filter((i) => i.type === "secret");
+
+    if (secretItems.length === 0) {
+      bulkImportInput.setValue("# Add your secrets here\nAPI_KEY=your_key_here");
     } else {
       const secretsJson = JSON.stringify(
-        items
-          .filter((i) => i.type === "secret")
-          .map((i) => ({
+        secretItems.map((i) => {
+          const secretItem = i as { value?: string; secretType?: string };
+          return {
             key: i.name,
-            value: (i as { value?: string }).value || "",
-            type: "string",
+            value: secretItem.value || "",
+            type: secretItem.secretType || "string",
             scope: "shared",
-          })),
+          };
+        }),
         null,
         2,
       );
-      bulkImportInput.setValue(secretsJson);
-      setBulkImportFormat("json");
+      const envContent = jsonToEnv(secretsJson);
+      bulkImportInput.setValue(envContent || "");
     }
-    setBulkImportMode(mode);
+
+    setBulkImportFormat("env");
     setActiveModal("bulkImport");
   };
 
@@ -484,24 +464,49 @@ export function ProjectPage({
         }
         return;
       }
-      if ((key.name === "i" || key.name === "o") && key.meta) {
+      if ((key.name === "s" || key.name === "return") && key.meta) {
         const trimmed = bulkImportInput.value.trim();
         if (!trimmed) return;
+        if (!selectedEnvId || !project) return;
+
         try {
           const parsed =
             bulkImportFormat === "env" ? parseEnvContent(trimmed) : JSON.parse(trimmed);
           const result = validateBulkImportJson(parsed);
           if (!result.valid || result.secrets.length === 0) return;
-          const action = key.name === "o" ? "overwriting" : "skipping";
-          runTask(
-            `Importing secrets (${action} collisions)...`,
-            () => new Promise((r) => setTimeout(r, 1000)),
-          );
-          showSuccess(`${result.secrets.length} secrets imported`);
-          setActiveModal("none");
-          bulkImportInput.reset();
-        } catch {
-          // ignore
+
+          (async () => {
+            try {
+              await runTask(`Saving ${result.secrets.length} secrets...`, async () => {
+                const relevantSecrets =
+                  viewLevel === "folder" && selectedFolderId
+                    ? secrets.filter((s) => s.folderId === selectedFolderId)
+                    : secrets.filter((s) => s.environmentId === selectedEnvId && !s.folderId);
+
+                const keyToSecretId = new Map(relevantSecrets.map((s) => [s.key, s.id]));
+
+                await updateSecretBulk({
+                  environmentId: selectedEnvId,
+                  folderId: viewLevel === "folder" ? selectedFolderId || undefined : undefined,
+                  secrets: result.secrets.map((s) => ({
+                    secretId: s.secretId || keyToSecretId.get(s.key),
+                    key: s.key,
+                    encryptedValue: String(s.value),
+                    valueType: s.type,
+                    scope: (s.scope as "client" | "server" | "shared") || "shared",
+                  })),
+                  mode: "overwrite",
+                });
+              });
+              showSuccess(`${result.secrets.length} secrets saved`);
+              setActiveModal("none");
+              bulkImportInput.reset();
+            } catch (error) {
+              logger.debug("Bulk import save failed:", error);
+            }
+          })();
+        } catch (error) {
+          logger.debug("Bulk import parse failed:", error);
         }
         return;
       }
@@ -548,10 +553,13 @@ export function ProjectPage({
         if (item?.type === "folder")
           setEditingItem({ type: "folder", id: item.id, name: item.name });
       }
-    } else if (key.name === "i" && key.meta && !isRestricted && viewLevel !== "environments")
-      openBulkImport("import");
-    else if (key.name === "u" && key.meta && !isRestricted && viewLevel !== "environments")
-      openBulkImport("update");
+    } else if (
+      (key.name === "i" || key.name === "u") &&
+      key.meta &&
+      !isRestricted &&
+      viewLevel !== "environments"
+    )
+      openBulkImport();
     else if (key.name === "c" && !isRestricted) setActiveModal("manageCollaborators");
     else if (key.name === "v") setShowSecrets((p) => !p);
     else if (key.sequence === "?") setActiveModal("commandPalette");
@@ -582,17 +590,12 @@ export function ProjectPage({
       const item = items[selectedIndex];
       if (item?.type !== "secret")
         shortcuts.push({ key: "u", description: "rename folder", disabled: isRestricted });
-      if (item?.type === "secret")
-        shortcuts.push({ key: "⌥u", description: "update secrets", disabled: isRestricted });
       shortcuts.push(
-        { key: "⌥i", description: "import secrets", disabled: isRestricted },
+        { key: "⌥i", description: "edit secrets", disabled: isRestricted },
         { key: "esc", description: "back" },
       );
     } else {
-      shortcuts.push(
-        { key: "⌥u", description: "update secrets", disabled: isRestricted },
-        { key: "⌥i", description: "import secrets", disabled: isRestricted },
-      );
+      shortcuts.push({ key: "⌥i", description: "edit secrets", disabled: isRestricted });
     }
     return { primary: [{ shortcuts }], secondary: [] };
   };
@@ -769,7 +772,7 @@ export function ProjectPage({
                 <text fg={THEME_COLORS.textDim}>
                   Latest Pulse:{" "}
                   <span fg={THEME_COLORS.textMuted}>
-                    {logs[0].user} {logs[0].action.replace(".", " ")}
+                    {logs[0]?.user || ""} {logs[0]?.action?.replace(".", " ") || ""}
                   </span>
                 </text>
               </box>
@@ -824,7 +827,6 @@ export function ProjectPage({
         format={bulkImportFormat}
         collisions={bulkImportCollisions}
         cursorVisible={true}
-        mode={bulkImportMode}
         onClose={() => {
           setActiveModal("none");
           bulkImportInput.reset();

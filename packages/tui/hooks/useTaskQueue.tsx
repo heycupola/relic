@@ -1,4 +1,5 @@
 import { createContext, type ReactNode, useCallback, useContext, useState } from "react";
+import { extractErrorMessage } from "../convex/types";
 
 export type TaskStatus = "idle" | "running" | "success" | "error";
 
@@ -16,8 +17,8 @@ interface TaskContextValue {
 
 const TaskContext = createContext<TaskContextValue | null>(null);
 
-const SUCCESS_HIDE_DELAY = 2000;
-const ERROR_HIDE_DELAY = 3000;
+const SUCCESS_HIDE_DELAY = 3000; // 3 seconds for success messages
+const ERROR_HIDE_DELAY = 4000; // 4 seconds for error messages (longer for readability)
 
 export function TaskProvider({ children }: { children: ReactNode }) {
   const [task, setTask] = useState<TaskState>({ status: "idle", message: "" });
@@ -47,9 +48,11 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         setTask({ status: "success", message });
         hideAfterDelay(SUCCESS_HIDE_DELAY);
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Operation failed";
+        const errorMessage = extractErrorMessage(error);
         setTask({ status: "error", message: errorMessage });
         hideAfterDelay(ERROR_HIDE_DELAY);
+        // Re-throw error so caller can handle it
+        throw error;
       }
     },
     [clearHideTimeout, hideAfterDelay],

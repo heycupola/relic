@@ -2,6 +2,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { logger } from "../../utils/debugLog";
 import { ensureValidJwt } from "../services/jwt";
 import type {
+  Environment,
   EnvironmentData,
   Project,
   ProjectListItem,
@@ -132,6 +133,12 @@ export class ProtectedApi {
     return this.withAuth(() => this.client.action("project:getLimits", {}));
   }
 
+  async getProjectEnvironments(projectId: string): Promise<Environment[]> {
+    return this.withAuth(() =>
+      this.client.query("environment:getProjectEnvironments", { projectId }),
+    );
+  }
+
   async getEnvironmentData(environmentId: string): Promise<EnvironmentData> {
     return this.withAuth(() =>
       this.client.query("environment:getEnvironmentData", { environmentId }),
@@ -182,6 +189,27 @@ export class ProtectedApi {
     description?: string;
   }): Promise<string> {
     return this.withAuth(() => this.client.mutation("secret:createSecret", args));
+  }
+
+  async updateSecretBulk(args: {
+    environmentId: string;
+    folderId?: string;
+    secrets: Array<{
+      secretId?: string;
+      key: string;
+      encryptedValue: string;
+      valueType: SecretValueType;
+      scope?: SecretScope;
+    }>;
+    mode?: "skip" | "overwrite";
+  }): Promise<{
+    success: boolean;
+    updatedCount: number;
+    createdCount: number;
+    skippedCount: number;
+    secretIds: string[];
+  }> {
+    return this.withAuth(() => this.client.mutation("secret:updateSecretBulk", args));
   }
 
   async getSecret(secretId: string): Promise<Secret> {

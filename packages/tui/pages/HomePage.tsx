@@ -109,8 +109,10 @@ export function HomePage() {
       setCreatingProject(false);
       await Promise.all([refetchProjects(), refetchLimits()]);
     } catch (err) {
+      // Error is already shown in TaskBar by runTask
+      // Just reset the creating state so user can try again
       logger.error("Failed to create project:", err);
-      throw err;
+      setCreatingProject(false);
     }
   };
 

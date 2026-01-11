@@ -29,8 +29,62 @@ export interface SessionValidation {
   session: Session | null;
 }
 
-export function isConvexError(error: unknown): error is { data?: { code?: string } } {
+export function isConvexError(
+  error: unknown,
+): error is { data?: { code?: string; message?: string } } {
   return typeof error === "object" && error !== null && "data" in error;
+}
+
+/**
+ * Extracts a user-friendly error message from an error.
+ * For ConvexError, returns the message from error.data.message.
+ * For regular Error, returns error.message.
+ * Falls back to a generic message if neither is available.
+ */
+export function extractErrorMessage(error: unknown): string {
+  if (isConvexError(error)) {
+    // Try to get message from ConvexError data
+    // Handle both direct message and nested JSON strings
+    let errorData = error.data;
+
+    // Handle double-encoded JSON (can happen when errors propagate through component boundaries)
+    while (typeof errorData === "string") {
+      try {
+        errorData = JSON.parse(errorData);
+      } catch {
+        break;
+      }
+    }
+
+    if (errorData && typeof errorData === "object" && "message" in errorData) {
+      const message = errorData.message;
+      if (typeof message === "string" && message.length > 0) {
+        return message;
+      }
+    }
+
+    // Fallback to code if message is not available
+    if (errorData && typeof errorData === "object" && "code" in errorData) {
+      const code = errorData.code;
+      if (typeof code === "string") {
+        // Return a more readable version of the error code
+        return code
+          .replace(/_/g, " ")
+          .toLowerCase()
+          .replace(/\b\w/g, (l) => l.toUpperCase());
+      }
+    }
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return "Operation failed";
 }
 
 export function isAuthorizationPending(error: unknown): boolean {

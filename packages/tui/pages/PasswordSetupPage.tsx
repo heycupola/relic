@@ -1,5 +1,6 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import {
+  createUserKeys,
   decryptPrivateKeyWithPassword,
   encryptPrivateKeyWithPassword,
   generateSalt,
@@ -22,6 +23,7 @@ interface PasswordSetupPageProps {
 type TaskStatus =
   | null
   | "checking_password"
+  | "creating_keys"
   | "verifying_old_password"
   | "rewrapping_key"
   | "updating_backend";
@@ -29,7 +31,7 @@ type TaskStatus =
 export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPageProps) {
   const { width, height } = useTerminalDimensions();
   const { api } = useApi();
-  const { encryptedPrivateKey, salt, checkHasKeys, updatePassword } = useUserKeys();
+  const { encryptedPrivateKey, salt, checkHasKeys, updatePassword, storeUserKeys } = useUserKeys();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showPasswordWarning, setShowPasswordWarning] = useState(false);
   const [pendingPassword, setPendingPassword] = useState<string | null>(null);
@@ -55,9 +57,29 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
       const hasKeys = await checkHasKeys();
 
       if (!hasKeys) {
-        setTaskStatus(null);
-        onComplete(password);
-        return;
+        // First time user - create keys
+        setTaskStatus("creating_keys");
+        try {
+          const {
+            publicKey,
+            encryptedPrivateKey: newEncryptedPrivateKey,
+            salt: newSalt,
+          } = await createUserKeys(password);
+
+          await storeUserKeys({
+            publicKey,
+            encryptedPrivateKey: newEncryptedPrivateKey,
+            salt: newSalt,
+          });
+
+          setTaskStatus(null);
+          onComplete(password);
+          return;
+        } catch (error) {
+          logger.error("Failed to create user keys:", error);
+          setTaskStatus(null);
+          throw error;
+        }
       }
 
       let storedEncryptedPrivateKey: string | null = null;
@@ -194,6 +216,8 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
     switch (taskStatus) {
       case "checking_password":
         return "Checking password...";
+      case "creating_keys":
+        return "Creating encryption keys...";
       case "verifying_old_password":
         return "Verifying old password...";
       case "rewrapping_key":

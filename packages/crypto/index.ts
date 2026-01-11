@@ -388,6 +388,66 @@ export async function unwrapAESKeyWithRSA(
   }
 }
 
+export async function wrapAESKeyWithAES(
+  keyToWrap: CryptoKey,
+  wrappingKey: CryptoKey,
+): Promise<string> {
+  try {
+    const iv = generateIV();
+    const wrapped = await crypto.subtle.wrapKey("raw", keyToWrap, wrappingKey, {
+      name: "AES-GCM",
+      iv: iv,
+    });
+
+    const combined = new Uint8Array(iv.length + wrapped.byteLength);
+    combined.set(iv);
+    combined.set(new Uint8Array(wrapped), iv.length);
+
+    return arrayBufferToBase64(combined);
+  } catch (error) {
+    if (error instanceof CryptoError) {
+      throw error;
+    }
+    throw new CryptoError("KEY_WRAP_FAILED", "Failed to wrap AES key with AES", error);
+  }
+}
+
+export async function unwrapAESKeyWithAES(
+  wrappedKey: string,
+  unwrappingKey: CryptoKey,
+): Promise<CryptoKey> {
+  assertNonEmptyString(wrappedKey, "wrappedKey");
+
+  try {
+    const combined = base64ToArrayBuffer(wrappedKey);
+    assertMinLength(combined, IV_LENGTH + 1, "wrapped key");
+
+    const iv = combined.slice(0, IV_LENGTH);
+    const wrapped = combined.slice(IV_LENGTH);
+
+    return await crypto.subtle.unwrapKey(
+      "raw",
+      wrapped,
+      unwrappingKey,
+      {
+        name: "AES-GCM",
+        iv: iv,
+      },
+      {
+        name: "AES-GCM",
+        length: 256,
+      },
+      true,
+      ["encrypt", "decrypt"],
+    );
+  } catch (error) {
+    if (error instanceof CryptoError) {
+      throw error;
+    }
+    throw new CryptoError("KEY_UNWRAP_FAILED", "Failed to unwrap AES key with AES", error);
+  }
+}
+
 // NOTE: IV prepended to ciphertext
 export async function encryptWithAES(aesKey: CryptoKey, data: string): Promise<string> {
   assertNonEmptyString(data, "data");

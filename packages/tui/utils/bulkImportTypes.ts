@@ -1,9 +1,10 @@
 export interface BulkImportSecret {
   key: string;
-  value: string;
+  value: string | number | boolean; // Can be actual type based on type field
   type: "string" | "number" | "boolean";
   scope?: string;
   folder?: string;
+  secretId?: string; // Optional: for update mode, to track which secret is being updated
 }
 
 export interface ValidationError {
