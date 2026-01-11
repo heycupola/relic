@@ -5,6 +5,7 @@ import { components } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
 import {
   AccessRestrictedEmail,
+  CollaboratorAddedEmail,
   GracePeriodStartedEmail,
   PlanUpgradedEmail,
   WelcomeEmail,
@@ -31,6 +32,12 @@ type EmailData =
       sharedProjectCount: number;
     }
   | {
+      kind: EmailKind.CollaboratorAdded;
+      userName: string;
+      projectName: string;
+      ownerName: string;
+    }
+  | {
       kind: EmailKind.GracePeriodStarted;
       userName: string;
       daysRemaining: number;
@@ -53,6 +60,15 @@ async function renderEmailTemplate(data: EmailData): Promise<string> {
           ownedProjectCount: data.ownedProjectCount,
           sharedProjectCount: data.sharedProjectCount,
           upgradeUrl: getUpgradeUrl(),
+        }),
+      );
+    case EmailKind.CollaboratorAdded:
+      return await render(
+        CollaboratorAddedEmail({
+          userName: data.userName,
+          projectName: data.projectName,
+          ownerName: data.ownerName,
+          dashboardUrl: getDashboardUrl(),
         }),
       );
     case EmailKind.GracePeriodStarted:
@@ -84,6 +100,8 @@ function getEmailSubject(kind: EmailKind): string {
   switch (kind) {
     case EmailKind.AccessRestricted:
       return "Your Relic access has been restricted";
+    case EmailKind.CollaboratorAdded:
+      return "You've been added to a project";
     case EmailKind.GracePeriodStarted:
       return "Your Relic plan has changed";
     case EmailKind.PlanUpgraded:

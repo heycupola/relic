@@ -123,6 +123,7 @@ export const updateUserAfterEmailSent = mutation({
     userId: v.id("user"),
     emailKind: v.union(
       v.literal(EmailKind.AccessRestricted),
+      v.literal(EmailKind.CollaboratorAdded),
       v.literal(EmailKind.GracePeriodStarted),
       v.literal(EmailKind.PlanUpgraded),
       v.literal(EmailKind.Welcome),

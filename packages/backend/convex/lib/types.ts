@@ -35,6 +35,7 @@ export enum SecretValueType {
 
 export enum EmailKind {
   AccessRestricted = "access-restricted",
+  CollaboratorAdded = "collaborator-added",
   GracePeriodStarted = "grace-period-started",
   PlanUpgraded = "plan-upgraded",
   Welcome = "welcome",

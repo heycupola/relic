@@ -82,6 +82,32 @@ export const getCurrentUser = protectedQuery({
   },
 });
 
+export const getUserPublicKeyByEmail = protectedQuery({
+  args: {
+    email: v.string(),
+  },
+  returns: v.union(v.object({ publicKey: v.string() }), v.null()),
+  handler: async (ctx: ProtectedQueryCtx, args: { email: string }) => {
+    const currentUser = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: ctx.userId,
+    });
+
+    if (!currentUser.hasPro) {
+      return null;
+    }
+
+    const user = await ctx.runQuery(components.betterAuth.user.loadUserByEmail, {
+      email: args.email,
+    });
+
+    if (!user || !user.publicKey) {
+      return null;
+    }
+
+    return { publicKey: user.publicKey };
+  },
+});
+
 export const _handlePlanUpgrade = internalAction({
   args: {
     userId: v.string(),
@@ -128,6 +154,7 @@ export const _handleEmailDelivered = internalMutation({
     userId: v.string(),
     emailKind: v.union(
       v.literal(EmailKind.AccessRestricted),
+      v.literal(EmailKind.CollaboratorAdded),
       v.literal(EmailKind.GracePeriodStarted),
       v.literal(EmailKind.PlanUpgraded),
       v.literal(EmailKind.Welcome),
