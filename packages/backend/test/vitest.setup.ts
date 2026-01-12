@@ -171,6 +171,34 @@ const { _mockAutumn } = vi.hoisted(() => {
       return { success: true };
     }
 
+    async checkout(
+      ctx: GenericActionCtx<DataModel>,
+      args: {
+        productId: string;
+        successUrl?: string;
+        customerData?: { name?: string; email?: string };
+        checkoutSessionParams?: Record<string, unknown>;
+      },
+    ) {
+      return {
+        data: {
+          url: `https://checkout.relic.so/session/mock-${args.productId}-${Date.now()}`,
+        },
+        error: null,
+      };
+    }
+
+    customers = {
+      billingPortal: async (ctx: GenericActionCtx<DataModel>, args: { returnUrl?: string }) => {
+        return {
+          data: {
+            url: `https://billing.relic.so/portal/mock-${Date.now()}`,
+          },
+          error: null,
+        };
+      },
+    };
+
     reset() {
       this.features.clear();
     }
