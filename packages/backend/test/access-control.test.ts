@@ -45,28 +45,37 @@ describe("Access Control", () => {
     test("should not access an archived project", async () => {
       const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
 
-      const { projectId } = await owner.asUser.action(api.project.createProject, {
+      const projectResult = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey,
         name: "project_" + randomString(),
+        confirmPayment: true,
       });
 
-      await owner.asUser.action(api.project.archiveProject, { projectId });
+      if (!projectResult.success || !projectResult.projectId) {
+        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
+      }
+
+      await owner.asUser.action(api.project.archiveProject, { projectId: projectResult.projectId });
 
       await expectConvexError(
-        () => owner.asUser.query(api.project.getProject, { projectId }),
+        () => owner.asUser.query(api.project.getProject, { projectId: projectResult.projectId }),
         ErrorCode.PROJECT_INACCESSIBLE,
       );
 
-      await owner.asUser.action(api.project.unarchiveProject, { projectId });
+      await owner.asUser.action(api.project.unarchiveProject, {
+        projectId: projectResult.projectId,
+      });
 
-      const project = await owner.asUser.query(api.project.getProject, { projectId });
+      const project = await owner.asUser.query(api.project.getProject, {
+        projectId: projectResult.projectId,
+      });
 
       expect(project).toBeDefined();
       expect(project.isArchived).toBe(false);
     });
 
     test("should get only 2 recent projects after getting restricted", async () => {
-      mockAutumn.setFeature(owner.userId, "projects", 6);
+      mockAutumn.setFeature(owner.userId, "projects", 8);
       await owner.asUser.mutation(components.betterAuth.user.upgradeToPro, {
         userId: owner.userId,
       });
@@ -77,12 +86,17 @@ describe("Access Control", () => {
       for (const projectName of projectNames) {
         const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
 
-        const { projectId } = await owner.asUser.action(api.project.createProject, {
+        const projectResult = await owner.asUser.action(api.project.createProject, {
           encryptedProjectKey,
           name: projectName,
+          confirmPayment: true,
         });
 
-        projectIds.push(projectId);
+        if (!projectResult.success || !projectResult.projectId) {
+          throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
+        }
+
+        projectIds.push(projectResult.projectId);
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
 
@@ -118,7 +132,7 @@ describe("Access Control", () => {
     });
 
     test("should block access to shared projects when owner loses pro and project becomes restricted", async () => {
-      mockAutumn.setFeature(owner.userId, "projects", 6);
+      mockAutumn.setFeature(owner.userId, "projects", 7);
       mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
       mockAutumn.setFeature(owner.userId, "additional_shares", 10);
       await owner.asUser.mutation(components.betterAuth.user.upgradeToPro, {
@@ -129,29 +143,46 @@ describe("Access Control", () => {
 
       for (let i = 0; i < 4; i++) {
         const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
-        const { projectId } = await owner.asUser.action(api.project.createProject, {
+        const projectResult = await owner.asUser.action(api.project.createProject, {
           encryptedProjectKey,
           name: "old_project_" + randomString(),
+          confirmPayment: true,
         });
-        projectIds.push(projectId);
+
+        if (!projectResult.success || !projectResult.projectId) {
+          throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
+        }
+
+        projectIds.push(projectResult.projectId);
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
 
       const oldestProjectId = projectIds[0];
 
-      await owner.asUser.action(api.projectShare.shareProject, {
+      const shareResult = await owner.asUser.action(api.projectShare.shareProject, {
         encryptedProjectKey: (await createProjectKey(owner.publicKey!)).encryptedProjectKey,
         projectId: oldestProjectId!,
         userEmail: collaborator.email,
+        confirmPayment: true,
       });
+
+      if (!shareResult.success) {
+        throw new Error(`Share failed: ${shareResult.message || "Unknown error"}`);
+      }
 
       for (let i = 0; i < 2; i++) {
         const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
-        const { projectId } = await owner.asUser.action(api.project.createProject, {
+        const projectResult = await owner.asUser.action(api.project.createProject, {
           encryptedProjectKey,
           name: "new_project_" + randomString(),
+          confirmPayment: true,
         });
-        projectIds.push(projectId);
+
+        if (!projectResult.success || !projectResult.projectId) {
+          throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
+        }
+
+        projectIds.push(projectResult.projectId);
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
 
@@ -200,24 +231,34 @@ describe("Access Control", () => {
 
       const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
 
-      const { projectId } = await owner.asUser.action(api.project.createProject, {
+      const projectResult = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey,
         name: "project_" + randomString(),
+        confirmPayment: true,
       });
 
-      await owner.asUser.action(api.projectShare.shareProject, {
+      if (!projectResult.success || !projectResult.projectId) {
+        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
+      }
+
+      const shareResult = await owner.asUser.action(api.projectShare.shareProject, {
         encryptedProjectKey,
-        projectId,
+        projectId: projectResult.projectId,
         userEmail: collaborator.email,
+        confirmPayment: true,
       });
+
+      if (!shareResult.success) {
+        throw new Error(`Share failed: ${shareResult.message || "Unknown error"}`);
+      }
 
       const sharedProject = await collaborator.asUser.query(
         api.projectShare.getProjectShareByProjectForCurrentUser,
-        { projectId },
+        { projectId: projectResult.projectId },
       );
 
       expect(sharedProject).toBeDefined();
-      expect(sharedProject.projectId).toBe(projectId);
+      expect(sharedProject.projectId).toBe(projectResult.projectId);
 
       mockAutumn.setFeature(collaborator.userId, "projects", 2);
       await collaborator.asUser.mutation(components.betterAuth.user.downgradeToFree, {
@@ -229,11 +270,11 @@ describe("Access Control", () => {
 
       const shareAfterRestriction = await collaborator.asUser.query(
         api.projectShare.getProjectShareByProjectForCurrentUser,
-        { projectId },
+        { projectId: projectResult.projectId },
       );
 
       expect(shareAfterRestriction).toBeDefined();
-      expect(shareAfterRestriction.projectId).toBe(projectId);
+      expect(shareAfterRestriction.projectId).toBe(projectResult.projectId);
 
       vi.useRealTimers();
     });
