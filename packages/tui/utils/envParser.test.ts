@@ -22,9 +22,9 @@ VERBOSE=false
 ENABLED=TRUE
 `;
       const result = parseEnvContent(input);
-      expect(result[0].type).toBe("boolean");
-      expect(result[1].type).toBe("boolean");
-      expect(result[2].type).toBe("boolean");
+      expect(result[0]?.type).toBe("boolean");
+      expect(result[1]?.type).toBe("boolean");
+      expect(result[2]?.type).toBe("boolean");
     });
 
     test("detects numeric values", () => {
@@ -42,13 +42,13 @@ NEGATIVE=-42
     test("strips double quotes from values", () => {
       const input = `API_KEY="my secret value"`;
       const result = parseEnvContent(input);
-      expect(result[0].value).toBe("my secret value");
+      expect(result[0]?.value).toBe("my secret value");
     });
 
     test("strips single quotes from values", () => {
       const input = `API_KEY='my secret value'`;
       const result = parseEnvContent(input);
-      expect(result[0].value).toBe("my secret value");
+      expect(result[0]?.value).toBe("my secret value");
     });
 
     test("ignores empty lines", () => {
@@ -92,7 +92,7 @@ ANOTHER_VALID=value2
     test("handles values with = signs", () => {
       const input = `CONNECTION=host=localhost;port=5432`;
       const result = parseEnvContent(input);
-      expect(result[0].value).toBe("host=localhost;port=5432");
+      expect(result[0]?.value).toBe("host=localhost;port=5432");
     });
 
     test("skips entries with empty keys", () => {

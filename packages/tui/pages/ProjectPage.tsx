@@ -2,12 +2,19 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useCallback, useEffect, useState } from "react";
 import { InlineInput } from "../components/forms/InlineInput";
 import {
+  BillingPortalModal,
   BulkImportModal,
+  type CheckoutReason,
+  CheckoutRedirectModal,
   CommandPaletteModal,
+  ConfirmPaymentModal,
   ManageCollaboratorsModal,
+  type PaymentConfirmationType,
 } from "../components/modals";
 import { DeleteConfirmation } from "../components/shared/DeleteConfirmation";
 import { GuideBar } from "../components/shared/GuideBar";
+
+import { useUser } from "../convex";
 import { useMultilineInput } from "../hooks/useMultilineInput";
 import { usePaste } from "../hooks/usePaste";
 import { useProjectData } from "../hooks/useProjectData";
@@ -32,13 +39,23 @@ const PAGE_SIZE = 10;
 export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPageProps) {
   const { width, height } = useTerminalDimensions();
   const { goBack: routerGoBack } = useRouter();
-  const { runTask, showSuccess } = useTaskQueue();
+  const {
+    runTask,
+    setTaskPending,
+    continueTask,
+    cancelTask,
+    showSuccess,
+    showError,
+    isProcessing,
+  } = useTaskQueue();
+  const { hasPro, startPolling, stopPolling, isPolling } = useUser();
 
   const {
     project,
     environments,
     currentEnvironmentData,
     sharedUsers,
+    shareLimits,
     loadEnvironmentData,
     createEnvironment,
     updateEnvironment,
@@ -50,7 +67,17 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     deleteSecret,
     shareProject,
     revokeShare,
+    revokeShareWithRotation,
+    refetch: refetchProjectData,
   } = useProjectData(projectId);
+
+  // When hasPro changes to true, refetch project data to get updated shareLimits
+  useEffect(() => {
+    if (hasPro && isPolling) {
+      stopPolling();
+      refetchProjectData();
+    }
+  }, [hasPro, isPolling, stopPolling, refetchProjectData]);
 
   const folders = currentEnvironmentData?.folders || [];
   const secrets = currentEnvironmentData?.secrets || [];
@@ -79,6 +106,37 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
   const bulkImportInput = useMultilineInput({ maxLines: 50 });
   const [bulkImportFormat, setBulkImportFormat] = useState<BulkImportFormat>("env");
   const [bulkImportCollisions, setBulkImportCollisions] = useState<CollisionInfo[]>([]);
+
+  // Collaborator add state
+  const [pendingCollaboratorEmail, setPendingCollaboratorEmail] = useState<string | null>(null);
+  const [confirmationModal, setConfirmationModal] = useState<{
+    visible: boolean;
+    type: PaymentConfirmationType;
+    email?: string;
+    balance: number;
+    freeLimit: number;
+  }>({
+    visible: false,
+    type: "seat",
+    balance: 0,
+    freeLimit: 0,
+  });
+  const [checkoutModal, setCheckoutModal] = useState<{
+    visible: boolean;
+    url: string;
+    reason: CheckoutReason;
+  }>({ visible: false, url: "", reason: "pro_required" });
+  const [billingPortalModal, setBillingPortalModal] = useState<{
+    visible: boolean;
+    url: string;
+  }>({ visible: false, url: "" });
+
+  const [isAddingCollaborator, setIsAddingCollaborator] = useState(false);
+  const [isRevokingCollaborator, setIsRevokingCollaborator] = useState(false);
+  const [isRevokingWithRotation, setIsRevokingWithRotation] = useState(false);
+  const [isCreatingItem, setIsCreatingItem] = useState(false);
+  const [isRenamingItem, setIsRenamingItem] = useState(false);
+  const [isDeletingItem, setIsDeletingItem] = useState(false);
 
   const isRestricted = projectStatus === "restricted" || projectStatus === "archived";
 
@@ -205,7 +263,9 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
   };
 
   const handleCreateItem = async (name: string) => {
+    if (isCreatingItem) return;
     if (!creatingItem) return;
+    setIsCreatingItem(true);
     try {
       if (creatingItem === "env") {
         await runTask(`Creating environment "${name}"...`, async () => {
@@ -219,16 +279,20 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         showSuccess(`Folder "${name}" created`);
       }
       setCreatingItem(null);
-    } catch (_error) {
-      // Error is handled by useProjectData
+    } catch {
+      // Error handled by finally block
+    } finally {
+      setIsCreatingItem(false);
     }
   };
 
   const handleRenameItem = async (name: string) => {
+    if (isRenamingItem) return;
     if (!editingItem || name === editingItem.name) {
       setEditingItem(null);
       return;
     }
+    setIsRenamingItem(true);
     try {
       if (editingItem.type === "env") {
         await runTask(`Renaming environment to "${name}"...`, async () => {
@@ -242,13 +306,17 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         showSuccess(`Folder renamed to "${name}"`);
       }
       setEditingItem(null);
-    } catch (_error) {
-      // Error is handled by useProjectData
+    } catch {
+      // Error handled by finally block
+    } finally {
+      setIsRenamingItem(false);
     }
   };
 
   const handleDeleteItem = async () => {
+    if (isDeletingItem) return;
     if (!confirmingDelete) return;
+    setIsDeletingItem(true);
     try {
       if (confirmingDelete.type === "env") {
         await runTask(`Deleting environment "${confirmingDelete.name}"...`, async () => {
@@ -275,30 +343,196 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         showSuccess(`Secret "${confirmingDelete.name}" deleted`);
       }
       setConfirmingDelete(null);
-    } catch (_error) {
-      // Error is handled by useProjectData
+    } catch {
+      // Error handled by finally block
+    } finally {
+      setIsDeletingItem(false);
     }
   };
 
-  const handleAddCollaborator = async (email: string) => {
+  const handleAddCollaborator = async (email: string, confirmPayment?: boolean) => {
+    if (isAddingCollaborator) return;
+    setIsAddingCollaborator(true);
+    setPendingCollaboratorEmail(email);
+
     try {
-      await runTask(`Adding collaborator "${email}"...`, async () => {
-        await shareProject(email);
-      });
-      showSuccess(`Collaborator "${email}" added`);
-    } catch (_error) {
-      // Error is handled by useProjectData
+      if (confirmPayment) {
+        const result = await continueTask(async () => {
+          return await shareProject(email, true);
+        });
+
+        setPendingCollaboratorEmail(null);
+
+        if (!result) {
+          setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+          return;
+        }
+
+        logger.debug("shareProject result (confirmed):", JSON.stringify(result, null, 2));
+
+        if (result.success) {
+          showSuccess(`Collaborator "${email}" added`);
+          setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+        } else if (result.requiresProPlan) {
+          setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+          if (result.checkoutUrl) {
+            setCheckoutModal({
+              visible: true,
+              url: result.checkoutUrl,
+              reason: "pro_required",
+            });
+            startPolling();
+          } else {
+            showError(result.message || "Pro plan required");
+          }
+        } else if (result.requiresAdditionalShare) {
+          setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+          if (result.checkoutUrl) {
+            setCheckoutModal({
+              visible: true,
+              url: result.checkoutUrl,
+              reason: "share_limit",
+            });
+            startPolling();
+          } else {
+            logger.error("Checkout URL is null:", result);
+            showError(
+              result.message ||
+                "Unable to create checkout session. Please try again or contact support.",
+            );
+          }
+        } else if (result.paymentFailed && result.billingPortalUrl) {
+          setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+          setBillingPortalModal({
+            visible: true,
+            url: result.billingPortalUrl,
+          });
+        } else if (result.paymentFailed) {
+          showError(result.message || "Payment failed. Please update your billing settings.");
+        } else if (result.message) {
+          showError(result.message);
+        }
+        return;
+      }
+
+      // First call - check if confirmation is needed
+      setTaskPending(`Adding collaborator "${email}"...`);
+
+      const result = await shareProject(email, false);
+
+      if (!result) {
+        cancelTask();
+        setPendingCollaboratorEmail(null);
+        return;
+      }
+
+      logger.debug("shareProject result:", JSON.stringify(result, null, 2));
+
+      if (result.success) {
+        showSuccess(`Collaborator "${email}" added`);
+        setPendingCollaboratorEmail(null);
+        setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+      } else if (result.requiresConfirmation) {
+        // Keep task in pending state, show confirmation modal
+        setConfirmationModal({
+          visible: true,
+          type: "seat",
+          email,
+          balance: result.balance ?? 0,
+          freeLimit: result.freeLimit ?? 0,
+        });
+      } else if (result.requiresProPlan) {
+        cancelTask();
+        setPendingCollaboratorEmail(null);
+        if (result.checkoutUrl) {
+          setCheckoutModal({
+            visible: true,
+            url: result.checkoutUrl,
+            reason: "pro_required",
+          });
+          // Start polling to detect when user completes pro purchase
+          startPolling();
+        } else {
+          showError(result.message || "Pro plan required");
+        }
+      } else if (result.requiresAdditionalShare) {
+        cancelTask();
+        setPendingCollaboratorEmail(null);
+        if (result.checkoutUrl) {
+          setCheckoutModal({
+            visible: true,
+            url: result.checkoutUrl,
+            reason: "share_limit",
+          });
+          // Start polling to detect when user completes share purchase
+          startPolling();
+        } else {
+          logger.error("Checkout URL is null:", result);
+          showError(
+            result.message ||
+              "Unable to create checkout session. Please try again or contact support.",
+          );
+        }
+      } else if (result.paymentFailed && result.billingPortalUrl) {
+        cancelTask();
+        setPendingCollaboratorEmail(null);
+        setBillingPortalModal({
+          visible: true,
+          url: result.billingPortalUrl,
+        });
+      } else if (result.paymentFailed) {
+        cancelTask();
+        setPendingCollaboratorEmail(null);
+        showError(result.message || "Payment failed. Please update your billing settings.");
+      } else if (result.message) {
+        cancelTask();
+        setPendingCollaboratorEmail(null);
+        showError(result.message);
+      }
+    } finally {
+      setIsAddingCollaborator(false);
     }
+  };
+
+  const handleConfirmPayment = async () => {
+    if (confirmationModal.email) {
+      await handleAddCollaborator(confirmationModal.email, true);
+    }
+  };
+
+  const handleCancelPayment = () => {
+    cancelTask();
+    setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+    setPendingCollaboratorEmail(null);
   };
 
   const handleRevokeCollaborator = async (collab: SharedUser) => {
+    if (isRevokingCollaborator) return;
+    setIsRevokingCollaborator(true);
     try {
       await runTask(`Revoking ${collab.email}...`, async () => {
         await revokeShare(collab.id);
       });
       showSuccess(`${collab.email} revoked`);
     } catch (_error) {
-      // Error is handled by useProjectData
+      logger.debug("Revoke collaborator failed");
+    } finally {
+      setIsRevokingCollaborator(false);
+    }
+  };
+
+  const handleRevokeCollaboratorWithRotation = async (collab: SharedUser) => {
+    if (isRevokingWithRotation) return;
+    setIsRevokingWithRotation(true);
+    try {
+      await runTask(`Revoking ${collab.email} and rotating keys...`, async () => {
+        await revokeShareWithRotation(collab.id);
+      });
+      showSuccess(`${collab.email} revoked and keys rotated`);
+    } catch (_error) {
+      logger.debug("Revoke with rotation failed");
+    } finally {
+      setIsRevokingWithRotation(false);
     }
   };
 
@@ -449,6 +683,21 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
   useKeyboard((key) => {
     if (creatingItem || editingItem) return;
 
+    // Let modal handle its own keyboard when visible
+    if (confirmationModal.visible || checkoutModal.visible || billingPortalModal.visible) return;
+
+    // Disable keyboard shortcuts during async operations
+    if (
+      isProcessing ||
+      isAddingCollaborator ||
+      isRevokingCollaborator ||
+      isRevokingWithRotation ||
+      isCreatingItem ||
+      isRenamingItem ||
+      isDeletingItem
+    )
+      return;
+
     if (activeModal === "bulkImport") {
       if (key.name === "escape") {
         setActiveModal("none");
@@ -574,13 +823,26 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
   });
 
   const getShortcuts = () => {
+    const isDisabled =
+      isProcessing ||
+      isAddingCollaborator ||
+      isRevokingCollaborator ||
+      isRevokingWithRotation ||
+      isCreatingItem ||
+      isRenamingItem ||
+      isDeletingItem;
+
     if (creatingItem || editingItem) {
       return {
         primary: [
           {
             shortcuts: [
-              { key: KEY_SYMBOLS.enter, description: creatingItem ? "create" : "save" },
-              { key: "esc", description: "cancel" },
+              {
+                key: KEY_SYMBOLS.enter,
+                description: creatingItem ? "create" : "save",
+                disabled: isDisabled,
+              },
+              { key: "esc", description: "cancel", disabled: isDisabled },
             ],
           },
         ],
@@ -588,22 +850,34 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
       };
     }
     const shortcuts = [];
-    if (viewLevel === "environments")
+    if (viewLevel === "environments") {
       shortcuts.push(
-        { key: "n", description: "create environment", disabled: isRestricted },
-        { key: "u", description: "rename environment", disabled: isRestricted },
+        { key: "n", description: "create environment", disabled: isDisabled || isRestricted },
+        { key: "u", description: "rename environment", disabled: isDisabled || isRestricted },
+        { key: "esc", description: "back", disabled: isDisabled },
       );
-    else if (viewLevel === "environment") {
-      shortcuts.push({ key: "n", description: "create folder", disabled: isRestricted });
+    } else if (viewLevel === "environment") {
+      shortcuts.push({
+        key: "n",
+        description: "create folder",
+        disabled: isDisabled || isRestricted,
+      });
       const item = items[selectedIndex];
       if (item?.type !== "secret")
-        shortcuts.push({ key: "u", description: "rename folder", disabled: isRestricted });
+        shortcuts.push({
+          key: "u",
+          description: "rename folder",
+          disabled: isDisabled || isRestricted,
+        });
       shortcuts.push(
-        { key: "⌥i", description: "edit secrets", disabled: isRestricted },
-        { key: "esc", description: "back" },
+        { key: "⌥i", description: "edit secrets", disabled: isDisabled || isRestricted },
+        { key: "esc", description: "back", disabled: isDisabled },
       );
     } else {
-      shortcuts.push({ key: "⌥i", description: "edit secrets", disabled: isRestricted });
+      shortcuts.push(
+        { key: "⌥i", description: "edit secrets", disabled: isDisabled || isRestricted },
+        { key: "esc", description: "back", disabled: isDisabled },
+      );
     }
     return { primary: [{ shortcuts }], secondary: [] };
   };
@@ -820,8 +1094,37 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         collaborators={sharedUsers}
         onAdd={handleAddCollaborator}
         onRevoke={handleRevokeCollaborator}
-        onRevokeWithRotation={handleRevokeCollaborator}
+        onRevokeWithRotation={handleRevokeCollaboratorWithRotation}
         onClose={() => setActiveModal("none")}
+        pendingEmail={pendingCollaboratorEmail}
+        shareLimits={shareLimits}
+      />
+
+      <CheckoutRedirectModal
+        visible={checkoutModal.visible}
+        checkoutUrl={checkoutModal.url}
+        reason={checkoutModal.reason}
+        onClose={() => {
+          setCheckoutModal({ visible: false, url: "", reason: "pro_required" });
+          // Stop polling when modal is closed manually
+          stopPolling();
+        }}
+      />
+
+      <ConfirmPaymentModal
+        visible={confirmationModal.visible}
+        type={confirmationModal.type}
+        itemName={confirmationModal.email}
+        freeLimit={confirmationModal.freeLimit}
+        balance={confirmationModal.balance}
+        onConfirm={handleConfirmPayment}
+        onCancel={handleCancelPayment}
+      />
+
+      <BillingPortalModal
+        visible={billingPortalModal.visible}
+        portalUrl={billingPortalModal.url}
+        onClose={() => setBillingPortalModal({ visible: false, url: "" })}
       />
 
       <CommandPaletteModal

@@ -21,6 +21,7 @@
     "@opentui/core": "^0.1.65",
     "@opentui/react": "^0.1.65",
     "convex": "catalog:",
+    "open": "^11.0.0",
     "react": "^19.2.3"
   }
 }

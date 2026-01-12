@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTaskQueue } from "../../hooks/useTaskQueue";
 import type { CursorPosition } from "../../types";
 import type {
   BulkImportSecret,
@@ -35,6 +36,8 @@ export function BulkImportModal({
   cursorVisible,
   onClose: _onClose,
 }: BulkImportModalProps) {
+  const { isRunning } = useTaskQueue();
+
   const validationResult = useMemo((): ValidationResult => {
     const trimmed = content.trim();
     if (trimmed === "") {
@@ -61,9 +64,9 @@ export function BulkImportModal({
 
   const getShortcuts = () => {
     return [
-      { key: "⌥j", description: format === "env" ? "advanced" : "simple" },
-      { key: "⌥s", description: "save" },
-      { key: "esc", description: "cancel" },
+      { key: "⌥j", description: format === "env" ? "advanced" : "simple", disabled: isRunning },
+      { key: "⌥s", description: "save", disabled: isRunning },
+      { key: "esc", description: "cancel", disabled: isRunning },
     ];
   };
 

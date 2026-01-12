@@ -1,7 +1,7 @@
 export * from "./bulkImportTypes";
 export * from "./bulkImportValidator";
 export * from "./constants";
-export { debugLog } from "./debugLog";
+export { initLogger, logger } from "./debugLog";
 export * from "./envParser";
 export * from "./formatConverter";
 export * from "./hyperlink";

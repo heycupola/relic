@@ -8,8 +8,6 @@ export const CHAR_LIMITS = {
 
 export const INPUT_WIDTH = 38;
 
-export const COLLABORATOR_LIMIT = 5;
-
 export const STATUS_COLORS = {
   owned: "#9ece6a",
   shared: "#7aa2f7",
@@ -33,5 +31,10 @@ export const THEME_COLORS = {
 } as const;
 
 export const KEY_SYMBOLS = {
-  enter: "↵", // DOWNWARDS ARROW WITH CORNER LEFTWARDS (U+21B5)
+  enter: "enter",
+} as const;
+
+export const PRICING = {
+  seatPrice: "$5",
+  projectPrice: "$10",
 } as const;

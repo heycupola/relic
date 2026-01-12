@@ -241,9 +241,13 @@ export function PasswordForm({
             primary: [
               {
                 shortcuts: [
-                  { key: "^v", description: showPassword ? "hide" : "show" },
-                  { key: "tab", description: "next field" },
-                  { key: KEY_SYMBOLS.enter, description: mode === "setup" ? "continue" : "save" },
+                  { key: "^v", description: showPassword ? "hide" : "show", disabled },
+                  { key: "tab", description: "next field", disabled },
+                  {
+                    key: KEY_SYMBOLS.enter,
+                    description: mode === "setup" ? "continue" : "save",
+                    disabled,
+                  },
                 ],
               },
             ],

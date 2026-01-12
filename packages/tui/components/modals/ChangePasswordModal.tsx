@@ -312,10 +312,14 @@ export function ChangePasswordModal({ visible, onClose, onSuccess }: ChangePassw
             primary: [
               {
                 shortcuts: [
-                  { key: "^v", description: showPassword ? "hide" : "show" },
-                  { key: "tab", description: "next field" },
-                  { key: KEY_SYMBOLS.enter, description: "save" },
-                  { key: "esc", description: "cancel" },
+                  {
+                    key: "^v",
+                    description: showPassword ? "hide" : "show",
+                    disabled: isProcessing,
+                  },
+                  { key: "tab", description: "next field", disabled: isProcessing },
+                  { key: KEY_SYMBOLS.enter, description: "save", disabled: isProcessing },
+                  { key: "esc", description: "cancel", disabled: isProcessing },
                 ],
               },
             ],

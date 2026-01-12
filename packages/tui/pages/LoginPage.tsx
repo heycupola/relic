@@ -1,4 +1,5 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
+import open from "open";
 import { useEffect, useRef, useState } from "react";
 import { GuideBar } from "../components/shared/GuideBar";
 import { LoginButton } from "../components/shared/LoginButton";
@@ -8,10 +9,12 @@ import { KEY_SYMBOLS, THEME_COLORS } from "../utils/constants";
 import { logger } from "../utils/debugLog";
 import { createHyperlink } from "../utils/hyperlink";
 
-const SHORTCUT_GROUPS = {
-  primary: [{ shortcuts: [{ key: KEY_SYMBOLS.enter, description: "sign in" }] }],
-  secondary: [{ shortcuts: [{ key: "↑↓", description: "navigate" }] }],
-};
+const getShortcutGroups = (isLoading: boolean) => ({
+  primary: [
+    { shortcuts: [{ key: KEY_SYMBOLS.enter, description: "sign in", disabled: isLoading }] },
+  ],
+  secondary: [{ shortcuts: [{ key: "↑↓", description: "navigate", disabled: isLoading }] }],
+});
 
 type Provider = "google" | "github";
 
@@ -103,22 +106,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     }
   }, [verificationUri, isModalOpen]);
 
-  const openBrowser = (url: string) => {
-    try {
-      const platform = process.platform;
-      const command =
-        platform === "darwin"
-          ? ["open", url]
-          : platform === "win32"
-            ? ["cmd", "/c", "start", url]
-            : ["xdg-open", url];
-
-      Bun.spawn(command);
-    } catch {
-      // ignore
-    }
-  };
-
   const closeModal = () => {
     cancel();
     setIsModalOpen(false);
@@ -140,7 +127,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       if (key.name === "escape") {
         closeModal();
       } else if (key.name === "return" && verificationUri) {
-        openBrowser(verificationUri);
+        open(verificationUri);
       }
       return;
     }
@@ -211,7 +198,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
           {!isModalOpen && (
             <box marginTop={1}>
-              <GuideBar groups={SHORTCUT_GROUPS} customWidth={52} minimal={true} />
+              <GuideBar groups={getShortcutGroups(isLoading)} customWidth={52} minimal={true} />
             </box>
           )}
         </box>
@@ -221,6 +208,14 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         visible={isModalOpen}
         title="Device Authorization"
         width={verificationUri ? Math.min(Math.max(verificationUri.length + 10, 50), 80) : 60}
+        shortcuts={[
+          {
+            key: KEY_SYMBOLS.enter,
+            description: "open link",
+            disabled: !verificationUri || isLoading,
+          },
+          { key: "esc", description: "cancel", disabled: isLoading },
+        ]}
       >
         <box flexDirection="column" gap={0}>
           {userCode ? (
@@ -242,7 +237,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                         : verificationUri}
                     </text>
                   </box>
-                  <text fg={THEME_COLORS.textDim}>Press Enter to open in browser</text>
                 </box>
               )}
             </>

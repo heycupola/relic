@@ -122,9 +122,9 @@ export function PasswordChangeWarningModal({
             primary: [
               {
                 shortcuts: [
-                  { key: "^v", description: showPassword ? "hide" : "show" },
-                  { key: KEY_SYMBOLS.enter, description: "confirm" },
-                  { key: "esc", description: "cancel" },
+                  { key: "^v", description: showPassword ? "hide" : "show", disabled: isLoading },
+                  { key: KEY_SYMBOLS.enter, description: "confirm", disabled: isLoading },
+                  { key: "esc", description: "cancel", disabled: isLoading },
                 ],
               },
             ],

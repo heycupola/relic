@@ -292,8 +292,8 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
         width={45}
         height={8}
         shortcuts={[
-          { key: "y", description: "yes" },
-          { key: "n", description: "no" },
+          { key: "y", description: "yes", disabled: !!taskStatus },
+          { key: "n", description: "no", disabled: !!taskStatus },
         ]}
       >
         <text fg={THEME_COLORS.textDim}>Are you sure you want to logout?</text>

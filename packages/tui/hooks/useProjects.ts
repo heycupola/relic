@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { CreateProjectResult } from "../convex/api/types";
 import { useApi } from "../convex/hooks/useApi";
 import type { Project } from "../types/models";
 import { logger } from "../utils/debugLog";
@@ -12,7 +13,11 @@ interface UseProjectsReturn {
   isLoadingLimits: boolean;
   refetch: () => Promise<void>;
   refetchLimits: () => Promise<void>;
-  createProject: (name: string, encryptedProjectKey: string) => Promise<string | undefined>;
+  createProject: (
+    name: string,
+    encryptedProjectKey: string,
+    confirmPayment?: boolean,
+  ) => Promise<CreateProjectResult>;
   renameProject: (projectId: string, name: string) => Promise<void>;
   archiveProject: (projectId: string) => Promise<void>;
 }
@@ -122,16 +127,22 @@ export function useProjects(): UseProjectsReturn {
   }, [api, isApiLoading, fetchProjects, fetchLimits]);
 
   const createProject = useCallback(
-    async (name: string, encryptedProjectKey: string): Promise<string | undefined> => {
+    async (
+      name: string,
+      encryptedProjectKey: string,
+      confirmPayment?: boolean,
+    ): Promise<CreateProjectResult> => {
       if (!api) {
         setError(new Error("API not initialized"));
-        return undefined;
+        return { success: false, message: "API not initialized" };
       }
 
       try {
-        const projectId = await api.createProject({ name, encryptedProjectKey });
-        await Promise.all([fetchProjects(), fetchLimits()]);
-        return projectId;
+        const result = await api.createProject({ name, encryptedProjectKey, confirmPayment });
+        if (result.success) {
+          await Promise.all([fetchProjects(), fetchLimits()]);
+        }
+        return result;
       } catch (err) {
         setError(err instanceof Error ? err : new Error("Failed to create project"));
         throw err;

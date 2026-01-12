@@ -133,7 +133,54 @@ export interface ProjectShare {
 
 export interface SharedUser {
   _id: string;
+  id: string;
   email: string;
   name: string;
+  publicKey: string | null;
   sharedAt: number;
+}
+
+export interface ShareProjectResult {
+  success: boolean;
+  shareId?: string;
+  requiresProPlan?: boolean;
+  requiresAdditionalShare?: boolean;
+  requiresConfirmation?: boolean;
+  balance?: number;
+  freeLimit?: number;
+  paymentFailed?: boolean;
+  checkoutUrl?: string | null;
+  billingPortalUrl?: string | null;
+  message?: string;
+}
+
+export interface ShareLimits {
+  hasPro: boolean;
+  freeShareLimit: number;
+  purchasedSharesCount: number;
+  totalSharesCount: number;
+  unusedShares: number;
+}
+
+export interface CreateProjectResult {
+  success: boolean;
+  projectId?: string;
+  requiresProPlan?: boolean;
+  requiresAdditionalProject?: boolean;
+  requiresConfirmation?: boolean;
+  balance?: number;
+  freeLimit?: number;
+  paymentFailed?: boolean;
+  checkoutUrl?: string | null;
+  billingPortalUrl?: string | null;
+  message?: string;
+}
+
+export interface ProjectLimits {
+  hasPro: boolean;
+  freeLimit: number;
+  totalProjectsCount: number;
+  purchasedProjectsCount: number;
+  unusedProjects: number;
+  includedUsage: number;
 }

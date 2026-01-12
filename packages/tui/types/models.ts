@@ -32,6 +32,7 @@ export interface SharedUser {
   id: string;
   email: string;
   name: string;
+  publicKey: string | null;
 }
 
 export interface LogEntry {

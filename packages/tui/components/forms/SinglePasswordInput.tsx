@@ -96,9 +96,9 @@ export function SinglePasswordInput({
           primary: [
             {
               shortcuts: [
-                { key: "^v", description: showPassword ? "hide" : "show" },
-                { key: KEY_SYMBOLS.enter, description: "confirm" },
-                { key: "esc", description: "cancel" },
+                { key: "^v", description: showPassword ? "hide" : "show", disabled },
+                { key: KEY_SYMBOLS.enter, description: "confirm", disabled },
+                { key: "esc", description: "cancel", disabled },
               ],
             },
           ],

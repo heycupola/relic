@@ -77,6 +77,8 @@ interface CommonProps {
   showCount?: boolean;
   /** Total width of the component */
   width?: number;
+  /** Whether to show input in muted/disabled state */
+  muted?: boolean;
 }
 
 type InlineInputProps = CommonProps & (ControlledProps | UncontrolledProps);
@@ -133,6 +135,7 @@ export function InlineInput(props: InlineInputProps) {
     showIcon = true,
     showCount = true,
     width,
+    muted = false,
   } = props;
 
   if (!isControlled(props)) {
@@ -151,6 +154,7 @@ export function InlineInput(props: InlineInputProps) {
         showIcon={showIcon}
         showCount={showCount}
         width={width}
+        muted={muted}
       />
     );
   }
@@ -174,6 +178,7 @@ export function InlineInput(props: InlineInputProps) {
       showIcon={showIcon}
       showCount={showCount}
       width={width}
+      muted={muted}
     />
   );
 }
@@ -199,6 +204,7 @@ function SmartInlineInput({
   showIcon,
   showCount,
   width,
+  muted,
 }: CommonProps & UncontrolledProps) {
   const input = useInlineInput({ maxLength, initialValue });
   const cursorVisible = useCursorBlink(active);
@@ -262,6 +268,7 @@ function SmartInlineInput({
       showIcon={showIcon!}
       showCount={showCount!}
       width={width}
+      muted={muted}
     />
   );
 }
@@ -285,6 +292,7 @@ interface InlineInputDisplayProps {
   showIcon: boolean;
   showCount: boolean;
   width?: number;
+  muted?: boolean;
 }
 
 function InlineInputDisplay({
@@ -303,11 +311,13 @@ function InlineInputDisplay({
   showIcon,
   showCount,
   width,
+  muted,
 }: InlineInputDisplayProps) {
   const displayValue = isPassword && !showPassword ? "•".repeat(value.length) : value;
   const isEmpty = value.length === 0;
   const charCount = `${value.length}/${maxLength}`;
-  const showCursor = isFocused && cursorVisible;
+  const showCursor = isFocused && cursorVisible && !muted;
+  const textColor = muted ? THEME_COLORS.textDim : THEME_COLORS.text;
 
   let displayText = displayValue;
   let displayCursor = cursor;
@@ -353,15 +363,15 @@ function InlineInputDisplay({
         ) : (
           <>
             <span fg={THEME_COLORS.textDim}>{scrollLeft}</span>
-            <span fg={THEME_COLORS.text}>{displayText.slice(0, displayCursor)}</span>
+            <span fg={textColor}>{displayText.slice(0, displayCursor)}</span>
             {showCursor ? (
               <span bg={THEME_COLORS.primary} fg={THEME_COLORS.header}>
                 {displayText[displayCursor] || " "}
               </span>
             ) : (
-              <span fg={THEME_COLORS.text}>{displayText[displayCursor] || " "}</span>
+              <span fg={textColor}>{displayText[displayCursor] || " "}</span>
             )}
-            <span fg={THEME_COLORS.text}>{displayText.slice(displayCursor + 1)}</span>
+            <span fg={textColor}>{displayText.slice(displayCursor + 1)}</span>
             <span fg={THEME_COLORS.textDim}>{scrollRight}</span>
           </>
         )}

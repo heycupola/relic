@@ -10,6 +10,7 @@ interface UseCurrentUserReturn {
   error: Error | null;
   refetch: () => Promise<void>;
   hasKeys: boolean;
+  hasPro: boolean;
 }
 
 export function useCurrentUser(): UseCurrentUserReturn {
@@ -54,5 +55,6 @@ export function useCurrentUser(): UseCurrentUserReturn {
     error: error || apiError,
     refetch: fetchUser,
     hasKeys,
+    hasPro: user?.hasPro ?? false,
   };
 }

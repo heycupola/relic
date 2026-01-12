@@ -23,7 +23,7 @@ import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
 import { useCallback, useEffect, useState } from "react";
 import { TaskBar } from "./components/shared";
-import { AuthProvider, useAuth } from "./convex";
+import { AuthProvider, UserProvider, useAuth } from "./convex";
 import { AppSessionContext } from "./hooks/useAppSession";
 import { useCurrentUser } from "./hooks/useCurrentUser";
 import { TaskProvider } from "./hooks/useTaskQueue";
@@ -136,12 +136,14 @@ function App() {
   logger.log("App component rendered");
   return (
     <AuthProvider>
-      <TaskProvider>
-        <RouterProvider>
-          <AppRouter />
-          <TaskBar />
-        </RouterProvider>
-      </TaskProvider>
+      <UserProvider>
+        <TaskProvider>
+          <RouterProvider>
+            <AppRouter />
+            <TaskBar />
+          </RouterProvider>
+        </TaskProvider>
+      </UserProvider>
     </AuthProvider>
   );
 }

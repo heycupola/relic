@@ -117,7 +117,9 @@ export async function handleWebhookEvent(ctx: WebhookContext, event: StripeEvent
 
     case "checkout.session.completed": {
       console.log(`[Stripe Webhook] Checkout completed for user ${userId}`);
-      // Initial subscription is handled by subscription.created
+      // Handle the upgrade directly here since subscription events don't have userId in metadata
+      // The checkout session metadata contains userId, but Stripe doesn't copy it to subscription
+      await ctx.scheduler.runAfter(0, internal.user._handlePlanUpgrade, { userId });
       break;
     }
 
@@ -134,7 +136,7 @@ export async function handleWebhookEvent(ctx: WebhookContext, event: StripeEvent
 }
 
 async function handleUserSubscriptionChange(
-  ctx: Pick<WebhookContext, "runMutation">,
+  ctx: Pick<WebhookContext, "scheduler">,
   userId: Id<"user">,
   isActive: boolean,
   priceId?: string,
@@ -143,9 +145,9 @@ async function handleUserSubscriptionChange(
 
   if (isActive && isProPlan) {
     console.log(`[User Webhook] Upgrading user ${userId} to Pro`);
-    await ctx.runMutation(internal.user._handlePlanUpgrade, { userId });
+    await ctx.scheduler.runAfter(0, internal.user._handlePlanUpgrade, { userId });
   } else {
     console.log(`[User Webhook] Downgrading user ${userId} to Free`);
-    await ctx.runMutation(internal.user._handlePlanDowngrade, { userId });
+    await ctx.scheduler.runAfter(0, internal.user._handlePlanDowngrade, { userId });
   }
 }

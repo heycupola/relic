@@ -1,3 +1,4 @@
+import open from "open";
 import type { DeviceCodeResponse, DeviceTokenResponse } from "../api";
 import { publicApi } from "../api";
 import { isAuthorizationDenied, isAuthorizationPending, isDeviceCodeExpired } from "../types";
@@ -106,7 +107,7 @@ export class DeviceAuthService {
 
       // Small delay to let users see the code before browser opens
       setTimeout(() => {
-        this.openBrowser(codeResponse.verification_uri_complete);
+        open(codeResponse.verification_uri_complete);
       }, 500);
 
       return await this.pollForToken(codeResponse.device_code, callbacks);
@@ -121,22 +122,6 @@ export class DeviceAuthService {
   stopPolling(): void {
     this.isPolling = false;
     this.abortController?.abort();
-  }
-
-  private openBrowser(url: string): void {
-    try {
-      const platform = process.platform;
-      const command =
-        platform === "darwin"
-          ? ["open", url]
-          : platform === "win32"
-            ? ["cmd", "/c", "start", url]
-            : ["xdg-open", url];
-
-      Bun.spawn(command);
-    } catch {
-      // ignore browser open failures
-    }
   }
 
   private sleep(ms: number): Promise<void> {
