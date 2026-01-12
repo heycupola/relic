@@ -147,6 +147,32 @@ export const getSecret = protectedQuery({
   },
 });
 
+export const getAllSecretsForProject = protectedQuery({
+  args: {
+    projectId: v.id("project"),
+  },
+  handler: async (
+    ctx: ProtectedQueryCtx,
+    args: { projectId: Id<"project"> },
+  ): Promise<Array<{ secretId: string; environmentId: string; encryptedValue: string }>> => {
+    const project = await ctx.runQuery(internal.project._loadProjectById, {
+      projectId: args.projectId,
+    });
+
+    await assertProjectAccess(ctx, project);
+
+    const secrets = await ctx.runQuery(internal.secret._loadSecretsByProjectId, {
+      projectId: args.projectId,
+    });
+
+    return secrets.map((secret) => ({
+      secretId: secret._id,
+      environmentId: secret.environmentId,
+      encryptedValue: secret.encryptedValue,
+    }));
+  },
+});
+
 export const updateSecretBulk = protectedMutation({
   args: {
     environmentId: v.id("environment"),
@@ -629,6 +655,20 @@ export const _loadSecretsByFolderId = internalQuery({
     return await ctx.db
       .query("secret")
       .withIndex("by_folder", (q) => q.eq("folderId", args.folderId))
+      .filter((q) => q.eq(q.field("isDeleted"), false))
+      .collect();
+  },
+});
+
+export const _loadSecretsByProjectId = internalQuery({
+  args: {
+    projectId: v.id("project"),
+  },
+  returns: v.array(doc(schema, "secret")),
+  handler: async (ctx, args: { projectId: Id<"project"> }) => {
+    return await ctx.db
+      .query("secret")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .filter((q) => q.eq(q.field("isDeleted"), false))
       .collect();
   },
