@@ -11,6 +11,7 @@ const STATUS_CONFIG: Record<
   { icon: string; textColor: string; bgColor: string; prefix: string }
 > = {
   idle: { icon: "", textColor: THEME_COLORS.textDim, bgColor: "#24283b", prefix: "" },
+  pending: { icon: "…", textColor: THEME_COLORS.accent, bgColor: "#24283b", prefix: "" },
   running: { icon: "", textColor: THEME_COLORS.primary, bgColor: "#24283b", prefix: "" },
   success: { icon: "✓", textColor: "#1a1e2e", bgColor: "#9ece6a", prefix: "Success: " },
   error: { icon: "✗", textColor: "#1a1e2e", bgColor: "#f7768e", prefix: "Error: " },
@@ -54,9 +55,11 @@ export function TaskBar() {
       <text>
         {isResult ? (
           <>
-            <span fg={config.textColor} bold={true}>
-              {icon} {config.prefix}
-            </span>
+            <b>
+              <span fg={config.textColor}>
+                {icon} {config.prefix}
+              </span>
+            </b>
             <span fg={config.textColor}>{task.message}</span>
           </>
         ) : (
