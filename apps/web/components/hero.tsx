@@ -6,7 +6,8 @@ export function Hero() {
   return (
     <SectionWrapper label="Introduction" showStripes>
       <div className="mx-auto max-w-6xl px-6 py-16 md:py-20 lg:px-12">
-        <p className="mb-4 font-mono text-sm text-foreground/50">{"What's new in v1.0.0"}</p>
+        {/* <p className="mb-4 font-mono text-sm text-foreground/50">{"What's new in v1.0.0"}</p> */}
+        <p className="mb-4 font-mono text-sm text-foreground/50">{"Closed beta now open!"}</p>
         <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-balance text-foreground md:text-5xl lg:text-6xl">
           The secret manager built for the terminal
         </h1>

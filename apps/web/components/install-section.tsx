@@ -6,14 +6,15 @@ import { useState } from "react";
 import { SectionWrapper } from "./section-wrapper";
 
 const installMethods = [
-  { name: "curl", command: "curl -fsSL https://relic.dev/install | bash" },
+  { name: "bun", command: "bun install -g @relic/cli" },
+  { name: "curl", command: "curl -fsSL https://relic.so/install | bash" },
   { name: "npm", command: "npm install -g @relic/cli" },
   { name: "brew", command: "brew install relic" },
   { name: "cargo", command: "cargo install relic" },
 ];
 
 export function InstallSection() {
-  const defaultMethod = { name: "curl", command: "curl -fsSL https://relic.dev/install | bash" };
+  const defaultMethod = { name: "bun", command: "bun install -g @relic/cli" };
   const [activeMethod, setActiveMethod] = useState(installMethods[0] ?? defaultMethod);
   const [copied, setCopied] = useState(false);
 
