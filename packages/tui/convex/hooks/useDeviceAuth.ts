@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { debugLog } from "../../utils";
 import type { DeviceCodeResponse } from "../api";
 import { type DeviceAuthStatus, deviceAuth } from "../services/deviceAuth";
 

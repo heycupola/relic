@@ -31,7 +31,7 @@ async function migrateLegacyPassword(): Promise<void> {
   }
 }
 
-async function getPasswordFromStorage(): Promise<string | null> {
+export async function getPasswordFromStorage(): Promise<string | null> {
   try {
     const password = await secrets.get({
       service: SECRETS_SERVICE,

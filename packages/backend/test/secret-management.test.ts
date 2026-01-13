@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, components, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { ErrorCode } from "../convex/lib/errors.ts";
+import { SecretValueType } from "../convex/lib/types.ts";
 import schema from "../convex/schema";
 import {
   betterAuthModules,
@@ -67,7 +68,6 @@ describe("Secret Management", () => {
 
         const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
           encryptedValue,
-          encryptionKeyVersion: 1,
           environmentId,
           key: keys[i],
           valueType: valueTypes[i],
@@ -116,7 +116,6 @@ describe("Secret Management", () => {
 
         const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
           encryptedValue,
-          encryptionKeyVersion: 1,
           environmentId,
           key: "key_" + randomString(),
           valueType: "string",
@@ -191,7 +190,6 @@ describe("Secret Management", () => {
 
       const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue,
-        encryptionKeyVersion: 1,
         environmentId,
         key: "API_KEY",
         valueType: "string",
@@ -222,7 +220,6 @@ describe("Secret Management", () => {
 
       const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue,
-        encryptionKeyVersion: 1,
         environmentId,
         key: "PUBLIC_API_KEY",
         valueType: "string",
@@ -254,7 +251,6 @@ describe("Secret Management", () => {
 
       const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue,
-        encryptionKeyVersion: 1,
         environmentId,
         key: "DB_PASSWORD",
         valueType: "string",
@@ -286,7 +282,6 @@ describe("Secret Management", () => {
 
       const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue,
-        encryptionKeyVersion: 1,
         environmentId,
         key: "CONFIGURABLE_KEY",
         valueType: "string",
@@ -306,8 +301,7 @@ describe("Secret Management", () => {
         secretId,
         updates: {
           encryptedValue: newEncryptedValue,
-          encryptionKeyVersion: 1,
-          valueType: "string",
+          valueType: SecretValueType.String,
           scope: "client",
         },
       });
@@ -336,7 +330,6 @@ describe("Secret Management", () => {
 
       const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue,
-        encryptionKeyVersion: 1,
         environmentId,
         key: "FEATURE_FLAG",
         valueType: "boolean",
@@ -356,8 +349,7 @@ describe("Secret Management", () => {
         secretId,
         updates: {
           encryptedValue: newEncryptedValue,
-          encryptionKeyVersion: 1,
-          valueType: "boolean",
+          valueType: SecretValueType.Boolean,
           scope: "server",
         },
       });
@@ -386,7 +378,6 @@ describe("Secret Management", () => {
 
       const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue,
-        encryptionKeyVersion: 1,
         environmentId,
         key: "PRESERVE_SCOPE_TEST",
         valueType: "string",
@@ -406,8 +397,7 @@ describe("Secret Management", () => {
         secretId,
         updates: {
           encryptedValue: newEncryptedValue,
-          encryptionKeyVersion: 1,
-          valueType: "string",
+          valueType: SecretValueType.String,
         },
       });
 
@@ -447,7 +437,6 @@ describe("Secret Management", () => {
 
         const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
           encryptedValue,
-          encryptionKeyVersion: 1,
           environmentId,
           key: secret.key,
           valueType: "string",

@@ -59,6 +59,8 @@ describe("Collaborator Access Control", () => {
     projectId = result.projectId;
     projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
 
+    // For sharing, we still use RSA (collaborator's master key is not available)
+    // In production, collaborator would unwrap using their own master key
     const collaboratorPublicKey = await importPublicKey(collaborator.publicKey!);
     const encryptedProjectKeyForCollaborator = await wrapAESKeyWithRSA(
       projectKey,
@@ -87,7 +89,6 @@ describe("Collaborator Access Control", () => {
 
       const { success, secretId } = await collaborator.asUser.mutation(api.secret.createSecret, {
         encryptedValue,
-        encryptionKeyVersion: 1,
         environmentId,
         key: "API_KEY_" + randomString(),
         valueType: "string",
@@ -109,7 +110,6 @@ describe("Collaborator Access Control", () => {
 
       const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue,
-        encryptionKeyVersion: 1,
         environmentId,
         key: "API_KEY_" + randomString(),
         valueType: "string",
@@ -131,7 +131,6 @@ describe("Collaborator Access Control", () => {
 
       const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue: await encryptSecret(projectKey, "old-value"),
-        encryptionKeyVersion: 1,
         environmentId,
         key: "API_KEY_" + randomString(),
         valueType: "string",
@@ -164,7 +163,6 @@ describe("Collaborator Access Control", () => {
 
       const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue: await encryptSecret(projectKey, "value"),
-        encryptionKeyVersion: 1,
         environmentId,
         key: "API_KEY_" + randomString(),
         valueType: "string",
@@ -203,7 +201,7 @@ describe("Collaborator Access Control", () => {
         environmentId,
       });
 
-      expect(data.environment.id).toBe(environmentId);
+      expect(data.environment._id).toBe(environmentId);
     });
 
     test("collaborator can UPDATE environments", async () => {
@@ -335,7 +333,6 @@ describe("Collaborator Access Control", () => {
 
       const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue: await encryptSecret(projectKey, "value"),
-        encryptionKeyVersion: 1,
         environmentId,
         key: "API_KEY",
         valueType: "string",
@@ -358,7 +355,6 @@ describe("Collaborator Access Control", () => {
         () =>
           nonCollaborator.asUser.mutation(api.secret.createSecret, {
             encryptedValue: "fake-encrypted",
-            encryptionKeyVersion: 1,
             environmentId,
             key: "HACKED_KEY",
             valueType: "string",

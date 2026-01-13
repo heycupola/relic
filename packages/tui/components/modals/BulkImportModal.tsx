@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTaskQueue } from "../../hooks/useTaskQueue";
 import type { CursorPosition } from "../../types";
 import type {
   BulkImportSecret,
@@ -20,7 +21,6 @@ interface BulkImportModalProps {
   format: "env" | "json";
   collisions: CollisionInfo[];
   cursorVisible: boolean;
-  mode: "import" | "update";
   onClose: () => void;
 }
 
@@ -34,9 +34,10 @@ export function BulkImportModal({
   format,
   collisions,
   cursorVisible,
-  mode,
   onClose: _onClose,
 }: BulkImportModalProps) {
+  const { isRunning } = useTaskQueue();
+
   const validationResult = useMemo((): ValidationResult => {
     const trimmed = content.trim();
     if (trimmed === "") {
@@ -61,28 +62,12 @@ export function BulkImportModal({
     }
   }, [content, format]);
 
-  const hasCollisions = collisions.length > 0;
-
   const getShortcuts = () => {
-    if (mode === "update") {
-      return [
-        { key: "⌥j", description: format === "env" ? "advanced" : "simple" },
-        { key: "⌥u", description: "update" },
-        { key: "esc", description: "cancel" },
-      ];
-    }
-
-    const shortcuts = [
-      { key: "⌥j", description: format === "env" ? "advanced" : "simple" },
-      { key: "⌥i", description: hasCollisions ? "merge" : "import" },
+    return [
+      { key: "⌥j", description: format === "env" ? "advanced" : "simple", disabled: isRunning },
+      { key: "⌥s", description: "save", disabled: isRunning },
+      { key: "esc", description: "cancel", disabled: isRunning },
     ];
-
-    if (hasCollisions) {
-      shortcuts.push({ key: "⌥o", description: "replace" });
-    }
-
-    shortcuts.push({ key: "esc", description: "cancel" });
-    return shortcuts;
   };
 
   const lines = content.split("\n");
@@ -187,13 +172,7 @@ export function BulkImportModal({
   };
 
   return (
-    <Modal
-      visible={visible}
-      title={mode === "update" ? "Batch Edit" : "Batch Add"}
-      width={80}
-      height={28}
-      shortcuts={getShortcuts()}
-    >
+    <Modal visible={visible} title="Edit Secrets" width={80} height={28} shortcuts={getShortcuts()}>
       <box flexDirection="column" width={EDITOR_WIDTH}>
         <box flexDirection="row" justifyContent="space-between">
           <text>
@@ -240,7 +219,7 @@ export function BulkImportModal({
               <span fg={THEME_COLORS.textMuted}>
                 {validationResult.secrets.length} secrets ready
               </span>
-              {hasCollisions && (
+              {collisions.length > 0 && (
                 <span fg={THEME_COLORS.accent}>
                   {" "}
                   · {collisions.length} collision{collisions.length > 1 ? "s" : ""}

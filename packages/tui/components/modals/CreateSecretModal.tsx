@@ -16,6 +16,7 @@ interface CreateSecretModalProps {
   focusedField: "key" | "value" | "type" | "scope";
   valueType: SecretValueType;
   scope: SecretScope;
+  disabled?: boolean;
   onClose: () => void;
 }
 
@@ -29,6 +30,7 @@ export function CreateSecretModal({
   focusedField,
   valueType,
   scope,
+  disabled = false,
   onClose: _onClose,
 }: CreateSecretModalProps) {
   return (
@@ -38,9 +40,9 @@ export function CreateSecretModal({
       width={50}
       height={17}
       shortcuts={[
-        { key: KEY_SYMBOLS.enter, description: "create" },
-        { key: "tab", description: "next" },
-        { key: "esc", description: "cancel" },
+        { key: KEY_SYMBOLS.enter, description: "create", disabled },
+        { key: "tab", description: "next", disabled },
+        { key: "esc", description: "cancel", disabled },
       ]}
     >
       <box flexDirection="column" alignItems="center" gap={1}>

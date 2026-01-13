@@ -69,10 +69,17 @@ describe("Project Sharing Performance", () => {
 
       const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
 
-      const { projectId } = await owner.asUser.action(api.project.createProject, {
+      const projectResult = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey,
         name: "project",
+        confirmPayment: true,
       });
+
+      if (!projectResult.success || !projectResult.projectId) {
+        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
+      }
+
+      const projectId = projectResult.projectId;
 
       const secretIds: Id<"secret">[] = [];
       const environmentIds: Id<"environment">[] = [];
@@ -85,7 +92,6 @@ describe("Project Sharing Performance", () => {
 
         for (const [index, secretKey] of secretKeys.entries()) {
           const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
-            encryptionKeyVersion: 1,
             encryptedValue: await encryptSecret(projectKey, secretValues[index]),
             environmentId,
             key: secretKey,
@@ -102,14 +108,18 @@ describe("Project Sharing Performance", () => {
         importedCollaborator1PublicKey,
       );
 
-      const { shareId: shareWithCollaborator1Id } = await owner.asUser.action(
-        api.projectShare.shareProject,
-        {
-          encryptedProjectKey: encryptedProjectKeyForCollaborator1,
-          projectId,
-          userEmail: collaborator.email,
-        },
-      );
+      const shareResult1 = await owner.asUser.action(api.projectShare.shareProject, {
+        encryptedProjectKey: encryptedProjectKeyForCollaborator1,
+        projectId,
+        userEmail: collaborator.email,
+        confirmPayment: true,
+      });
+
+      if (!shareResult1.success || !shareResult1.shareId) {
+        throw new Error(`Share 1 failed: ${shareResult1.message || "Unknown error"}`);
+      }
+
+      const shareWithCollaborator1Id = shareResult1.shareId;
 
       const importedCollaborator2PublicKey = await importPublicKey(collaborator2.publicKey!);
       const encryptedProjectKeyForCollaborator2 = await wrapAESKeyWithRSA(
@@ -117,14 +127,18 @@ describe("Project Sharing Performance", () => {
         importedCollaborator2PublicKey,
       );
 
-      const { shareId: shareWithCollaborator2Id } = await owner.asUser.action(
-        api.projectShare.shareProject,
-        {
-          encryptedProjectKey: encryptedProjectKeyForCollaborator2,
-          projectId,
-          userEmail: collaborator2.email,
-        },
-      );
+      const shareResult2 = await owner.asUser.action(api.projectShare.shareProject, {
+        encryptedProjectKey: encryptedProjectKeyForCollaborator2,
+        projectId,
+        userEmail: collaborator2.email,
+        confirmPayment: true,
+      });
+
+      if (!shareResult2.success || !shareResult2.shareId) {
+        throw new Error(`Share 2 failed: ${shareResult2.message || "Unknown error"}`);
+      }
+
+      const shareWithCollaborator2Id = shareResult2.shareId;
 
       const { encryptedProjectKey: newEncryptedProjectKey, projectKey: newProjectKey } =
         await createProjectKey(owner.publicKey!);

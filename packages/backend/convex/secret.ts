@@ -3,7 +3,6 @@ import { doc } from "convex-helpers/validators";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
-import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
 import { assertProjectAccess } from "./lib/access";
 import { alreadyExistsError, createError, ErrorCode, notFoundError } from "./lib/errors";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
@@ -16,7 +15,7 @@ import {
 } from "./lib/types";
 import schema from "./schema";
 
-// INFO: should i add a secret limit in an environment
+const MAX_SECRETS_PER_ENVIRONMENT = 1024;
 
 export const createSecret = protectedMutation({
   args: {
@@ -27,7 +26,6 @@ export const createSecret = protectedMutation({
     valueType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
     scope: v.optional(v.union(v.literal("client"), v.literal("server"), v.literal("shared"))),
     // description: v.optional(v.string()),
-    encryptionKeyVersion: v.number(),
     // tags: v.optional(v.array(v.string())),
   },
   handler: async (
@@ -39,7 +37,6 @@ export const createSecret = protectedMutation({
       encryptedValue: string;
       valueType: "string" | "number" | "boolean";
       scope?: "client" | "server" | "shared";
-      encryptionKeyVersion: number;
     },
   ) => {
     const environment = await ctx.runQuery(internal.environment._loadEnvironmentById, {
@@ -74,11 +71,11 @@ export const createSecret = protectedMutation({
       throw alreadyExistsError("secret", ErrorSeverity.Medium);
     }
 
-    // create secret
+    // create secret using project's current key version
     const { secretId } = await ctx.runMutation(internal.secret._insertSecret, {
       createdBy: ctx.userId,
       encryptedValue: args.encryptedValue,
-      encryptionKeyVersion: args.encryptionKeyVersion,
+      encryptionKeyVersion: project.keyVersion,
       environmentId: args.environmentId,
       key: args.key,
       valueType: args.valueType,
@@ -150,13 +147,300 @@ export const getSecret = protectedQuery({
   },
 });
 
+export const getAllSecretsForProject = protectedQuery({
+  args: {
+    projectId: v.id("project"),
+  },
+  handler: async (
+    ctx: ProtectedQueryCtx,
+    args: { projectId: Id<"project"> },
+  ): Promise<Array<{ secretId: string; environmentId: string; encryptedValue: string }>> => {
+    const project = await ctx.runQuery(internal.project._loadProjectById, {
+      projectId: args.projectId,
+    });
+
+    await assertProjectAccess(ctx, project);
+
+    const secrets = await ctx.runQuery(internal.secret._loadSecretsByProjectId, {
+      projectId: args.projectId,
+    });
+
+    return secrets.map((secret) => ({
+      secretId: secret._id,
+      environmentId: secret.environmentId,
+      encryptedValue: secret.encryptedValue,
+    }));
+  },
+});
+
+export const updateSecretBulk = protectedMutation({
+  args: {
+    environmentId: v.id("environment"),
+    folderId: v.optional(v.id("folder")),
+    secrets: v.array(
+      v.object({
+        secretId: v.optional(v.id("secret")),
+        key: v.string(),
+        encryptedValue: v.string(),
+        valueType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
+        scope: v.optional(v.union(v.literal("client"), v.literal("server"), v.literal("shared"))),
+      }),
+    ),
+    mode: v.optional(v.union(v.literal("skip"), v.literal("overwrite"))),
+  },
+  returns: v.object({
+    success: v.boolean(),
+    updatedCount: v.number(),
+    createdCount: v.number(),
+    skippedCount: v.number(),
+    secretIds: v.array(v.id("secret")),
+  }),
+  handler: async (
+    ctx: ProtectedMutationCtx,
+    args: {
+      environmentId: Id<"environment">;
+      folderId?: Id<"folder">;
+      secrets: Array<{
+        secretId?: Id<"secret">;
+        key: string;
+        encryptedValue: string;
+        valueType: "string" | "number" | "boolean";
+        scope?: "client" | "server" | "shared";
+      }>;
+      mode?: "skip" | "overwrite";
+    },
+  ) => {
+    if (args.secrets.length === 0) {
+      throw createError({
+        code: ErrorCode.INVALID_ARGUMENTS,
+        message: "Cannot update empty secret list",
+        severity: ErrorSeverity.Low,
+      });
+    }
+
+    const environment: Doc<"environment"> = await ctx.runQuery(
+      internal.environment._loadEnvironmentById,
+      {
+        environmentId: args.environmentId,
+      },
+    );
+
+    const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
+      projectId: environment.projectId,
+    });
+
+    await assertProjectAccess(ctx, project);
+
+    await checkRateLimit(ctx, "write");
+
+    let folder: Doc<"folder"> | undefined;
+
+    if (args.folderId) {
+      folder = await ctx.runQuery(internal.folder._loadFolderId, {
+        folderId: args.folderId,
+      });
+
+      if (!folder) {
+        throw notFoundError("folder");
+      }
+
+      if (folder.environmentId !== args.environmentId) {
+        throw createError({
+          code: ErrorCode.INVALID_ARGUMENTS,
+          message: "Folder does not belong to this environment",
+          severity: ErrorSeverity.Medium,
+        });
+      }
+    }
+
+    const mode = args.mode || "skip";
+    const updatedSecretIds: Id<"secret">[] = [];
+    const createdSecretIds: Id<"secret">[] = [];
+    let updatedCount = 0;
+    let skippedCount = 0;
+
+    // Check current secret count to ensure we don't exceed limit when creating new secrets
+    const existingSecrets = await ctx.runQuery(internal.secret._loadSecretsByEnvironmentId, {
+      environmentId: args.environmentId,
+    });
+    const initialCount = existingSecrets.length;
+
+    // Process each secret
+    for (const secretInput of args.secrets) {
+      let secret: Doc<"secret"> | null = null;
+
+      // If secretId provided, load by ID
+      if (secretInput.secretId) {
+        secret = await ctx.runQuery(internal.secret._loadSecretById, {
+          secretId: secretInput.secretId,
+        });
+
+        if (!secret) {
+          if (mode === "skip") {
+            skippedCount++;
+            continue;
+          }
+          throw notFoundError("secret");
+        }
+
+        if (secret.isDeleted) {
+          if (mode === "skip") {
+            skippedCount++;
+            continue;
+          }
+          throw createError({
+            code: ErrorCode.INVALID_RESOURCE_STATE,
+            message: "Cannot update a deleted secret. Restore it first",
+            severity: ErrorSeverity.Low,
+          });
+        }
+
+        if (secret.environmentId !== args.environmentId) {
+          if (mode === "skip") {
+            skippedCount++;
+            continue;
+          }
+          throw createError({
+            code: ErrorCode.INVALID_ARGUMENTS,
+            message: "Secret does not belong to this environment",
+            severity: ErrorSeverity.Medium,
+          });
+        }
+      } else {
+        // Load by key
+        secret = await ctx.runQuery(internal.secret._loadSecretByKeyAndEnvironmentIdAndFolderId, {
+          environmentId: args.environmentId,
+          folderId: args.folderId,
+          key: secretInput.key,
+        });
+
+        if (!secret) {
+          // Always create new secret if not found (both skip and overwrite modes)
+          // This allows updateSecretBulk to both update existing secrets and create new ones
+
+          // Check if adding this new secret would exceed the limit
+          if (initialCount + createdSecretIds.length >= MAX_SECRETS_PER_ENVIRONMENT) {
+            if (mode === "skip") {
+              skippedCount++;
+              continue;
+            }
+            throw createError({
+              code: ErrorCode.ENVIRONMENT_LIMIT_REACHED,
+              message: `Cannot create new secret "${secretInput.key}". Environment already has ${initialCount + createdSecretIds.length} secrets. Maximum ${MAX_SECRETS_PER_ENVIRONMENT} secrets per environment.`,
+              severity: ErrorSeverity.High,
+            });
+          }
+
+          const { secretId } = await ctx.runMutation(internal.secret._insertSecret, {
+            createdBy: ctx.userId,
+            encryptedValue: secretInput.encryptedValue,
+            encryptionKeyVersion: project.keyVersion,
+            valueType: secretInput.valueType,
+            scope: secretInput.scope || "shared",
+            projectId: project._id,
+            environmentId: environment._id,
+            folderId: args.folderId,
+            key: secretInput.key,
+          });
+
+          await ctx.runMutation(internal.actionLog._logSecretAction, {
+            environmentId: environment._id,
+            environmentName: environment.name,
+            key: secretInput.key,
+            projectId: project._id,
+            projectName: project.name,
+            secretAction: "secret.created",
+            secretId,
+            userId: ctx.userId,
+            folderId: args.folderId,
+            folderName: folder?.name,
+          });
+
+          createdSecretIds.push(secretId);
+          updatedSecretIds.push(secretId);
+          continue;
+        }
+
+        if (secret.isDeleted) {
+          if (mode === "skip") {
+            skippedCount++;
+            continue;
+          }
+          throw createError({
+            code: ErrorCode.INVALID_RESOURCE_STATE,
+            message: "Cannot update a deleted secret. Restore it first",
+            severity: ErrorSeverity.Low,
+          });
+        }
+      }
+
+      const newValueType =
+        secretInput.valueType === "string"
+          ? SecretValueType.String
+          : secretInput.valueType === "number"
+            ? SecretValueType.Number
+            : SecretValueType.Boolean;
+
+      const newScope = secretInput.scope || "shared";
+
+      const isUnchanged =
+        secret.encryptedValue === secretInput.encryptedValue &&
+        secret.key === secretInput.key &&
+        secret.valueType === newValueType &&
+        secret.scope === newScope &&
+        secret.encryptionKeyVersion === project.keyVersion;
+
+      if (isUnchanged) {
+        updatedSecretIds.push(secret._id);
+        continue;
+      }
+
+      await ctx.runMutation(internal.secret._updateSecret, {
+        secretId: secret._id,
+        updates: {
+          updatedBy: ctx.userId,
+          key: secretInput.key,
+          encryptedValue: secretInput.encryptedValue,
+          encryptionKeyVersion: project.keyVersion,
+          valueType: newValueType,
+          scope: newScope,
+        },
+      });
+
+      await ctx.runMutation(internal.actionLog._logSecretAction, {
+        environmentId: environment._id,
+        environmentName: environment.name,
+        key: secret.key,
+        newKey: secretInput.key !== secret.key ? secretInput.key : undefined,
+        projectId: project._id,
+        projectName: project.name,
+        secretAction: "secret.updated",
+        secretId: secret._id,
+        userId: ctx.userId,
+        folderId: args.folderId,
+        folderName: folder?.name,
+      });
+
+      updatedCount++;
+      updatedSecretIds.push(secret._id);
+    }
+
+    return {
+      success: true,
+      updatedCount,
+      createdCount: createdSecretIds.length,
+      skippedCount,
+      secretIds: updatedSecretIds,
+    };
+  },
+});
+
 export const updateSecret = protectedMutation({
   args: {
     secretId: v.id("secret"),
     updates: v.object({
       key: v.optional(v.string()),
       encryptedValue: v.optional(v.string()),
-      encryptionKeyVersion: v.optional(v.number()),
       valueType: v.union(
         v.literal(SecretValueType.String),
         v.literal(SecretValueType.Number),
@@ -174,10 +458,8 @@ export const updateSecret = protectedMutation({
       updates: {
         key?: string;
         encryptedValue?: string;
-        encryptionKeyVersion?: number;
         valueType?: SecretValueType;
         scope?: "client" | "server" | "shared";
-        isDeleted?: boolean;
       };
     },
   ) => {
@@ -205,14 +487,14 @@ export const updateSecret = protectedMutation({
 
     await checkRateLimit(ctx, "write");
 
-    // update secret here
+    // update secret here, using project's current key version when value is updated
     await ctx.runMutation(internal.secret._updateSecret, {
       secretId: args.secretId,
       updates: {
         updatedBy: ctx.userId,
         key: args.updates.key,
         encryptedValue: args.updates.encryptedValue,
-        encryptionKeyVersion: args.updates.encryptionKeyVersion,
+        encryptionKeyVersion: args.updates.encryptedValue ? project.keyVersion : undefined,
         valueType: args.updates.valueType,
         scope: args.updates.scope,
       },
@@ -372,6 +654,20 @@ export const _loadSecretsByFolderId = internalQuery({
     return await ctx.db
       .query("secret")
       .withIndex("by_folder", (q) => q.eq("folderId", args.folderId))
+      .filter((q) => q.eq(q.field("isDeleted"), false))
+      .collect();
+  },
+});
+
+export const _loadSecretsByProjectId = internalQuery({
+  args: {
+    projectId: v.id("project"),
+  },
+  returns: v.array(doc(schema, "secret")),
+  handler: async (ctx, args: { projectId: Id<"project"> }) => {
+    return await ctx.db
+      .query("secret")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .filter((q) => q.eq(q.field("isDeleted"), false))
       .collect();
   },

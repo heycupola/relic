@@ -1,16 +1,28 @@
 import { useKeyboard } from "@opentui/react";
 import { useState } from "react";
+import type { ShareLimits } from "../../convex/api/types";
 import { useCursorBlink } from "../../hooks/useCursorBlink";
 import { useInlineInput } from "../../hooks/useInlineInput";
 import { usePaste } from "../../hooks/usePaste";
-import { COLLABORATOR_LIMIT, KEY_SYMBOLS, THEME_COLORS } from "../../utils/constants";
+import { useTaskQueue } from "../../hooks/useTaskQueue";
+import { KEY_SYMBOLS, THEME_COLORS } from "../../utils/constants";
 import { InlineInput } from "../forms/InlineInput";
 import { Modal } from "../shared/Modal";
+
+/**
+ * Simple email validation
+ */
+function isValidEmail(email: string): boolean {
+  const emailRegex =
+    /^[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
+  return emailRegex.test(email);
+}
 
 interface Collaborator {
   id: string;
   email: string;
   name: string;
+  publicKey: string | null;
 }
 
 interface RevokeConfirmationProps {
@@ -110,6 +122,10 @@ interface CommonProps {
   collaborators: Collaborator[];
   /** Called when modal should close */
   onClose: () => void;
+  /** Email currently being added (shown as pending, not editable) */
+  pendingEmail?: string | null;
+  /** Share limits from backend (freeLimit, purchasedSeats, totalLimit) */
+  shareLimits?: ShareLimits | null;
 }
 
 type ManageCollaboratorsModalProps = CommonProps & (ControlledProps | SmartProps);
@@ -181,13 +197,27 @@ function SmartManageCollaboratorsModal({
   onAdd,
   onRevoke,
   onRevokeWithRotation,
+  pendingEmail,
+  shareLimits,
 }: CommonProps & SmartProps) {
+  const { isRunning } = useTaskQueue();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [creatingCollab, setCreatingCollab] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState<Collaborator | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
 
   const input = useInlineInput({ maxLength: 50 });
   const cursorVisible = useCursorBlink(creatingCollab);
+
+  // Clear submittedEmail when pendingEmail becomes null (task completed)
+  // Use the actual pendingEmail from parent as source of truth
+  const displayEmail = pendingEmail || submittedEmail;
+
+  // When parent says task is done (pendingEmail null) and we had submitted, clear it
+  if (!pendingEmail && submittedEmail) {
+    setSubmittedEmail(null);
+  }
 
   usePaste((text) => {
     if (!creatingCollab) return;
@@ -196,6 +226,9 @@ function SmartManageCollaboratorsModal({
   });
 
   useKeyboard((key) => {
+    // Only block when task is actively running (not waiting for confirmation)
+    if (isRunning) return;
+
     if (confirmingDelete) {
       if (key.name === "y") {
         onRevoke?.(confirmingDelete);
@@ -213,19 +246,31 @@ function SmartManageCollaboratorsModal({
       if (key.name === "escape") {
         setCreatingCollab(false);
         input.reset();
+        setEmailError(null);
         return;
       }
 
       if (key.name === "return") {
         const trimmed = input.value.trim();
-        if (trimmed) {
-          onAdd?.(trimmed);
-          setCreatingCollab(false);
-          input.reset();
+        if (!trimmed) {
+          return;
         }
+        if (!isValidEmail(trimmed)) {
+          setEmailError("Invalid email address");
+          return;
+        }
+        setEmailError(null);
+        setCreatingCollab(false);
+        setSubmittedEmail(trimmed);
+        input.reset();
+        onAdd?.(trimmed);
         return;
       }
 
+      // Clear error when user types
+      if (emailError) {
+        setEmailError(null);
+      }
       input.handleKey(key);
       return;
     }
@@ -237,6 +282,7 @@ function SmartManageCollaboratorsModal({
 
     if (key.name === "a") {
       setCreatingCollab(true);
+      setEmailError(null);
       input.reset();
       return;
     }
@@ -276,6 +322,9 @@ function SmartManageCollaboratorsModal({
           ? { type: "collab", id: confirmingDelete.id, name: confirmingDelete.email }
           : null
       }
+      emailError={emailError}
+      pendingEmail={displayEmail}
+      shareLimits={shareLimits}
     />
   );
 }
@@ -292,6 +341,9 @@ interface ManageCollaboratorsDisplayProps {
   newCollabCursor: number;
   cursorVisible: boolean;
   confirmingDelete?: { type: string; id: string; name: string } | null;
+  emailError?: string | null;
+  pendingEmail?: string | null;
+  shareLimits?: ShareLimits | null;
 }
 
 function ManageCollaboratorsDisplay({
@@ -303,37 +355,88 @@ function ManageCollaboratorsDisplay({
   newCollabCursor,
   cursorVisible,
   confirmingDelete,
+  emailError,
+  pendingEmail,
+  shareLimits,
 }: ManageCollaboratorsDisplayProps) {
+  const { isRunning } = useTaskQueue();
+  const totalShares = shareLimits?.totalSharesCount ?? collaborators.length;
+  const hasPro = shareLimits?.hasPro ?? false;
+  const freeShareLimit = shareLimits?.freeShareLimit ?? 0;
+  const unusedShares = shareLimits?.unusedShares ?? 0;
+
+  // Calculate remaining free shares
+  const remainingFree = Math.max(0, freeShareLimit - totalShares);
+
+  // Format: "X shares (Y free)" when has remaining free, "X shares" when no remaining free
+  const getUsageText = () => {
+    if (!hasPro) {
+      return null;
+    }
+
+    // No remaining free - don't show free
+    if (remainingFree === 0) {
+      return (
+        <text>
+          <span fg={THEME_COLORS.textDim}>
+            {totalShares} share{totalShares !== 1 ? "s" : ""}
+          </span>
+          {unusedShares > 0 && (
+            <span>
+              <span fg={THEME_COLORS.textDim}> · </span>
+              <span fg={THEME_COLORS.success}>{unusedShares} left</span>
+            </span>
+          )}
+        </text>
+      );
+    }
+
+    // Has remaining free - show remaining free
+    return (
+      <text>
+        <span fg={THEME_COLORS.textDim}>
+          {totalShares} share{totalShares !== 1 ? "s" : ""}{" "}
+        </span>
+        <span fg={THEME_COLORS.textDim}>(</span>
+        <span fg={THEME_COLORS.success}>{remainingFree} free</span>
+        <span fg={THEME_COLORS.textDim}>)</span>
+        {unusedShares > 0 && (
+          <span>
+            <span fg={THEME_COLORS.textDim}> · </span>
+            <span fg={THEME_COLORS.success}>{unusedShares} left</span>
+          </span>
+        )}
+      </text>
+    );
+  };
+
   const shortcuts = creatingCollab
     ? [
-        { key: KEY_SYMBOLS.enter, description: "add" },
-        { key: "esc", description: "cancel" },
+        { key: KEY_SYMBOLS.enter, description: "add", disabled: isRunning },
+        { key: "esc", description: "cancel", disabled: isRunning },
       ]
     : [
-        { key: "a", description: "add" },
-        { key: "d", description: "revoke" },
-        { key: "esc", description: "close" },
+        { key: "a", description: "add", disabled: isRunning },
+        { key: "d", description: "revoke", disabled: isRunning },
+        { key: "esc", description: "close", disabled: isRunning },
       ];
 
   return (
-    <Modal visible={true} width={50} height={11} shortcuts={shortcuts}>
-      <box flexDirection="column" width={44}>
-        <box flexDirection="row" alignItems="center">
-          <text>
-            <span fg={THEME_COLORS.textMuted}>Manage Collaborators</span>
-            <span fg={THEME_COLORS.textDim}> · </span>
-            <span fg={THEME_COLORS.primary}>{projectName}</span>
-          </text>
+    <Modal visible={true} width={56} height={12} shortcuts={shortcuts}>
+      <box flexDirection="column" width={50}>
+        <box flexDirection="column">
+          <box flexDirection="row" justifyContent="space-between" alignItems="center">
+            <text>
+              <span fg={THEME_COLORS.textMuted}>Manage Collaborators</span>
+              <span fg={THEME_COLORS.textDim}> · </span>
+              <span fg={THEME_COLORS.primary}>{projectName}</span>
+            </text>
+            {!hasPro && <text fg={THEME_COLORS.accent}>upgrade to pro</text>}
+          </box>
+          {hasPro && <box marginTop={1}>{getUsageText()}</box>}
         </box>
 
-        <box flexDirection="row" justifyContent="space-between" marginTop={1}>
-          <text fg={THEME_COLORS.textMuted}>Collaborators</text>
-          <text fg={THEME_COLORS.textDim}>
-            {collaborators.length}/{COLLABORATOR_LIMIT}
-          </text>
-        </box>
-
-        <box flexDirection="column" width={44}>
+        <box flexDirection="column" width={50} marginTop={1}>
           {collaborators.length === 0 && !creatingCollab ? (
             <text fg={THEME_COLORS.textDim}>No collaborators yet.</text>
           ) : (
@@ -356,18 +459,22 @@ function ManageCollaboratorsDisplay({
                   </box>
                 );
               })}
-              {creatingCollab && (
-                <InlineInput
-                  value={newCollabInput}
-                  cursor={newCollabCursor}
-                  cursorVisible={cursorVisible}
-                  maxWidth={28}
-                  maxLength={50}
-                  placeholder="e.g. user@example.com"
-                  isFocused={true}
-                  showIcon={false}
-                  showCount={true}
-                />
+              {(creatingCollab || pendingEmail) && (
+                <box flexDirection="column">
+                  <InlineInput
+                    value={pendingEmail || newCollabInput}
+                    cursor={pendingEmail ? 0 : newCollabCursor}
+                    cursorVisible={pendingEmail ? false : cursorVisible}
+                    maxWidth={28}
+                    maxLength={50}
+                    placeholder="e.g. user@example.com"
+                    isFocused={creatingCollab && !pendingEmail}
+                    showIcon={false}
+                    showCount={creatingCollab && !pendingEmail}
+                    muted={!!pendingEmail}
+                  />
+                  {emailError && <text fg={THEME_COLORS.error}> {emailError}</text>}
+                </box>
               )}
             </>
           )}

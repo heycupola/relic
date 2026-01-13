@@ -10,6 +10,7 @@ interface CreateItemModalProps {
   value: string;
   cursor: number;
   cursorVisible: boolean;
+  disabled?: boolean;
   onClose: () => void;
 }
 
@@ -42,6 +43,7 @@ export function CreateItemModal({
   value,
   cursor,
   cursorVisible,
+  disabled = false,
   onClose: _onClose,
 }: CreateItemModalProps) {
   const config = ITEM_CONFIGS[itemType];
@@ -53,8 +55,8 @@ export function CreateItemModal({
       width={50}
       height={9}
       shortcuts={[
-        { key: KEY_SYMBOLS.enter, description: "create" },
-        { key: "esc", description: "cancel" },
+        { key: KEY_SYMBOLS.enter, description: "create", disabled },
+        { key: "esc", description: "cancel", disabled },
       ]}
     >
       <box flexDirection="column" alignItems="center">
@@ -79,3 +81,5 @@ export function CreateEnvironmentModal(props: Omit<CreateItemModalProps, "itemTy
 export function CreateFolderModal(props: Omit<CreateItemModalProps, "itemType">) {
   return <CreateItemModal {...props} itemType="folder" />;
 }
+
+export type { CreateItemModalProps };

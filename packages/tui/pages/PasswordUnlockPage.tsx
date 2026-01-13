@@ -32,6 +32,7 @@ export function PasswordUnlockPage({ onUnlock, onLogout }: PasswordUnlockPagePro
   const [error, setError] = useState<string | null>(null);
   const [cursorVisible, setCursorVisible] = useState(true);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => setCursorVisible((prev) => !prev), 530);
@@ -48,12 +49,16 @@ export function PasswordUnlockPage({ onUnlock, onLogout }: PasswordUnlockPagePro
       return;
     }
 
-    if (!(await verifyPassword(passwordInput.value))) {
-      setError("Incorrect password");
-      return;
+    setIsLoading(true);
+    try {
+      if (!(await verifyPassword(passwordInput.value))) {
+        setError("Incorrect password");
+        return;
+      }
+      onUnlock();
+    } finally {
+      setIsLoading(false);
     }
-
-    onUnlock();
   };
 
   const handleLogout = async () => {
@@ -61,6 +66,8 @@ export function PasswordUnlockPage({ onUnlock, onLogout }: PasswordUnlockPagePro
   };
 
   useKeyboard((key) => {
+    if (isLoading) return;
+
     if (showLogoutModal) {
       if (key.name === "y") {
         handleLogout();
@@ -141,9 +148,13 @@ export function PasswordUnlockPage({ onUnlock, onLogout }: PasswordUnlockPagePro
                 primary: [
                   {
                     shortcuts: [
-                      { key: "^v", description: passwordInput.showPassword ? "hide" : "show" },
-                      { key: KEY_SYMBOLS.enter, description: "unlock" },
-                      { key: "^l", description: "logout" },
+                      {
+                        key: "^v",
+                        description: passwordInput.showPassword ? "hide" : "show",
+                        disabled: isLoading,
+                      },
+                      { key: KEY_SYMBOLS.enter, description: "unlock", disabled: isLoading },
+                      { key: "^l", description: "logout", disabled: isLoading },
                     ],
                   },
                 ],
@@ -162,8 +173,8 @@ export function PasswordUnlockPage({ onUnlock, onLogout }: PasswordUnlockPagePro
         width={45}
         height={8}
         shortcuts={[
-          { key: "y", description: "yes" },
-          { key: "n", description: "no" },
+          { key: "y", description: "yes", disabled: isLoading },
+          { key: "n", description: "no", disabled: isLoading },
         ]}
       >
         <text fg={THEME_COLORS.textDim}>Are you sure you want to logout?</text>

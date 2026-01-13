@@ -1,7 +1,7 @@
 import type { BulkImportSecret, ValidationError, ValidationResult } from "./bulkImportTypes";
 import { CHAR_LIMITS } from "./constants";
 
-export const BULK_IMPORT_LIMIT = 50;
+export const BULK_IMPORT_LIMIT = 100;
 
 const KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const VALID_TYPES = new Set(["string", "number", "boolean"]);
@@ -9,10 +9,11 @@ const VALID_SCOPES = new Set(["client", "server", "shared"]);
 
 interface FolderSecret {
   key: string;
-  value: string;
+  value: string | number | boolean;
   type: string;
   scope?: string;
   folder?: string;
+  secretId?: string; // Optional: for update mode tracking
 }
 
 function validateSecret(
@@ -66,14 +67,98 @@ function validateSecret(
   }
   seenKeys.set(keyPath, { folder, index });
 
-  if (typeof secret.value !== "string") {
-    errors.push({ index, field: "value", message: "Value must be a string" });
-    return null;
+  // Validate value based on type
+  // This ensures type and value match correctly before encryption
+  const expectedType = secret.type;
+  let value: string | number | boolean;
+
+  if (expectedType === "number") {
+    if (typeof secret.value === "number") {
+      // Check for valid number (not NaN, Infinity, etc.)
+      if (Number.isNaN(secret.value) || !Number.isFinite(secret.value)) {
+        errors.push({
+          index,
+          field: "value",
+          message: `Value must be a finite number, got: ${secret.value}`,
+        });
+        return null;
+      }
+      value = secret.value;
+    } else if (typeof secret.value === "string") {
+      // Allow string representation for flexibility, but validate it's a valid number
+      const trimmed = secret.value.trim();
+      if (trimmed === "") {
+        errors.push({
+          index,
+          field: "value",
+          message: `Value cannot be empty for type "number"`,
+        });
+        return null;
+      }
+      const numValue = Number(trimmed);
+      if (Number.isNaN(numValue) || !Number.isFinite(numValue)) {
+        errors.push({
+          index,
+          field: "value",
+          message: `Value must be a valid number for type "number", got: "${secret.value}"`,
+        });
+        return null;
+      }
+      // Check if string representation matches the parsed number (prevents "5abc" -> 5)
+      if (String(numValue) !== trimmed && String(numValue) !== `+${trimmed}`) {
+        errors.push({
+          index,
+          field: "value",
+          message: `Value must be a valid number, got: "${secret.value}"`,
+        });
+        return null;
+      }
+      value = numValue;
+    } else {
+      errors.push({
+        index,
+        field: "value",
+        message: `Value must be a number for type "number", got: ${typeof secret.value} (${secret.value})`,
+      });
+      return null;
+    }
+  } else if (expectedType === "boolean") {
+    if (typeof secret.value === "boolean") {
+      value = secret.value;
+    } else if (typeof secret.value === "string") {
+      // Only accept "true" or "false" as strings (case-insensitive)
+      const trimmed = secret.value.trim().toLowerCase();
+      if (trimmed === "true") {
+        value = true;
+      } else if (trimmed === "false") {
+        value = false;
+      } else {
+        errors.push({
+          index,
+          field: "value",
+          message: `Value must be "true" or "false" for type "boolean", got: "${secret.value}"`,
+        });
+        return null;
+      }
+    } else {
+      errors.push({
+        index,
+        field: "value",
+        message: `Value must be a boolean (true/false) for type "boolean", got: ${typeof secret.value} (${secret.value})`,
+      });
+      return null;
+    }
+  } else {
+    // string type - accept any value and convert to string
+    if (typeof secret.value !== "string") {
+      value = String(secret.value);
+    } else {
+      value = secret.value;
+    }
   }
 
-  const value = secret.value;
-
-  if (value.length > CHAR_LIMITS.secretValue) {
+  // Check length only for string values
+  if (typeof value === "string" && value.length > CHAR_LIMITS.secretValue) {
     errors.push({
       index,
       field: "value",
@@ -107,6 +192,7 @@ function validateSecret(
     type: secret.type,
     scope,
     folder,
+    secretId: typeof secret.secretId === "string" ? secret.secretId : undefined,
   };
 }
 
@@ -152,6 +238,7 @@ export function validateBulkImportJson(input: unknown): ValidationResult {
           type: result.type as "string" | "number" | "boolean",
           scope: result.scope,
           folder: "/",
+          secretId: result.secretId,
         });
       }
     }
@@ -193,6 +280,7 @@ export function validateBulkImportJson(input: unknown): ValidationResult {
             type: result.type as "string" | "number" | "boolean",
             scope: result.scope,
             folder: folderName,
+            secretId: result.secretId,
           });
         }
       }

@@ -16,7 +16,7 @@ export const modules = import.meta.glob([
 export const betterAuthModules = import.meta.glob("../convex/betterAuth/**/*.ts");
 
 // Get the mock autumn from globalThis (set by vitest.setup.ts)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: Test mock accessed via globalThis
 export const mockAutumn = (globalThis as any).__mockAutumn;
 
 export interface TestUser {

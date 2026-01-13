@@ -69,7 +69,9 @@ export function Modal({
                 <>
                   {index > 0 && <span fg={THEME_COLORS.textDim}> </span>}
                   <span fg={THEME_COLORS.textDim}>[</span>
-                  <span fg={THEME_COLORS.primary}>{shortcut.key}</span>
+                  <span fg={shortcut.disabled ? THEME_COLORS.textMuted : THEME_COLORS.primary}>
+                    {shortcut.key}
+                  </span>
                   <span fg={THEME_COLORS.textDim}>]</span>
                   <span fg={THEME_COLORS.textMuted}> {shortcut.description}</span>
                 </>

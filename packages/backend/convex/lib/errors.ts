@@ -134,8 +134,6 @@ export function createError(options: ErrorOptions): never {
   });
 }
 
-// Helper functions for common error patterns
-
 export function notFoundError(
   resource: "user" | "project" | "environment" | "folder" | "secret" | "request" | "share",
   severity: ErrorSeverity = ErrorSeverity.High,
@@ -202,9 +200,20 @@ export function alreadyExistsError(
   resource: string,
   severity: ErrorSeverity = ErrorSeverity.Low,
 ): never {
+  function articleFor(word: string) {
+    const vowels = ["a", "e", "i", "o", "u"];
+    const initial = word[0];
+
+    if (initial === undefined || !initial || initial.length === 0) {
+      return "A";
+    }
+
+    return vowels.includes(initial) ? "An" : "A";
+  }
+
   createError({
     code: ErrorCode.RESOURCE_ALREADY_EXISTS,
-    message: `A ${resource} with this identifier already exists`,
+    message: `${articleFor(resource)} ${resource} with this identifier already exists`,
     severity,
   });
 }

@@ -1,8 +1,24 @@
+import {
+  createProjectKey,
+  decryptSecret,
+  encryptSecret,
+  importPublicKey,
+  unwrapAESKeyWithRSA,
+  wrapAESKeyWithRSA,
+} from "@repo/crypto";
 import { useCallback, useEffect, useState } from "react";
-import type { Project as ApiProject, EnvironmentData } from "../convex/api/types";
+import type { Project as ApiProject, ShareLimits, ShareProjectResult } from "../convex/api/types";
 import { useApi } from "../convex/hooks/useApi";
+import { useUserKeys } from "../convex/hooks/useUserKeys";
 import type { Environment, Folder, Secret, SharedUser } from "../types/models";
-import { mapApiEnvironment, mapApiFolder, mapApiSecret, mapApiSharedUser } from "../utils/mappers";
+import { logger } from "../utils/debugLog";
+import { mapApiEnvironment, mapApiFolder, mapApiSecret } from "../utils/mappers";
+import {
+  decryptSecretValue,
+  encryptSecretValue,
+  getProjectKey,
+  ProjectKeyError,
+} from "../utils/projectKey";
 
 interface UseProjectDataReturn {
   project: ApiProject | null;
@@ -15,6 +31,7 @@ interface UseProjectDataReturn {
   } | null;
 
   sharedUsers: SharedUser[];
+  shareLimits: ShareLimits | null;
 
   isLoading: boolean;
   isLoadingEnvironmentData: boolean;
@@ -41,6 +58,24 @@ interface UseProjectDataReturn {
     scope?: "client" | "server" | "shared";
     description?: string;
   }) => Promise<string | undefined>;
+  updateSecretBulk: (args: {
+    environmentId: string;
+    folderId?: string;
+    secrets: Array<{
+      secretId?: string;
+      key: string;
+      encryptedValue: string;
+      valueType: "string" | "number" | "boolean";
+      scope?: "client" | "server" | "shared";
+    }>;
+    mode?: "skip" | "overwrite";
+  }) => Promise<{
+    success: boolean;
+    updatedCount: number;
+    createdCount: number;
+    skippedCount: number;
+    secretIds: string[];
+  }>;
   updateSecret: (args: {
     secretId: string;
     key?: string;
@@ -51,12 +86,17 @@ interface UseProjectDataReturn {
   }) => Promise<void>;
   deleteSecret: (secretId: string) => Promise<void>;
 
-  shareProject: (email: string, encryptedProjectKey: string) => Promise<void>;
+  shareProject: (email: string, confirmPayment?: boolean) => Promise<ShareProjectResult>;
   revokeShare: (shareId: string) => Promise<void>;
+  revokeShareWithRotation: (shareId: string) => Promise<void>;
+  getAllSecretsForProject: () => Promise<
+    Array<{ secretId: string; environmentId: string; encryptedValue: string }>
+  >;
 }
 
 export function useProjectData(projectId: string): UseProjectDataReturn {
   const { api, isLoading: isApiLoading, error: apiError } = useApi();
+  const { encryptedPrivateKey, salt } = useUserKeys();
 
   const [project, setProject] = useState<ApiProject | null>(null);
   const [environments, setEnvironments] = useState<Environment[]>([]);
@@ -65,10 +105,57 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
     secrets: Secret[];
   } | null>(null);
   const [sharedUsers, setSharedUsers] = useState<SharedUser[]>([]);
+  const [shareLimits, setShareLimits] = useState<ShareLimits | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingEnvironmentData, setIsLoadingEnvironmentData] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+
+  // Get project key for encryption/decryption
+  const getProjectKeyForProject = useCallback(async (): Promise<CryptoKey | null> => {
+    if (!encryptedPrivateKey || !salt || !api) {
+      return null;
+    }
+
+    try {
+      let encryptedProjectKey: string | null = null;
+
+      // Try to get from project (for owned projects)
+      if (project?.encryptedProjectKey) {
+        encryptedProjectKey = project.encryptedProjectKey;
+      } else {
+        // Try to get from project share (for shared projects)
+        try {
+          const share = await api.getProjectShare(projectId);
+          if (share?.encryptedProjectKey) {
+            encryptedProjectKey = share.encryptedProjectKey;
+          }
+        } catch (error) {
+          logger.debug("Failed to get project share:", error);
+        }
+      }
+
+      if (!encryptedProjectKey) {
+        logger.error("No encrypted project key available");
+        return null;
+      }
+
+      return await getProjectKey(encryptedProjectKey, encryptedPrivateKey, salt);
+    } catch (error) {
+      if (error instanceof ProjectKeyError) {
+        logger.error(`Project key error (${error.code}):`, error.message);
+        setError(error);
+      } else {
+        logger.error("Failed to get project key:", error);
+        setError(
+          error instanceof Error
+            ? error
+            : new Error("Failed to get project key for encryption/decryption"),
+        );
+      }
+      return null;
+    }
+  }, [project?.encryptedProjectKey, encryptedPrivateKey, salt, api, projectId]);
 
   // Fetch project and its environments
   const fetchProjectData = useCallback(async () => {
@@ -82,12 +169,27 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
       const projectData = await api.getProject(projectId);
       setProject(projectData);
 
-      // Fetch shared users if owner
+      // Fetch environments
       try {
-        const shares = await api.listProjectShares(projectId);
-        setSharedUsers(shares.map(mapApiSharedUser));
+        const envs = await api.getProjectEnvironments(projectId);
+        setEnvironments(envs.map(mapApiEnvironment));
+      } catch {
+        setEnvironments([]);
+      }
+
+      try {
+        const result = await api.listProjectShares(projectId);
+        setSharedUsers(result.shares);
       } catch {
         setSharedUsers([]);
+      }
+
+      // Fetch share limits for this project
+      try {
+        const limits = await api.getShareLimits(projectId);
+        setShareLimits(limits);
+      } catch {
+        setShareLimits(null);
       }
     } catch (err) {
       setError(err instanceof Error ? err : new Error("Failed to fetch project data"));
@@ -121,9 +223,30 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
           return prev;
         });
 
+        // Decrypt secrets if project key is available
+        const projectKey = await getProjectKeyForProject();
+        const decryptedSecrets = await Promise.all(
+          envData.secrets.map(async (apiSecret) => {
+            const mapped = mapApiSecret(apiSecret);
+            if (projectKey && apiSecret.encryptedValue) {
+              try {
+                const decryptedValue = await decryptSecretValue(
+                  projectKey,
+                  apiSecret.encryptedValue,
+                );
+                return { ...mapped, value: decryptedValue };
+              } catch (error) {
+                logger.error(`Failed to decrypt secret ${mapped.key}:`, error);
+                return mapped;
+              }
+            }
+            return mapped;
+          }),
+        );
+
         setCurrentEnvironmentData({
           folders: envData.folders.map(mapApiFolder),
-          secrets: envData.secrets.map(mapApiSecret),
+          secrets: decryptedSecrets,
         });
       } catch (err) {
         setError(err instanceof Error ? err : new Error("Failed to load environment data"));
@@ -131,7 +254,7 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
         setIsLoadingEnvironmentData(false);
       }
     },
-    [api],
+    [api, getProjectKeyForProject],
   );
 
   // Environment CRUD
@@ -251,7 +374,20 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
       if (!api) return undefined;
 
       try {
-        const secretId = await api.createSecret(args);
+        // Encrypt secret before sending
+        const projectKey = await getProjectKeyForProject();
+        if (!projectKey) {
+          throw new Error(
+            "Cannot encrypt secret: Project key not available. Please verify your password.",
+          );
+        }
+
+        const encryptedValue = await encryptSecretValue(projectKey, args.encryptedValue);
+
+        const secretId = await api.createSecret({
+          ...args,
+          encryptedValue,
+        });
         await loadEnvironmentData(args.environmentId);
         return secretId;
       } catch (err) {
@@ -259,7 +395,62 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
         throw err;
       }
     },
-    [api, loadEnvironmentData],
+    [api, loadEnvironmentData, getProjectKeyForProject],
+  );
+
+  const updateSecretBulk = useCallback(
+    async (args: {
+      environmentId: string;
+      folderId?: string;
+      secrets: Array<{
+        secretId?: string;
+        key: string;
+        encryptedValue: string;
+        valueType: "string" | "number" | "boolean";
+        scope?: "client" | "server" | "shared";
+      }>;
+      mode?: "skip" | "overwrite";
+    }): Promise<{
+      success: boolean;
+      updatedCount: number;
+      createdCount: number;
+      skippedCount: number;
+      secretIds: string[];
+    }> => {
+      if (!api) {
+        throw new Error("API not initialized");
+      }
+
+      try {
+        // Encrypt secrets before sending
+        const projectKey = await getProjectKeyForProject();
+        if (!projectKey) {
+          throw new Error("Cannot encrypt secrets: Project key not available");
+        }
+
+        const encryptedSecrets = await Promise.all(
+          args.secrets.map(async (secret) => ({
+            ...secret,
+            encryptedValue: await encryptSecretValue(projectKey, secret.encryptedValue),
+          })),
+        );
+
+        const result = await api.updateSecretBulk({
+          ...args,
+          secrets: encryptedSecrets,
+        });
+        await loadEnvironmentData(args.environmentId);
+        return result;
+      } catch (err) {
+        if (err instanceof ProjectKeyError) {
+          setError(err);
+          throw err;
+        }
+        setError(err instanceof Error ? err : new Error("Failed to update secrets in bulk"));
+        throw err;
+      }
+    },
+    [api, loadEnvironmentData, getProjectKeyForProject],
   );
 
   const updateSecret = useCallback(
@@ -274,17 +465,36 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
       if (!api) return;
 
       try {
-        await api.updateSecret(args);
+        // Encrypt secret value if provided
+        let encryptedValue = args.encryptedValue;
+        if (encryptedValue) {
+          const projectKey = await getProjectKeyForProject();
+          if (!projectKey) {
+            throw new Error(
+              "Cannot encrypt secret: Project key not available. Please verify your password.",
+            );
+          }
+          encryptedValue = await encryptSecretValue(projectKey, encryptedValue);
+        }
+
+        await api.updateSecret({
+          ...args,
+          encryptedValue,
+        });
         const secret = currentEnvironmentData?.secrets.find((s) => s.id === args.secretId);
         if (secret) {
           await loadEnvironmentData(secret.environmentId);
         }
       } catch (err) {
+        if (err instanceof ProjectKeyError) {
+          setError(err);
+          throw err;
+        }
         setError(err instanceof Error ? err : new Error("Failed to update secret"));
         throw err;
       }
     },
-    [api, currentEnvironmentData, loadEnvironmentData],
+    [api, currentEnvironmentData, loadEnvironmentData, getProjectKeyForProject],
   );
 
   const deleteSecret = useCallback(
@@ -309,18 +519,55 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
   );
 
   const shareProject = useCallback(
-    async (email: string, encryptedProjectKey: string): Promise<void> => {
-      if (!api) return;
+    async (email: string, confirmPayment?: boolean): Promise<ShareProjectResult> => {
+      if (!api) {
+        return { success: false, message: "API not available" };
+      }
 
       try {
-        await api.shareProject({ projectId, email, encryptedProjectKey });
-        await fetchProjectData();
+        const collaboratorKeyResult = await api.getUserPublicKeyByEmail(email);
+        if (!collaboratorKeyResult) {
+          return {
+            success: false,
+            message: "User not found or hasn't set up their account yet",
+          };
+        }
+
+        const projectKey = await getProjectKeyForProject();
+        if (!projectKey) {
+          return {
+            success: false,
+            message: "Cannot share project: Project key not available",
+          };
+        }
+
+        const collaboratorPublicKey = await importPublicKey(collaboratorKeyResult.publicKey);
+        const encryptedProjectKeyForCollaborator = await wrapAESKeyWithRSA(
+          projectKey,
+          collaboratorPublicKey,
+        );
+
+        const result = await api.shareProject({
+          projectId,
+          userEmail: email,
+          encryptedProjectKey: encryptedProjectKeyForCollaborator,
+          confirmPayment,
+        });
+
+        if (result.success) {
+          await fetchProjectData();
+        }
+
+        return result;
       } catch (err) {
         setError(err instanceof Error ? err : new Error("Failed to share project"));
-        throw err;
+        return {
+          success: false,
+          message: err instanceof Error ? err.message : "Failed to share project",
+        };
       }
     },
-    [api, projectId, fetchProjectData],
+    [api, projectId, fetchProjectData, getProjectKeyForProject],
   );
 
   const revokeShare = useCallback(
@@ -338,11 +585,125 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
     [api, fetchProjectData],
   );
 
+  const getAllSecretsForProject = useCallback(async (): Promise<
+    Array<{ secretId: string; environmentId: string; encryptedValue: string }>
+  > => {
+    if (!api) return [];
+
+    // Bulk fetch: get all secrets in a single call (solves N+1 query problem)
+    return await api.getAllSecretsForProject(projectId);
+  }, [api, projectId]);
+
+  const revokeShareWithRotation = useCallback(
+    async (shareId: string): Promise<void> => {
+      if (!api || !project || !encryptedPrivateKey || !salt) {
+        throw new Error("Cannot revoke with rotation: missing dependencies");
+      }
+
+      try {
+        const currentProjectKey = await getProjectKeyForProject();
+        if (!currentProjectKey) {
+          throw new Error("Cannot get current project key");
+        }
+
+        const currentUser = await api.getCurrentUser();
+        if (!currentUser.publicKey) {
+          throw new Error("Current user has no public key");
+        }
+
+        const { encryptedProjectKey: newEncryptedProjectKey, projectKey: newProjectKey } =
+          await createProjectKey(currentUser.publicKey);
+
+        const allSecrets = await getAllSecretsForProject();
+        const reEncryptedSecrets: Array<{ secretId: string; newEncryptedValue: string }> = [];
+
+        for (const secret of allSecrets) {
+          const decryptedValue = await decryptSecret(currentProjectKey, secret.encryptedValue);
+          const newEncryptedValue = await encryptSecret(newProjectKey, decryptedValue);
+          reEncryptedSecrets.push({
+            secretId: secret.secretId,
+            newEncryptedValue,
+          });
+        }
+
+        const remainingShares = sharedUsers.filter((user) => user.id !== shareId);
+        const rewrappedShares: Array<{ shareId: string; newEncryptedProjectKey: string }> = [];
+
+        for (const share of remainingShares) {
+          if (share.publicKey) {
+            const collaboratorPublicKey = await importPublicKey(share.publicKey);
+            const newEncryptedKeyForCollaborator = await wrapAESKeyWithRSA(
+              newProjectKey,
+              collaboratorPublicKey,
+            );
+            rewrappedShares.push({
+              shareId: share.id,
+              newEncryptedProjectKey: newEncryptedKeyForCollaborator,
+            });
+          }
+        }
+
+        // Retry mechanism: if local encryption succeeds but backend call fails, retry
+        const MAX_RETRIES = 3;
+        let retryCount = 0;
+        let lastError: Error | null = null;
+
+        while (retryCount < MAX_RETRIES) {
+          try {
+            await api.revokeShareWithRotation({
+              shareId,
+              newEncryptedProjectKey,
+              rewrappedShares,
+              reEncryptedSecrets,
+            });
+            break;
+          } catch (error) {
+            lastError = error instanceof Error ? error : new Error(String(error));
+            retryCount++;
+
+            // Don't retry on validation errors (these won't succeed on retry)
+            if (
+              lastError.message.includes("not found") ||
+              lastError.message.includes("already revoked") ||
+              lastError.message.includes("Invalid share") ||
+              lastError.message.includes("Cannot update revoked")
+            ) {
+              throw lastError;
+            }
+
+            if (retryCount >= MAX_RETRIES) {
+              throw lastError;
+            }
+
+            const delayMs = 1000 * 2 ** (retryCount - 1);
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          }
+        }
+
+        await fetchProjectData();
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error("Failed to revoke share with rotation"));
+        throw err;
+      }
+    },
+    [
+      api,
+      project,
+      encryptedPrivateKey,
+      salt,
+      sharedUsers,
+      getProjectKeyForProject,
+      getAllSecretsForProject,
+      fetchProjectData,
+    ],
+  );
+
   return {
     project,
     environments,
     currentEnvironmentData,
     sharedUsers,
+    shareLimits,
     isLoading: isLoading || isApiLoading,
     isLoadingEnvironmentData,
     error: error || apiError,
@@ -356,8 +717,11 @@ export function useProjectData(projectId: string): UseProjectDataReturn {
     deleteFolder,
     createSecret,
     updateSecret,
+    updateSecretBulk,
     deleteSecret,
     shareProject,
     revokeShare,
+    revokeShareWithRotation,
+    getAllSecretsForProject,
   };
 }

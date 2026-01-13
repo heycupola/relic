@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@convex-dev/better-auth": "catalog:",
+    "@repo/backend": "*",
     "@repo/ui": "*",
     "@tailwindcss/postcss": "catalog:",
     "autumn-js": "catalog:",

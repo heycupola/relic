@@ -1,11 +1,21 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useEffect, useState } from "react";
 import { InlineInput } from "../components/forms/InlineInput";
+import { BillingPortalModal } from "../components/modals/BillingPortalModal";
 import { ChangePasswordModal } from "../components/modals/ChangePasswordModal";
+import {
+  type CheckoutReason,
+  CheckoutRedirectModal,
+} from "../components/modals/CheckoutRedirectModal";
 import { CommandPaletteModal } from "../components/modals/CommandPaletteModal";
+import {
+  ConfirmPaymentModal,
+  type PaymentConfirmationType,
+} from "../components/modals/ConfirmPaymentModal";
 import { DeleteConfirmation } from "../components/shared/DeleteConfirmation";
 import { GuideBar } from "../components/shared/GuideBar";
 import { Modal } from "../components/shared/Modal";
+import { useUser } from "../convex";
 import { useUserKeys } from "../convex/hooks/useUserKeys";
 import { useAppSession } from "../hooks/useAppSession";
 import { useProjects } from "../hooks/useProjects";
@@ -28,7 +38,16 @@ export function HomePage() {
   const { width, height } = useTerminalDimensions();
   const { navigate } = useRouter();
   const { logout } = useAppSession();
-  const { runTask, showSuccess } = useTaskQueue();
+  const {
+    runTask,
+    setTaskPending,
+    continueTask,
+    cancelTask,
+    showSuccess,
+    showError,
+    isProcessing,
+  } = useTaskQueue();
+  const { hasPro, isLoading: isLoadingPlan } = useUser();
 
   const {
     projects,
@@ -50,6 +69,30 @@ export function HomePage() {
   const [confirmingDelete, setConfirmingDelete] = useState<{ id: string; name: string } | null>(
     null,
   );
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [isRenamingProject, setIsRenamingProject] = useState(false);
+  const [isArchivingProject, setIsArchivingProject] = useState(false);
+  const [checkoutModal, setCheckoutModal] = useState<{
+    visible: boolean;
+    url: string;
+    reason: CheckoutReason;
+  }>({ visible: false, url: "", reason: "pro_required" });
+  const [billingPortalModal, setBillingPortalModal] = useState<{
+    visible: boolean;
+    url: string;
+  }>({ visible: false, url: "" });
+  const [confirmationModal, setConfirmationModal] = useState<{
+    visible: boolean;
+    type: PaymentConfirmationType;
+    projectName?: string;
+    balance: number;
+    freeLimit: number;
+  }>({
+    visible: false,
+    type: "project",
+    balance: 0,
+    freeLimit: 0,
+  });
 
   const validatedEditingProject =
     editingProject && projects.some((p) => p.id === editingProject.id) ? editingProject : null;
@@ -90,31 +133,137 @@ export function HomePage() {
     navigate({ name: "project", projectId, projectName, projectStatus });
   };
 
-  const handleCreateProject = async (name: string) => {
+  const handleCreateProject = async (name: string, confirmPayment?: boolean) => {
+    if (isCreatingProject) return;
     if (!hasKeys || !publicKey) {
       logger.error("Cannot create project: User has no keys");
       return;
     }
 
-    try {
-      await runTask(`Creating project "${name}"...`, async () => {
-        const { createProjectKey } = await import("@repo/crypto");
-        const { encryptedProjectKey } = await createProjectKey(publicKey);
+    setIsCreatingProject(true);
+    setCreatingProject(false);
 
-        const { getProtectedApi } = await import("../convex/api/protected");
-        const api = getProtectedApi();
-        await api.createProject({ name, encryptedProjectKey });
-      });
-      showSuccess(`Project "${name}" created`);
-      setCreatingProject(false);
-      await Promise.all([refetchProjects(), refetchLimits()]);
-    } catch (err) {
-      logger.error("Failed to create project:", err);
-      throw err;
+    try {
+      if (confirmPayment) {
+        const result = await continueTask(async () => {
+          const { createProjectKey } = await import("@repo/crypto");
+          const { encryptedProjectKey } = await createProjectKey(publicKey);
+
+          const { getProtectedApi } = await import("../convex/api/protected");
+          const api = getProtectedApi();
+          return await api.createProject({ name, encryptedProjectKey, confirmPayment: true });
+        });
+
+        if (!result) {
+          setConfirmationModal({ visible: false, type: "project", balance: 0, freeLimit: 0 });
+          return;
+        }
+
+        if (result.success) {
+          showSuccess(`Project "${name}" created`);
+          await Promise.all([refetchProjects(), refetchLimits()]);
+          setConfirmationModal({ visible: false, type: "project", balance: 0, freeLimit: 0 });
+        } else if (result.requiresProPlan && result.checkoutUrl) {
+          setConfirmationModal({ visible: false, type: "project", balance: 0, freeLimit: 0 });
+          setCheckoutModal({
+            visible: true,
+            url: result.checkoutUrl,
+            reason: "pro_required",
+          });
+        } else if (result.requiresAdditionalProject && result.checkoutUrl) {
+          setConfirmationModal({ visible: false, type: "project", balance: 0, freeLimit: 0 });
+          setCheckoutModal({
+            visible: true,
+            url: result.checkoutUrl,
+            reason: "project_limit",
+          });
+        } else if (result.paymentFailed && result.billingPortalUrl) {
+          setConfirmationModal({ visible: false, type: "project", balance: 0, freeLimit: 0 });
+          setBillingPortalModal({
+            visible: true,
+            url: result.billingPortalUrl,
+          });
+        } else if (result.paymentFailed) {
+          showError(result.message || "Payment failed. Please update your billing settings.");
+        } else if (result.message) {
+          showError(result.message);
+        }
+        return;
+      }
+
+      // First call - check if confirmation is needed
+      setTaskPending(`Creating project "${name}"...`);
+
+      const { createProjectKey } = await import("@repo/crypto");
+      const { encryptedProjectKey } = await createProjectKey(publicKey);
+
+      const { getProtectedApi } = await import("../convex/api/protected");
+      const api = getProtectedApi();
+      const result = await api.createProject({ name, encryptedProjectKey, confirmPayment: false });
+
+      if (!result) {
+        cancelTask();
+        return;
+      }
+
+      if (result.success) {
+        showSuccess(`Project "${name}" created`);
+        await Promise.all([refetchProjects(), refetchLimits()]);
+        setConfirmationModal({ visible: false, type: "project", balance: 0, freeLimit: 0 });
+      } else if (result.requiresConfirmation) {
+        // Keep task in pending state, show confirmation modal
+        setConfirmationModal({
+          visible: true,
+          type: "project",
+          projectName: name,
+          balance: result.balance ?? 0,
+          freeLimit: result.freeLimit ?? 0,
+        });
+      } else if (result.requiresProPlan && result.checkoutUrl) {
+        cancelTask();
+        setCheckoutModal({
+          visible: true,
+          url: result.checkoutUrl,
+          reason: "pro_required",
+        });
+      } else if (result.requiresAdditionalProject && result.checkoutUrl) {
+        cancelTask();
+        setCheckoutModal({
+          visible: true,
+          url: result.checkoutUrl,
+          reason: "project_limit",
+        });
+      } else if (result.paymentFailed && result.billingPortalUrl) {
+        cancelTask();
+        setBillingPortalModal({
+          visible: true,
+          url: result.billingPortalUrl,
+        });
+      } else if (result.paymentFailed) {
+        cancelTask();
+        showError(result.message || "Payment failed. Please update your billing settings.");
+      } else if (result.message) {
+        cancelTask();
+        showError(result.message);
+      }
+    } finally {
+      setIsCreatingProject(false);
     }
   };
 
+  const handleConfirmPayment = async () => {
+    if (confirmationModal.projectName) {
+      await handleCreateProject(confirmationModal.projectName, true);
+    }
+  };
+
+  const handleCancelPayment = () => {
+    cancelTask();
+    setConfirmationModal({ visible: false, type: "project", balance: 0, freeLimit: 0 });
+  };
+
   const handleRenameProject = async (name: string, projectId: string) => {
+    if (isRenamingProject) return;
     logger.debug("handleRenameProject called", { name, projectId, type: typeof projectId });
     if (!projectId) {
       logger.error("Cannot rename project: no projectId provided", {
@@ -131,6 +280,7 @@ export function HomePage() {
       setEditingProject(null);
       return;
     }
+    setIsRenamingProject(true);
     try {
       await runTask(`Renaming project to "${name}"...`, async () => {
         const { getProtectedApi } = await import("../convex/api/protected");
@@ -142,11 +292,15 @@ export function HomePage() {
       refetchProjects();
     } catch (err) {
       logger.error("Failed to rename project:", err);
+    } finally {
+      setIsRenamingProject(false);
     }
   };
 
   const handleArchiveProject = async () => {
+    if (isArchivingProject) return;
     if (!confirmingDelete) return;
+    setIsArchivingProject(true);
     try {
       await runTask(`Archiving "${confirmingDelete.name}"...`, async () => {
         const { getProtectedApi } = await import("../convex/api/protected");
@@ -158,6 +312,8 @@ export function HomePage() {
       await Promise.all([refetchProjects(), refetchLimits()]);
     } catch (err) {
       logger.error("Failed to archive project:", err);
+    } finally {
+      setIsArchivingProject(false);
     }
   };
 
@@ -168,6 +324,7 @@ export function HomePage() {
   const commands = [
     { key: "n", description: "Create project", category: "Create" },
     { key: "u", description: "Rename project", category: "Manage" },
+    { key: "d", description: "Delete project", category: "Manage" },
     { key: "p", description: "Change password", category: "Account" },
     { key: "^l", description: "Logout", category: "Account" },
   ].sort((a, b) => {
@@ -190,6 +347,13 @@ export function HomePage() {
         }
         break;
       }
+      case "d": {
+        const project = projects[selectedIndex];
+        if (project && project.status !== "restricted" && project.status !== "archived") {
+          setConfirmingDelete({ id: project.id, name: project.name });
+        }
+        break;
+      }
       case "p":
         setActiveModal("password");
         break;
@@ -201,6 +365,12 @@ export function HomePage() {
 
   useKeyboard((key) => {
     if (creatingProject || editingProject) return;
+
+    // Let modal handle its own keyboard when visible
+    if (confirmationModal.visible || checkoutModal.visible || billingPortalModal.visible) return;
+
+    // Disable keyboard shortcuts during async operations (only when actively running)
+    if (isProcessing || isCreatingProject || isRenamingProject || isArchivingProject) return;
 
     if (activeModal === "logout") {
       if (key.name === "y") handleLogout();
@@ -274,13 +444,15 @@ export function HomePage() {
   });
 
   const getShortcuts = () => {
+    const isDisabled = isProcessing || isCreatingProject || isRenamingProject || isArchivingProject;
+
     if (creatingProject) {
       return {
         primary: [
           {
             shortcuts: [
-              { key: KEY_SYMBOLS.enter, description: "create" },
-              { key: "esc", description: "cancel" },
+              { key: KEY_SYMBOLS.enter, description: "create", disabled: isDisabled },
+              { key: "esc", description: "cancel", disabled: isDisabled },
             ],
           },
         ],
@@ -292,24 +464,33 @@ export function HomePage() {
         primary: [
           {
             shortcuts: [
-              { key: KEY_SYMBOLS.enter, description: "save" },
-              { key: "esc", description: "cancel" },
+              { key: KEY_SYMBOLS.enter, description: "save", disabled: isDisabled },
+              { key: "esc", description: "cancel", disabled: isDisabled },
             ],
           },
         ],
         secondary: [],
       };
     }
+
     return {
       primary: [
         {
           shortcuts: [
-            { key: "n", description: "create project" },
-            { key: "u", description: "rename project" },
+            { key: "n", description: "create project", disabled: isDisabled },
+            { key: "u", description: "rename project", disabled: isDisabled },
+            { key: "d", description: "delete project", disabled: isDisabled },
           ],
         },
       ],
-      secondary: [],
+      secondary: [
+        {
+          shortcuts: [
+            { key: "p", description: "change password", disabled: isDisabled },
+            { key: "^l", description: "logout", disabled: isDisabled },
+          ],
+        },
+      ],
     };
   };
 
@@ -340,7 +521,17 @@ export function HomePage() {
             <ascii-font text="relic" font="block" />
           </box>
           <box height={1} marginBottom={1} justifyContent="center" alignItems="center">
-            <text fg={THEME_COLORS.textMuted}>Zero-knowledge secret management</text>
+            <text>
+              <span fg={THEME_COLORS.textMuted}>Zero-knowledge secret management</span>
+              <span fg={THEME_COLORS.textDim}> · </span>
+              {isLoadingPlan ? (
+                <span fg={THEME_COLORS.textDim}>...</span>
+              ) : hasPro ? (
+                <span fg={THEME_COLORS.success}>PRO</span>
+              ) : (
+                <span fg={THEME_COLORS.textDim}>FREE</span>
+              )}
+            </text>
           </box>
 
           <box
@@ -353,13 +544,40 @@ export function HomePage() {
             alignItems="center"
           >
             <text fg={THEME_COLORS.textMuted}>Projects</text>
-            <text fg={THEME_COLORS.textDim}>
-              {isLoadingProjects || isLoadingLimits
-                ? "..."
-                : limits !== null && limits.included_usage !== undefined
-                  ? `${limits.usage} / ${limits.included_usage}`
-                  : `${projects.length}`}
-            </text>
+            {(() => {
+              if (isLoadingProjects || isLoadingLimits) {
+                return <text fg={THEME_COLORS.textDim}>...</text>;
+              }
+
+              if (limits !== null && limits.included_usage !== undefined) {
+                const totalProjects = limits.usage;
+                const freeLimit = limits.included_usage;
+                const remainingFree = Math.max(0, freeLimit - totalProjects);
+
+                // No remaining free - don't show free
+                if (remainingFree === 0) {
+                  return (
+                    <text fg={THEME_COLORS.textDim}>
+                      {totalProjects} project{totalProjects !== 1 ? "s" : ""}
+                    </text>
+                  );
+                }
+
+                // Has remaining free - show remaining free
+                return (
+                  <text>
+                    <span fg={THEME_COLORS.textDim}>
+                      {totalProjects} project{totalProjects !== 1 ? "s" : ""}{" "}
+                    </span>
+                    <span fg={THEME_COLORS.textDim}>(</span>
+                    <span fg={THEME_COLORS.success}>{remainingFree} free</span>
+                    <span fg={THEME_COLORS.textDim}>)</span>
+                  </text>
+                );
+              }
+
+              return <text fg={THEME_COLORS.textDim}>{projects.length}</text>;
+            })()}
           </box>
 
           <box
@@ -373,7 +591,9 @@ export function HomePage() {
                       (creatingProject ? 1 : 0) +
                       (validatedConfirmingDelete ? 1 : 0),
                     PAGE_SIZE + (validatedConfirmingDelete ? 1 : 0),
-                  )
+                  ) +
+                  (scrollOffset > 0 ? 1 : 0) +
+                  (scrollOffset + PAGE_SIZE < projects.length ? 1 : 0)
             }
           >
             {isLoadingProjects ? (
@@ -382,6 +602,11 @@ export function HomePage() {
               <text fg={THEME_COLORS.textDim}>No projects created. Press 'n' to create one.</text>
             ) : (
               <>
+                {scrollOffset > 0 && (
+                  <text fg={THEME_COLORS.textDim}>
+                    {"  "}... {scrollOffset} more item{scrollOffset > 1 ? "s" : ""} above
+                  </text>
+                )}
                 {projects.slice(scrollOffset, scrollOffset + PAGE_SIZE).map((project, index) => {
                   const actualIndex = index + scrollOffset;
                   const isSelected =
@@ -473,6 +698,12 @@ export function HomePage() {
                     iconColor={THEME_COLORS.success}
                   />
                 )}
+                {scrollOffset + PAGE_SIZE < projects.length && (
+                  <text fg={THEME_COLORS.textDim}>
+                    {"  "}... {projects.length - (scrollOffset + PAGE_SIZE)} more item
+                    {projects.length - (scrollOffset + PAGE_SIZE) > 1 ? "s" : ""} below
+                  </text>
+                )}
               </>
             )}
           </box>
@@ -496,8 +727,8 @@ export function HomePage() {
         width={45}
         height={8}
         shortcuts={[
-          { key: "y", description: "yes" },
-          { key: "n", description: "no" },
+          { key: "y", description: "yes", disabled: isProcessing },
+          { key: "n", description: "no", disabled: isProcessing },
         ]}
       >
         <text fg={THEME_COLORS.textDim}>Are you sure you want to logout?</text>
@@ -507,7 +738,6 @@ export function HomePage() {
         visible={activeModal === "password"}
         onClose={() => setActiveModal("none")}
         onSuccess={() => setActiveModal("none")}
-        verifyCurrentPassword={() => true}
       />
 
       <CommandPaletteModal
@@ -515,6 +745,29 @@ export function HomePage() {
         commands={commands}
         onExecute={executeCommand}
         onClose={() => setActiveModal("none")}
+      />
+
+      <CheckoutRedirectModal
+        visible={checkoutModal.visible}
+        checkoutUrl={checkoutModal.url}
+        reason={checkoutModal.reason}
+        onClose={() => setCheckoutModal({ visible: false, url: "", reason: "pro_required" })}
+      />
+
+      <ConfirmPaymentModal
+        visible={confirmationModal.visible}
+        type={confirmationModal.type}
+        itemName={confirmationModal.projectName}
+        freeLimit={confirmationModal.freeLimit}
+        balance={confirmationModal.balance}
+        onConfirm={handleConfirmPayment}
+        onCancel={handleCancelPayment}
+      />
+
+      <BillingPortalModal
+        visible={billingPortalModal.visible}
+        portalUrl={billingPortalModal.url}
+        onClose={() => setBillingPortalModal({ visible: false, url: "" })}
       />
     </box>
   );

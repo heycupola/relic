@@ -17,7 +17,14 @@ export type {
   User,
 } from "./api";
 export { clearProtectedApi, getProtectedApi, ProtectedApi, PublicApi, publicApi } from "./api";
-export { AuthProvider, useAuth } from "./context";
+export {
+  AuthProvider,
+  UserPlanProvider,
+  UserProvider,
+  useAuth,
+  useUser,
+  useUserPlan,
+} from "./context";
 export { useDeviceAuth, useSession } from "./hooks";
 export type { DeviceAuthCallbacks, DeviceAuthResult, DeviceAuthStatus } from "./services";
 export {

@@ -2,29 +2,29 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useCallback, useEffect, useState } from "react";
 import { InlineInput } from "../components/forms/InlineInput";
 import {
+  BillingPortalModal,
   BulkImportModal,
+  type CheckoutReason,
+  CheckoutRedirectModal,
   CommandPaletteModal,
+  ConfirmPaymentModal,
   ManageCollaboratorsModal,
+  type PaymentConfirmationType,
 } from "../components/modals";
 import { DeleteConfirmation } from "../components/shared/DeleteConfirmation";
 import { GuideBar } from "../components/shared/GuideBar";
+
+import { useUser } from "../convex";
 import { useMultilineInput } from "../hooks/useMultilineInput";
 import { usePaste } from "../hooks/usePaste";
+import { useProjectData } from "../hooks/useProjectData";
 import { useTaskQueue } from "../hooks/useTaskQueue";
 import { useRouter } from "../router";
-import type {
-  Environment,
-  Folder,
-  LogEntry,
-  ModalType,
-  ProjectStatus,
-  Secret,
-  SharedUser,
-  ViewLevel,
-} from "../types";
+import type { ModalType, ProjectStatus, SharedUser, ViewLevel } from "../types";
 import type { BulkImportFormat, CollisionInfo } from "../utils/bulkImportTypes";
 import { validateBulkImportJson } from "../utils/bulkImportValidator";
 import { KEY_SYMBOLS, STATUS_COLORS, THEME_COLORS } from "../utils/constants";
+import { logger } from "../utils/debugLog";
 import { parseEnvContent } from "../utils/envParser";
 import { envToJson, jsonToEnv } from "../utils/formatConverter";
 
@@ -34,94 +34,53 @@ interface ProjectPageProps {
   projectStatus: ProjectStatus;
 }
 
-const MOCK_ENVIRONMENTS: Environment[] = [
-  { id: "env1", name: "production" },
-  { id: "env2", name: "staging" },
-  { id: "env3", name: "development" },
-];
-
-const MOCK_FOLDERS: Folder[] = [
-  { id: "f1", name: "database", environmentId: "env1" },
-  { id: "f2", name: "auth", environmentId: "env1" },
-  { id: "f3", name: "api", environmentId: "env2" },
-];
-
-const MOCK_SECRETS: Secret[] = [
-  {
-    id: "s1",
-    key: "DATABASE_URL",
-    value: "postgresql://user:pass@localhost:5432/db",
-    type: "string",
-    environmentId: "env1",
-  },
-  {
-    id: "s2",
-    key: "API_KEY",
-    value: "sk_test_4eC39HqLyjWDarjtT1zdp7dc",
-    type: "string",
-    environmentId: "env1",
-  },
-  {
-    id: "s3",
-    key: "JWT_SECRET",
-    value: "a-very-secret-signing-key",
-    type: "string",
-    environmentId: "env1",
-    folderId: "f1",
-  },
-  {
-    id: "s4",
-    key: "SMTP_PASSWORD",
-    value: "pass123",
-    type: "string",
-    environmentId: "env1",
-    folderId: "f1",
-  },
-  {
-    id: "s5",
-    key: "AWS_ACCESS_KEY",
-    value: "AKIAIOSFODNN7EXAMPLE",
-    type: "string",
-    environmentId: "env1",
-  },
-  {
-    id: "s6",
-    key: "REDIS_URL",
-    value: "redis://localhost:6379",
-    type: "string",
-    environmentId: "env1",
-  },
-  { id: "s7", key: "STRIPE_KEY", value: "sk_test_51Mz...", type: "string", environmentId: "env2" },
-  { id: "s8", key: "MAX_CONNECTIONS", value: "100", type: "number", environmentId: "env1" },
-  { id: "s9", key: "DEBUG_MODE", value: "true", type: "boolean", environmentId: "env1" },
-];
-
-const MOCK_SHARED_USERS: SharedUser[] = [
-  { id: "u1", email: "john@example.com", name: "John" },
-  { id: "u2", email: "jane@example.com", name: "Jane" },
-];
-
-const MOCK_LOGS: LogEntry[] = [
-  { id: "l1", action: "secret.created", timestamp: Date.now() - 3600000, user: "you" },
-  { id: "l2", action: "folder.created", timestamp: Date.now() - 7200000, user: "john@example.com" },
-];
-
 const PAGE_SIZE = 10;
 
-export function ProjectPage({
-  projectId: _projectId,
-  projectName,
-  projectStatus,
-}: ProjectPageProps) {
+export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPageProps) {
   const { width, height } = useTerminalDimensions();
   const { goBack: routerGoBack } = useRouter();
-  const { runTask, showSuccess } = useTaskQueue();
+  const {
+    runTask,
+    setTaskPending,
+    continueTask,
+    cancelTask,
+    showSuccess,
+    showError,
+    isProcessing,
+  } = useTaskQueue();
+  const { hasPro, startPolling, stopPolling, isPolling } = useUser();
 
-  const [environments] = useState<Environment[]>(MOCK_ENVIRONMENTS);
-  const [folders] = useState<Folder[]>(MOCK_FOLDERS);
-  const [secrets] = useState<Secret[]>(MOCK_SECRETS);
-  const [sharedUsers] = useState<SharedUser[]>(MOCK_SHARED_USERS);
-  const [logs] = useState<LogEntry[]>(MOCK_LOGS);
+  const {
+    project,
+    environments,
+    currentEnvironmentData,
+    sharedUsers,
+    shareLimits,
+    loadEnvironmentData,
+    createEnvironment,
+    updateEnvironment,
+    deleteEnvironment,
+    createFolder,
+    updateFolder,
+    deleteFolder,
+    updateSecretBulk,
+    deleteSecret,
+    shareProject,
+    revokeShare,
+    revokeShareWithRotation,
+    refetch: refetchProjectData,
+  } = useProjectData(projectId);
+
+  // When hasPro changes to true, refetch project data to get updated shareLimits
+  useEffect(() => {
+    if (hasPro && isPolling) {
+      stopPolling();
+      refetchProjectData();
+    }
+  }, [hasPro, isPolling, stopPolling, refetchProjectData]);
+
+  const folders = currentEnvironmentData?.folders || [];
+  const secrets = currentEnvironmentData?.secrets || [];
 
   const [viewLevel, setViewLevel] = useState<ViewLevel>("environments");
   const [selectedEnvId, setSelectedEnvId] = useState<string | null>(null);
@@ -147,7 +106,37 @@ export function ProjectPage({
   const bulkImportInput = useMultilineInput({ maxLines: 50 });
   const [bulkImportFormat, setBulkImportFormat] = useState<BulkImportFormat>("env");
   const [bulkImportCollisions, setBulkImportCollisions] = useState<CollisionInfo[]>([]);
-  const [bulkImportMode, setBulkImportMode] = useState<"import" | "update">("import");
+
+  // Collaborator add state
+  const [pendingCollaboratorEmail, setPendingCollaboratorEmail] = useState<string | null>(null);
+  const [confirmationModal, setConfirmationModal] = useState<{
+    visible: boolean;
+    type: PaymentConfirmationType;
+    email?: string;
+    balance: number;
+    freeLimit: number;
+  }>({
+    visible: false,
+    type: "seat",
+    balance: 0,
+    freeLimit: 0,
+  });
+  const [checkoutModal, setCheckoutModal] = useState<{
+    visible: boolean;
+    url: string;
+    reason: CheckoutReason;
+  }>({ visible: false, url: "", reason: "pro_required" });
+  const [billingPortalModal, setBillingPortalModal] = useState<{
+    visible: boolean;
+    url: string;
+  }>({ visible: false, url: "" });
+
+  const [isAddingCollaborator, setIsAddingCollaborator] = useState(false);
+  const [isRevokingCollaborator, setIsRevokingCollaborator] = useState(false);
+  const [isRevokingWithRotation, setIsRevokingWithRotation] = useState(false);
+  const [isCreatingItem, setIsCreatingItem] = useState(false);
+  const [isRenamingItem, setIsRenamingItem] = useState(false);
+  const [isDeletingItem, setIsDeletingItem] = useState(false);
 
   const isRestricted = projectStatus === "restricted" || projectStatus === "archived";
 
@@ -242,7 +231,7 @@ export function ProjectPage({
     });
   };
 
-  const enter = () => {
+  const enter = async () => {
     const item = items[selectedIndex];
     if (!item) return;
     if (item.type === "env") {
@@ -250,6 +239,7 @@ export function ProjectPage({
       setViewLevel("environment");
       setSelectedIndex(0);
       setScrollOffset(0);
+      await loadEnvironmentData(item.id);
     } else if (item.type === "folder") {
       setSelectedFolderId(item.id);
       setViewLevel("folder");
@@ -273,52 +263,277 @@ export function ProjectPage({
   };
 
   const handleCreateItem = async (name: string) => {
+    if (isCreatingItem) return;
     if (!creatingItem) return;
-    const itemType = creatingItem === "env" ? "environment" : "folder";
-    await runTask(
-      `Creating ${itemType} "${name}"...`,
-      () => new Promise((r) => setTimeout(r, 1000)),
-    );
-    showSuccess(`${itemType.charAt(0).toUpperCase() + itemType.slice(1)} "${name}" created`);
-    setCreatingItem(null);
+    setIsCreatingItem(true);
+    try {
+      if (creatingItem === "env") {
+        await runTask(`Creating environment "${name}"...`, async () => {
+          await createEnvironment(name);
+        });
+        showSuccess(`Environment "${name}" created`);
+      } else if (creatingItem === "folder" && selectedEnvId) {
+        await runTask(`Creating folder "${name}"...`, async () => {
+          await createFolder(selectedEnvId, name);
+        });
+        showSuccess(`Folder "${name}" created`);
+      }
+      setCreatingItem(null);
+    } catch {
+      // Error handled by finally block
+    } finally {
+      setIsCreatingItem(false);
+    }
   };
 
   const handleRenameItem = async (name: string) => {
+    if (isRenamingItem) return;
     if (!editingItem || name === editingItem.name) {
       setEditingItem(null);
       return;
     }
-    const itemType = editingItem.type === "env" ? "environment" : "folder";
-    await runTask(
-      `Renaming ${itemType} to "${name}"...`,
-      () => new Promise((r) => setTimeout(r, 1000)),
-    );
-    showSuccess(`${itemType.charAt(0).toUpperCase() + itemType.slice(1)} renamed to "${name}"`);
-    setEditingItem(null);
+    setIsRenamingItem(true);
+    try {
+      if (editingItem.type === "env") {
+        await runTask(`Renaming environment to "${name}"...`, async () => {
+          await updateEnvironment(editingItem.id, name);
+        });
+        showSuccess(`Environment renamed to "${name}"`);
+      } else if (editingItem.type === "folder") {
+        await runTask(`Renaming folder to "${name}"...`, async () => {
+          await updateFolder(editingItem.id, name);
+        });
+        showSuccess(`Folder renamed to "${name}"`);
+      }
+      setEditingItem(null);
+    } catch {
+      // Error handled by finally block
+    } finally {
+      setIsRenamingItem(false);
+    }
   };
 
   const handleDeleteItem = async () => {
+    if (isDeletingItem) return;
     if (!confirmingDelete) return;
-    const itemType = confirmingDelete.type === "env" ? "environment" : confirmingDelete.type;
-    await runTask(
-      `Deleting ${itemType} "${confirmingDelete.name}"...`,
-      () => new Promise((r) => setTimeout(r, 1000)),
-    );
-    showSuccess(`${confirmingDelete.name} deleted`);
-    setConfirmingDelete(null);
+    setIsDeletingItem(true);
+    try {
+      if (confirmingDelete.type === "env") {
+        await runTask(`Deleting environment "${confirmingDelete.name}"...`, async () => {
+          await deleteEnvironment(confirmingDelete.id);
+        });
+        showSuccess(`Environment "${confirmingDelete.name}" deleted`);
+        if (selectedEnvId === confirmingDelete.id) {
+          setSelectedEnvId(null);
+          setViewLevel("environments");
+        }
+      } else if (confirmingDelete.type === "folder") {
+        await runTask(`Deleting folder "${confirmingDelete.name}"...`, async () => {
+          await deleteFolder(confirmingDelete.id);
+        });
+        showSuccess(`Folder "${confirmingDelete.name}" deleted`);
+        if (selectedFolderId === confirmingDelete.id) {
+          setSelectedFolderId(null);
+          setViewLevel("environment");
+        }
+      } else if (confirmingDelete.type === "secret") {
+        await runTask(`Deleting secret "${confirmingDelete.name}"...`, async () => {
+          await deleteSecret(confirmingDelete.id);
+        });
+        showSuccess(`Secret "${confirmingDelete.name}" deleted`);
+      }
+      setConfirmingDelete(null);
+    } catch {
+      // Error handled by finally block
+    } finally {
+      setIsDeletingItem(false);
+    }
   };
 
-  const handleAddCollaborator = async (email: string) => {
-    await runTask(
-      `Adding collaborator "${email}"...`,
-      () => new Promise((r) => setTimeout(r, 1000)),
-    );
-    showSuccess(`Collaborator "${email}" added`);
+  const handleAddCollaborator = async (email: string, confirmPayment?: boolean) => {
+    if (isAddingCollaborator) return;
+    setIsAddingCollaborator(true);
+    setPendingCollaboratorEmail(email);
+
+    try {
+      if (confirmPayment) {
+        const result = await continueTask(async () => {
+          return await shareProject(email, true);
+        });
+
+        setPendingCollaboratorEmail(null);
+
+        if (!result) {
+          setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+          return;
+        }
+
+        logger.debug("shareProject result (confirmed):", JSON.stringify(result, null, 2));
+
+        if (result.success) {
+          showSuccess(`Collaborator "${email}" added`);
+          setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+        } else if (result.requiresProPlan) {
+          setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+          if (result.checkoutUrl) {
+            setCheckoutModal({
+              visible: true,
+              url: result.checkoutUrl,
+              reason: "pro_required",
+            });
+            startPolling();
+          } else {
+            showError(result.message || "Pro plan required");
+          }
+        } else if (result.requiresAdditionalShare) {
+          setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+          if (result.checkoutUrl) {
+            setCheckoutModal({
+              visible: true,
+              url: result.checkoutUrl,
+              reason: "share_limit",
+            });
+            startPolling();
+          } else {
+            logger.error("Checkout URL is null:", result);
+            showError(
+              result.message ||
+                "Unable to create checkout session. Please try again or contact support.",
+            );
+          }
+        } else if (result.paymentFailed && result.billingPortalUrl) {
+          setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+          setBillingPortalModal({
+            visible: true,
+            url: result.billingPortalUrl,
+          });
+        } else if (result.paymentFailed) {
+          showError(result.message || "Payment failed. Please update your billing settings.");
+        } else if (result.message) {
+          showError(result.message);
+        }
+        return;
+      }
+
+      // First call - check if confirmation is needed
+      setTaskPending(`Adding collaborator "${email}"...`);
+
+      const result = await shareProject(email, false);
+
+      if (!result) {
+        cancelTask();
+        setPendingCollaboratorEmail(null);
+        return;
+      }
+
+      logger.debug("shareProject result:", JSON.stringify(result, null, 2));
+
+      if (result.success) {
+        showSuccess(`Collaborator "${email}" added`);
+        setPendingCollaboratorEmail(null);
+        setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+      } else if (result.requiresConfirmation) {
+        // Keep task in pending state, show confirmation modal
+        setConfirmationModal({
+          visible: true,
+          type: "seat",
+          email,
+          balance: result.balance ?? 0,
+          freeLimit: result.freeLimit ?? 0,
+        });
+      } else if (result.requiresProPlan) {
+        cancelTask();
+        setPendingCollaboratorEmail(null);
+        if (result.checkoutUrl) {
+          setCheckoutModal({
+            visible: true,
+            url: result.checkoutUrl,
+            reason: "pro_required",
+          });
+          // Start polling to detect when user completes pro purchase
+          startPolling();
+        } else {
+          showError(result.message || "Pro plan required");
+        }
+      } else if (result.requiresAdditionalShare) {
+        cancelTask();
+        setPendingCollaboratorEmail(null);
+        if (result.checkoutUrl) {
+          setCheckoutModal({
+            visible: true,
+            url: result.checkoutUrl,
+            reason: "share_limit",
+          });
+          // Start polling to detect when user completes share purchase
+          startPolling();
+        } else {
+          logger.error("Checkout URL is null:", result);
+          showError(
+            result.message ||
+              "Unable to create checkout session. Please try again or contact support.",
+          );
+        }
+      } else if (result.paymentFailed && result.billingPortalUrl) {
+        cancelTask();
+        setPendingCollaboratorEmail(null);
+        setBillingPortalModal({
+          visible: true,
+          url: result.billingPortalUrl,
+        });
+      } else if (result.paymentFailed) {
+        cancelTask();
+        setPendingCollaboratorEmail(null);
+        showError(result.message || "Payment failed. Please update your billing settings.");
+      } else if (result.message) {
+        cancelTask();
+        setPendingCollaboratorEmail(null);
+        showError(result.message);
+      }
+    } finally {
+      setIsAddingCollaborator(false);
+    }
+  };
+
+  const handleConfirmPayment = async () => {
+    if (confirmationModal.email) {
+      await handleAddCollaborator(confirmationModal.email, true);
+    }
+  };
+
+  const handleCancelPayment = () => {
+    cancelTask();
+    setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+    setPendingCollaboratorEmail(null);
   };
 
   const handleRevokeCollaborator = async (collab: SharedUser) => {
-    await runTask(`Revoking ${collab.email}...`, () => new Promise((r) => setTimeout(r, 1000)));
-    showSuccess(`${collab.email} revoked`);
+    if (isRevokingCollaborator) return;
+    setIsRevokingCollaborator(true);
+    try {
+      await runTask(`Revoking ${collab.email}...`, async () => {
+        await revokeShare(collab.id);
+      });
+      showSuccess(`${collab.email} revoked`);
+    } catch (_error) {
+      logger.debug("Revoke collaborator failed");
+    } finally {
+      setIsRevokingCollaborator(false);
+    }
+  };
+
+  const handleRevokeCollaboratorWithRotation = async (collab: SharedUser) => {
+    if (isRevokingWithRotation) return;
+    setIsRevokingWithRotation(true);
+    try {
+      await runTask(`Revoking ${collab.email} and rotating keys...`, async () => {
+        await revokeShareWithRotation(collab.id);
+      });
+      showSuccess(`${collab.email} revoked and keys rotated`);
+    } catch (_error) {
+      logger.debug("Revoke with rotation failed");
+    } finally {
+      setIsRevokingWithRotation(false);
+    }
   };
 
   const getAllCommands = () => {
@@ -333,6 +548,12 @@ export function ProjectPage({
       cmds.push({
         key: "u",
         description: "Rename environment",
+        category: "Manage",
+        disabled: isRestricted,
+      });
+      cmds.push({
+        key: "d",
+        description: "Delete environment",
         category: "Manage",
         disabled: isRestricted,
       });
@@ -353,29 +574,29 @@ export function ProjectPage({
           disabled: isRestricted,
         });
       cmds.push({
-        key: "⌥u",
-        description: "Update secrets",
+        key: "⌥i",
+        description: "Edit secrets",
         category: "Manage",
         disabled: isRestricted,
       });
       cmds.push({
-        key: "⌥i",
-        description: "Import secrets",
-        category: "Create",
+        key: "d",
+        description: "Delete",
+        category: "Manage",
         disabled: isRestricted,
       });
       cmds.push({ key: "esc", description: "Go back", category: "Navigate" });
     } else {
       cmds.push({
-        key: "⌥u",
-        description: "Update secrets",
+        key: "⌥i",
+        description: "Edit secrets",
         category: "Manage",
         disabled: isRestricted,
       });
       cmds.push({
-        key: "⌥i",
-        description: "Import secrets",
-        category: "Create",
+        key: "d",
+        description: "Delete secret",
+        category: "Manage",
         disabled: isRestricted,
       });
       cmds.push({ key: "esc", description: "Go back", category: "Navigate" });
@@ -420,10 +641,8 @@ export function ProjectPage({
         goBack();
         break;
       case "⌥i":
-        openBulkImport("import");
-        break;
       case "⌥u":
-        openBulkImport("update");
+        openBulkImport();
         break;
       case "c":
         setActiveModal("manageCollaborators");
@@ -434,32 +653,50 @@ export function ProjectPage({
     }
   };
 
-  const openBulkImport = (mode: "import" | "update") => {
-    if (mode === "import") {
-      bulkImportInput.setValue("# Paste your .env file here\nAPI_KEY=your_key_here");
-      setBulkImportFormat("env");
+  const openBulkImport = () => {
+    const secretItems = items.filter((i) => i.type === "secret");
+
+    if (secretItems.length === 0) {
+      bulkImportInput.setValue("# Add your secrets here\nAPI_KEY=your_key_here");
     } else {
       const secretsJson = JSON.stringify(
-        items
-          .filter((i) => i.type === "secret")
-          .map((i) => ({
+        secretItems.map((i) => {
+          const secretItem = i as { value?: string; secretType?: string };
+          return {
             key: i.name,
-            value: (i as { value?: string }).value || "",
-            type: "string",
+            value: secretItem.value || "",
+            type: secretItem.secretType || "string",
             scope: "shared",
-          })),
+          };
+        }),
         null,
         2,
       );
-      bulkImportInput.setValue(secretsJson);
-      setBulkImportFormat("json");
+      const envContent = jsonToEnv(secretsJson);
+      bulkImportInput.setValue(envContent || "");
     }
-    setBulkImportMode(mode);
+
+    setBulkImportFormat("env");
     setActiveModal("bulkImport");
   };
 
   useKeyboard((key) => {
     if (creatingItem || editingItem) return;
+
+    // Let modal handle its own keyboard when visible
+    if (confirmationModal.visible || checkoutModal.visible || billingPortalModal.visible) return;
+
+    // Disable keyboard shortcuts during async operations
+    if (
+      isProcessing ||
+      isAddingCollaborator ||
+      isRevokingCollaborator ||
+      isRevokingWithRotation ||
+      isCreatingItem ||
+      isRenamingItem ||
+      isDeletingItem
+    )
+      return;
 
     if (activeModal === "bulkImport") {
       if (key.name === "escape") {
@@ -484,24 +721,49 @@ export function ProjectPage({
         }
         return;
       }
-      if ((key.name === "i" || key.name === "o") && key.meta) {
+      if ((key.name === "s" || key.name === "return") && key.meta) {
         const trimmed = bulkImportInput.value.trim();
         if (!trimmed) return;
+        if (!selectedEnvId || !project) return;
+
         try {
           const parsed =
             bulkImportFormat === "env" ? parseEnvContent(trimmed) : JSON.parse(trimmed);
           const result = validateBulkImportJson(parsed);
           if (!result.valid || result.secrets.length === 0) return;
-          const action = key.name === "o" ? "overwriting" : "skipping";
-          runTask(
-            `Importing secrets (${action} collisions)...`,
-            () => new Promise((r) => setTimeout(r, 1000)),
-          );
-          showSuccess(`${result.secrets.length} secrets imported`);
-          setActiveModal("none");
-          bulkImportInput.reset();
-        } catch {
-          // ignore
+
+          (async () => {
+            try {
+              await runTask(`Saving ${result.secrets.length} secrets...`, async () => {
+                const relevantSecrets =
+                  viewLevel === "folder" && selectedFolderId
+                    ? secrets.filter((s) => s.folderId === selectedFolderId)
+                    : secrets.filter((s) => s.environmentId === selectedEnvId && !s.folderId);
+
+                const keyToSecretId = new Map(relevantSecrets.map((s) => [s.key, s.id]));
+
+                await updateSecretBulk({
+                  environmentId: selectedEnvId,
+                  folderId: viewLevel === "folder" ? selectedFolderId || undefined : undefined,
+                  secrets: result.secrets.map((s) => ({
+                    secretId: s.secretId || keyToSecretId.get(s.key),
+                    key: s.key,
+                    encryptedValue: String(s.value),
+                    valueType: s.type,
+                    scope: (s.scope as "client" | "server" | "shared") || "shared",
+                  })),
+                  mode: "overwrite",
+                });
+              });
+              showSuccess(`${result.secrets.length} secrets saved`);
+              setActiveModal("none");
+              bulkImportInput.reset();
+            } catch (error) {
+              logger.debug("Bulk import save failed:", error);
+            }
+          })();
+        } catch (error) {
+          logger.debug("Bulk import parse failed:", error);
         }
         return;
       }
@@ -535,7 +797,7 @@ export function ProjectPage({
           id: item.id,
           name: item.name,
         });
-    } else if (key.name === "n" && !isRestricted)
+    } else if (key.name === "n" && !key.meta && !isRestricted)
       setCreatingItem(
         viewLevel === "environments" ? "env" : viewLevel === "environment" ? "folder" : null,
       );
@@ -548,23 +810,39 @@ export function ProjectPage({
         if (item?.type === "folder")
           setEditingItem({ type: "folder", id: item.id, name: item.name });
       }
-    } else if (key.name === "i" && key.meta && !isRestricted && viewLevel !== "environments")
-      openBulkImport("import");
-    else if (key.name === "u" && key.meta && !isRestricted && viewLevel !== "environments")
-      openBulkImport("update");
+    } else if (
+      (key.name === "i" || key.name === "u") &&
+      key.meta &&
+      !isRestricted &&
+      viewLevel !== "environments"
+    )
+      openBulkImport();
     else if (key.name === "c" && !isRestricted) setActiveModal("manageCollaborators");
     else if (key.name === "v") setShowSecrets((p) => !p);
     else if (key.sequence === "?") setActiveModal("commandPalette");
   });
 
   const getShortcuts = () => {
+    const isDisabled =
+      isProcessing ||
+      isAddingCollaborator ||
+      isRevokingCollaborator ||
+      isRevokingWithRotation ||
+      isCreatingItem ||
+      isRenamingItem ||
+      isDeletingItem;
+
     if (creatingItem || editingItem) {
       return {
         primary: [
           {
             shortcuts: [
-              { key: KEY_SYMBOLS.enter, description: creatingItem ? "create" : "save" },
-              { key: "esc", description: "cancel" },
+              {
+                key: KEY_SYMBOLS.enter,
+                description: creatingItem ? "create" : "save",
+                disabled: isDisabled,
+              },
+              { key: "esc", description: "cancel", disabled: isDisabled },
             ],
           },
         ],
@@ -572,26 +850,33 @@ export function ProjectPage({
       };
     }
     const shortcuts = [];
-    if (viewLevel === "environments")
+    if (viewLevel === "environments") {
       shortcuts.push(
-        { key: "n", description: "create environment", disabled: isRestricted },
-        { key: "u", description: "rename environment", disabled: isRestricted },
+        { key: "n", description: "create environment", disabled: isDisabled || isRestricted },
+        { key: "u", description: "rename environment", disabled: isDisabled || isRestricted },
+        { key: "esc", description: "back", disabled: isDisabled },
       );
-    else if (viewLevel === "environment") {
-      shortcuts.push({ key: "n", description: "create folder", disabled: isRestricted });
+    } else if (viewLevel === "environment") {
+      shortcuts.push({
+        key: "n",
+        description: "create folder",
+        disabled: isDisabled || isRestricted,
+      });
       const item = items[selectedIndex];
       if (item?.type !== "secret")
-        shortcuts.push({ key: "u", description: "rename folder", disabled: isRestricted });
-      if (item?.type === "secret")
-        shortcuts.push({ key: "⌥u", description: "update secrets", disabled: isRestricted });
+        shortcuts.push({
+          key: "u",
+          description: "rename folder",
+          disabled: isDisabled || isRestricted,
+        });
       shortcuts.push(
-        { key: "⌥i", description: "import secrets", disabled: isRestricted },
-        { key: "esc", description: "back" },
+        { key: "⌥i", description: "edit secrets", disabled: isDisabled || isRestricted },
+        { key: "esc", description: "back", disabled: isDisabled },
       );
     } else {
       shortcuts.push(
-        { key: "⌥u", description: "update secrets", disabled: isRestricted },
-        { key: "⌥i", description: "import secrets", disabled: isRestricted },
+        { key: "⌥i", description: "edit secrets", disabled: isDisabled || isRestricted },
+        { key: "esc", description: "back", disabled: isDisabled },
       );
     }
     return { primary: [{ shortcuts }], secondary: [] };
@@ -670,13 +955,20 @@ export function ProjectPage({
                 : Math.min(
                     items.length + (creatingItem ? 1 : 0) + (confirmingDelete ? 1 : 0),
                     PAGE_SIZE + (confirmingDelete ? 1 : 0),
-                  )
+                  ) +
+                  (scrollOffset > 0 ? 1 : 0) +
+                  (scrollOffset + PAGE_SIZE < items.length ? 1 : 0)
             }
           >
             {items.length === 0 && !creatingItem ? (
               <text fg={THEME_COLORS.textDim}>Empty. Use shortcuts below to create items.</text>
             ) : (
               <>
+                {scrollOffset > 0 && (
+                  <text fg={THEME_COLORS.textDim}>
+                    {"  "}... {scrollOffset} more item{scrollOffset > 1 ? "s" : ""} above
+                  </text>
+                )}
                 {items.slice(scrollOffset, scrollOffset + PAGE_SIZE).map((item, index) => {
                   const actualIndex = index + scrollOffset;
                   const isSelected = actualIndex === selectedIndex && !creatingItem && !editingItem;
@@ -759,21 +1051,17 @@ export function ProjectPage({
                     }
                   />
                 )}
+                {scrollOffset + PAGE_SIZE < items.length && (
+                  <text fg={THEME_COLORS.textDim}>
+                    {"  "}... {items.length - (scrollOffset + PAGE_SIZE)} more item
+                    {items.length - (scrollOffset + PAGE_SIZE) > 1 ? "s" : ""} below
+                  </text>
+                )}
               </>
             )}
           </box>
 
           <box flexDirection="column" marginTop={1}>
-            {viewLevel === "environments" && logs.length > 0 && (
-              <box height={1} width={66}>
-                <text fg={THEME_COLORS.textDim}>
-                  Latest Pulse:{" "}
-                  <span fg={THEME_COLORS.textMuted}>
-                    {logs[0].user} {logs[0].action.replace(".", " ")}
-                  </span>
-                </text>
-              </box>
-            )}
             <box height={1} width={66} flexDirection="row" justifyContent="space-between">
               <text fg={THEME_COLORS.textDim}>Collaborators [{sharedUsers.length}]</text>
               <text fg={THEME_COLORS.textDim}>
@@ -806,8 +1094,37 @@ export function ProjectPage({
         collaborators={sharedUsers}
         onAdd={handleAddCollaborator}
         onRevoke={handleRevokeCollaborator}
-        onRevokeWithRotation={handleRevokeCollaborator}
+        onRevokeWithRotation={handleRevokeCollaboratorWithRotation}
         onClose={() => setActiveModal("none")}
+        pendingEmail={pendingCollaboratorEmail}
+        shareLimits={shareLimits}
+      />
+
+      <CheckoutRedirectModal
+        visible={checkoutModal.visible}
+        checkoutUrl={checkoutModal.url}
+        reason={checkoutModal.reason}
+        onClose={() => {
+          setCheckoutModal({ visible: false, url: "", reason: "pro_required" });
+          // Stop polling when modal is closed manually
+          stopPolling();
+        }}
+      />
+
+      <ConfirmPaymentModal
+        visible={confirmationModal.visible}
+        type={confirmationModal.type}
+        itemName={confirmationModal.email}
+        freeLimit={confirmationModal.freeLimit}
+        balance={confirmationModal.balance}
+        onConfirm={handleConfirmPayment}
+        onCancel={handleCancelPayment}
+      />
+
+      <BillingPortalModal
+        visible={billingPortalModal.visible}
+        portalUrl={billingPortalModal.url}
+        onClose={() => setBillingPortalModal({ visible: false, url: "" })}
       />
 
       <CommandPaletteModal
@@ -824,7 +1141,6 @@ export function ProjectPage({
         format={bulkImportFormat}
         collisions={bulkImportCollisions}
         cursorVisible={true}
-        mode={bulkImportMode}
         onClose={() => {
           setActiveModal("none");
           bulkImportInput.reset();

@@ -47,13 +47,69 @@ export const getLimits = protectedAction({
   },
 });
 
+export const getProjectLimits = protectedAction({
+  args: {},
+  handler: async (ctx: ProtectedActionCtx) => {
+    const projectsFeature = await ctx.autumn.check(ctx, {
+      featureId: "projects",
+    });
+
+    if (projectsFeature.error || !projectsFeature.data) {
+      throw createError({
+        code: ErrorCode.EXTERNAL_SERVICE_ERROR,
+        message: "Projects feature info isn't reachable",
+        severity: ErrorSeverity.High,
+      });
+    }
+
+    const canShare = await ctx.autumn.check(ctx, {
+      featureId: "can_share_project",
+    });
+
+    const hasPro = canShare.data?.allowed === true;
+
+    if (
+      !projectsFeature.data ||
+      projectsFeature.data.usage === undefined ||
+      projectsFeature.data.included_usage === undefined
+    ) {
+      throw createError({
+        code: ErrorCode.EXTERNAL_SERVICE_ERROR,
+        message: "Projects feature data is incomplete",
+        severity: ErrorSeverity.High,
+      });
+    }
+
+    const usage = projectsFeature.data.usage;
+    const includedUsage = projectsFeature.data.included_usage;
+    const balance = projectsFeature.data.balance;
+
+    const freeLimit = includedUsage;
+    const purchasedProjectsCount = Math.max(0, usage - freeLimit);
+    const unusedProjects = balance;
+
+    return {
+      hasPro,
+      freeLimit,
+      totalProjectsCount: usage,
+      purchasedProjectsCount,
+      unusedProjects,
+      includedUsage,
+    };
+  },
+});
+
 export const createProject = protectedAction({
   args: {
     name: v.string(),
     // description: v.optional(v.string()),
     encryptedProjectKey: v.string(),
+    confirmPayment: v.optional(v.boolean()),
   },
-  handler: async (ctx: ProtectedActionCtx, args: { name: string; encryptedProjectKey: string }) => {
+  handler: async (
+    ctx: ProtectedActionCtx,
+    args: { name: string; encryptedProjectKey: string; confirmPayment?: boolean },
+  ) => {
     await checkRateLimit(ctx, "write");
 
     const { data, error } = await ctx.autumn.check(ctx, {
@@ -68,10 +124,80 @@ export const createProject = protectedAction({
       });
     }
 
-    if (!data.allowed) {
-      const currentUsage = data.usage || 0;
+    if (data.usage === undefined || data.included_usage === undefined) {
+      throw createError({
+        code: ErrorCode.EXTERNAL_SERVICE_ERROR,
+        message: "Projects feature data is incomplete",
+        severity: ErrorSeverity.High,
+      });
+    }
 
-      throw limitReachedError("projects", currentUsage, data.included_usage, ErrorSeverity.High);
+    const currentUsage = data.usage;
+
+    const canShare = await ctx.autumn.check(ctx, {
+      featureId: "can_share_project",
+    });
+
+    const hasPro = canShare.data?.allowed === true;
+    const freeLimit = data.included_usage;
+
+    const isPaidProject = currentUsage >= freeLimit;
+
+    if (isPaidProject) {
+      if (!hasPro) {
+        try {
+          const checkoutResult = await ctx.autumn.checkout(ctx, {
+            productId: "pro_plan",
+            successUrl: `${process.env.SITE_URL || "https://relic.so"}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+            customerData: {
+              name: ctx.name,
+              email: ctx.email,
+            },
+            checkoutSessionParams: {
+              cancel_url: `${process.env.SITE_URL || "https://relic.so"}/subscription/cancel`,
+              metadata: {
+                userId: ctx.userId,
+              },
+            },
+          });
+
+          return {
+            success: false,
+            requiresProPlan: true,
+            checkoutUrl: checkoutResult.data?.url || null,
+            message: `Project limit reached (${currentUsage}/${data.included_usage}). Upgrade to Pro for more projects.`,
+          };
+        } catch (checkoutError) {
+          console.error("Autumn checkout failed:", checkoutError);
+          return {
+            success: false,
+            requiresProPlan: true,
+            checkoutUrl: null,
+            message: `Project limit reached (${currentUsage}/${data.included_usage}). Upgrade to Pro for more projects.`,
+          };
+        }
+      }
+
+      const balance = data.balance;
+
+      if (!args.confirmPayment) {
+        if (!balance || balance <= 0) {
+          return {
+            success: false,
+            requiresConfirmation: true,
+            balance: 0,
+            freeLimit,
+            message: "No purchased projects available. Adding a project costs $10.",
+          };
+        }
+        return {
+          success: false,
+          requiresConfirmation: true,
+          balance,
+          freeLimit,
+          message: `This will use 1 of your ${balance} purchased projects.`,
+        };
+      }
     }
 
     const { projectId } = await ctx.runMutation(internal.project._insertProject, {
@@ -81,14 +207,46 @@ export const createProject = protectedAction({
       encryptedProjectKey: args.encryptedProjectKey,
     });
 
-    await ctx.autumn.track(ctx, {
-      featureId: "projects",
-      value: 1,
-    });
+    let paymentFailed = false;
+
+    // Track usage: paid projects (for billing) or free projects within limit (for usage counting)
+    if (isPaidProject || data.allowed) {
+      // For paid projects, re-verify balance before tracking to avoid relying on error messages
+      if (isPaidProject) {
+        const freshCheck = await ctx.autumn.check(ctx, {
+          featureId: "projects",
+        });
+
+        const freshBalance = freshCheck.data?.balance ?? 0;
+        if (freshBalance <= 0) {
+          return {
+            success: false,
+            paymentFailed: true,
+            message: "No purchased projects available. Adding a project costs $10.",
+          };
+        }
+      }
+
+      try {
+        await ctx.autumn.track(ctx, {
+          featureId: "projects",
+          value: 1,
+        });
+      } catch (trackError) {
+        console.error(
+          "[createProject] Payment tracking failed after project creation:",
+          trackError,
+        );
+        if (isPaidProject) {
+          paymentFailed = true;
+        }
+        // For free tier tracking failures, log but don't fail the operation
+      }
+    }
 
     const pId: Id<"project"> = projectId;
 
-    return { success: true, projectId: pId };
+    return { success: true, projectId: pId, paymentFailed };
   },
 });
 
@@ -376,7 +534,7 @@ export const _insertProject = internalMutation({
       ownerId: args.ownerId,
       encryptedProjectKey: args.encryptedProjectKey,
       keyVersion: 1,
-      share_usage_count: 0,
+      shareUsageCount: 0,
       isArchived: false,
       createdAt: now,
       updatedAt: now,

@@ -21,25 +21,25 @@ describe("bulkImportValidator", () => {
     test("rejects non-array input", () => {
       const result = validateBulkImportJson({ key: "value" });
       expect(result.valid).toBe(false);
-      expect(result.errors[0].message).toContain("array");
+      expect(result.errors[0]?.message).toContain("array");
     });
 
     test("rejects empty array", () => {
       const result = validateBulkImportJson([]);
       expect(result.valid).toBe(false);
-      expect(result.errors[0].message).toContain("No secrets");
+      expect(result.errors[0]?.message).toContain("No secrets");
     });
 
     test("rejects missing key field", () => {
       const result = validateBulkImportJson([{ value: "test", type: "string" }]);
       expect(result.valid).toBe(false);
-      expect(result.errors[0].field).toBe("key");
+      expect(result.errors[0]?.field).toBe("key");
     });
 
     test("rejects empty key", () => {
       const result = validateBulkImportJson([{ key: "", value: "test", type: "string" }]);
       expect(result.valid).toBe(false);
-      expect(result.errors[0].message).toContain("empty");
+      expect(result.errors[0]?.message).toContain("empty");
     });
 
     test("rejects invalid key format", () => {
@@ -47,7 +47,7 @@ describe("bulkImportValidator", () => {
         { key: "invalid-key", value: "test", type: "string" },
       ]);
       expect(result.valid).toBe(false);
-      expect(result.errors[0].message).toContain("letters, numbers");
+      expect(result.errors[0]?.message).toContain("letters, numbers");
     });
 
     test("allows underscore-prefixed keys", () => {
@@ -74,7 +74,7 @@ describe("bulkImportValidator", () => {
     test("rejects invalid type values", () => {
       const result = validateBulkImportJson([{ key: "KEY", value: "test", type: "invalid" }]);
       expect(result.valid).toBe(false);
-      expect(result.errors[0].field).toBe("type");
+      expect(result.errors[0]?.field).toBe("type");
     });
 
     test("accepts all valid types", () => {
@@ -100,7 +100,7 @@ describe("bulkImportValidator", () => {
       }));
       const result = validateBulkImportJson(input);
       expect(result.valid).toBe(false);
-      expect(result.errors[0].message).toContain("Maximum");
+      expect(result.errors[0]?.message).toContain("Maximum");
     });
   });
 
@@ -114,13 +114,13 @@ describe("bulkImportValidator", () => {
     test("rejects empty input", () => {
       const result = parseAndValidateInput("");
       expect(result.valid).toBe(false);
-      expect(result.errors[0].message).toContain("empty");
+      expect(result.errors[0]?.message).toContain("empty");
     });
 
     test("rejects invalid JSON syntax", () => {
       const result = parseAndValidateInput("{not valid json}");
       expect(result.valid).toBe(false);
-      expect(result.errors[0].message).toContain("Invalid JSON");
+      expect(result.errors[0]?.message).toContain("Invalid JSON");
     });
   });
 });

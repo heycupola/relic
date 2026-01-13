@@ -76,14 +76,12 @@ export function mapApiSecret(apiSecret: ApiSecret): Secret {
   };
 }
 
-/**
- * Maps API SharedUser to TUI SharedUser type
- */
 export function mapApiSharedUser(apiUser: ApiSharedUser): SharedUser {
   return {
-    id: apiUser._id,
+    id: apiUser.id || apiUser._id,
     email: apiUser.email,
     name: apiUser.name,
+    publicKey: apiUser.publicKey,
   };
 }
 

@@ -18,6 +18,7 @@ import type * as folder from "../folder.js";
 import type * as http from "../http.js";
 import type * as lib_access from "../lib/access.js";
 import type * as lib_emails_access_restricted from "../lib/emails/access_restricted.js";
+import type * as lib_emails_collaborator_added from "../lib/emails/collaborator_added.js";
 import type * as lib_emails_grace_period_started from "../lib/emails/grace_period_started.js";
 import type * as lib_emails_index from "../lib/emails/index.js";
 import type * as lib_emails_plan_upgraded from "../lib/emails/plan_upgraded.js";
@@ -54,6 +55,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "lib/access": typeof lib_access;
   "lib/emails/access_restricted": typeof lib_emails_access_restricted;
+  "lib/emails/collaborator_added": typeof lib_emails_collaborator_added;
   "lib/emails/grace_period_started": typeof lib_emails_grace_period_started;
   "lib/emails/index": typeof lib_emails_index;
   "lib/emails/plan_upgraded": typeof lib_emails_plan_upgraded;
@@ -1433,6 +1435,7 @@ export declare const components: {
         {
           emailKind:
             | "access-restricted"
+            | "collaborator-added"
             | "grace-period-started"
             | "plan-upgraded"
             | "welcome";

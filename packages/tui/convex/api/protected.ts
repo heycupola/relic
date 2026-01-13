@@ -2,13 +2,18 @@ import { ConvexHttpClient } from "convex/browser";
 import { logger } from "../../utils/debugLog";
 import { ensureValidJwt } from "../services/jwt";
 import type {
+  CreateProjectResult,
+  Environment,
   EnvironmentData,
   Project,
+  ProjectLimits,
   ProjectListItem,
   Secret,
   SecretScope,
   SecretValueType,
   SharedUser,
+  ShareLimits,
+  ShareProjectResult,
   User,
 } from "./types";
 
@@ -71,6 +76,10 @@ export class ProtectedApi {
     return this.withAuth(() => this.client.query("user:getCurrentUser", {}));
   }
 
+  async getUserPublicKeyByEmail(email: string): Promise<{ publicKey: string } | null> {
+    return this.withAuth(() => this.client.query("user:getUserPublicKeyByEmail", { email }));
+  }
+
   async hasUserKeys(): Promise<boolean> {
     const result = await this.withAuth(() => this.client.query("userKey:hasUserKeys", {}));
     return result.hasKeys;
@@ -112,7 +121,11 @@ export class ProtectedApi {
     return this.withAuth(() => this.client.query("project:getProject", { projectId }));
   }
 
-  async createProject(args: { name: string; encryptedProjectKey: string }): Promise<string> {
+  async createProject(args: {
+    name: string;
+    encryptedProjectKey: string;
+    confirmPayment?: boolean;
+  }): Promise<CreateProjectResult> {
     return this.withAuth(() => this.client.action("project:createProject", args));
   }
 
@@ -130,6 +143,16 @@ export class ProtectedApi {
 
   async getLimits(): Promise<{ usage: number; included_usage: number }> {
     return this.withAuth(() => this.client.action("project:getLimits", {}));
+  }
+
+  async getProjectLimits(): Promise<ProjectLimits> {
+    return this.withAuth(() => this.client.action("project:getProjectLimits", {}));
+  }
+
+  async getProjectEnvironments(projectId: string): Promise<Environment[]> {
+    return this.withAuth(() =>
+      this.client.query("environment:getProjectEnvironments", { projectId }),
+    );
   }
 
   async getEnvironmentData(environmentId: string): Promise<EnvironmentData> {
@@ -184,8 +207,35 @@ export class ProtectedApi {
     return this.withAuth(() => this.client.mutation("secret:createSecret", args));
   }
 
+  async updateSecretBulk(args: {
+    environmentId: string;
+    folderId?: string;
+    secrets: Array<{
+      secretId?: string;
+      key: string;
+      encryptedValue: string;
+      valueType: SecretValueType;
+      scope?: SecretScope;
+    }>;
+    mode?: "skip" | "overwrite";
+  }): Promise<{
+    success: boolean;
+    updatedCount: number;
+    createdCount: number;
+    skippedCount: number;
+    secretIds: string[];
+  }> {
+    return this.withAuth(() => this.client.mutation("secret:updateSecretBulk", args));
+  }
+
   async getSecret(secretId: string): Promise<Secret> {
     return this.withAuth(() => this.client.query("secret:getSecret", { secretId }));
+  }
+
+  async getAllSecretsForProject(
+    projectId: string,
+  ): Promise<Array<{ secretId: string; environmentId: string; encryptedValue: string }>> {
+    return this.withAuth(() => this.client.query("secret:getAllSecretsForProject", { projectId }));
   }
 
   async updateSecret(args: {
@@ -205,9 +255,10 @@ export class ProtectedApi {
 
   async shareProject(args: {
     projectId: string;
-    email: string;
+    userEmail: string;
     encryptedProjectKey: string;
-  }): Promise<void> {
+    confirmPayment?: boolean;
+  }): Promise<ShareProjectResult> {
     return this.withAuth(() => this.client.action("projectShare:shareProject", args));
   }
 
@@ -215,10 +266,20 @@ export class ProtectedApi {
     return this.withAuth(() => this.client.action("projectShare:revokeShare", { shareId }));
   }
 
-  async listProjectShares(projectId: string): Promise<SharedUser[]> {
-    return this.withAuth(() =>
+  async listProjectShares(projectId: string): Promise<{ shares: SharedUser[] }> {
+    const result = await this.withAuth(() =>
       this.client.query("projectShare:listActiveProjectSharesByProject", { projectId }),
     );
+    return {
+      shares: result.shares.map((share: any) => ({
+        _id: share.id,
+        id: share.id,
+        email: share.userEmail,
+        name: share.userName,
+        publicKey: share.userPublicKey,
+        sharedAt: share.sharedAt,
+      })),
+    };
   }
 
   async listSharedProjects(): Promise<ProjectListItem[]> {
@@ -260,6 +321,10 @@ export class ProtectedApi {
 
   async checkProPlan(): Promise<{ hasPro: boolean }> {
     return this.withAuth(() => this.client.action("user:checkProPlan", {}));
+  }
+
+  async getShareLimits(projectId: string): Promise<ShareLimits> {
+    return this.withAuth(() => this.client.action("projectShare:getShareLimits", { projectId }));
   }
 }
 

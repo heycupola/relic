@@ -48,11 +48,12 @@ function assertValidBase64(value: string, name: string): void {
   }
 }
 
-function assertMinLength(data: Uint8Array, minLength: number, name: string): void {
-  if (data.length < minLength) {
+function assertMinLength(data: ArrayBuffer | Uint8Array, minLength: number, name: string): void {
+  const length = data instanceof ArrayBuffer ? data.byteLength : data.length;
+  if (length < minLength) {
     throw new CryptoError(
       "INVALID_CIPHERTEXT",
-      `${name} is too short: expected at least ${minLength} bytes, got ${data.length}`,
+      `${name} is too short: expected at least ${minLength} bytes, got ${length}`,
     );
   }
 }
@@ -117,6 +118,12 @@ export function generateIV(): Uint8Array {
   return iv;
 }
 
+function toArrayBuffer(data: Uint8Array | Buffer): ArrayBuffer {
+  const arrayBuffer = new ArrayBuffer(data.length);
+  new Uint8Array(arrayBuffer).set(data);
+  return arrayBuffer;
+}
+
 // NOTE: Argon2id with OWASP params (64MB, 3 iter, 4 threads)
 export async function deriveKeyFromPassword(password: string, salt: string): Promise<CryptoKey> {
   assertNonEmptyString(password, "password");
@@ -135,10 +142,15 @@ export async function deriveKeyFromPassword(password: string, salt: string): Pro
       raw: true,
     });
 
-    return await crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM", length: 256 }, false, [
-      "encrypt",
-      "decrypt",
-    ]);
+    const keyBuffer = new Uint8Array(rawKey).buffer as ArrayBuffer;
+
+    return await crypto.subtle.importKey(
+      "raw",
+      keyBuffer,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"],
+    );
   } catch (error) {
     if (error instanceof CryptoError) {
       throw error;
@@ -229,7 +241,7 @@ export async function encryptPrivateKeyWithPassword(
     const encrypted = await crypto.subtle.encrypt(
       {
         name: "AES-GCM",
-        iv: iv,
+        iv: toArrayBuffer(iv),
       },
       derivedKey,
       encoder.encode(privateKeyData),
@@ -259,10 +271,11 @@ export async function decryptPrivateKeyWithPassword(
 
   try {
     const derivedKey = await deriveKeyFromPassword(password, salt);
-    const combined = base64ToArrayBuffer(encryptedPrivateKey);
+    const combinedBuffer = base64ToArrayBuffer(encryptedPrivateKey);
 
-    assertMinLength(combined, IV_LENGTH + 1, "encrypted private key");
+    assertMinLength(combinedBuffer, IV_LENGTH + 1, "encrypted private key");
 
+    const combined = new Uint8Array(combinedBuffer);
     const iv = combined.slice(0, IV_LENGTH);
     const ciphertext = combined.slice(IV_LENGTH);
 
@@ -388,6 +401,67 @@ export async function unwrapAESKeyWithRSA(
   }
 }
 
+export async function wrapAESKeyWithAES(
+  keyToWrap: CryptoKey,
+  wrappingKey: CryptoKey,
+): Promise<string> {
+  try {
+    const iv = generateIV();
+    const wrapped = await crypto.subtle.wrapKey("raw", keyToWrap, wrappingKey, {
+      name: "AES-GCM",
+      iv: toArrayBuffer(iv),
+    });
+
+    const combined = new Uint8Array(iv.length + wrapped.byteLength);
+    combined.set(iv);
+    combined.set(new Uint8Array(wrapped), iv.length);
+
+    return arrayBufferToBase64(combined);
+  } catch (error) {
+    if (error instanceof CryptoError) {
+      throw error;
+    }
+    throw new CryptoError("KEY_WRAP_FAILED", "Failed to wrap AES key with AES", error);
+  }
+}
+
+export async function unwrapAESKeyWithAES(
+  wrappedKey: string,
+  unwrappingKey: CryptoKey,
+): Promise<CryptoKey> {
+  assertNonEmptyString(wrappedKey, "wrappedKey");
+
+  try {
+    const combinedBuffer = base64ToArrayBuffer(wrappedKey);
+    assertMinLength(combinedBuffer, IV_LENGTH + 1, "wrapped key");
+
+    const combined = new Uint8Array(combinedBuffer);
+    const iv = combined.slice(0, IV_LENGTH);
+    const wrapped = combined.slice(IV_LENGTH);
+
+    return await crypto.subtle.unwrapKey(
+      "raw",
+      wrapped,
+      unwrappingKey,
+      {
+        name: "AES-GCM",
+        iv: iv,
+      },
+      {
+        name: "AES-GCM",
+        length: 256,
+      },
+      true,
+      ["encrypt", "decrypt"],
+    );
+  } catch (error) {
+    if (error instanceof CryptoError) {
+      throw error;
+    }
+    throw new CryptoError("KEY_UNWRAP_FAILED", "Failed to unwrap AES key with AES", error);
+  }
+}
+
 // NOTE: IV prepended to ciphertext
 export async function encryptWithAES(aesKey: CryptoKey, data: string): Promise<string> {
   assertNonEmptyString(data, "data");
@@ -398,7 +472,7 @@ export async function encryptWithAES(aesKey: CryptoKey, data: string): Promise<s
     const encrypted = await crypto.subtle.encrypt(
       {
         name: "AES-GCM",
-        iv: iv,
+        iv: toArrayBuffer(iv),
       },
       aesKey,
       encoder.encode(data),
@@ -422,10 +496,11 @@ export async function decryptWithAES(aesKey: CryptoKey, encryptedData: string): 
   assertNonEmptyString(encryptedData, "encryptedData");
 
   try {
-    const combined = base64ToArrayBuffer(encryptedData);
+    const combinedBuffer = base64ToArrayBuffer(encryptedData);
 
-    assertMinLength(combined, IV_LENGTH + 1, "encrypted data");
+    assertMinLength(combinedBuffer, IV_LENGTH + 1, "encrypted data");
 
+    const combined = new Uint8Array(combinedBuffer);
     const iv = combined.slice(0, IV_LENGTH);
     const ciphertext = combined.slice(IV_LENGTH);
 
@@ -518,7 +593,8 @@ function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
   return Buffer.from(bytes).toString("base64");
 }
 
-function base64ToArrayBuffer(base64: string): Uint8Array {
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
   assertValidBase64(base64, "base64 input");
-  return new Uint8Array(Buffer.from(base64, "base64"));
+  const uint8 = new Uint8Array(Buffer.from(base64, "base64"));
+  return uint8.buffer.slice(uint8.byteOffset, uint8.byteOffset + uint8.byteLength);
 }

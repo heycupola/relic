@@ -18,14 +18,14 @@ export const getProPlan = protectedAction({
 
     if (!user.hasPro) {
       const checkoutResult = await ctx.autumn.checkout(ctx, {
-        productId: "pro",
-        successUrl: `${process.env.SITE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+        productId: "pro_plan",
+        successUrl: `${process.env.SITE_URL || "https://relic.so"}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
         customerData: {
           name: user.name || undefined,
           email: user.email,
         },
         checkoutSessionParams: {
-          cancel_url: `${process.env.SITE_URL}/subscription/cancel`,
+          cancel_url: `${process.env.SITE_URL || "https://relic.so"}/subscription/cancel`,
           metadata: {
             userId: ctx.userId,
           },
@@ -82,6 +82,34 @@ export const getCurrentUser = protectedQuery({
   },
 });
 
+export const getUserPublicKeyByEmail = protectedQuery({
+  args: {
+    email: v.string(),
+  },
+  returns: v.union(v.object({ publicKey: v.string() }), v.null()),
+  handler: async (ctx: ProtectedQueryCtx, args: { email: string }) => {
+    // First, check if requesting user has pro plan
+    // Since this is a query, we need to check the user's pro status through the database
+    const currentUser = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: ctx.userId,
+    });
+
+    if (!currentUser || !currentUser.hasPro) {
+      return null;
+    }
+
+    const user = await ctx.runQuery(components.betterAuth.user.loadUserByEmail, {
+      email: args.email,
+    });
+
+    if (!user || !user.publicKey) {
+      return null;
+    }
+
+    return { publicKey: user.publicKey };
+  },
+});
+
 export const _handlePlanUpgrade = internalAction({
   args: {
     userId: v.string(),
@@ -128,6 +156,7 @@ export const _handleEmailDelivered = internalMutation({
     userId: v.string(),
     emailKind: v.union(
       v.literal(EmailKind.AccessRestricted),
+      v.literal(EmailKind.CollaboratorAdded),
       v.literal(EmailKind.GracePeriodStarted),
       v.literal(EmailKind.PlanUpgraded),
       v.literal(EmailKind.Welcome),
@@ -208,5 +237,29 @@ export const _sendWelcomeEmail = internalAction({
     });
 
     return { success: true };
+  },
+});
+
+export const getBillingPortalUrl = protectedAction({
+  args: {},
+  handler: async (ctx: ProtectedActionCtx) => {
+    await checkRateLimit(ctx, "read");
+
+    try {
+      const result = await ctx.autumn.customers.billingPortal(ctx, {
+        returnUrl: `${process.env.SITE_URL || "https://relic.so"}/billing/return`,
+      });
+
+      return {
+        success: true,
+        url: result.data?.url || null,
+      };
+    } catch (error) {
+      console.error("[getBillingPortalUrl] Failed to get billing portal URL:", error);
+      return {
+        success: false,
+        url: null,
+      };
+    }
   },
 });
