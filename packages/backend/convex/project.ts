@@ -141,7 +141,9 @@ export const createProject = protectedAction({
     const hasPro = canShare.data?.allowed === true;
     const freeLimit = data.included_usage;
 
-    if (currentUsage >= freeLimit) {
+    const isPaidProject = currentUsage >= freeLimit;
+
+    if (isPaidProject) {
       if (!hasPro) {
         try {
           const checkoutResult = await ctx.autumn.checkout(ctx, {
@@ -196,34 +198,6 @@ export const createProject = protectedAction({
           message: `This will use 1 of your ${balance} purchased projects.`,
         };
       }
-
-      try {
-        await ctx.autumn.track(ctx, {
-          featureId: "projects",
-          value: 1,
-        });
-      } catch (trackError) {
-        console.error("[createProject] Payment tracking failed:", trackError);
-        try {
-          const billingPortalResult = await ctx.autumn.customers.billingPortal(ctx, {
-            returnUrl: `${process.env.SITE_URL || "https://relic.so"}/billing/return`,
-          });
-          return {
-            success: false,
-            paymentFailed: true,
-            billingPortalUrl: billingPortalResult.data?.url || null,
-            message: "Payment failed. Please add a payment method to continue.",
-          };
-        } catch (billingError) {
-          console.error("[createProject] Billing portal failed:", billingError);
-          return {
-            success: false,
-            paymentFailed: true,
-            billingPortalUrl: null,
-            message: "Payment failed. Please update your billing settings and try again.",
-          };
-        }
-      }
     }
 
     const { projectId } = await ctx.runMutation(internal.project._insertProject, {
@@ -233,16 +207,46 @@ export const createProject = protectedAction({
       encryptedProjectKey: args.encryptedProjectKey,
     });
 
-    if (data.allowed) {
-      await ctx.autumn.track(ctx, {
-        featureId: "projects",
-        value: 1,
-      });
+    let paymentFailed = false;
+
+    // Track usage: paid projects (for billing) or free projects within limit (for usage counting)
+    if (isPaidProject || data.allowed) {
+      // For paid projects, re-verify balance before tracking to avoid relying on error messages
+      if (isPaidProject) {
+        const freshCheck = await ctx.autumn.check(ctx, {
+          featureId: "projects",
+        });
+
+        const freshBalance = freshCheck.data?.balance ?? 0;
+        if (freshBalance <= 0) {
+          return {
+            success: false,
+            paymentFailed: true,
+            message: "No purchased projects available. Adding a project costs $10.",
+          };
+        }
+      }
+
+      try {
+        await ctx.autumn.track(ctx, {
+          featureId: "projects",
+          value: 1,
+        });
+      } catch (trackError) {
+        console.error(
+          "[createProject] Payment tracking failed after project creation:",
+          trackError,
+        );
+        if (isPaidProject) {
+          paymentFailed = true;
+        }
+        // For free tier tracking failures, log but don't fail the operation
+      }
     }
 
     const pId: Id<"project"> = projectId;
 
-    return { success: true, projectId: pId };
+    return { success: true, projectId: pId, paymentFailed };
   },
 });
 
@@ -530,7 +534,7 @@ export const _insertProject = internalMutation({
       ownerId: args.ownerId,
       encryptedProjectKey: args.encryptedProjectKey,
       keyVersion: 1,
-      share_usage_count: 0,
+      shareUsageCount: 0,
       isArchived: false,
       createdAt: now,
       updatedAt: now,

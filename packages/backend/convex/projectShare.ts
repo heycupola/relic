@@ -43,7 +43,7 @@ export const getShareLimits = protectedAction({
       userId: ctx.userId,
     });
 
-    const totalSharesCount = project.share_usage_count ?? 0;
+    const totalSharesCount = project.shareUsageCount ?? 0;
 
     // If user doesn't have pro, they can't share - return actual count but 0 limits
     if (!user.hasPro) {
@@ -98,7 +98,8 @@ export const shareProject = protectedAction({
   ) => {
     await checkRateLimit(ctx, "write");
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex =
+      /^[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
     if (!emailRegex.test(args.userEmail)) {
       throw createError({
         code: ErrorCode.INVALID_OPERATION,
@@ -185,10 +186,12 @@ export const shareProject = protectedAction({
       throw alreadyExistsError("share", ErrorSeverity.Medium);
     }
 
-    const currentUsage = project.share_usage_count ?? 0;
+    const currentUsage = project.shareUsageCount ?? 0;
 
     // Check if user has exceeded free share limit
-    if (currentUsage >= shareLimits.freeShareLimit) {
+    const isPaidShare = currentUsage >= shareLimits.freeShareLimit;
+
+    if (isPaidShare) {
       // Check balance before tracking - prevent auto-charge without user consent
       const additionalShares = await ctx.autumn.check(ctx, {
         featureId: "additional_shares",
@@ -224,34 +227,6 @@ export const shareProject = protectedAction({
           message: `This will use 1 of your ${balance} purchased share${balance !== 1 ? "s" : ""}.`,
         };
       }
-
-      try {
-        await ctx.autumn.track(ctx, {
-          featureId: "additional_shares",
-          value: 1,
-        });
-      } catch (trackError) {
-        console.error("[shareProject] Payment tracking failed:", trackError);
-        try {
-          const billingPortalResult = await ctx.autumn.customers.billingPortal(ctx, {
-            returnUrl: `${process.env.SITE_URL || "https://relic.so"}/billing/return`,
-          });
-          return {
-            success: false,
-            paymentFailed: true,
-            billingPortalUrl: billingPortalResult.data?.url || null,
-            message: "Payment failed. Please add a payment method to continue.",
-          };
-        } catch (billingError) {
-          console.error("[shareProject] Billing portal failed:", billingError);
-          return {
-            success: false,
-            paymentFailed: true,
-            billingPortalUrl: null,
-            message: "Payment failed. Please update your billing settings and try again.",
-          };
-        }
-      }
     }
 
     const { shareId } = await ctx.runMutation(internal.projectShare._insertProjectShare, {
@@ -278,6 +253,34 @@ export const shareProject = protectedAction({
       value: 1,
     });
 
+    let paymentFailed = false;
+
+    if (isPaidShare) {
+      // Re-verify balance before tracking to avoid relying on error messages
+      const freshCheck = await ctx.autumn.check(ctx, {
+        featureId: "additional_shares",
+      });
+
+      const freshBalance = freshCheck.data?.balance ?? 0;
+      if (freshBalance <= 0) {
+        return {
+          success: false,
+          paymentFailed: true,
+          message: "No purchased shares available. Adding a share costs $5.",
+        };
+      }
+
+      try {
+        await ctx.autumn.track(ctx, {
+          featureId: "additional_shares",
+          value: 1,
+        });
+      } catch (trackError) {
+        console.error("[shareProject] Payment tracking failed after share creation:", trackError);
+        paymentFailed = true;
+      }
+    }
+
     const owner = await ctx.runQuery(components.betterAuth.user.loadUserById, {
       userId: project.ownerId as BetterAuthId<"user">,
     });
@@ -293,7 +296,7 @@ export const shareProject = protectedAction({
       console.error("[Email] Failed to send collaborator added email:", error);
     }
 
-    return { success: true, shareId: sId };
+    return { success: true, shareId: sId, paymentFailed };
   },
 });
 
@@ -355,7 +358,7 @@ export const revokeShare = protectedAction({
     const updatedProject = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: share.projectId,
     });
-    const newUsage = updatedProject.share_usage_count ?? 0;
+    const newUsage = updatedProject.shareUsageCount ?? 0;
 
     // Only track -1 if we were using more than free limit (meaning we freed up a purchased share)
     // After decrement, if newUsage >= freeShareLimit, we were using purchased shares
@@ -567,7 +570,7 @@ export const revokeShareWithRotation = protectedAction({
     const updatedProject = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: share.projectId,
     });
-    const newUsage = updatedProject.share_usage_count ?? 0;
+    const newUsage = updatedProject.shareUsageCount ?? 0;
 
     // Only track -1 if we were using more than free limit (meaning we freed up a purchased share)
     // After decrement, if newUsage >= freeShareLimit, we were using purchased shares
@@ -912,12 +915,12 @@ export const _trackShareUsageCount = internalMutation({
       return { success: false };
     }
 
-    const currentCount = project.share_usage_count ?? 0;
+    const currentCount = project.shareUsageCount ?? 0;
 
     const newCount = currentCount + args.value;
 
     await ctx.db.patch(args.projectId, {
-      share_usage_count: newCount,
+      shareUsageCount: newCount,
     });
 
     return { success: true };
