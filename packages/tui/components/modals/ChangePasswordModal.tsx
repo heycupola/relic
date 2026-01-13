@@ -116,11 +116,6 @@ export function ChangePasswordModal({ visible, onClose, onSuccess }: ChangePassw
       return;
     }
 
-    if (newInput.value === currentInput.value) {
-      setError("Must be different from current password");
-      return;
-    }
-
     if (confirmInput.value !== newInput.value) {
       setError("Passwords do not match");
       return;
@@ -144,6 +139,12 @@ export function ChangePasswordModal({ visible, onClose, onSuccess }: ChangePassw
         logger.error("Failed to verify current password:", error);
         setIsProcessing(false);
         setError("Incorrect current password");
+        return;
+      }
+
+      if (newInput.value === currentInput.value) {
+        setIsProcessing(false);
+        setError("Must be different from current password");
         return;
       }
 
