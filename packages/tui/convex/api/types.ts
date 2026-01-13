@@ -46,7 +46,7 @@ export interface Project {
   ownerId: string;
   encryptedProjectKey: string;
   keyVersion: number;
-  share_usage_count: number;
+  shareUsageCount: number;
   isArchived: boolean;
   createdAt: number;
   updatedAt: number;

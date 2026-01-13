@@ -9,7 +9,7 @@ export default defineSchema({
     ownerId: v.string(),
     encryptedProjectKey: v.string(),
     keyVersion: v.number(),
-    share_usage_count: v.number(),
+    shareUsageCount: v.number(),
     isArchived: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),

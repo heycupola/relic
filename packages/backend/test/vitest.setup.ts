@@ -131,12 +131,14 @@ const { _mockAutumn } = vi.hoisted(() => {
       }
 
       const allowed = feature.current < feature.limit;
+      const balance = Math.max(0, feature.limit - feature.current);
       return {
         data: {
           allowed,
+          balance,
           included_usage: feature.limit,
           usage: feature.current,
-          remaining_usage: Math.max(0, feature.limit - feature.current),
+          remaining_usage: balance,
         },
         error: null,
       };
