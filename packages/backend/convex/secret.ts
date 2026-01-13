@@ -263,7 +263,7 @@ export const updateSecretBulk = protectedMutation({
     const existingSecrets = await ctx.runQuery(internal.secret._loadSecretsByEnvironmentId, {
       environmentId: args.environmentId,
     });
-    let currentCount = existingSecrets.length;
+    const initialCount = existingSecrets.length;
 
     // Process each secret
     for (const secretInput of args.secrets) {
@@ -319,14 +319,14 @@ export const updateSecretBulk = protectedMutation({
           // This allows updateSecretBulk to both update existing secrets and create new ones
 
           // Check if adding this new secret would exceed the limit
-          if (currentCount >= MAX_SECRETS_PER_ENVIRONMENT) {
+          if (initialCount + createdSecretIds.length >= MAX_SECRETS_PER_ENVIRONMENT) {
             if (mode === "skip") {
               skippedCount++;
               continue;
             }
             throw createError({
               code: ErrorCode.ENVIRONMENT_LIMIT_REACHED,
-              message: `Cannot create new secret "${secretInput.key}". Environment already has ${currentCount} secrets. Maximum ${MAX_SECRETS_PER_ENVIRONMENT} secrets per environment.`,
+              message: `Cannot create new secret "${secretInput.key}". Environment already has ${initialCount + createdSecretIds.length} secrets. Maximum ${MAX_SECRETS_PER_ENVIRONMENT} secrets per environment.`,
               severity: ErrorSeverity.High,
             });
           }
@@ -358,7 +358,6 @@ export const updateSecretBulk = protectedMutation({
 
           createdSecretIds.push(secretId);
           updatedSecretIds.push(secretId);
-          currentCount++;
           continue;
         }
 
