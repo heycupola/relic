@@ -6,7 +6,7 @@ import { useState } from "react";
 import { SectionWrapper } from "./section-wrapper";
 
 const installMethods = [
-  { name: "bun", command: "bun install -g @relic/cli" },
+  { name: "bun", command: "bun install -g relic" },
   { name: "curl", command: "curl -fsSL https://relic.so/install | bash" },
   { name: "npm", command: "npm install -g @relic/cli" },
   { name: "brew", command: "brew install relic" },
