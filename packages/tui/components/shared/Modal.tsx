@@ -1,6 +1,6 @@
 import { useTerminalDimensions } from "@opentui/react";
 import type { ReactNode } from "react";
-import type { Shortcut } from "../../types";
+import type { Shortcut } from "../../types/keyboard";
 import { THEME_COLORS } from "../../utils/constants";
 
 interface ModalProps {

@@ -1,17 +1,15 @@
 import { useMemo } from "react";
 import { useTaskQueue } from "../../hooks/useTaskQueue";
-import type { CursorPosition } from "../../types";
+import type { CursorPosition } from "../../types/keyboard";
 import type {
   BulkImportSecret,
   CollisionAction,
   CollisionInfo,
   ValidationResult,
-} from "../../utils/bulkImportTypes";
-import { validateBulkImportJson } from "../../utils/bulkImportValidator";
+} from "../../utils/bulkImport";
+import { parseEnvContent, validateBulkImportJson } from "../../utils/bulkImport";
 import { THEME_COLORS } from "../../utils/constants";
-import { parseEnvContent } from "../../utils/envParser";
-import { highlightLine } from "../../utils/syntaxHighlight";
-import { mapCursorToWrappedLines, wrapLine } from "../../utils/wordWrap";
+import { highlightLine, mapCursorToWrappedLines, wrapLine } from "../../utils/ui";
 import { Modal } from "../shared/Modal";
 
 interface BulkImportModalProps {
@@ -72,9 +70,8 @@ export function BulkImportModal({
 
   const lines = content.split("\n");
   const visibleLines = EDITOR_HEIGHT - 2;
-  const maxLineWidth = EDITOR_WIDTH - 8; // Account for line numbers and padding
+  const maxLineWidth = EDITOR_WIDTH - 8;
 
-  // Map cursor to wrapped lines
   const { wrappedLine, wrappedColumn, allWrappedLines } = useMemo(
     () => mapCursorToWrappedLines(lines, cursor, maxLineWidth),
     [lines, cursor, maxLineWidth],
@@ -102,8 +99,6 @@ export function BulkImportModal({
     const visibleEnd = scrollOffset + visibleLines;
     const visibleWrappedLines = allWrappedLines.slice(visibleStart, visibleEnd);
 
-    // Map wrapped line indices back to original line numbers
-    // and track which wrapped lines are the first line of their original line
     const wrappedLineToOriginalLine: number[] = [];
     const isFirstWrappedLine: boolean[] = [];
     for (let i = 0; i < lines.length; i++) {
@@ -119,7 +114,7 @@ export function BulkImportModal({
       const isCursorLine = wrappedLineIndex === wrappedLine;
       const originalLineNum = wrappedLineToOriginalLine[wrappedLineIndex] ?? 0;
       const isFirstLine = isFirstWrappedLine[wrappedLineIndex] ?? true;
-      const lineNum = isFirstLine ? String(originalLineNum + 1).padStart(3, " ") : "   "; // Empty space for continuation lines
+      const lineNum = isFirstLine ? String(originalLineNum + 1).padStart(3, " ") : "   ";
 
       if (!isCursorLine) {
         const highlighted = highlightLine(displayLine || " ", format);

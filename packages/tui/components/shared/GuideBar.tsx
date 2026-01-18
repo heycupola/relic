@@ -1,4 +1,4 @@
-import type { Shortcut, ShortcutGroup } from "../../types";
+import type { Shortcut, ShortcutGroup } from "../../types/keyboard";
 import { THEME_COLORS } from "../../utils/constants";
 
 interface GuideBarProps {
@@ -13,10 +13,6 @@ interface GuideBarProps {
   showHelp?: boolean;
 }
 
-/**
- * Ultra-minimal premium GuideBar
- * Shows only essential actions - trusts users to know navigation
- */
 export function GuideBar({
   shortcuts,
   groups,
@@ -26,16 +22,14 @@ export function GuideBar({
 }: GuideBarProps) {
   const boxWidth = customWidth ?? 66;
 
-  // Ultra-minimal premium style
   if (minimal && groups) {
-    // Only show first 3 primary actions + help (if enabled)
     const primaryActions = groups.primary.flatMap((g) => g.shortcuts).slice(0, 3);
 
     return (
       <box width={boxWidth} height={1}>
         <text>
           {primaryActions.map((shortcut, index) => (
-            <>
+            <span key={`${shortcut.key}-${index}`}>
               <span fg={THEME_COLORS.textDim}>[</span>
               <span fg={shortcut.disabled ? THEME_COLORS.textMuted : THEME_COLORS.primary}>
                 {shortcut.key}
@@ -43,22 +37,21 @@ export function GuideBar({
               <span fg={THEME_COLORS.textDim}>] </span>
               <span fg={THEME_COLORS.textMuted}>{shortcut.description}</span>
               {(index < primaryActions.length - 1 || showHelp) && <span> </span>}
-            </>
+            </span>
           ))}
           {showHelp && (
-            <>
+            <span key="help">
               <span fg={THEME_COLORS.textDim}>[</span>
               <span fg={THEME_COLORS.accent}>?</span>
               <span fg={THEME_COLORS.textDim}>] </span>
               <span fg={THEME_COLORS.textMuted}>help</span>
-            </>
+            </span>
           )}
         </text>
       </box>
     );
   }
 
-  // Grouped layout fallback
   if (groups) {
     const allShortcuts = [
       ...groups.primary.flatMap((g) => g.shortcuts),
@@ -69,7 +62,7 @@ export function GuideBar({
       <box width={boxWidth} height={1}>
         <text>
           {allShortcuts.slice(0, 5).map((shortcut, index) => (
-            <>
+            <span key={`${shortcut.key}-${index}`}>
               <span fg={THEME_COLORS.textDim}>[</span>
               <span fg={shortcut.disabled ? THEME_COLORS.textMuted : THEME_COLORS.primary}>
                 {shortcut.key}
@@ -77,20 +70,19 @@ export function GuideBar({
               <span fg={THEME_COLORS.textDim}>] </span>
               <span fg={THEME_COLORS.textMuted}>{shortcut.description}</span>
               {index < Math.min(allShortcuts.length, 5) - 1 && <span> </span>}
-            </>
+            </span>
           ))}
         </text>
       </box>
     );
   }
 
-  // Legacy single shortcuts array
   if (shortcuts) {
     return (
       <box width={boxWidth} height={1}>
         <text>
           {shortcuts.slice(0, 5).map((shortcut, index) => (
-            <>
+            <span key={`${shortcut.key}-${index}`}>
               <span fg={THEME_COLORS.textDim}>[</span>
               <span fg={shortcut.disabled ? THEME_COLORS.textMuted : THEME_COLORS.primary}>
                 {shortcut.key}
@@ -98,7 +90,7 @@ export function GuideBar({
               <span fg={THEME_COLORS.textDim}>] </span>
               <span fg={THEME_COLORS.textMuted}>{shortcut.description}</span>
               {index < Math.min(shortcuts.length, 5) - 1 && <span> </span>}
-            </>
+            </span>
           ))}
         </text>
       </box>
