@@ -1,43 +1,36 @@
-import { initLogger, logger } from "./utils/debugLog";
+import { initLogger } from "./utils/debugLog";
 
-console.log("DEBUG: Before initLogger");
 initLogger();
-console.log("DEBUG: After initLogger");
-logger.log("App starting - logger initialized");
-console.log("DEBUG: After first logger.log");
 
 if (process.env.DEV === "true") {
   try {
     const devtools = await import("react-devtools-core");
-    devtools.connectToDevTools({
-      host: "localhost",
-      port: 8097,
-    });
-    logger.log("Attempted to connect to React DevTools");
-  } catch (err) {
-    logger.error("Failed to connect to React DevTools", err);
+    devtools.connectToDevTools({ host: "localhost", port: 8097 });
+  } catch {
+    // DevTools connection is optional
   }
 }
 
 import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
 import { useCallback, useEffect, useState } from "react";
-import { TaskBar } from "./components/shared";
-import { AuthProvider, UserProvider, useAuth } from "./convex";
+import { TaskBar } from "./components/shared/TaskBar";
+import { AppProvider, useAuth } from "./context";
 import { AppSessionContext } from "./hooks/useAppSession";
 import { useCurrentUser } from "./hooks/useCurrentUser";
 import { TaskProvider } from "./hooks/useTaskQueue";
-import { HomePage, LoginPage, PasswordSetupPage, PasswordUnlockPage, ProjectPage } from "./pages";
+import { HomePage } from "./pages/HomePage";
+import { LoginPage } from "./pages/LoginPage";
+import { PasswordSetupPage } from "./pages/PasswordSetupPage";
+import { PasswordUnlockPage } from "./pages/PasswordUnlockPage";
+import { ProjectPage } from "./pages/ProjectPage";
 import { RouterProvider, useRouter } from "./router";
-import { clearPassword, hasPassword, savePassword } from "./utils/passwordStorage";
+import { clearPassword, hasPassword, savePassword } from "./utils/password";
 
 function AppRouter() {
-  logger.log("AppRouter rendered");
   const { isAuthenticated, isLoading: isAuthLoading, refreshAuth, logout: authLogout } = useAuth();
   const { route, navigate } = useRouter();
   const { displayName } = useCurrentUser();
-
-  logger.log("AppRouter state:", { isAuthenticated, isAuthLoading });
 
   const [isPasswordUnlocked, setIsPasswordUnlocked] = useState(false);
   const [passwordStatus, setPasswordStatus] = useState<{ has: boolean; loading: boolean }>({
@@ -88,12 +81,10 @@ function AppRouter() {
   }
 
   if (!isAuthenticated) {
-    logger.log("AppRouter: Not authenticated, showing LoginPage");
     return <LoginPage onLogin={handleLogin} />;
   }
 
   if (!isPasswordUnlocked) {
-    logger.log("AppRouter: Password not unlocked, passwordStatus:", passwordStatus);
     if (passwordStatus.has) {
       return <PasswordUnlockPage onUnlock={handlePasswordUnlock} onLogout={handleLogout} />;
     }
@@ -105,7 +96,6 @@ function AppRouter() {
     displayName,
   };
 
-  logger.log("AppRouter: Authenticated and unlocked, route:", route.name);
   const renderPage = () => {
     switch (route.name) {
       case "login":
@@ -132,26 +122,17 @@ function AppRouter() {
 }
 
 function App() {
-  console.log("DEBUG: App component rendered");
-  logger.log("App component rendered");
   return (
-    <AuthProvider>
-      <UserProvider>
-        <TaskProvider>
-          <RouterProvider>
-            <AppRouter />
-            <TaskBar />
-          </RouterProvider>
-        </TaskProvider>
-      </UserProvider>
-    </AuthProvider>
+    <AppProvider>
+      <TaskProvider>
+        <RouterProvider>
+          <AppRouter />
+          <TaskBar />
+        </RouterProvider>
+      </TaskProvider>
+    </AppProvider>
   );
 }
 
-const renderer = await createCliRenderer({
-  exitOnCtrlC: true,
-});
-
-logger.log("About to render App component");
+const renderer = await createCliRenderer({ exitOnCtrlC: true });
 createRoot(renderer).render(<App />);
-logger.log("App component rendered to root");

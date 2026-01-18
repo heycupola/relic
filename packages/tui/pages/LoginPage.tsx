@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { GuideBar } from "../components/shared/GuideBar";
 import { LoginButton } from "../components/shared/LoginButton";
 import { Modal } from "../components/shared/Modal";
-import { type DeviceAuthStatus, useDeviceAuth } from "../convex";
+import { type DeviceAuthStatus, useDeviceAuth } from "../convex/hooks/useDeviceAuth";
 import { KEY_SYMBOLS, THEME_COLORS } from "../utils/constants";
 import { logger } from "../utils/debugLog";
-import { createHyperlink } from "../utils/hyperlink";
+import { createHyperlink } from "../utils/ui";
 
 const getShortcutGroups = (isLoading: boolean) => ({
   primary: [

@@ -1,32 +1,31 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useCallback, useEffect, useState } from "react";
 import { InlineInput } from "../components/forms/InlineInput";
+import { BulkImportModal } from "../components/modals/BulkImportModal";
+import { CommandPaletteModal } from "../components/modals/CommandPaletteModal";
+import {
+  ConfirmPaymentModal,
+  type PaymentConfirmationType,
+} from "../components/modals/ConfirmPaymentModal";
+import { ManageCollaboratorsModal } from "../components/modals/ManageCollaboratorsModal";
 import {
   BillingPortalModal,
-  BulkImportModal,
   type CheckoutReason,
   CheckoutRedirectModal,
-  CommandPaletteModal,
-  ConfirmPaymentModal,
-  ManageCollaboratorsModal,
-  type PaymentConfirmationType,
-} from "../components/modals";
+} from "../components/modals/UrlOpenModal";
 import { DeleteConfirmation } from "../components/shared/DeleteConfirmation";
 import { GuideBar } from "../components/shared/GuideBar";
-
-import { useUser } from "../convex";
-import { useMultilineInput } from "../hooks/useMultilineInput";
+import { useUser } from "../context";
+import { useMultiLineInput } from "../hooks/useInput";
 import { usePaste } from "../hooks/usePaste";
-import { useProjectData } from "../hooks/useProjectData";
+import { useProjectPage } from "../hooks/useProjectPage";
 import { useTaskQueue } from "../hooks/useTaskQueue";
 import { useRouter } from "../router";
-import type { ModalType, ProjectStatus, SharedUser, ViewLevel } from "../types";
-import type { BulkImportFormat, CollisionInfo } from "../utils/bulkImportTypes";
-import { validateBulkImportJson } from "../utils/bulkImportValidator";
+import type { ModalType, ProjectStatus, SharedUser, ViewLevel } from "../types/models";
+import type { BulkImportFormat, CollisionInfo } from "../utils/bulkImport";
+import { envToJson, jsonToEnv, parseEnvContent, validateBulkImportJson } from "../utils/bulkImport";
 import { KEY_SYMBOLS, STATUS_COLORS, THEME_COLORS } from "../utils/constants";
 import { logger } from "../utils/debugLog";
-import { parseEnvContent } from "../utils/envParser";
-import { envToJson, jsonToEnv } from "../utils/formatConverter";
 
 interface ProjectPageProps {
   projectId: string;
@@ -53,13 +52,14 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
   const {
     project,
     environments,
-    currentEnvironmentData,
+    folders,
+    secrets,
     sharedUsers,
     shareLimits,
-    loadEnvironmentData,
-    createEnvironment,
-    updateEnvironment,
-    deleteEnvironment,
+    loadEnvironment: loadEnvironmentData,
+    createEnv: createEnvironment,
+    updateEnv: updateEnvironment,
+    removeEnv: deleteEnvironment,
     createFolder,
     updateFolder,
     deleteFolder,
@@ -68,19 +68,15 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     shareProject,
     revokeShare,
     revokeShareWithRotation,
-    refetch: refetchProjectData,
-  } = useProjectData(projectId);
+    refetchProject: refetchProjectData,
+  } = useProjectPage(projectId);
 
-  // When hasPro changes to true, refetch project data to get updated shareLimits
   useEffect(() => {
     if (hasPro && isPolling) {
       stopPolling();
       refetchProjectData();
     }
   }, [hasPro, isPolling, stopPolling, refetchProjectData]);
-
-  const folders = currentEnvironmentData?.folders || [];
-  const secrets = currentEnvironmentData?.secrets || [];
 
   const [viewLevel, setViewLevel] = useState<ViewLevel>("environments");
   const [selectedEnvId, setSelectedEnvId] = useState<string | null>(null);
@@ -103,23 +99,20 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     name: string;
   } | null>(null);
 
-  const bulkImportInput = useMultilineInput({ maxLines: 50 });
+  const bulkImportInput = useMultiLineInput({ maxLines: 50 });
   const [bulkImportFormat, setBulkImportFormat] = useState<BulkImportFormat>("env");
   const [bulkImportCollisions, setBulkImportCollisions] = useState<CollisionInfo[]>([]);
 
-  // Collaborator add state
   const [pendingCollaboratorEmail, setPendingCollaboratorEmail] = useState<string | null>(null);
   const [confirmationModal, setConfirmationModal] = useState<{
     visible: boolean;
     type: PaymentConfirmationType;
     email?: string;
     balance: number;
-    freeLimit: number;
   }>({
     visible: false,
     type: "seat",
     balance: 0,
-    freeLimit: 0,
   });
   const [checkoutModal, setCheckoutModal] = useState<{
     visible: boolean;
@@ -364,7 +357,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         setPendingCollaboratorEmail(null);
 
         if (!result) {
-          setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+          setConfirmationModal({ visible: false, type: "seat", balance: 0 });
           return;
         }
 
@@ -372,9 +365,9 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
 
         if (result.success) {
           showSuccess(`Collaborator "${email}" added`);
-          setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+          setConfirmationModal({ visible: false, type: "seat", balance: 0 });
         } else if (result.requiresProPlan) {
-          setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+          setConfirmationModal({ visible: false, type: "seat", balance: 0 });
           if (result.checkoutUrl) {
             setCheckoutModal({
               visible: true,
@@ -386,7 +379,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
             showError(result.message || "Pro plan required");
           }
         } else if (result.requiresAdditionalShare) {
-          setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+          setConfirmationModal({ visible: false, type: "seat", balance: 0 });
           if (result.checkoutUrl) {
             setCheckoutModal({
               visible: true,
@@ -402,7 +395,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
             );
           }
         } else if (result.paymentFailed && result.billingPortalUrl) {
-          setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+          setConfirmationModal({ visible: false, type: "seat", balance: 0 });
           setBillingPortalModal({
             visible: true,
             url: result.billingPortalUrl,
@@ -415,7 +408,6 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         return;
       }
 
-      // First call - check if confirmation is needed
       setTaskPending(`Adding collaborator "${email}"...`);
 
       const result = await shareProject(email, false);
@@ -431,15 +423,13 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
       if (result.success) {
         showSuccess(`Collaborator "${email}" added`);
         setPendingCollaboratorEmail(null);
-        setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+        setConfirmationModal({ visible: false, type: "seat", balance: 0 });
       } else if (result.requiresConfirmation) {
-        // Keep task in pending state, show confirmation modal
         setConfirmationModal({
           visible: true,
           type: "seat",
           email,
           balance: result.balance ?? 0,
-          freeLimit: result.freeLimit ?? 0,
         });
       } else if (result.requiresProPlan) {
         cancelTask();
@@ -450,7 +440,6 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
             url: result.checkoutUrl,
             reason: "pro_required",
           });
-          // Start polling to detect when user completes pro purchase
           startPolling();
         } else {
           showError(result.message || "Pro plan required");
@@ -464,7 +453,6 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
             url: result.checkoutUrl,
             reason: "share_limit",
           });
-          // Start polling to detect when user completes share purchase
           startPolling();
         } else {
           logger.error("Checkout URL is null:", result);
@@ -502,7 +490,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
 
   const handleCancelPayment = () => {
     cancelTask();
-    setConfirmationModal({ visible: false, type: "seat", balance: 0, freeLimit: 0 });
+    setConfirmationModal({ visible: false, type: "seat", balance: 0 });
     setPendingCollaboratorEmail(null);
   };
 
@@ -526,7 +514,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     setIsRevokingWithRotation(true);
     try {
       await runTask(`Revoking ${collab.email} and rotating keys...`, async () => {
-        await revokeShareWithRotation(collab.id);
+        await revokeShareWithRotation(collab.id, sharedUsers);
       });
       showSuccess(`${collab.email} revoked and keys rotated`);
     } catch (_error) {
@@ -683,10 +671,8 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
   useKeyboard((key) => {
     if (creatingItem || editingItem) return;
 
-    // Let modal handle its own keyboard when visible
     if (confirmationModal.visible || checkoutModal.visible || billingPortalModal.visible) return;
 
-    // Disable keyboard shortcuts during async operations
     if (
       isProcessing ||
       isAddingCollaborator ||
@@ -748,7 +734,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
                   secrets: result.secrets.map((s) => ({
                     secretId: s.secretId || keyToSecretId.get(s.key),
                     key: s.key,
-                    encryptedValue: String(s.value),
+                    value: String(s.value),
                     valueType: s.type,
                     scope: (s.scope as "client" | "server" | "shared") || "shared",
                   })),
@@ -1106,7 +1092,6 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         reason={checkoutModal.reason}
         onClose={() => {
           setCheckoutModal({ visible: false, url: "", reason: "pro_required" });
-          // Stop polling when modal is closed manually
           stopPolling();
         }}
       />
@@ -1115,7 +1100,6 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         visible={confirmationModal.visible}
         type={confirmationModal.type}
         itemName={confirmationModal.email}
-        freeLimit={confirmationModal.freeLimit}
         balance={confirmationModal.balance}
         onConfirm={handleConfirmPayment}
         onCancel={handleCancelPayment}

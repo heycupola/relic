@@ -1,6 +1,6 @@
-import { watch } from "fs";
-import { resolve } from "path";
-import { fileURLToPath } from "url";
+import { watch } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = resolve(__filename, "..");

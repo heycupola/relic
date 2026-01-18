@@ -6,14 +6,13 @@ import {
   generateSalt,
 } from "@repo/crypto";
 import { useState } from "react";
-import { PasswordForm } from "../components/forms/PasswordForm";
-import { PasswordChangeWarningModal } from "../components/modals/PasswordChangeWarningModal";
+import { getProtectedApi } from "../api";
+import { PasswordInput } from "../components/PasswordInput";
 import { Modal } from "../components/shared/Modal";
-import { useApi } from "../convex/hooks/useApi";
 import { useUserKeys } from "../convex/hooks/useUserKeys";
 import { THEME_COLORS } from "../utils/constants";
 import { logger } from "../utils/debugLog";
-import { verifyPasswordWithExistingKeys } from "../utils/passwordVerification";
+import { verifyPasswordWithExistingKeys } from "../utils/password";
 
 interface PasswordSetupPageProps {
   onComplete: (password: string) => void;
@@ -30,7 +29,6 @@ type TaskStatus =
 
 export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPageProps) {
   const { width, height } = useTerminalDimensions();
-  const { api } = useApi();
   const { encryptedPrivateKey, salt, checkHasKeys, updatePassword, storeUserKeys } = useUserKeys();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showPasswordWarning, setShowPasswordWarning] = useState(false);
@@ -45,19 +43,12 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
   };
 
   const handlePasswordSubmit = async (password: string) => {
-    if (!api) {
-      logger.error("API not initialized");
-      onComplete(password);
-      return;
-    }
-
     setTaskStatus("checking_password");
 
     try {
       const hasKeys = await checkHasKeys();
 
       if (!hasKeys) {
-        // First time user - create keys
         setTaskStatus("creating_keys");
         try {
           const {
@@ -86,6 +77,8 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
       let storedSalt: string | null = null;
 
       if (!encryptedPrivateKey || !salt) {
+        const api = getProtectedApi();
+        await api.ensureAuth();
         const user = await api.getCurrentUser();
         if (user.encryptedPrivateKey && user.salt) {
           storedEncryptedPrivateKey = user.encryptedPrivateKey;
@@ -263,7 +256,7 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
           </box>
 
           <box flexDirection="column" width={46} marginTop={1}>
-            <PasswordForm
+            <PasswordInput
               mode="setup"
               onSubmit={handlePasswordSubmit}
               width={46}
@@ -299,13 +292,29 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
         <text fg={THEME_COLORS.textDim}>Are you sure you want to logout?</text>
       </Modal>
 
-      <PasswordChangeWarningModal
+      <Modal
         visible={showPasswordWarning}
-        onConfirm={handleWarningConfirm}
-        onCancel={handleWarningCancel}
-        isLoading={!!taskStatus}
-        error={rewrapError}
-      />
+        title="Password Change Warning"
+        width={60}
+        height={12}
+        shortcuts={[
+          { key: "enter", description: "confirm", disabled: !!taskStatus },
+          { key: "esc", description: "cancel", disabled: !!taskStatus },
+        ]}
+      >
+        <box flexDirection="column" width={56} gap={1}>
+          <text fg={THEME_COLORS.accent}>[!] New password detected</text>
+          <text fg={THEME_COLORS.text}>Enter your old password to rewrap your private key</text>
+          <PasswordInput
+            mode="verify"
+            onSubmit={handleWarningConfirm}
+            onCancel={handleWarningCancel}
+            width={46}
+            disabled={!!taskStatus}
+            error={rewrapError}
+          />
+        </box>
+      </Modal>
     </box>
   );
 }
