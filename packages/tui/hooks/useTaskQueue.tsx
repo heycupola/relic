@@ -10,11 +10,8 @@ interface TaskState {
 
 interface TaskContextValue {
   task: TaskState;
-  /** True when task is running OR pending (waiting for user confirmation) */
   isProcessing: boolean;
-  /** True only when task is actively running (not waiting for confirmation) */
   isRunning: boolean;
-  /** True only when task is pending (waiting for user confirmation) */
   isPending: boolean;
   runTask: <T>(message: string, taskFn: () => Promise<T>) => Promise<T | undefined>;
   setTaskPending: (message: string) => void;
@@ -26,8 +23,8 @@ interface TaskContextValue {
 
 const TaskContext = createContext<TaskContextValue | null>(null);
 
-const SUCCESS_HIDE_DELAY = 3000; // 3 seconds for success messages
-const ERROR_HIDE_DELAY = 4000; // 4 seconds for error messages (longer for readability)
+const SUCCESS_HIDE_DELAY = 3000;
+const ERROR_HIDE_DELAY = 4000;
 
 export function TaskProvider({ children }: { children: ReactNode }) {
   const [task, setTask] = useState<TaskState>({ status: "idle", message: "" });

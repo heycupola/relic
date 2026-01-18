@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import type { User } from "../convex/api/types";
-import { useApi } from "../convex/hooks/useApi";
+import { getProtectedApi } from "../api";
+import type { User } from "../types/api";
 import { getUserDisplayName } from "../utils/mappers";
 
 interface UseCurrentUserReturn {
@@ -14,19 +14,18 @@ interface UseCurrentUserReturn {
 }
 
 export function useCurrentUser(): UseCurrentUserReturn {
-  const { api, isLoading: isApiLoading, error: apiError } = useApi();
   const [user, setUser] = useState<User | null>(null);
   const [hasKeys, setHasKeys] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchUser = useCallback(async () => {
-    if (!api) return;
-
     setIsLoading(true);
     setError(null);
 
     try {
+      const api = getProtectedApi();
+      await api.ensureAuth();
       const [currentUser, userHasKeys] = await Promise.all([
         api.getCurrentUser(),
         api.hasUserKeys(),
@@ -38,21 +37,19 @@ export function useCurrentUser(): UseCurrentUserReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [api]);
+  }, []);
 
   useEffect(() => {
-    if (api && !isApiLoading) {
-      fetchUser();
-    }
-  }, [api, isApiLoading, fetchUser]);
+    fetchUser();
+  }, [fetchUser]);
 
   const displayName = user ? getUserDisplayName(user) : "User";
 
   return {
     user,
     displayName,
-    isLoading: isLoading || isApiLoading,
-    error: error || apiError,
+    isLoading,
+    error,
     refetch: fetchUser,
     hasKeys,
     hasPro: user?.hasPro ?? false,
