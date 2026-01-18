@@ -43,11 +43,8 @@ export function isConvexError(
  */
 export function extractErrorMessage(error: unknown): string {
   if (isConvexError(error)) {
-    // Try to get message from ConvexError data
-    // Handle both direct message and nested JSON strings
     let errorData = error.data;
 
-    // Handle double-encoded JSON (can happen when errors propagate through component boundaries)
     while (typeof errorData === "string") {
       try {
         errorData = JSON.parse(errorData);
@@ -63,11 +60,9 @@ export function extractErrorMessage(error: unknown): string {
       }
     }
 
-    // Fallback to code if message is not available
     if (errorData && typeof errorData === "object" && "code" in errorData) {
       const code = errorData.code;
       if (typeof code === "string") {
-        // Return a more readable version of the error code
         return code
           .replace(/_/g, " ")
           .toLowerCase()
@@ -117,15 +112,8 @@ export function isDeviceCodeExpired(error: unknown): boolean {
   return false;
 }
 
-/**
- * Checks if an error is a Convex system function timeout.
- * This can occur when Convex tries to discover components (e.g., Autumn components)
- * but the system function times out. This is typically non-critical and can be safely ignored
- * if the TUI app doesn't use those components.
- */
 export function isSystemFunctionTimeout(error: unknown): boolean {
   if (error instanceof Error) {
-    // Check for the specific system function timeout error
     if (
       error.message.includes("_system/frontend/modules:listForAllComponents") ||
       error.message.includes("Function execution timed out") ||
@@ -135,7 +123,6 @@ export function isSystemFunctionTimeout(error: unknown): boolean {
     }
   }
   if (isConvexError(error)) {
-    // Check for timeout-related error codes
     const errorCode = error.data?.code;
     if (errorCode === "TIMEOUT" || errorCode === "FUNCTION_TIMEOUT") {
       return true;

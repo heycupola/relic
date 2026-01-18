@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { clearSession, hasValidSession, loadSession, validateSession } from "../services/session";
+import { clearSession, validateSession } from "../services/session";
 import type { Session } from "../types";
 
 interface UseSessionReturn {

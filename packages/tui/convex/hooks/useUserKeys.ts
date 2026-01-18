@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getProtectedApi } from "../../api";
+import { clearMasterKeyCache } from "../../utils/crypto";
 import { logger } from "../../utils/debugLog";
-import { clearMasterKeyCache } from "../../utils/masterKeyCache";
-import { useApi } from "./useApi";
 
 interface UseUserKeysOptions {
   onError?: (error: Error) => void;
@@ -36,7 +36,6 @@ interface UseUserKeysReturn {
 }
 
 export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
-  const { api, isLoading: isApiLoading, error: apiError } = useApi();
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [encryptedPrivateKey, setEncryptedPrivateKey] = useState<string | null>(null);
   const [salt, setSalt] = useState<string | null>(null);
@@ -45,8 +44,6 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isRotating, setIsRotating] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-
-  // Store the latest onError callback in a ref to avoid including options in dependency arrays
   const onErrorRef = useRef<((error: Error) => void) | undefined>(options?.onError);
   useEffect(() => {
     onErrorRef.current = options?.onError;
@@ -57,15 +54,12 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
   }, []);
 
   const fetchUserKeys = useCallback(async () => {
-    if (!api) {
-      setIsLoading(false);
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
 
     try {
+      const api = getProtectedApi();
+      await api.ensureAuth();
       const user = await api.getCurrentUser();
       setPublicKey(user.publicKey ?? null);
       setEncryptedPrivateKey(user.encryptedPrivateKey ?? null);
@@ -78,14 +72,12 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [api]);
+  }, []);
 
   const checkHasKeys = useCallback(async (): Promise<boolean> => {
-    if (!api) {
-      return false;
-    }
-
     try {
+      const api = getProtectedApi();
+      await api.ensureAuth();
       return await api.hasUserKeys();
     } catch (err) {
       logger.error("Failed to check if user has keys:", err);
@@ -94,21 +86,16 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
       onErrorRef.current?.(error);
       return false;
     }
-  }, [api]);
+  }, []);
 
   const storeUserKeys = useCallback(
     async (args: { publicKey: string; encryptedPrivateKey: string; salt: string }) => {
-      if (!api) {
-        const error = new Error("API not initialized");
-        setError(error);
-        onErrorRef.current?.(error);
-        throw error;
-      }
-
       setIsStoring(true);
       setError(null);
 
       try {
+        const api = getProtectedApi();
+        await api.ensureAuth();
         await api.storeUserKeys(args);
         setPublicKey(args.publicKey);
         setEncryptedPrivateKey(args.encryptedPrivateKey);
@@ -123,22 +110,17 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
         setIsStoring(false);
       }
     },
-    [api],
+    [],
   );
 
   const updatePassword = useCallback(
     async (args: { encryptedPrivateKey: string; salt: string }) => {
-      if (!api) {
-        const error = new Error("API not initialized");
-        setError(error);
-        onErrorRef.current?.(error);
-        throw error;
-      }
-
       setIsUpdating(true);
       setError(null);
 
       try {
+        const api = getProtectedApi();
+        await api.ensureAuth();
         await api.updatePassword(args);
         setEncryptedPrivateKey(args.encryptedPrivateKey);
         setSalt(args.salt);
@@ -152,7 +134,7 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
         setIsUpdating(false);
       }
     },
-    [api],
+    [],
   );
 
   const rotateUserKeys = useCallback(
@@ -163,17 +145,12 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
       rewrappedShares?: Array<{ shareId: string; newEncryptedProjectKey: string }>;
       rewrappedOwnedProjects?: Array<{ projectId: string; newEncryptedProjectKey: string }>;
     }) => {
-      if (!api) {
-        const error = new Error("API not initialized");
-        setError(error);
-        onErrorRef.current?.(error);
-        throw error;
-      }
-
       setIsRotating(true);
       setError(null);
 
       try {
+        const api = getProtectedApi();
+        await api.ensureAuth();
         await api.rotateUserKeys({
           newPublicKey: args.newPublicKey,
           newEncryptedPrivateKey: args.newEncryptedPrivateKey,
@@ -195,14 +172,12 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
         setIsRotating(false);
       }
     },
-    [api],
+    [],
   );
 
   useEffect(() => {
-    if (api && !isApiLoading) {
-      fetchUserKeys();
-    }
-  }, [api, isApiLoading, fetchUserKeys]);
+    fetchUserKeys();
+  }, [fetchUserKeys]);
 
   const hasKeys = publicKey !== null && encryptedPrivateKey !== null && salt !== null;
 
@@ -211,11 +186,11 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
     encryptedPrivateKey,
     salt,
     hasKeys,
-    isLoading: isLoading || isApiLoading,
+    isLoading,
     isStoring,
     isUpdating,
     isRotating,
-    error: error || apiError,
+    error,
     refetch: fetchUserKeys,
     storeUserKeys,
     updatePassword,

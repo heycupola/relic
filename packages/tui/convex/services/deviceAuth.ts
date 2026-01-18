@@ -1,6 +1,6 @@
 import open from "open";
-import type { DeviceCodeResponse, DeviceTokenResponse } from "../api";
-import { publicApi } from "../api";
+import { publicApi } from "../../auth";
+import type { DeviceCodeResponse, DeviceTokenResponse } from "../../types/api";
 import { isAuthorizationDenied, isAuthorizationPending, isDeviceCodeExpired } from "../types";
 import { saveSession } from "./session";
 
@@ -105,7 +105,6 @@ export class DeviceAuthService {
       callbacks?.onCodeReceived?.(codeResponse);
       callbacks?.onStatusChange?.("pending");
 
-      // Small delay to let users see the code before browser opens
       setTimeout(() => {
         open(codeResponse.verification_uri_complete);
       }, 500);
