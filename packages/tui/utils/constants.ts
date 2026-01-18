@@ -8,12 +8,17 @@ export const CHAR_LIMITS = {
 
 export const INPUT_WIDTH = 38;
 
-export const STATUS_COLORS = {
+export const STATUS_COLORS: Record<string, string> & {
+  owned: string;
+  shared: string;
+  archived: string;
+  restricted: string;
+} = {
   owned: "#9ece6a",
   shared: "#7aa2f7",
   archived: "#565f89",
   restricted: "#f7768e",
-} as const;
+};
 
 export const THEME_COLORS = {
   background: "#0f0f14",

@@ -6,14 +6,13 @@ import type {
   Secret as ApiSecret,
   SharedUser as ApiSharedUser,
   User as ApiUser,
-} from "../convex/api/types";
+} from "../types/api";
 import type { Environment, Folder, Project, Secret, SharedUser } from "../types/models";
 
-/**
- * Maps API ProjectListItem to TUI Project type
- */
 export function mapApiProject(apiProject: ApiProject): Project {
-  const projectId = (apiProject as any).id || (apiProject as any)._id;
+  // API may return id or _id depending on the endpoint
+  const projectWithId = apiProject as ApiProject & { id?: string };
+  const projectId = projectWithId.id || apiProject._id;
   if (!projectId) {
     throw new Error(`Project ID is missing in API response: ${JSON.stringify(apiProject)}`);
   }
@@ -27,16 +26,10 @@ export function mapApiProject(apiProject: ApiProject): Project {
   };
 }
 
-/**
- * Maps array of API ProjectListItems to TUI Project types
- */
 export function mapApiProjects(apiProjects: ApiProject[]): Project[] {
   return apiProjects.map(mapApiProject);
 }
 
-/**
- * Maps API Environment to TUI Environment type
- */
 export function mapApiEnvironment(apiEnv: ApiEnvironment): Environment {
   return {
     id: apiEnv._id,
@@ -44,9 +37,6 @@ export function mapApiEnvironment(apiEnv: ApiEnvironment): Environment {
   };
 }
 
-/**
- * Maps API Folder to TUI Folder type
- */
 export function mapApiFolder(apiFolder: ApiFolder): Folder {
   return {
     id: apiFolder._id,
@@ -55,9 +45,6 @@ export function mapApiFolder(apiFolder: ApiFolder): Folder {
   };
 }
 
-/**
- * Maps API Secret to TUI Secret type
- */
 export function mapApiSecret(apiSecret: ApiSecret): Secret {
   return {
     id: apiSecret._id,
@@ -100,9 +87,6 @@ export function mapApiEnvironmentData(data: ApiEnvironmentData): {
   };
 }
 
-/**
- * Maps API User to display name
- */
 export function getUserDisplayName(user: ApiUser): string {
   return user.name || user.email.split("@")[0] || "User";
 }

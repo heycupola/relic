@@ -41,7 +41,7 @@ function writeLog(level: string, message: string, forceWrite = false): void {
       appendFileSync(PROD_ERROR_LOG, line);
     }
   } catch {
-    // Silently fail - logging should never crash the app
+    // Silently fail - logging should not crash the app
   }
 }
 
@@ -71,7 +71,7 @@ export function initLogger(): void {
       const timestamp = new Date().toISOString();
       appendFileSync(DEV_LOG_FILE, `[${timestamp}] Logger initialized. Using sync FS APIs.\n`);
     } catch {
-      // Silently fail
+      // Silently fail - logging setup should not crash the app
     }
   } else {
     ensureDirSync(PROD_ERROR_LOG);
