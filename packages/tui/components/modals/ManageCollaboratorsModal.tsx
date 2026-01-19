@@ -127,8 +127,8 @@ export function ManageCollaboratorsModal({
 
   const currentCollabCount = collaborators.length;
   const limitText = shareLimits
-    ? `${currentCollabCount}/${shareLimits.totalSharesCount} seats`
-    : `${currentCollabCount} seat${currentCollabCount !== 1 ? "s" : ""}`;
+    ? `${currentCollabCount}/${shareLimits.totalSharesCount} shares`
+    : `${currentCollabCount} share${currentCollabCount !== 1 ? "s" : ""}`;
 
   return (
     <Modal
@@ -149,7 +149,11 @@ export function ManageCollaboratorsModal({
 
         <box
           flexDirection="column"
-          height={Math.min(collaborators.length + (creatingCollab ? 1 : 0), 8)}
+          height={
+            collaborators.length === 0 && !creatingCollab
+              ? 1
+              : Math.min(collaborators.length + (creatingCollab ? 1 : 0), 8)
+          }
         >
           {collaborators.length === 0 && !creatingCollab ? (
             <text fg={THEME_COLORS.textDim}>No collaborators. Press 'n' to add one.</text>
@@ -219,12 +223,12 @@ export function ManageCollaboratorsModal({
           </box>
         )}
 
-        {shareLimits && (
+        {shareLimits && shareLimits.totalSharesCount > 0 && (
           <box height={1}>
             <text fg={THEME_COLORS.textDim}>
               {shareLimits.unusedShares > 0
-                ? `${shareLimits.unusedShares} free seat${shareLimits.unusedShares !== 1 ? "s" : ""} remaining`
-                : `Using ${currentCollabCount} of ${shareLimits.totalSharesCount} seats`}
+                ? `${shareLimits.unusedShares} free share${shareLimits.unusedShares !== 1 ? "s" : ""} remaining`
+                : `Using ${currentCollabCount} of ${shareLimits.totalSharesCount} shares`}
             </text>
           </box>
         )}

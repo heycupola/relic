@@ -47,7 +47,7 @@ const STATUS_COLORS = {
 
 const CHECKOUT_TITLES = {
   pro_required: "Upgrade to Pro",
-  share_limit: "Add More Seats",
+  share_limit: "Add More Shares",
   project_limit: "Add More Projects",
 };
 
@@ -124,7 +124,7 @@ export function UrlOpenModal({
         <text fg={STATUS_COLORS[status]}>{statusMessage}</text>
         <box flexDirection="column">
           <text fg={THEME_COLORS.textDim}>If the page didn't open:</text>
-          <text fg={THEME_COLORS.primary}>{truncatedUrl}</text>
+          <text fg={THEME_COLORS.textDim}>{truncatedUrl}</text>
         </box>
         {(hint || defaultHint) && <text fg={THEME_COLORS.textMuted}>{hint || defaultHint}</text>}
       </box>
