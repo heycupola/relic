@@ -72,6 +72,7 @@ export function useProjectPage(projectId: string) {
     encryptedProjectKey,
     encryptedPrivateKey,
     salt,
+    shareLimits,
   );
 
   const isLoading = isLoadingProject || isLoadingEnvs || isLoadingSecrets;

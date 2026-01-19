@@ -7,7 +7,7 @@ import {
 } from "@repo/crypto";
 import { useCallback } from "react";
 import { getProtectedApi } from "../api";
-import type { SharedUser, ShareProjectResult } from "../types/api";
+import type { SharedUser, ShareLimits, ShareProjectResult } from "../types/api";
 import { getProjectKey } from "../utils/crypto";
 
 export function useSharing(
@@ -15,11 +15,24 @@ export function useSharing(
   encryptedProjectKeySource: string | null,
   encryptedPrivateKey: string | null,
   salt: string | null,
+  shareLimits: ShareLimits | null,
 ) {
   const shareProject = useCallback(
     async (email: string, confirmPayment?: boolean): Promise<ShareProjectResult> => {
       const api = getProtectedApi();
       await api.ensureAuth();
+
+      // Call backend first to check PRO status - it returns checkout URL if needed
+      // Only proceed with collaborator lookup if we have shares available
+      if (shareLimits?.totalSharesCount === 0 || shareLimits?.unusedShares === 0) {
+        // Let backend handle the PRO/share check by calling shareProject with placeholder
+        return await api.shareProject({
+          projectId,
+          userEmail: email,
+          encryptedProjectKey: "",
+          confirmPayment,
+        });
+      }
 
       const collaboratorKeyResult = await api.getUserPublicKeyByEmail(email);
       if (!collaboratorKeyResult) {
@@ -41,7 +54,7 @@ export function useSharing(
         confirmPayment,
       });
     },
-    [projectId, encryptedProjectKeySource, encryptedPrivateKey, salt],
+    [projectId, encryptedProjectKeySource, encryptedPrivateKey, salt, shareLimits],
   );
 
   const revokeShare = useCallback(async (shareId: string) => {
