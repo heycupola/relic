@@ -231,7 +231,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               {verificationUri && (
                 <box flexDirection="column" marginTop={1} gap={0}>
                   <box height={1} marginTop={0}>
-                    <text fg={THEME_COLORS.textMuted}>
+                    <text fg={THEME_COLORS.textDim}>
                       {verificationUri.length > 70
                         ? `${verificationUri.substring(0, 70)}...`
                         : verificationUri}
