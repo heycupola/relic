@@ -12,6 +12,12 @@ import {
 import { InlineInput } from "./forms/InlineInput";
 import { GuideBar } from "./shared/GuideBar";
 
+interface Shortcut {
+  key: string;
+  description: string;
+  disabled?: boolean;
+}
+
 interface PasswordInputProps {
   mode: "setup" | "change" | "unlock" | "verify";
   onSubmit: (password: string, newPassword?: string) => void;
@@ -19,6 +25,7 @@ interface PasswordInputProps {
   width?: number;
   disabled?: boolean;
   error?: string | null;
+  additionalShortcuts?: Shortcut[];
 }
 
 export function PasswordInput({
@@ -28,6 +35,7 @@ export function PasswordInput({
   width = 46,
   disabled = false,
   error = null,
+  additionalShortcuts = [],
 }: PasswordInputProps) {
   const [focusedField, setFocusedField] = useState<"current" | "password" | "confirm">(
     mode === "change" ? "current" : "password",
@@ -203,7 +211,7 @@ export function PasswordInput({
         />
       )}
 
-      {error && mode === "unlock" && (
+      {error && (
         <box height={1}>
           <text fg={THEME_COLORS.error}>[!] {error}</text>
         </box>
@@ -214,10 +222,6 @@ export function PasswordInput({
           primary: [
             {
               shortcuts: [
-                { key: "^v", description: showPassword ? "hide" : "show", disabled },
-                ...(mode !== "unlock" && mode !== "verify"
-                  ? [{ key: "tab", description: "next field", disabled }]
-                  : []),
                 {
                   key: KEY_SYMBOLS.enter,
                   description:
@@ -228,6 +232,11 @@ export function PasswordInput({
                         : "continue",
                   disabled,
                 },
+                { key: "^v", description: showPassword ? "hide" : "show", disabled },
+                ...(mode !== "unlock" && mode !== "verify"
+                  ? [{ key: "tab", description: "next field", disabled }]
+                  : []),
+                ...additionalShortcuts,
               ],
             },
           ],

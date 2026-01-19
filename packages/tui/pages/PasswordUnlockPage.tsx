@@ -1,9 +1,8 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useState } from "react";
-import { InlineInput } from "../components/forms/InlineInput";
-import { GuideBar } from "../components/shared/GuideBar";
+import { PasswordInput } from "../components/PasswordInput";
 import { Modal } from "../components/shared/Modal";
-import { KEY_SYMBOLS, THEME_COLORS } from "../utils/constants";
+import { THEME_COLORS } from "../utils/constants";
 import { verifyPassword } from "../utils/password";
 
 interface PasswordUnlockPageProps {
@@ -82,38 +81,14 @@ export function PasswordUnlockPage({ onUnlock, onLogout }: PasswordUnlockPagePro
             <text fg={THEME_COLORS.text}>Enter Password</text>
           </box>
 
-          <box flexDirection="column" width={46} gap={1} marginTop={1}>
-            <InlineInput
-              active={true}
-              maxWidth={28}
-              maxLength={64}
-              placeholder="Password"
-              isFocused={true}
-              isPassword={true}
-              showPassword={false}
-              error={error}
-              showIcon={false}
-              showCount={false}
-              width={46}
+          <box flexDirection="column" width={46} marginTop={1}>
+            <PasswordInput
+              mode="unlock"
               onSubmit={handleSubmit}
-            />
-          </box>
-
-          <box marginTop={1}>
-            <GuideBar
-              groups={{
-                primary: [
-                  {
-                    shortcuts: [
-                      { key: KEY_SYMBOLS.enter, description: "unlock", disabled: isLoading },
-                      { key: "^l", description: "logout", disabled: isLoading },
-                    ],
-                  },
-                ],
-                secondary: [],
-              }}
-              customWidth={46}
-              minimal={true}
+              width={46}
+              disabled={isLoading || showLogoutModal}
+              error={error}
+              additionalShortcuts={[{ key: "^l", description: "logout", disabled: isLoading }]}
             />
           </box>
         </box>
