@@ -42,7 +42,16 @@ export class ProtectedApi {
     this.authPromise = (async () => {
       try {
         const token = await ensureValidJwt();
-        this.client.setAuth(() => Promise.resolve(token));
+        const tokenParts = token.split(".");
+        logger.debug("Setting auth token:", {
+          tokenLength: token.length,
+          tokenParts: tokenParts.length,
+          tokenPreview: `${token.substring(0, 20)}...${token.substring(token.length - 20)}`,
+        });
+        if (tokenParts.length !== 3) {
+          throw new Error(`Invalid JWT format before setAuth: ${tokenParts.length} parts`);
+        }
+        this.client.setAuth(token as any);
       } catch (error) {
         logger.error("Failed to get JWT token:", error);
         this.client.clearAuth();
