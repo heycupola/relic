@@ -19,15 +19,20 @@ export async function getPlatformLibrary(): Promise<string> {
 
   const libName = process.platform === "win32" ? "relic.dll" : `librelic.${suffix}`;
 
-  const prebuiltPath = `${import.meta.dir}/../bindings/prebuilt/${targetPlatform}/${libName}`;
-  const debugPath = `${import.meta.dir}/../bindings/target/debug/${libName}`;
-  const releasePath = `${import.meta.dir}/../bindings/target/release/${libName}`;
+  const rustRoot = `${import.meta.dir}/../../packages/cli-core`;
+  const prebuiltPath = `${rustRoot}/prebuilt/${targetPlatform}/${libName}`;
+  const legacyPrebuiltPath = `${import.meta.dir}/../prebuilds/${targetPlatform}/${libName}`;
+  const debugPath = `${rustRoot}/target/debug/${libName}`;
+  const releasePath = `${rustRoot}/target/release/${libName}`;
 
   let libraryPath: string;
 
   if (await Bun.file(prebuiltPath).exists()) {
     libraryPath = prebuiltPath;
     console.log(`Loading prebuilt binary for ${platformKey}`);
+  } else if (await Bun.file(legacyPrebuiltPath).exists()) {
+    libraryPath = legacyPrebuiltPath;
+    console.log(`Loading prebuilt binary for ${platformKey} (legacy path)`);
   } else if (await Bun.file(releasePath).exists()) {
     libraryPath = releasePath;
     console.log(`Loading release binary for ${platformKey}`);
@@ -41,7 +46,7 @@ export async function getPlatformLibrary(): Promise<string> {
         `  - ${prebuiltPath}\n` +
         `  - ${releasePath}\n` +
         `  - ${debugPath}\n\n` +
-        `Please run: cd rust && cargo build --release`,
+        `Please run: cd packages/cli-core && cargo build --release`,
     );
   }
 

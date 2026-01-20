@@ -8,7 +8,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/cupolalabs/relic.git",
+    "url": "https://github.com/heycupola/relic.git",
     "directory": "apps/cli"
   },
   "author": "Can Vardar",
@@ -17,18 +17,15 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build:bindings": "cd bindings && cargo build",
-    "dev": "bun run build:bindings && bun run index.ts",
-    "logs": "tail -f ~/Library/Application\\ Support/com.cupolalabs.relic/relic.log",
+    "build:bindings": "cd ../../packages/cli-core && cargo build",
+    "deva": "bun run build:bindings && bun run index.ts",
+    "logs": "tail -f ~/Library/Application\\ Support/com.cupola.relic/relic.log",
     "lint": "biome check --write .",
     "format": "biome format --write ."
   },
   "files": [
     "index.ts",
-    "src/**",
-    "bindings/prebuilt/**",
-    "bindings/src/**",
-    "bindings/Cargo.toml",
+    "ffi/**",
     "README.md"
   ],
   "devDependencies": {

@@ -33,9 +33,3 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Finder (MacOS) folder config
 .DS_Store
 
-# For Rust based projects
-bindings/target/
-bindings/Cargo.lock
-
-# Keep prebuilt binaries (these should be committed)
-!bindings/prebuilt/
