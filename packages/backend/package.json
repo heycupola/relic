@@ -1,6 +1,7 @@
 {
   "name": "@repo/backend",
   "module": "index.ts",
+  "types": "index.d.ts",
   "type": "module",
   "private": true,
   "scripts": {

@@ -1,4 +1,4 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { doc } from "convex-helpers/validators";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -17,11 +17,11 @@ export const createFolder = protectedMutation({
     name: v.string(),
     // description: v.optional(v.string()),
   },
-  returns: v.object({ success: v.boolean(), folderId: v.id("folder"), path: v.string() }),
+  returns: v.object({ id: v.id("folder"), path: v.string() }),
   handler: async (
     ctx: ProtectedMutationCtx,
     args: { environmentId: Id<"environment">; name: string },
-  ): Promise<{ success: boolean; folderId: Id<"folder">; path: string }> => {
+  ): Promise<{ id: Id<"folder">; path: string }> => {
     const environment: Doc<"environment"> = await ctx.runQuery(
       internal.environment._loadEnvironmentById,
       {
@@ -58,7 +58,7 @@ export const createFolder = protectedMutation({
       },
     );
 
-    return { success: true, folderId, path };
+    return { id: folderId, path };
   },
 });
 
@@ -83,8 +83,8 @@ export const updateFolder = protectedMutation({
       });
 
       if (existingFolder && existingFolder._id !== args.folderId) {
-        throw new ConvexError({
-          code: "DUPLICATE_FOLDER_NAME",
+        throw createError({
+          code: ErrorCode.RESOURCE_ALREADY_EXISTS,
           message: "A folder with this name already exists in this environment",
           severity: ErrorSeverity.High,
         });

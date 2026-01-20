@@ -21,6 +21,17 @@ import {
   type TestUser,
 } from "./setup";
 
+function assertProjectCreated(result: {
+  status: string;
+  projectId?: string;
+  message?: string;
+}): string {
+  if (result.status !== "success" || !result.projectId) {
+    throw new Error(`Project creation failed: ${result.message || "Unknown error"}`);
+  }
+  return result.projectId;
+}
+
 describe("Project Sharing", () => {
   let t: TestConvex<typeof schema>;
   let testUsers: TestUser[] = [];
@@ -77,9 +88,7 @@ describe("Project Sharing", () => {
         name: "project-name",
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
+      const projectId = assertProjectCreated(projectResult);
 
       const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
 
@@ -92,7 +101,7 @@ describe("Project Sharing", () => {
 
       const shareResult = await owner.asUser.action(api.projectShare.shareProject, {
         encryptedProjectKey: encryptedProjectKeyForCollaborator,
-        projectId: projectResult.projectId,
+        projectId,
         userEmail: collaborator.email,
       });
 
@@ -110,9 +119,7 @@ describe("Project Sharing", () => {
         name: "project-name",
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
+      const projectId = assertProjectCreated(projectResult);
 
       const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
 
@@ -125,7 +132,7 @@ describe("Project Sharing", () => {
 
       const shareResult1 = await owner.asUser.action(api.projectShare.shareProject, {
         encryptedProjectKey: encryptedProjectKeyForCollaborator,
-        projectId: projectResult.projectId,
+        projectId,
         userEmail: collaborator.email,
         confirmPayment: true,
       });
@@ -143,7 +150,7 @@ describe("Project Sharing", () => {
 
       const shareResult2 = await owner.asUser.action(api.projectShare.shareProject, {
         encryptedProjectKey: encryptedProjectKeyForCollaborator2,
-        projectId: projectResult.projectId,
+        projectId,
         userEmail: collaborator2.email,
         confirmPayment: true,
       });
@@ -155,11 +162,12 @@ describe("Project Sharing", () => {
     test("should share a project to a collaborator", async () => {
       const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
 
-      const { projectId } = await owner.asUser.action(api.project.createProject, {
+      const projectResult = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey,
         name: "project-name",
         confirmPayment: true,
       });
+      const projectId = assertProjectCreated(projectResult);
 
       const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
 
@@ -220,11 +228,7 @@ describe("Project Sharing", () => {
         confirmPayment: true,
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
-
-      const projectId = projectResult.projectId;
+      const projectId = assertProjectCreated(projectResult);
 
       const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
 
@@ -261,7 +265,7 @@ describe("Project Sharing", () => {
         throw new Error(`Share 2 failed: ${shareResult2.message || "Unknown error"}`);
       }
 
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "test",
         projectId,
       });
@@ -270,7 +274,7 @@ describe("Project Sharing", () => {
       const value = "rk_9c2f1a7e4d8b5a0f3e6c9d2b7a1e4f8c";
       const encryptedValue = await encryptSecret(projectKey, value);
 
-      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+      const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         key,
         encryptedValue,
         valueType: "string",
@@ -400,11 +404,7 @@ describe("Project Sharing", () => {
         confirmPayment: true,
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
-
-      const projectId = projectResult.projectId;
+      const projectId = assertProjectCreated(projectResult);
 
       await expectConvexError(
         () =>
@@ -425,11 +425,7 @@ describe("Project Sharing", () => {
         confirmPayment: true,
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
-
-      const projectId = projectResult.projectId;
+      const projectId = assertProjectCreated(projectResult);
 
       const shareResult1 = await owner.asUser.action(api.projectShare.shareProject, {
         encryptedProjectKey,
@@ -456,10 +452,11 @@ describe("Project Sharing", () => {
 
     test("fails when non-owner tries to share", async () => {
       const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
-      const { projectId } = await owner.asUser.action(api.project.createProject, {
+      const projectResult = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey,
         name: "project-name",
       });
+      const projectId = assertProjectCreated(projectResult);
 
       await expectConvexError(
         () =>
@@ -480,11 +477,7 @@ describe("Project Sharing", () => {
         confirmPayment: true,
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
-
-      const projectId = projectResult.projectId;
+      const projectId = assertProjectCreated(projectResult);
 
       const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
       const collaboratorPublicKey = await importPublicKey(collaborator.publicKey!);
@@ -524,11 +517,7 @@ describe("Project Sharing", () => {
         confirmPayment: true,
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
-
-      const projectId = projectResult.projectId;
+      const projectId = assertProjectCreated(projectResult);
 
       const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
       const collaboratorPublicKey = await importPublicKey(collaborator.publicKey!);
@@ -569,18 +558,14 @@ describe("Project Sharing", () => {
         confirmPayment: true,
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
+      const projectId = assertProjectCreated(projectResult);
 
-      const projectId = projectResult.projectId;
-
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "env",
         projectId,
       });
 
-      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+      const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue: await encryptSecret(projectKey, "value1"),
         environmentId,
         key: "key1",

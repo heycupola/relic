@@ -23,6 +23,17 @@ import {
   type TestUser,
 } from "./setup";
 
+function assertProjectCreated(result: {
+  status: string;
+  projectId?: string;
+  message?: string;
+}): string {
+  if (result.status !== "success" || !result.projectId) {
+    throw new Error(`Project creation failed: ${result.message || "Unknown error"}`);
+  }
+  return result.projectId;
+}
+
 /**
  * TEST CASES
  * - Collaborators: Full CRUD on secrets, environments, folders
@@ -56,7 +67,7 @@ describe("Collaborator Access Control", () => {
       encryptedProjectKey,
       name: "shared-project-" + randomString(),
     });
-    projectId = result.projectId;
+    projectId = assertProjectCreated(result);
     projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
 
     // For sharing, we still use RSA (collaborator's master key is not available)
@@ -80,14 +91,14 @@ describe("Collaborator Access Control", () => {
 
   describe("Secrets - Collaborator CRUD", () => {
     test("collaborator can CREATE secrets", async () => {
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "env-" + randomString(),
         projectId,
       });
 
       const encryptedValue = await encryptSecret(projectKey, "secret-value");
 
-      const { success, secretId } = await collaborator.asUser.mutation(api.secret.createSecret, {
+      const { id: secretId } = await collaborator.asUser.mutation(api.secret.createSecret, {
         encryptedValue,
         environmentId,
         key: "API_KEY_" + randomString(),
@@ -95,12 +106,11 @@ describe("Collaborator Access Control", () => {
         folderId: undefined,
       });
 
-      expect(success).toBe(true);
       expect(secretId).toBeDefined();
     });
 
     test("collaborator can READ secrets", async () => {
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "env-" + randomString(),
         projectId,
       });
@@ -108,7 +118,7 @@ describe("Collaborator Access Control", () => {
       const value = "my-secret-value";
       const encryptedValue = await encryptSecret(projectKey, value);
 
-      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+      const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue,
         environmentId,
         key: "API_KEY_" + randomString(),
@@ -124,12 +134,12 @@ describe("Collaborator Access Control", () => {
     });
 
     test("collaborator can UPDATE secrets", async () => {
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "env-" + randomString(),
         projectId,
       });
 
-      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+      const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue: await encryptSecret(projectKey, "old-value"),
         environmentId,
         key: "API_KEY_" + randomString(),
@@ -156,12 +166,12 @@ describe("Collaborator Access Control", () => {
     });
 
     test("collaborator can DELETE secrets", async () => {
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "env-" + randomString(),
         projectId,
       });
 
-      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+      const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue: await encryptSecret(projectKey, "value"),
         environmentId,
         key: "API_KEY_" + randomString(),
@@ -179,7 +189,7 @@ describe("Collaborator Access Control", () => {
 
   describe("Environments - Collaborator CRUD", () => {
     test("collaborator can CREATE environments", async () => {
-      const { success, environmentId } = await collaborator.asUser.mutation(
+      const { id: environmentId } = await collaborator.asUser.mutation(
         api.environment.createEnvironment,
         {
           name: "collab-env-" + randomString(),
@@ -187,12 +197,11 @@ describe("Collaborator Access Control", () => {
         },
       );
 
-      expect(success).toBe(true);
       expect(environmentId).toBeDefined();
     });
 
     test("collaborator can READ environment data", async () => {
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "env-" + randomString(),
         projectId,
       });
@@ -201,11 +210,11 @@ describe("Collaborator Access Control", () => {
         environmentId,
       });
 
-      expect(data.environment._id).toBe(environmentId);
+      expect(data.environment.id).toBe(environmentId);
     });
 
     test("collaborator can UPDATE environments", async () => {
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "old-name",
         projectId,
       });
@@ -219,7 +228,7 @@ describe("Collaborator Access Control", () => {
     });
 
     test("collaborator can DELETE empty environments", async () => {
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "temp-env-" + randomString(),
         projectId,
       });
@@ -240,21 +249,20 @@ describe("Collaborator Access Control", () => {
         name: "env-" + randomString(),
         projectId,
       });
-      environmentId = result.environmentId;
+      environmentId = result.id;
     });
 
     test("collaborator can CREATE folders", async () => {
-      const { success, folderId } = await collaborator.asUser.mutation(api.folder.createFolder, {
+      const { id: folderId } = await collaborator.asUser.mutation(api.folder.createFolder, {
         environmentId,
         name: "collab-folder-" + randomString(),
       });
 
-      expect(success).toBe(true);
       expect(folderId).toBeDefined();
     });
 
     test("collaborator can UPDATE folders", async () => {
-      const { folderId } = await owner.asUser.mutation(api.folder.createFolder, {
+      const { id: folderId } = await owner.asUser.mutation(api.folder.createFolder, {
         environmentId,
         name: "old-folder",
       });
@@ -268,7 +276,7 @@ describe("Collaborator Access Control", () => {
     });
 
     test("collaborator can DELETE empty folders", async () => {
-      const { folderId } = await owner.asUser.mutation(api.folder.createFolder, {
+      const { id: folderId } = await owner.asUser.mutation(api.folder.createFolder, {
         environmentId,
         name: "temp-folder-" + randomString(),
       });
@@ -306,10 +314,11 @@ describe("Collaborator Access Control", () => {
     test("collaborator CANNOT unarchive project", async () => {
       // create a fresh project, share it, then archive it via owner
       const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
-      const { projectId: newProjectId } = await owner.asUser.action(api.project.createProject, {
+      const projectResult = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey,
         name: "archived-project-" + randomString(),
       });
+      const newProjectId = assertProjectCreated(projectResult);
 
       // archive it (no shares = can archive)
       await owner.asUser.action(api.project.archiveProject, { projectId: newProjectId });
@@ -326,12 +335,12 @@ describe("Collaborator Access Control", () => {
 
   describe("Non-Collaborator - No Access", () => {
     test("non-collaborator CANNOT read secrets", async () => {
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "env-" + randomString(),
         projectId,
       });
 
-      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+      const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue: await encryptSecret(projectKey, "value"),
         environmentId,
         key: "API_KEY",
@@ -346,7 +355,7 @@ describe("Collaborator Access Control", () => {
     });
 
     test("non-collaborator CANNOT create secrets", async () => {
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "env-" + randomString(),
         projectId,
       });
@@ -365,7 +374,7 @@ describe("Collaborator Access Control", () => {
     });
 
     test("non-collaborator CANNOT read environment data", async () => {
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "env-" + randomString(),
         projectId,
       });

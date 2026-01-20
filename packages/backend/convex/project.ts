@@ -26,7 +26,7 @@ export const getLimits = protectedAction({
   args: {},
   returns: v.object({
     usage: v.number(),
-    included_usage: v.number(),
+    includedUsage: v.number(),
   }),
   handler: async (ctx: ProtectedActionCtx) => {
     const result = await ctx.autumn.check(ctx, {
@@ -36,13 +36,13 @@ export const getLimits = protectedAction({
     if (result.error || !result.data) {
       return {
         usage: 0,
-        included_usage: 0,
+        includedUsage: 0,
       };
     }
 
     return {
       usage: result.data.usage ?? 0,
-      included_usage: result.data.included_usage ?? 0,
+      includedUsage: result.data.included_usage ?? 0,
     };
   },
 });
@@ -106,6 +106,25 @@ export const createProject = protectedAction({
     encryptedProjectKey: v.string(),
     confirmPayment: v.optional(v.boolean()),
   },
+  returns: v.union(
+    v.object({
+      status: v.literal("success"),
+      projectId: v.id("project"),
+      paymentFailed: v.optional(v.boolean()),
+      message: v.optional(v.string()),
+    }),
+    v.object({
+      status: v.literal("requiresProPlan"),
+      checkoutUrl: v.union(v.string(), v.null()),
+      message: v.optional(v.string()),
+    }),
+    v.object({
+      status: v.literal("requiresConfirmation"),
+      balance: v.number(),
+      freeLimit: v.number(),
+      message: v.optional(v.string()),
+    }),
+  ),
   handler: async (
     ctx: ProtectedActionCtx,
     args: { name: string; encryptedProjectKey: string; confirmPayment?: boolean },
@@ -162,16 +181,14 @@ export const createProject = protectedAction({
           });
 
           return {
-            success: false,
-            requiresProPlan: true,
+            status: "requiresProPlan" as const,
             checkoutUrl: checkoutResult.data?.url || null,
             message: `Project limit reached (${currentUsage}/${data.included_usage}). Upgrade to Pro for more projects.`,
           };
         } catch (checkoutError) {
           console.error("Autumn checkout failed:", checkoutError);
           return {
-            success: false,
-            requiresProPlan: true,
+            status: "requiresProPlan" as const,
             checkoutUrl: null,
             message: `Project limit reached (${currentUsage}/${data.included_usage}). Upgrade to Pro for more projects.`,
           };
@@ -183,16 +200,14 @@ export const createProject = protectedAction({
       if (!args.confirmPayment) {
         if (!balance || balance <= 0) {
           return {
-            success: false,
-            requiresConfirmation: true,
+            status: "requiresConfirmation" as const,
             balance: 0,
             freeLimit,
             message: "No purchased projects available. Adding a project costs $10.",
           };
         }
         return {
-          success: false,
-          requiresConfirmation: true,
+          status: "requiresConfirmation" as const,
           balance,
           freeLimit,
           message: `This will use 1 of your ${balance} purchased projects.`,
@@ -207,6 +222,8 @@ export const createProject = protectedAction({
       encryptedProjectKey: args.encryptedProjectKey,
     });
 
+    const pId: Id<"project"> = projectId;
+
     let paymentFailed = false;
 
     // Track usage: paid projects (for billing) or free projects within limit (for usage counting)
@@ -219,10 +236,12 @@ export const createProject = protectedAction({
 
         const freshBalance = freshCheck.data?.balance ?? 0;
         if (freshBalance <= 0) {
+          // NOTE: Project already created; callers must check paymentFailed.
           return {
-            success: false,
+            status: "success" as const,
             paymentFailed: true,
             message: "No purchased projects available. Adding a project costs $10.",
+            projectId: pId,
           };
         }
       }
@@ -244,9 +263,7 @@ export const createProject = protectedAction({
       }
     }
 
-    const pId: Id<"project"> = projectId;
-
-    return { success: true, projectId: pId, paymentFailed };
+    return { status: "success" as const, projectId: pId, paymentFailed };
   },
 });
 
@@ -286,6 +303,7 @@ export const listUserProjects = protectedQuery({
         isArchived: p.isArchived,
         status,
         ownerId: p.ownerId,
+        shareUsageCount: p.shareUsageCount,
       };
     });
 

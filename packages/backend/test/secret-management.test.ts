@@ -16,6 +16,17 @@ import {
   type TestUser,
 } from "./setup";
 
+function assertProjectCreated(result: {
+  status: string;
+  projectId?: string;
+  message?: string;
+}): string {
+  if (result.status !== "success" || !result.projectId) {
+    throw new Error(`Project creation failed: ${result.message || "Unknown error"}`);
+  }
+  return result.projectId;
+}
+
 describe("Secret Management", () => {
   let t: TestConvex<typeof schema>;
   let testUsers: TestUser[] = [];
@@ -46,12 +57,13 @@ describe("Secret Management", () => {
     test("should create secrets with different primitive types", async () => {
       const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
 
-      const { projectId } = await owner.asUser.action(api.project.createProject, {
+      const projectResult = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey,
         name: "project_" + randomString(),
       });
+      const projectId = assertProjectCreated(projectResult);
 
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "environment_" + randomString(),
         projectId,
       });
@@ -66,7 +78,7 @@ describe("Secret Management", () => {
       for (i; i < 3; ++i) {
         const encryptedValue = await encryptSecret(projectKey, values[i]);
 
-        const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+        const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
           encryptedValue,
           environmentId,
           key: keys[i],
@@ -91,17 +103,18 @@ describe("Secret Management", () => {
     test("should delete cascade to folders", async () => {
       const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
 
-      const { projectId } = await owner.asUser.action(api.project.createProject, {
+      const projectResult = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey,
         name: "project_" + randomString(),
       });
+      const projectId = assertProjectCreated(projectResult);
 
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "environment_" + randomString(),
         projectId,
       });
 
-      const { folderId } = await owner.asUser.mutation(api.folder.createFolder, {
+      const { id: folderId } = await owner.asUser.mutation(api.folder.createFolder, {
         environmentId,
         name: "folder_" + randomString(),
       });
@@ -114,7 +127,7 @@ describe("Secret Management", () => {
       for (i; i < 3; ++i) {
         const encryptedValue = await encryptSecret(projectKey, values[i]);
 
-        const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+        const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
           encryptedValue,
           environmentId,
           key: "key_" + randomString(),
@@ -176,19 +189,20 @@ describe("Secret Management", () => {
     test("should create secret with default shared scope", async () => {
       const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
 
-      const { projectId } = await owner.asUser.action(api.project.createProject, {
+      const projectResult = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey,
         name: "project_" + randomString(),
       });
+      const projectId = assertProjectCreated(projectResult);
 
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "environment_" + randomString(),
         projectId,
       });
 
       const encryptedValue = await encryptSecret(projectKey, "secret-value");
 
-      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+      const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue,
         environmentId,
         key: "API_KEY",
@@ -206,19 +220,20 @@ describe("Secret Management", () => {
     test("should create secret with explicit client scope", async () => {
       const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
 
-      const { projectId } = await owner.asUser.action(api.project.createProject, {
+      const projectResult = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey,
         name: "project_" + randomString(),
       });
+      const projectId = assertProjectCreated(projectResult);
 
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "environment_" + randomString(),
         projectId,
       });
 
       const encryptedValue = await encryptSecret(projectKey, "public-api-key");
 
-      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+      const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue,
         environmentId,
         key: "PUBLIC_API_KEY",
@@ -237,19 +252,20 @@ describe("Secret Management", () => {
     test("should create secret with explicit server scope", async () => {
       const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
 
-      const { projectId } = await owner.asUser.action(api.project.createProject, {
+      const projectResult = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey,
         name: "project_" + randomString(),
       });
+      const projectId = assertProjectCreated(projectResult);
 
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "environment_" + randomString(),
         projectId,
       });
 
       const encryptedValue = await encryptSecret(projectKey, "database-password");
 
-      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+      const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue,
         environmentId,
         key: "DB_PASSWORD",
@@ -268,19 +284,20 @@ describe("Secret Management", () => {
     test("should update secret scope from server to client", async () => {
       const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
 
-      const { projectId } = await owner.asUser.action(api.project.createProject, {
+      const projectResult = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey,
         name: "project_" + randomString(),
       });
+      const projectId = assertProjectCreated(projectResult);
 
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "environment_" + randomString(),
         projectId,
       });
 
       const encryptedValue = await encryptSecret(projectKey, "initial-value");
 
-      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+      const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue,
         environmentId,
         key: "CONFIGURABLE_KEY",
@@ -316,19 +333,20 @@ describe("Secret Management", () => {
     test("should update secret scope from client to server", async () => {
       const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
 
-      const { projectId } = await owner.asUser.action(api.project.createProject, {
+      const projectResult = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey,
         name: "project_" + randomString(),
       });
+      const projectId = assertProjectCreated(projectResult);
 
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "environment_" + randomString(),
         projectId,
       });
 
       const encryptedValue = await encryptSecret(projectKey, "public-key");
 
-      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+      const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue,
         environmentId,
         key: "FEATURE_FLAG",
@@ -364,19 +382,20 @@ describe("Secret Management", () => {
     test("should preserve scope when updating other fields", async () => {
       const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
 
-      const { projectId } = await owner.asUser.action(api.project.createProject, {
+      const projectResult = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey,
         name: "project_" + randomString(),
       });
+      const projectId = assertProjectCreated(projectResult);
 
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "environment_" + randomString(),
         projectId,
       });
 
       const encryptedValue = await encryptSecret(projectKey, "original-value");
 
-      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+      const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue,
         environmentId,
         key: "PRESERVE_SCOPE_TEST",
@@ -413,12 +432,13 @@ describe("Secret Management", () => {
     test("should create multiple secrets with different scopes in same environment", async () => {
       const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
 
-      const { projectId } = await owner.asUser.action(api.project.createProject, {
+      const projectResult = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey,
         name: "project_" + randomString(),
       });
+      const projectId = assertProjectCreated(projectResult);
 
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "environment_" + randomString(),
         projectId,
       });
@@ -435,7 +455,7 @@ describe("Secret Management", () => {
       for (const secret of secrets) {
         const encryptedValue = await encryptSecret(projectKey, secret.value);
 
-        const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+        const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
           encryptedValue,
           environmentId,
           key: secret.key,
@@ -458,6 +478,152 @@ describe("Secret Management", () => {
         const decryptedValue = await decryptSecret(projectKey, retrievedSecret.encryptedValue);
         expect(decryptedValue).toBe(secrets[i].value);
       }
+    });
+  });
+
+  describe("Bulk Update Optimization", () => {
+    beforeEach(async () => {
+      mockAutumn.setFeature(owner.userId, "projects", 2);
+    });
+
+    test("should not create action log for unchanged secrets in bulk update", async () => {
+      const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
+
+      const projectResult = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+      const projectId = assertProjectCreated(projectResult);
+
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "environment_" + randomString(),
+        projectId,
+      });
+
+      // Create initial secrets
+      const secret1Value = await encryptSecret(projectKey, "12345");
+      const { id: secret1Id } = await owner.asUser.mutation(api.secret.createSecret, {
+        encryptedValue: secret1Value,
+        environmentId,
+        key: "API_KEY",
+        valueType: "string",
+        folderId: undefined,
+      });
+
+      const secret2Value = await encryptSecret(projectKey, "old-value");
+      const { id: secret2Id } = await owner.asUser.mutation(api.secret.createSecret, {
+        encryptedValue: secret2Value,
+        environmentId,
+        key: "NAME",
+        valueType: "string",
+        folderId: undefined,
+      });
+
+      // Get initial action log count
+      const logsBefore = await owner.asUser.action(api.actionLog.loadActionLogsByProject, {
+        projectId,
+        paginationOpts: { numItems: 100, cursor: null },
+      });
+      const initialLogCount = logsBefore.page.length;
+
+      // Get current secret data to reuse unchanged encrypted value
+      const secret1Data = await owner.asUser.query(api.secret.getSecret, {
+        secretId: secret1Id,
+      });
+
+      // Bulk update: one unchanged (API_KEY with same encryptedValue), one changed (NAME=new-value)
+      const changedValue = await encryptSecret(projectKey, "new-value");
+
+      await owner.asUser.mutation(api.secret.updateSecretBulk, {
+        environmentId,
+        secrets: [
+          {
+            secretId: secret1Id,
+            key: "API_KEY",
+            encryptedValue: secret1Data.encryptedValue, // Reuse same encrypted value
+            valueType: "string",
+          },
+          {
+            secretId: secret2Id,
+            key: "NAME",
+            encryptedValue: changedValue,
+            valueType: "string",
+          },
+        ],
+        mode: "overwrite",
+      });
+
+      // Get action logs after bulk update
+      const logsAfter = await owner.asUser.action(api.actionLog.loadActionLogsByProject, {
+        projectId,
+        paginationOpts: { numItems: 100, cursor: null },
+      });
+
+      // Should only have 1 new action log (for the changed secret)
+      // Initial: 2 creates + 1 update (for NAME) = 3 total
+      expect(logsAfter.page.length).toBe(initialLogCount + 1);
+
+      // Verify the new log is for the updated secret
+      const newLog = logsAfter.page[0];
+      expect(newLog?.action).toBe("secret.updated");
+      expect(newLog?.metadata?.key).toBe("NAME");
+    });
+
+    test("should not update database for unchanged secrets in bulk update", async () => {
+      const { encryptedProjectKey, projectKey } = await createProjectKey(owner.publicKey!);
+
+      const projectResult = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+      const projectId = assertProjectCreated(projectResult);
+
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "environment_" + randomString(),
+        projectId,
+      });
+
+      // Create a secret
+      const initialValue = await encryptSecret(projectKey, "test-value");
+      const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+        encryptedValue: initialValue,
+        environmentId,
+        key: "TEST_KEY",
+        valueType: "string",
+        folderId: undefined,
+      });
+
+      // Get the secret before bulk update
+      const secretBefore = await owner.asUser.query(api.secret.getSecret, {
+        secretId,
+      });
+
+      // Bulk update with same value (same encrypted value)
+      const result = await owner.asUser.mutation(api.secret.updateSecretBulk, {
+        environmentId,
+        secrets: [
+          {
+            secretId,
+            key: "TEST_KEY",
+            encryptedValue: secretBefore.encryptedValue,
+            valueType: "string",
+          },
+        ],
+        mode: "overwrite",
+      });
+
+      // Verify result shows 0 updates
+      expect(result.updatedCount).toBe(0);
+      expect(result.createdCount).toBe(0);
+      expect(result.skippedCount).toBe(0);
+
+      // Get the secret after bulk update
+      const secretAfter = await owner.asUser.query(api.secret.getSecret, {
+        secretId,
+      });
+
+      // Verify updatedAt timestamp hasn't changed
+      expect(secretAfter.updatedAt).toBe(secretBefore.updatedAt);
     });
   });
 });

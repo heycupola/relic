@@ -15,6 +15,17 @@ import {
   type TestUser,
 } from "./setup";
 
+function assertProjectCreated(result: {
+  status: string;
+  projectId?: string;
+  message?: string;
+}): string {
+  if (result.status !== "success" || !result.projectId) {
+    throw new Error(`Project creation failed: ${result.message || "Unknown error"}`);
+  }
+  return result.projectId;
+}
+
 describe("Access Control", () => {
   let t: TestConvex<typeof schema>;
   let testUsers: TestUser[] = [];
@@ -51,23 +62,21 @@ describe("Access Control", () => {
         confirmPayment: true,
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
+      const projectId = assertProjectCreated(projectResult);
 
-      await owner.asUser.action(api.project.archiveProject, { projectId: projectResult.projectId });
+      await owner.asUser.action(api.project.archiveProject, { projectId });
 
       await expectConvexError(
-        () => owner.asUser.query(api.project.getProject, { projectId: projectResult.projectId }),
+        () => owner.asUser.query(api.project.getProject, { projectId }),
         ErrorCode.PROJECT_INACCESSIBLE,
       );
 
       await owner.asUser.action(api.project.unarchiveProject, {
-        projectId: projectResult.projectId,
+        projectId,
       });
 
       const project = await owner.asUser.query(api.project.getProject, {
-        projectId: projectResult.projectId,
+        projectId,
       });
 
       expect(project).toBeDefined();
@@ -92,11 +101,7 @@ describe("Access Control", () => {
           confirmPayment: true,
         });
 
-        if (!projectResult.success || !projectResult.projectId) {
-          throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-        }
-
-        projectIds.push(projectResult.projectId);
+        projectIds.push(assertProjectCreated(projectResult));
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
 
@@ -149,11 +154,7 @@ describe("Access Control", () => {
           confirmPayment: true,
         });
 
-        if (!projectResult.success || !projectResult.projectId) {
-          throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-        }
-
-        projectIds.push(projectResult.projectId);
+        projectIds.push(assertProjectCreated(projectResult));
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
 
@@ -178,11 +179,7 @@ describe("Access Control", () => {
           confirmPayment: true,
         });
 
-        if (!projectResult.success || !projectResult.projectId) {
-          throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-        }
-
-        projectIds.push(projectResult.projectId);
+        projectIds.push(assertProjectCreated(projectResult));
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
 
@@ -237,13 +234,11 @@ describe("Access Control", () => {
         confirmPayment: true,
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
+      const projectId = assertProjectCreated(projectResult);
 
       const shareResult = await owner.asUser.action(api.projectShare.shareProject, {
         encryptedProjectKey,
-        projectId: projectResult.projectId,
+        projectId,
         userEmail: collaborator.email,
         confirmPayment: true,
       });
@@ -254,11 +249,11 @@ describe("Access Control", () => {
 
       const sharedProject = await collaborator.asUser.query(
         api.projectShare.getProjectShareByProjectForCurrentUser,
-        { projectId: projectResult.projectId },
+        { projectId },
       );
 
       expect(sharedProject).toBeDefined();
-      expect(sharedProject.projectId).toBe(projectResult.projectId);
+      expect(sharedProject.projectId).toBe(projectId);
 
       mockAutumn.setFeature(collaborator.userId, "projects", 2);
       await collaborator.asUser.mutation(components.betterAuth.user.downgradeToFree, {
@@ -270,11 +265,11 @@ describe("Access Control", () => {
 
       const shareAfterRestriction = await collaborator.asUser.query(
         api.projectShare.getProjectShareByProjectForCurrentUser,
-        { projectId: projectResult.projectId },
+        { projectId },
       );
 
       expect(shareAfterRestriction).toBeDefined();
-      expect(shareAfterRestriction.projectId).toBe(projectResult.projectId);
+      expect(shareAfterRestriction.projectId).toBe(projectId);
 
       vi.useRealTimers();
     });

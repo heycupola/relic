@@ -54,7 +54,7 @@ export const GracePeriodStartedEmail = ({
             </Button>
           </Section>
           <Section style={footer}>
-            <Text style={footerText}>Built by Cupola Labs</Text>
+            <Text style={footerText}>Relic from Cupola</Text>
             <Text style={footerCopyright}>© 2025</Text>
           </Section>
         </Container>

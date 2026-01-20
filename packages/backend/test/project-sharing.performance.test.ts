@@ -22,6 +22,17 @@ import {
   type TestUser,
 } from "./setup";
 
+function assertProjectCreated(result: {
+  status: string;
+  projectId?: string;
+  message?: string;
+}): string {
+  if (result.status !== "success" || !result.projectId) {
+    throw new Error(`Project creation failed: ${result.message || "Unknown error"}`);
+  }
+  return result.projectId;
+}
+
 describe("Project Sharing Performance", () => {
   let t: TestConvex<typeof schema>;
   let testUsers: TestUser[] = [];
@@ -75,23 +86,22 @@ describe("Project Sharing Performance", () => {
         confirmPayment: true,
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
-
-      const projectId = projectResult.projectId;
+      const projectId = assertProjectCreated(projectResult);
 
       const secretIds: Id<"secret">[] = [];
       const environmentIds: Id<"environment">[] = [];
       for (const environmentName of environmentNames) {
-        const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
-          name: environmentName,
-          projectId,
-        });
+        const { id: environmentId } = await owner.asUser.mutation(
+          api.environment.createEnvironment,
+          {
+            name: environmentName,
+            projectId,
+          },
+        );
         environmentIds.push(environmentId);
 
         for (const [index, secretKey] of secretKeys.entries()) {
-          const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+          const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
             encryptedValue: await encryptSecret(projectKey, secretValues[index]),
             environmentId,
             key: secretKey,

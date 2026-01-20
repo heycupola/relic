@@ -1,4 +1,5 @@
 import { internal } from "./_generated/api";
+import type { ActionCtx } from "./_generated/server";
 import type { Id } from "./betterAuth/_generated/dataModel";
 
 const WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS = 300; // 5 minutes
@@ -68,17 +69,11 @@ export async function verifyStripeSignature(
   return expectedSigHex === sig;
 }
 
-type WebhookContext = {
-  // biome-ignore lint/suspicious/noExplicitAny: Convex HTTP action context requires generic mutation types
-  runMutation: (mutation: any, args: any) => Promise<any>;
-  scheduler: {
-    // biome-ignore lint/suspicious/noExplicitAny: Convex scheduler requires generic mutation types
-    runAfter: (delayMs: number, mutation: any, args: any) => Promise<Id<"_scheduled_functions">>;
-  };
-};
+// NOTE: Use the Convex Action context type so scheduler/runAfter is typed without any.
+type WebhookContext = Pick<ActionCtx, "scheduler">;
 
 function isValidUserId(userId: string): userId is Id<"user"> {
-  // Convex IDs follow a specific pattern - basic validation
+  // NOTE: Convex IDs follow a specific pattern - basic validation
   return typeof userId === "string" && userId.length > 0 && userId.length < 100;
 }
 
