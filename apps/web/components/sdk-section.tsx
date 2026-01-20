@@ -54,7 +54,7 @@ export function SDKSection() {
         </p>
         <div className="mt-6 overflow-hidden border-2 border-border">
           <div
-            className="flex border-b-2 border-border bg-muted/30"
+            className="flex border-b-2 border-border"
             role="tablist"
             aria-label="Programming languages"
           >

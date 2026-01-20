@@ -55,7 +55,10 @@ export function FAQ() {
               key={index}
               type="button"
               onClick={() => setOpenIndex(openIndex === index ? null : index)}
-              className="w-full text-left px-6 py-5 hover:bg-muted/50 transition-colors"
+              className={cn(
+                "w-full text-left px-6 py-5 transition-colors",
+                openIndex === index ? "bg-foreground/5" : "hover:bg-muted/50",
+              )}
             >
               <div className="flex items-center justify-between gap-4">
                 <span className="font-medium text-foreground">{faq.question}</span>
@@ -81,7 +84,7 @@ export function FAQ() {
         <div className="mt-8 flex items-center gap-3 text-foreground/60">
           <span>Have more questions?</span>
           <Link
-            href="https://x.com/cupolalabs"
+            href="https://x.com/heycupola"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 text-foreground hover:text-foreground/80 transition-colors font-medium"

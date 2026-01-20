@@ -190,7 +190,7 @@ export function SyntaxHighlighter({
   const tokenizedLines = tokenize(code, language);
 
   return (
-    <pre className={cn("overflow-x-auto bg-zinc-100 dark:bg-[#0a0a0a] p-6", className)}>
+    <pre className={cn("overflow-x-auto bg-muted/20 p-6", className)}>
       <code className="font-mono text-sm leading-relaxed">
         {tokenizedLines.map((lineTokens, lineIndex) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: lines are static and order won't change
