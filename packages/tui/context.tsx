@@ -1,3 +1,5 @@
+import { api } from "@repo/backend";
+import { useQuery } from "convex/react";
 import {
   createContext,
   type ReactNode,
@@ -7,7 +9,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { getProtectedApi } from "./api";
 import { clearSession, validateSession } from "./convex/services/session";
 import type { Session } from "./convex/types";
 import type { User } from "./types/api";
@@ -21,32 +22,24 @@ interface AppContextValue {
   isUserLoading: boolean;
   hasPro: boolean;
   refreshUser: () => Promise<void>;
-  startPolling: () => void;
-  stopPolling: () => void;
-  isPolling: boolean;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
 interface AppProviderProps {
   children: ReactNode;
-  pollingInterval?: number;
   onProStatusChange?: (hasPro: boolean) => void;
 }
 
-export function AppProvider({
-  children,
-  pollingInterval = 2000,
-  onProStatusChange,
-}: AppProviderProps) {
+export function AppProvider({ children, onProStatusChange }: AppProviderProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [isUserLoading, setIsUserLoading] = useState(true);
-  const [isPolling, setIsPolling] = useState(false);
-  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const previousHasProRef = useRef<boolean | null>(null);
+
+  const convexUser = useQuery(api.user.getCurrentUser);
+  const user = convexUser as User | null | undefined;
+  const isUserLoading = convexUser === undefined;
 
   const validateAuth = useCallback(async () => {
     setIsAuthLoading(true);
@@ -62,73 +55,26 @@ export function AppProvider({
     }
   }, []);
 
-  const fetchUser = useCallback(async () => {
-    if (!isAuthenticated) {
-      setUser(null);
-      setIsUserLoading(false);
-      return;
-    }
-
-    try {
-      const api = getProtectedApi();
-      const userData = await api.getCurrentUser();
-      setUser(userData);
-
-      const currentHasPro = userData?.hasPro ?? false;
-      if (previousHasProRef.current !== null && previousHasProRef.current !== currentHasPro) {
-        onProStatusChange?.(currentHasPro);
-      }
-      previousHasProRef.current = currentHasPro;
-    } catch {
-      if (!isPolling) setUser(null);
-    } finally {
-      setIsUserLoading(false);
-    }
-  }, [isAuthenticated, onProStatusChange, isPolling]);
-
   const logout = useCallback(async () => {
     await clearSession();
     setIsAuthenticated(false);
     setSession(null);
-    setUser(null);
   }, []);
 
-  const startPolling = useCallback(() => {
-    if (pollingIntervalRef.current) return;
-    setIsPolling(true);
-    pollingIntervalRef.current = setInterval(fetchUser, pollingInterval);
-  }, [fetchUser, pollingInterval]);
-
-  const stopPolling = useCallback(() => {
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
+  useEffect(() => {
+    const currentHasPro = user?.hasPro ?? false;
+    if (previousHasProRef.current !== null && previousHasProRef.current !== currentHasPro) {
+      onProStatusChange?.(currentHasPro);
     }
-    setIsPolling(false);
-  }, []);
+    previousHasProRef.current = currentHasPro;
+  }, [user?.hasPro, onProStatusChange]);
 
   useEffect(() => {
     validateAuth();
   }, [validateAuth]);
 
-  useEffect(() => {
-    if (!isAuthLoading) {
-      fetchUser();
-    }
-  }, [isAuthLoading, fetchUser]);
-
-  useEffect(() => {
-    if (user?.hasPro && isPolling) {
-      stopPolling();
-    }
-  }, [user?.hasPro, isPolling, stopPolling]);
-
-  useEffect(() => {
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
-    };
+  const refreshUser = useCallback(async () => {
+    // Placeholder for future implementation - user data is automatically refreshed by Convex
   }, []);
 
   return (
@@ -138,13 +84,10 @@ export function AppProvider({
         isAuthLoading,
         session,
         logout,
-        user,
+        user: user ?? null,
         isUserLoading,
         hasPro: user?.hasPro ?? false,
-        refreshUser: fetchUser,
-        startPolling,
-        stopPolling,
-        isPolling,
+        refreshUser,
       }}
     >
       {children}
@@ -178,15 +121,11 @@ export function useAuth() {
 }
 
 export function useUser() {
-  const { user, isUserLoading, hasPro, refreshUser, startPolling, stopPolling, isPolling } =
-    useApp();
+  const { user, isUserLoading, hasPro, refreshUser } = useApp();
   return {
     user,
     isLoading: isUserLoading,
     hasPro,
     refetch: refreshUser,
-    startPolling,
-    stopPolling,
-    isPolling,
   };
 }

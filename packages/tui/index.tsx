@@ -15,7 +15,9 @@ import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
 import { useCallback, useEffect, useState } from "react";
 import { TaskBar } from "./components/shared/TaskBar";
-import { AppProvider, useAuth } from "./context";
+import { AppProvider } from "./context";
+import { ConvexAuthProvider } from "./convex/provider";
+import { clearSession, validateSession } from "./convex/services/session";
 import { AppSessionContext } from "./hooks/useAppSession";
 import { useCurrentUser } from "./hooks/useCurrentUser";
 import { TaskProvider } from "./hooks/useTaskQueue";
@@ -27,8 +29,7 @@ import { ProjectPage } from "./pages/ProjectPage";
 import { RouterProvider, useRouter } from "./router";
 import { clearPassword, hasPassword, savePassword } from "./utils/password";
 
-function AppRouter() {
-  const { isAuthenticated, isLoading: isAuthLoading, refreshAuth, logout: authLogout } = useAuth();
+function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
   const { route, navigate } = useRouter();
   const { displayName } = useCurrentUser();
 
@@ -47,11 +48,11 @@ function AppRouter() {
   }, []);
 
   const handleLogout = useCallback(async () => {
-    await authLogout();
+    await onLogout();
     await clearPassword();
     setIsPasswordUnlocked(false);
     navigate({ name: "login" });
-  }, [authLogout, navigate]);
+  }, [onLogout, navigate]);
 
   const handlePasswordSetup = async (password: string) => {
     await savePassword(password);
@@ -65,23 +66,8 @@ function AppRouter() {
     navigate({ name: "home" });
   };
 
-  const handleLogin = async () => {
-    await refreshAuth();
-    const has = await hasPassword();
-    setPasswordStatus({ has, loading: false });
-    if (has) {
-      navigate({ name: "password-unlock" });
-    } else {
-      navigate({ name: "password-setup" });
-    }
-  };
-
-  if (isAuthLoading || passwordStatus.loading) {
+  if (passwordStatus.loading) {
     return null;
-  }
-
-  if (!isAuthenticated) {
-    return <LoginPage onLogin={handleLogin} />;
   }
 
   if (!isPasswordUnlocked) {
@@ -121,16 +107,66 @@ function AppRouter() {
   );
 }
 
+function AppRouter() {
+  const { navigate } = useRouter();
+  const [authState, setAuthState] = useState<{
+    isAuthenticated: boolean;
+    isLoading: boolean;
+  }>({ isAuthenticated: false, isLoading: true });
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const validation = await validateSession();
+        setAuthState({ isAuthenticated: validation.isValid, isLoading: false });
+      } catch {
+        setAuthState({ isAuthenticated: false, isLoading: false });
+      }
+    };
+    checkAuth();
+  }, []);
+
+  const handleLogin = useCallback(async () => {
+    const validation = await validateSession();
+    setAuthState({ isAuthenticated: validation.isValid, isLoading: false });
+    const has = await hasPassword();
+    if (has) {
+      navigate({ name: "password-unlock" });
+    } else {
+      navigate({ name: "password-setup" });
+    }
+  }, [navigate]);
+
+  const handleLogout = useCallback(async () => {
+    await clearSession();
+    setAuthState({ isAuthenticated: false, isLoading: false });
+  }, []);
+
+  if (authState.isLoading) {
+    return null;
+  }
+
+  if (!authState.isAuthenticated) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
+  return (
+    <ConvexAuthProvider>
+      <AppProvider>
+        <AuthenticatedApp onLogout={handleLogout} />
+      </AppProvider>
+    </ConvexAuthProvider>
+  );
+}
+
 function App() {
   return (
-    <AppProvider>
-      <TaskProvider>
-        <RouterProvider>
-          <AppRouter />
-          <TaskBar />
-        </RouterProvider>
-      </TaskProvider>
-    </AppProvider>
+    <TaskProvider>
+      <RouterProvider>
+        <AppRouter />
+        <TaskBar />
+      </RouterProvider>
+    </TaskProvider>
   );
 }
 

@@ -1,11 +1,11 @@
 import { useKeyboard } from "@opentui/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCursorBlink } from "../../hooks/useCursorBlink";
 import { useSingleLineInput } from "../../hooks/useInput";
 import { usePaste } from "../../hooks/usePaste";
 import { useTaskQueue } from "../../hooks/useTaskQueue";
 import type { ShareLimits } from "../../types/api";
-import { THEME_COLORS } from "../../utils/constants";
+import { SPINNER_FRAMES, SPINNER_INTERVAL, THEME_COLORS } from "../../utils/constants";
 import { InlineInput } from "../forms/InlineInput";
 import { Modal } from "../shared/Modal";
 
@@ -50,15 +50,18 @@ export function ManageCollaboratorsModal({
   const [creatingCollab, setCreatingCollab] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState<Collaborator | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
-  const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
+  const [spinnerFrame, setSpinnerFrame] = useState(0);
 
   const input = useSingleLineInput({ maxLength: 50 });
   const _cursorVisible = useCursorBlink(creatingCollab);
 
-  const displayEmail = pendingEmail || submittedEmail;
-  if (!pendingEmail && submittedEmail) {
-    setSubmittedEmail(null);
-  }
+  useEffect(() => {
+    if (!pendingEmail) return;
+    const interval = setInterval(() => {
+      setSpinnerFrame((prev) => (prev + 1) % SPINNER_FRAMES.length);
+    }, SPINNER_INTERVAL);
+    return () => clearInterval(interval);
+  }, [pendingEmail]);
 
   usePaste((text) => {
     if (!creatingCollab) return;
@@ -97,7 +100,6 @@ export function ManageCollaboratorsModal({
           return;
         }
         onAdd?.(email);
-        setSubmittedEmail(email);
         setCreatingCollab(false);
         setEmailError(null);
         input.setValue("");
@@ -126,9 +128,33 @@ export function ManageCollaboratorsModal({
   if (!visible) return null;
 
   const currentCollabCount = collaborators.length;
-  const limitText = shareLimits
-    ? `${currentCollabCount}/${shareLimits.totalSharesCount} shares`
-    : `${currentCollabCount} share${currentCollabCount !== 1 ? "s" : ""}`;
+
+  const getLimitText = () => {
+    if (!shareLimits) {
+      return `${currentCollabCount} share${currentCollabCount !== 1 ? "s" : ""}`;
+    }
+
+    if (shareLimits.hasPro) {
+      const totalLimit = shareLimits.freeShareLimit + shareLimits.unusedShares;
+      return `${currentCollabCount}/${totalLimit} shares`;
+    }
+
+    return `${currentCollabCount} share${currentCollabCount !== 1 ? "s" : ""}`;
+  };
+
+  const limitText = getLimitText();
+
+  const showPendingEmail = pendingEmail && !collaborators.some((c) => c.email === pendingEmail);
+  const listHeight =
+    collaborators.length === 0 && !creatingCollab && !showPendingEmail
+      ? 1
+      : Math.min(
+          collaborators.length +
+            (creatingCollab ? 1 : 0) +
+            (showPendingEmail ? 1 : 0) +
+            (confirmingDelete ? 1 : 0),
+          8 + (confirmingDelete ? 1 : 0),
+        );
 
   return (
     <Modal
@@ -136,8 +162,16 @@ export function ManageCollaboratorsModal({
       title={`Manage Collaborators · ${projectName}`}
       width={65}
       shortcuts={[
-        { key: "n", description: "add", disabled: creatingCollab || isRunning },
-        { key: "d", description: "revoke", disabled: creatingCollab || isRunning },
+        {
+          key: "n",
+          description: "add",
+          disabled: creatingCollab || isRunning || !!showPendingEmail,
+        },
+        {
+          key: "d",
+          description: "revoke",
+          disabled: creatingCollab || isRunning || !!showPendingEmail,
+        },
         { key: "esc", description: "close", disabled: isRunning },
       ]}
     >
@@ -147,20 +181,13 @@ export function ManageCollaboratorsModal({
           <text fg={THEME_COLORS.textDim}>{limitText}</text>
         </box>
 
-        <box
-          flexDirection="column"
-          height={
-            collaborators.length === 0 && !creatingCollab
-              ? 1
-              : Math.min(collaborators.length + (creatingCollab ? 1 : 0), 8)
-          }
-        >
-          {collaborators.length === 0 && !creatingCollab ? (
+        <box flexDirection="column" height={listHeight}>
+          {collaborators.length === 0 && !creatingCollab && !showPendingEmail ? (
             <text fg={THEME_COLORS.textDim}>No collaborators. Press 'n' to add one.</text>
           ) : (
             <>
               {collaborators.map((collab, index) => {
-                const isSelected = index === selectedIndex && !creatingCollab;
+                const isSelected = index === selectedIndex && !creatingCollab && !showPendingEmail;
                 const isConfirming = confirmingDelete?.id === collab.id;
 
                 return (
@@ -193,6 +220,17 @@ export function ManageCollaboratorsModal({
                   </box>
                 );
               })}
+
+              {showPendingEmail && (
+                <box height={1}>
+                  <text>
+                    <span fg={THEME_COLORS.primary}>{SPINNER_FRAMES[spinnerFrame]} </span>
+                    <span fg={THEME_COLORS.textMuted}>{pendingEmail}</span>
+                    <span fg={THEME_COLORS.textDim}> (adding...)</span>
+                  </text>
+                </box>
+              )}
+
               {creatingCollab && (
                 <InlineInput
                   active={true}
@@ -211,27 +249,6 @@ export function ManageCollaboratorsModal({
             </>
           )}
         </box>
-
-        {displayEmail && (
-          <box height={1}>
-            <text>
-              <span fg={THEME_COLORS.primary}>› </span>
-              <span fg={THEME_COLORS.textMuted}>Adding </span>
-              <span fg={THEME_COLORS.accent}>{displayEmail}</span>
-              <span fg={THEME_COLORS.textMuted}>...</span>
-            </text>
-          </box>
-        )}
-
-        {shareLimits && shareLimits.totalSharesCount > 0 && (
-          <box height={1}>
-            <text fg={THEME_COLORS.textDim}>
-              {shareLimits.unusedShares > 0
-                ? `${shareLimits.unusedShares} free share${shareLimits.unusedShares !== 1 ? "s" : ""} remaining`
-                : `Using ${currentCollabCount} of ${shareLimits.totalSharesCount} shares`}
-            </text>
-          </box>
-        )}
       </box>
     </Modal>
   );

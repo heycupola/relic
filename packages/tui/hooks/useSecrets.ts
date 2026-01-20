@@ -61,7 +61,7 @@ export function useSecrets(
     async (environmentId: string, name: string) => {
       const api = getProtectedApi();
       await api.ensureAuth();
-      const id = await api.createFolder({ environmentId, name });
+      const { id } = await api.createFolder({ environmentId, name });
       await loadEnvironment(environmentId);
       return id;
     },
@@ -108,7 +108,7 @@ export function useSecrets(
 
       const api = getProtectedApi();
       await api.ensureAuth();
-      const id = await api.createSecret({
+      const { id } = await api.createSecret({
         environmentId: args.environmentId,
         folderId: args.folderId,
         key: args.key,
@@ -140,14 +140,40 @@ export function useSecrets(
       }
 
       const projectKey = await getProjectKey(encryptedProjectKeySource, encryptedPrivateKey, salt);
+
+      // Optimize: only re-encrypt if value actually changed
       const encrypted = await Promise.all(
-        args.secrets.map(async (s) => ({
-          secretId: s.secretId,
-          key: s.key,
-          encryptedValue: await encryptSecretValue(projectKey, s.value),
-          valueType: s.valueType,
-          scope: s.scope,
-        })),
+        args.secrets.map(async (s) => {
+          // Find existing secret by ID or key
+          const existingSecret = s.secretId
+            ? secrets.find((existing) => existing.id === s.secretId)
+            : secrets.find(
+                (existing) =>
+                  existing.key === s.key &&
+                  existing.environmentId === args.environmentId &&
+                  existing.folderId === args.folderId,
+              );
+
+          // If secret exists and value hasn't changed, reuse encrypted value from state
+          if (existingSecret && existingSecret.value === s.value && existingSecret.encryptedValue) {
+            return {
+              secretId: s.secretId,
+              key: s.key,
+              encryptedValue: existingSecret.encryptedValue,
+              valueType: s.valueType,
+              scope: s.scope,
+            };
+          }
+
+          // Otherwise, encrypt the new/changed value
+          return {
+            secretId: s.secretId,
+            key: s.key,
+            encryptedValue: await encryptSecretValue(projectKey, s.value),
+            valueType: s.valueType,
+            scope: s.scope,
+          };
+        }),
       );
 
       const api = getProtectedApi();
@@ -163,7 +189,7 @@ export function useSecrets(
       await loadEnvironment(args.environmentId);
       return result;
     },
-    [encryptedProjectKeySource, encryptedPrivateKey, salt, loadEnvironment],
+    [encryptedProjectKeySource, encryptedPrivateKey, salt, loadEnvironment, secrets],
   );
 
   const updateSecret = useCallback(

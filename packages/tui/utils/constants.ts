@@ -43,3 +43,8 @@ export const PRICING = {
   seatPrice: "$5",
   projectPrice: "$10",
 } as const;
+
+export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
+export const SPINNER_INTERVAL = 80;
+
+export const DASHBOARD_URL = `${process.env.SITE_URL ?? "http://localhost:3000"}/dashboard`;

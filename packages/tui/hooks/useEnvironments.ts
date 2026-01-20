@@ -34,7 +34,7 @@ export function useEnvironments(projectId: string) {
     async (name: string, color?: string) => {
       const api = getProtectedApi();
       await api.ensureAuth();
-      const id = await api.createEnvironment({ projectId, name, color });
+      const { id } = await api.createEnvironment({ projectId, name, color });
       await fetch();
       return id;
     },

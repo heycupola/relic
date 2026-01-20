@@ -23,7 +23,7 @@ export interface DeviceTokenResponse {
 }
 
 export interface User {
-  _id: string;
+  id: string;
   name: string;
   email: string;
   emailVerified: boolean;
@@ -39,7 +39,7 @@ export interface User {
 export type ProjectStatus = "owned" | "shared" | "archived" | "restricted";
 
 export interface Project {
-  _id: string;
+  id: string;
   name: string;
   slug: string;
   description?: string;
@@ -55,9 +55,7 @@ export interface Project {
 }
 
 export interface ProjectListItem {
-  _id: string;
-  /** Optional id alias - present in mapped shared projects */
-  id?: string;
+  id: string;
   name: string;
   slug: string;
   status: ProjectStatus;
@@ -69,7 +67,7 @@ export interface ProjectListItem {
 }
 
 export interface Environment {
-  _id: string;
+  id: string;
   projectId: string;
   name: string;
   slug: string;
@@ -82,7 +80,7 @@ export interface Environment {
 }
 
 export interface Folder {
-  _id: string;
+  id: string;
   environmentId: string;
   projectId: string;
   name: string;
@@ -99,7 +97,7 @@ export type SecretValueType = "string" | "number" | "boolean";
 export type SecretScope = "client" | "server" | "shared";
 
 export interface Secret {
-  _id: string;
+  id: string;
   projectId: string;
   environmentId: string;
   folderId?: string;
@@ -124,7 +122,7 @@ export interface EnvironmentData {
 }
 
 export interface ProjectShare {
-  _id: string;
+  id: string;
   projectId: string;
   userId: string;
   encryptedProjectKey: string;
@@ -134,7 +132,6 @@ export interface ProjectShare {
 }
 
 export interface SharedUser {
-  _id: string;
   id: string;
   email: string;
   name: string;
@@ -164,19 +161,24 @@ export interface ShareLimits {
   unusedShares: number;
 }
 
-export interface CreateProjectResult {
-  success: boolean;
-  projectId?: string;
-  requiresProPlan?: boolean;
-  requiresAdditionalProject?: boolean;
-  requiresConfirmation?: boolean;
-  balance?: number;
-  freeLimit?: number;
-  paymentFailed?: boolean;
-  checkoutUrl?: string | null;
-  billingPortalUrl?: string | null;
-  message?: string;
-}
+export type CreateProjectResult =
+  | {
+      status: "success";
+      projectId: string;
+      paymentFailed?: boolean;
+      message?: string;
+    }
+  | {
+      status: "requiresProPlan";
+      checkoutUrl: string | null;
+      message?: string;
+    }
+  | {
+      status: "requiresConfirmation";
+      balance: number;
+      freeLimit: number;
+      message?: string;
+    };
 
 export interface ProjectLimits {
   hasPro: boolean;
@@ -203,4 +205,35 @@ export interface ApiSharedProjectResponse {
   isRestricted: boolean;
   isArchived: boolean;
   ownerId: string;
+}
+
+export interface ActionLog {
+  _id: string;
+  action: string;
+  projectId?: string;
+  projectName?: string;
+  environmentId?: string;
+  environmentName?: string;
+  timestamp: number;
+  userId: string;
+  metadata?: {
+    folderId?: string;
+    folderName?: string;
+    secretId?: string;
+    key?: string;
+    newKey?: string;
+    exportFormat?: "relic" | "env" | "json";
+    exportCount?: number;
+    affectedValueCount?: number;
+    deleteCount?: number;
+    sharedUserId?: string;
+    sharedUserEmail?: string;
+    shareId?: string;
+    reason?: string;
+    oldKeyVersion?: number;
+    newKeyVersion?: number;
+    keyRotated?: boolean;
+    secretsReEncrypted?: number;
+    sharesUpdated?: number;
+  };
 }

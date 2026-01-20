@@ -1,6 +1,7 @@
 import { ConvexHttpClient } from "convex/browser";
 import { ensureValidJwt } from "./convex/services/jwt";
 import type {
+  ActionLog,
   ApiSharedProjectResponse,
   ApiShareResponse,
   CreateProjectResult,
@@ -51,7 +52,8 @@ export class ProtectedApi {
         if (tokenParts.length !== 3) {
           throw new Error(`Invalid JWT format before setAuth: ${tokenParts.length} parts`);
         }
-        this.client.setAuth(token as any);
+        // @ts-expect-error - ConvexHttpClient.setAuth expects a different type but works with string JWT
+        this.client.setAuth(token);
       } catch (error) {
         logger.error("Failed to get JWT token:", error);
         this.client.clearAuth();
@@ -147,7 +149,7 @@ export class ProtectedApi {
     return this.withAuth(() => this.client.action("project:unarchiveProject", { projectId }));
   }
 
-  async getLimits(): Promise<{ usage: number; included_usage: number }> {
+  async getLimits(): Promise<{ usage: number; includedUsage: number }> {
     return this.withAuth(() => this.client.action("project:getLimits", {}));
   }
 
@@ -171,7 +173,7 @@ export class ProtectedApi {
     projectId: string;
     name: string;
     color?: string;
-  }): Promise<string> {
+  }): Promise<{ id: string }> {
     return this.withAuth(() => this.client.mutation("environment:createEnvironment", args));
   }
 
@@ -189,7 +191,7 @@ export class ProtectedApi {
     );
   }
 
-  async createFolder(args: { environmentId: string; name: string }): Promise<string> {
+  async createFolder(args: { environmentId: string; name: string }): Promise<{ id: string }> {
     return this.withAuth(() => this.client.mutation("folder:createFolder", args));
   }
 
@@ -209,7 +211,7 @@ export class ProtectedApi {
     valueType?: SecretValueType;
     scope?: SecretScope;
     description?: string;
-  }): Promise<string> {
+  }): Promise<{ id: string }> {
     return this.withAuth(() => this.client.mutation("secret:createSecret", args));
   }
 
@@ -240,7 +242,7 @@ export class ProtectedApi {
 
   async getAllSecretsForProject(
     projectId: string,
-  ): Promise<Array<{ secretId: string; environmentId: string; encryptedValue: string }>> {
+  ): Promise<Array<{ id: string; environmentId: string; encryptedValue: string }>> {
     return this.withAuth(() => this.client.query("secret:getAllSecretsForProject", { projectId }));
   }
 
@@ -278,7 +280,6 @@ export class ProtectedApi {
     );
     return {
       shares: result.shares.map((share) => ({
-        _id: share.id,
         id: share.id,
         email: share.userEmail,
         name: share.userName,
@@ -294,7 +295,6 @@ export class ProtectedApi {
     );
     return result.shares.map((share) => ({
       id: share.projectId,
-      _id: share.projectId,
       name: share.projectName,
       slug: share.projectSlug,
       status: share.status as ProjectListItem["status"],
@@ -331,6 +331,16 @@ export class ProtectedApi {
 
   async getShareLimits(projectId: string): Promise<ShareLimits> {
     return this.withAuth(() => this.client.action("projectShare:getShareLimits", { projectId }));
+  }
+
+  async loadLastPulse(environmentId: string): Promise<ActionLog | null> {
+    return this.withAuth(async () => {
+      const result = await this.client.action("actionLog:loadActionLogsByEnvironment", {
+        environmentId,
+        paginationOpts: { numItems: 1, cursor: null },
+      });
+      return result.page[0] || null;
+    });
   }
 }
 

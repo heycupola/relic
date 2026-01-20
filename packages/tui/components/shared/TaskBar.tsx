@@ -1,10 +1,7 @@
 import { useTerminalDimensions } from "@opentui/react";
 import { useEffect, useState } from "react";
 import { type TaskStatus, useTaskQueue } from "../../hooks/useTaskQueue";
-import { THEME_COLORS } from "../../utils/constants";
-
-const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-const SPINNER_INTERVAL = 80;
+import { SPINNER_FRAMES, SPINNER_INTERVAL, THEME_COLORS } from "../../utils/constants";
 
 const STATUS_CONFIG: Record<
   TaskStatus,

@@ -86,7 +86,7 @@ export function useSharing(
       const allSecrets = await api.getAllSecretsForProject(projectId);
       const reEncryptedSecrets = await Promise.all(
         allSecrets.map(async (secret) => ({
-          secretId: secret.secretId,
+          secretId: secret.id,
           newEncryptedValue: await encryptSecret(
             newProjectKey,
             await decryptSecret(currentProjectKey, secret.encryptedValue),

@@ -1,5 +1,5 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { InlineInput } from "../components/forms/InlineInput";
 import { CommandPaletteModal } from "../components/modals/CommandPaletteModal";
 import { ConfirmPaymentModal } from "../components/modals/ConfirmPaymentModal";
@@ -18,7 +18,13 @@ import { useProjects } from "../hooks/useProjects";
 import { useTaskQueue } from "../hooks/useTaskQueue";
 import { useRouter } from "../router";
 import type { ModalType, ProjectStatus } from "../types/models";
-import { KEY_SYMBOLS, STATUS_COLORS, THEME_COLORS } from "../utils/constants";
+import {
+  KEY_SYMBOLS,
+  SPINNER_FRAMES,
+  SPINNER_INTERVAL,
+  STATUS_COLORS,
+  THEME_COLORS,
+} from "../utils/constants";
 import { logger } from "../utils/debugLog";
 
 const STATUS_ICONS: Record<ProjectStatus, string> = {
@@ -34,8 +40,7 @@ export function HomePage() {
   const { width, height } = useTerminalDimensions();
   const { navigate } = useRouter();
   const { logout } = useAppSession();
-  const { runTask, setTaskPending, continueTask, cancelTask, showSuccess, isProcessing } =
-    useTaskQueue();
+  const { runTask, continueTask, cancelTask, showSuccess, isProcessing } = useTaskQueue();
   const { hasPro, isLoading: isLoadingPlan } = useUser();
 
   const {
@@ -67,10 +72,20 @@ export function HomePage() {
 
   const [activeModal, setActiveModal] = useState<ModalType>("none");
   const [creatingProject, setCreatingProject] = useState(false);
+  const [pendingProjectName, setPendingProjectName] = useState<string | null>(null);
+  const [spinnerFrame, setSpinnerFrame] = useState(0);
   const [editingProject, setEditingProject] = useState<{ id: string; name: string } | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState<{ id: string; name: string } | null>(
     null,
   );
+
+  useEffect(() => {
+    if (!pendingProjectName) return;
+    const interval = setInterval(() => {
+      setSpinnerFrame((prev) => (prev + 1) % SPINNER_FRAMES.length);
+    }, SPINNER_INTERVAL);
+    return () => clearInterval(interval);
+  }, [pendingProjectName]);
 
   const validatedEditingProject =
     editingProject && projects.some((p) => p.id === editingProject.id) ? editingProject : null;
@@ -78,6 +93,19 @@ export function HomePage() {
     confirmingDelete && projects.some((p) => p.id === confirmingDelete.id)
       ? confirmingDelete
       : null;
+
+  const showPendingProject =
+    pendingProjectName && !projects.some((p) => p.name === pendingProjectName);
+
+  const prevHasProRef = useRef(hasPro);
+  useEffect(() => {
+    if (hasPro && !prevHasProRef.current) {
+      refetchProjects();
+      payment.closeAll();
+      showSuccess("You're now a PRO! Unlimited projects unlocked.", 5000);
+    }
+    prevHasProRef.current = hasPro;
+  }, [hasPro, refetchProjects, payment, showSuccess]);
 
   const handleCreateProject = async (name: string, confirmPayment?: boolean) => {
     if (!hasKeys || !publicKey) {
@@ -87,41 +115,55 @@ export function HomePage() {
 
     await loading.run("creating", async () => {
       setCreatingProject(false);
+      setPendingProjectName(name);
 
-      if (confirmPayment) {
-        const result = await continueTask(async () => {
+      try {
+        if (confirmPayment) {
+          const result = await continueTask(async () => {
+            const { createProjectKey } = await import("@repo/crypto");
+            const { encryptedProjectKey } = await createProjectKey(publicKey);
+            const { getProtectedApi } = await import("../api");
+            const api = getProtectedApi();
+            return await api.createProject({ name, encryptedProjectKey, confirmPayment: true });
+          });
+
+          if (!result) {
+            setPendingProjectName(null);
+            payment.closeConfirmation();
+            return;
+          }
+
+          payment.handleResult(result, "project", name);
+          if (result.status === "success") {
+            await refetchProjects();
+          } else {
+            setPendingProjectName(null);
+          }
+          return;
+        }
+
+        const result = await runTask(`Creating project "${name}"...`, async () => {
           const { createProjectKey } = await import("@repo/crypto");
           const { encryptedProjectKey } = await createProjectKey(publicKey);
           const { getProtectedApi } = await import("../api");
           const api = getProtectedApi();
-          return await api.createProject({ name, encryptedProjectKey, confirmPayment: true });
+          return await api.createProject({ name, encryptedProjectKey, confirmPayment: false });
         });
 
         if (!result) {
-          payment.closeConfirmation();
+          setPendingProjectName(null);
           return;
         }
 
         payment.handleResult(result, "project", name);
-        if (result.success) await refetchProjects();
-        return;
+        if (result.status === "success") {
+          await refetchProjects();
+        } else {
+          setPendingProjectName(null);
+        }
+      } catch {
+        setPendingProjectName(null);
       }
-
-      setTaskPending(`Creating project "${name}"...`);
-
-      const { createProjectKey } = await import("@repo/crypto");
-      const { encryptedProjectKey } = await createProjectKey(publicKey);
-      const { getProtectedApi } = await import("../api");
-      const api = getProtectedApi();
-      const result = await api.createProject({ name, encryptedProjectKey, confirmPayment: false });
-
-      if (!result) {
-        cancelTask();
-        return;
-      }
-
-      payment.handleResult(result, "project", name);
-      if (result.success) await refetchProjects();
     });
   };
 
@@ -149,7 +191,6 @@ export function HomePage() {
       });
       showSuccess(`Project renamed to "${name}"`);
       setEditingProject(null);
-      refetchProjects();
     });
   };
 
@@ -260,6 +301,10 @@ export function HomePage() {
       }
     } else if (key.name === "p") {
       setActiveModal("password");
+    } else if (key.name === "g" && !key.meta && !key.ctrl) {
+      const { DASHBOARD_URL } = require("../utils/constants");
+      const { exec } = require("node:child_process");
+      exec(`open "${DASHBOARD_URL}"`);
     } else if ((key.name === "l" && key.ctrl) || key.sequence === "\x0C") {
       setActiveModal("logout");
     } else if (key.sequence === "?") {
@@ -306,6 +351,7 @@ export function HomePage() {
             { key: "n", description: "create project", disabled: isDisabled },
             { key: "u", description: "rename project", disabled: isDisabled },
             { key: "d", description: "delete project", disabled: isDisabled },
+            { key: "g", description: "dashboard", disabled: isDisabled },
           ],
         },
       ],
@@ -375,9 +421,9 @@ export function HomePage() {
                 return <text fg={THEME_COLORS.textDim}>...</text>;
               }
 
-              if (limits !== null && limits.included_usage !== undefined) {
+              if (limits !== null && limits.includedUsage !== undefined) {
                 const totalProjects = limits.usage;
-                const freeLimit = limits.included_usage;
+                const freeLimit = limits.includedUsage;
                 const remainingFree = Math.max(0, freeLimit - totalProjects);
 
                 if (remainingFree === 0) {
@@ -408,13 +454,15 @@ export function HomePage() {
             flexDirection="column"
             width={52}
             height={
-              projects.length === 0 && !creatingProject
+              isLoadingProjects ||
+              (projects.length === 0 && !creatingProject && !showPendingProject)
                 ? 1
                 : Math.min(
                     projects.length +
                       (creatingProject ? 1 : 0) +
+                      (showPendingProject ? 1 : 0) +
                       (validatedConfirmingDelete ? 1 : 0),
-                    PAGE_SIZE + (validatedConfirmingDelete ? 1 : 0),
+                    PAGE_SIZE + (validatedConfirmingDelete ? 1 : 0) + (showPendingProject ? 1 : 0),
                   ) +
                   (navigation.hasMore.above ? 1 : 0) +
                   (navigation.hasMore.below ? 1 : 0)
@@ -422,7 +470,7 @@ export function HomePage() {
           >
             {isLoadingProjects ? (
               <text fg={THEME_COLORS.textDim}>Loading projects...</text>
-            ) : projects.length === 0 && !creatingProject ? (
+            ) : projects.length === 0 && !creatingProject && !showPendingProject ? (
               <text fg={THEME_COLORS.textDim}>No projects created. Press 'n' to create one.</text>
             ) : (
               <>
@@ -504,6 +552,22 @@ export function HomePage() {
                     icon="[+]"
                     iconColor={THEME_COLORS.success}
                   />
+                )}
+                {/* Show pending project in the list with spinner */}
+                {showPendingProject && (
+                  <box
+                    height={1}
+                    width={52}
+                    flexDirection="row"
+                    justifyContent="space-between"
+                    alignItems="center"
+                  >
+                    <text fg={THEME_COLORS.textMuted}>
+                      <span fg={THEME_COLORS.primary}>{SPINNER_FRAMES[spinnerFrame]} </span>
+                      {pendingProjectName}
+                    </text>
+                    <text fg={THEME_COLORS.textDim}>(creating...)</text>
+                  </box>
                 )}
                 {navigation.hasMore.below && (
                   <text fg={THEME_COLORS.textDim}>

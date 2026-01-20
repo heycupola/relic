@@ -1,56 +1,74 @@
-import { useCallback, useEffect, useState } from "react";
+import { api } from "@repo/backend";
+import { useQuery } from "convex/react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getProtectedApi } from "../api";
-import type { CreateProjectResult, ProjectListItem } from "../types/api";
+import type { CreateProjectResult } from "../types/api";
 import type { Project } from "../types/models";
 import { logger } from "../utils/debugLog";
-import { mapApiProjects } from "../utils/mappers";
 
 export function useProjects() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [limits, setLimits] = useState<{ usage: number; included_usage: number } | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const ownedProjectsData = useQuery(api.project.listUserProjects);
+  const sharedProjectsData = useQuery(api.projectShare.listActiveSharedProjectsForCurrentUser);
 
-  const fetch = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
+  const [limits, setLimits] = useState<{ usage: number; includedUsage: number } | null>(null);
+  const [limitsLoading, setLimitsLoading] = useState(true);
+
+  const fetchLimits = useCallback(async () => {
+    setLimitsLoading(true);
     try {
-      const api = getProtectedApi();
-      await api.ensureAuth();
-
-      const [owned, shared, limitsData] = await Promise.all([
-        api.listProjects(),
-        api.listSharedProjects().catch(() => []),
-        api.getLimits().catch(() => null),
-      ]);
-
-      const projectMap = new Map<string, ProjectListItem>();
-      [...owned, ...shared].forEach((p) => {
-        const id = p.id || p._id;
-        if (id && !projectMap.has(id)) projectMap.set(id, p);
-      });
-
-      const sorted = mapApiProjects(Array.from(projectMap.values())).sort((a, b) => {
-        const order = { active: 1, restricted: 2, archived: 3 };
-        const diff =
-          (order[a.status as keyof typeof order] || 1) -
-          (order[b.status as keyof typeof order] || 1);
-        return diff !== 0 ? diff : a.name.localeCompare(b.name);
-      });
-
-      setProjects(sorted);
+      const apiClient = getProtectedApi();
+      await apiClient.ensureAuth();
+      const limitsData = await apiClient.getLimits();
       setLimits(limitsData);
     } catch (err) {
-      logger.error("Failed to fetch projects:", err);
-      setError(err instanceof Error ? err : new Error("Failed to fetch projects"));
+      logger.error("Failed to fetch limits:", err);
+      setLimits(null);
     } finally {
-      setIsLoading(false);
+      setLimitsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetch();
-  }, [fetch]);
+    fetchLimits();
+  }, [fetchLimits]);
+
+  const projects = useMemo<Project[]>(() => {
+    const projectMap = new Map<string, Project>();
+
+    if (ownedProjectsData?.projects) {
+      for (const p of ownedProjectsData.projects) {
+        projectMap.set(p.id, {
+          id: p.id,
+          name: p.name,
+          status: p.status as Project["status"],
+        });
+      }
+    }
+
+    if (sharedProjectsData?.shares) {
+      for (const s of sharedProjectsData.shares) {
+        if (!projectMap.has(s.projectId)) {
+          projectMap.set(s.projectId, {
+            id: s.projectId,
+            name: s.projectName,
+            status: s.status as Project["status"],
+          });
+        }
+      }
+    }
+
+    const sorted = Array.from(projectMap.values()).sort((a, b) => {
+      const order = { owned: 1, shared: 1, restricted: 2, archived: 3 };
+      const diff =
+        (order[a.status as keyof typeof order] || 1) - (order[b.status as keyof typeof order] || 1);
+      return diff !== 0 ? diff : a.name.localeCompare(b.name);
+    });
+
+    return sorted;
+  }, [ownedProjectsData, sharedProjectsData]);
+
+  const isLoading =
+    ownedProjectsData === undefined || sharedProjectsData === undefined || limitsLoading;
 
   const createProject = useCallback(
     async (
@@ -59,44 +77,42 @@ export function useProjects() {
       confirmPayment?: boolean,
     ): Promise<CreateProjectResult> => {
       try {
-        const api = getProtectedApi();
-        await api.ensureAuth();
-        const result = await api.createProject({ name, encryptedProjectKey, confirmPayment });
-        if (result.success) await fetch();
+        const apiClient = getProtectedApi();
+        await apiClient.ensureAuth();
+        const result = await apiClient.createProject({ name, encryptedProjectKey, confirmPayment });
+        if (result.status === "success") {
+          fetchLimits();
+        }
         return result;
       } catch (err) {
         throw err instanceof Error ? err : new Error("Failed to create project");
       }
     },
-    [fetch],
+    [fetchLimits],
   );
 
-  const renameProject = useCallback(
-    async (projectId: string, name: string) => {
-      const api = getProtectedApi();
-      await api.ensureAuth();
-      await api.updateProject({ projectId, name });
-      await fetch();
-    },
-    [fetch],
-  );
+  const renameProject = useCallback(async (projectId: string, name: string) => {
+    const apiClient = getProtectedApi();
+    await apiClient.ensureAuth();
+    await apiClient.updateProject({ projectId, name });
+  }, []);
 
   const archiveProject = useCallback(
     async (projectId: string) => {
-      const api = getProtectedApi();
-      await api.ensureAuth();
-      await api.archiveProject(projectId);
-      await fetch();
+      const apiClient = getProtectedApi();
+      await apiClient.ensureAuth();
+      await apiClient.archiveProject(projectId);
+      fetchLimits();
     },
-    [fetch],
+    [fetchLimits],
   );
 
   return {
     projects,
     limits,
     isLoading,
-    error,
-    refetch: fetch,
+    error: null,
+    refetch: fetchLimits,
     createProject,
     renameProject,
     archiveProject,

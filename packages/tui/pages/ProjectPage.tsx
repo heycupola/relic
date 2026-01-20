@@ -1,5 +1,5 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { InlineInput } from "../components/forms/InlineInput";
 import { BulkImportModal } from "../components/modals/BulkImportModal";
 import { CommandPaletteModal } from "../components/modals/CommandPaletteModal";
@@ -16,6 +16,7 @@ import {
 import { DeleteConfirmation } from "../components/shared/DeleteConfirmation";
 import { GuideBar } from "../components/shared/GuideBar";
 import { useUser } from "../context";
+import { extractErrorMessage } from "../convex/types";
 import { useMultiLineInput } from "../hooks/useInput";
 import { usePaste } from "../hooks/usePaste";
 import { useProjectPage } from "../hooks/useProjectPage";
@@ -47,7 +48,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     showError,
     isProcessing,
   } = useTaskQueue();
-  const { hasPro, startPolling, stopPolling, isPolling } = useUser();
+  const { hasPro } = useUser();
 
   const {
     project,
@@ -71,12 +72,16 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     refetchProject: refetchProjectData,
   } = useProjectPage(projectId);
 
+  const prevHasProRef = useRef(hasPro);
   useEffect(() => {
-    if (hasPro && isPolling) {
-      stopPolling();
+    if (hasPro && !prevHasProRef.current) {
       refetchProjectData();
+      setCheckoutModal({ visible: false, url: "", reason: "pro_required" });
+      setBillingPortalModal({ visible: false, url: "" });
+      showSuccess("You're now a PRO! Unlimited sharing unlocked.", 5000);
     }
-  }, [hasPro, isPolling, stopPolling, refetchProjectData]);
+    prevHasProRef.current = hasPro;
+  }, [hasPro, refetchProjectData, showSuccess]);
 
   const [viewLevel, setViewLevel] = useState<ViewLevel>("environments");
   const [selectedEnvId, setSelectedEnvId] = useState<string | null>(null);
@@ -366,6 +371,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         if (result.success) {
           showSuccess(`Collaborator "${email}" added`);
           setConfirmationModal({ visible: false, type: "seat", balance: 0 });
+          refetchProjectData();
         } else if (result.requiresProPlan) {
           setConfirmationModal({ visible: false, type: "seat", balance: 0 });
           if (result.checkoutUrl) {
@@ -374,7 +380,6 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
               url: result.checkoutUrl,
               reason: "pro_required",
             });
-            startPolling();
           } else {
             showError(result.message || "Pro plan required");
           }
@@ -386,7 +391,6 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
               url: result.checkoutUrl,
               reason: "share_limit",
             });
-            startPolling();
           } else {
             logger.error("Checkout URL is null:", result);
             showError(
@@ -424,6 +428,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         showSuccess(`Collaborator "${email}" added`);
         setPendingCollaboratorEmail(null);
         setConfirmationModal({ visible: false, type: "seat", balance: 0 });
+        refetchProjectData();
       } else if (result.requiresConfirmation) {
         setConfirmationModal({
           visible: true,
@@ -440,7 +445,6 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
             url: result.checkoutUrl,
             reason: "pro_required",
           });
-          startPolling();
         } else {
           showError(result.message || "Pro plan required");
         }
@@ -453,7 +457,6 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
             url: result.checkoutUrl,
             reason: "share_limit",
           });
-          startPolling();
         } else {
           logger.error("Checkout URL is null:", result);
           showError(
@@ -477,6 +480,10 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         setPendingCollaboratorEmail(null);
         showError(result.message);
       }
+    } catch (error) {
+      cancelTask();
+      setPendingCollaboratorEmail(null);
+      showError(extractErrorMessage(error));
     } finally {
       setIsAddingCollaborator(false);
     }
@@ -502,6 +509,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         await revokeShare(collab.id);
       });
       showSuccess(`${collab.email} revoked`);
+      refetchProjectData();
     } catch (_error) {
       logger.debug("Revoke collaborator failed");
     } finally {
@@ -517,6 +525,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         await revokeShareWithRotation(collab.id, sharedUsers);
       });
       showSuccess(`${collab.email} revoked and keys rotated`);
+      refetchProjectData();
     } catch (_error) {
       logger.debug("Revoke with rotation failed");
     } finally {
@@ -545,6 +554,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         category: "Manage",
         disabled: isRestricted,
       });
+      cmds.push({ key: "g", description: "Go to dashboard", category: "Navigate" });
       cmds.push({ key: "esc", description: "Back to home", category: "Navigate" });
     } else if (viewLevel === "environment") {
       cmds.push({
@@ -573,6 +583,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         category: "Manage",
         disabled: isRestricted,
       });
+      cmds.push({ key: "g", description: "Go to dashboard", category: "Navigate" });
       cmds.push({ key: "esc", description: "Go back", category: "Navigate" });
     } else {
       cmds.push({
@@ -587,6 +598,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         category: "Manage",
         disabled: isRestricted,
       });
+      cmds.push({ key: "g", description: "Go to dashboard", category: "Navigate" });
       cmds.push({ key: "esc", description: "Go back", category: "Navigate" });
     }
     cmds.push({
@@ -638,6 +650,12 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
       case "v":
         setShowSecrets((p) => !p);
         break;
+      case "g": {
+        const { DASHBOARD_URL } = require("../utils/constants");
+        const { exec } = require("node:child_process");
+        exec(`open "${DASHBOARD_URL}"`);
+        break;
+      }
     }
   };
 
@@ -765,6 +783,13 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
       return;
     }
 
+    if (key.name === "g" && !key.meta && !key.ctrl) {
+      const { DASHBOARD_URL } = require("../utils/constants");
+      const { exec } = require("node:child_process");
+      exec(`open "${DASHBOARD_URL}"`);
+      return;
+    }
+
     if (key.name === "escape" || key.name === "backspace") {
       goBack();
       setConfirmingDelete(null);
@@ -840,6 +865,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
       shortcuts.push(
         { key: "n", description: "create environment", disabled: isDisabled || isRestricted },
         { key: "u", description: "rename environment", disabled: isDisabled || isRestricted },
+        { key: "g", description: "dashboard", disabled: isDisabled },
         { key: "esc", description: "back", disabled: isDisabled },
       );
     } else if (viewLevel === "environment") {
@@ -857,11 +883,13 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         });
       shortcuts.push(
         { key: "⌥i", description: "edit secrets", disabled: isDisabled || isRestricted },
+        { key: "g", description: "dashboard", disabled: isDisabled },
         { key: "esc", description: "back", disabled: isDisabled },
       );
     } else {
       shortcuts.push(
         { key: "⌥i", description: "edit secrets", disabled: isDisabled || isRestricted },
+        { key: "g", description: "dashboard", disabled: isDisabled },
         { key: "esc", description: "back", disabled: isDisabled },
       );
     }
@@ -1092,7 +1120,6 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         reason={checkoutModal.reason}
         onClose={() => {
           setCheckoutModal({ visible: false, url: "", reason: "pro_required" });
-          stopPolling();
         }}
       />
 

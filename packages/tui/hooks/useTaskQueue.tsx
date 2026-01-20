@@ -17,7 +17,7 @@ interface TaskContextValue {
   setTaskPending: (message: string) => void;
   continueTask: <T>(taskFn: () => Promise<T>) => Promise<T | undefined>;
   cancelTask: () => void;
-  showSuccess: (message: string) => void;
+  showSuccess: (message: string, duration?: number) => void;
   showError: (message: string) => void;
 }
 
@@ -98,10 +98,10 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   }, [clearHideTimeout]);
 
   const showSuccess = useCallback(
-    (message: string) => {
+    (message: string, duration?: number) => {
       clearHideTimeout();
       setTask({ status: "success", message });
-      hideAfterDelay(SUCCESS_HIDE_DELAY);
+      hideAfterDelay(duration ?? SUCCESS_HIDE_DELAY);
     },
     [clearHideTimeout, hideAfterDelay],
   );

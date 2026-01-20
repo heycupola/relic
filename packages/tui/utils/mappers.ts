@@ -10,17 +10,14 @@ import type {
 import type { Environment, Folder, Project, Secret, SharedUser } from "../types/models";
 
 export function mapApiProject(apiProject: ApiProject): Project {
-  // API may return id or _id depending on the endpoint
-  const projectWithId = apiProject as ApiProject & { id?: string };
-  const projectId = projectWithId.id || apiProject._id;
-  if (!projectId) {
+  if (!apiProject.id) {
     throw new Error(`Project ID is missing in API response: ${JSON.stringify(apiProject)}`);
   }
 
   const status = apiProject.status || "owned";
 
   return {
-    id: projectId,
+    id: apiProject.id,
     name: apiProject.name,
     status,
   };
@@ -32,14 +29,14 @@ export function mapApiProjects(apiProjects: ApiProject[]): Project[] {
 
 export function mapApiEnvironment(apiEnv: ApiEnvironment): Environment {
   return {
-    id: apiEnv._id,
+    id: apiEnv.id,
     name: apiEnv.name,
   };
 }
 
 export function mapApiFolder(apiFolder: ApiFolder): Folder {
   return {
-    id: apiFolder._id,
+    id: apiFolder.id,
     name: apiFolder.name,
     environmentId: apiFolder.environmentId,
   };
@@ -47,9 +44,10 @@ export function mapApiFolder(apiFolder: ApiFolder): Folder {
 
 export function mapApiSecret(apiSecret: ApiSecret): Secret {
   return {
-    id: apiSecret._id,
+    id: apiSecret.id,
     key: apiSecret.key,
     value: undefined,
+    encryptedValue: apiSecret.encryptedValue,
     type:
       apiSecret.valueType === "string"
         ? "string"
@@ -65,7 +63,7 @@ export function mapApiSecret(apiSecret: ApiSecret): Secret {
 
 export function mapApiSharedUser(apiUser: ApiSharedUser): SharedUser {
   return {
-    id: apiUser.id || apiUser._id,
+    id: apiUser.id,
     email: apiUser.email,
     name: apiUser.name,
     publicKey: apiUser.publicKey,

@@ -23,6 +23,7 @@ export interface Secret {
   id: string;
   key: string;
   value?: string;
+  encryptedValue?: string;
   type?: SecretValueType;
   folderId?: string;
   environmentId: string;

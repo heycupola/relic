@@ -1,5 +1,5 @@
 import { useTerminalDimensions } from "@opentui/react";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import type { Shortcut } from "../../types/keyboard";
 import { THEME_COLORS } from "../../utils/constants";
 
@@ -31,12 +31,13 @@ export function Modal({
 
   return (
     <>
+      {/* Leave bottom row for TaskBar */}
       <box
         position="absolute"
         left={0}
         top={0}
         width={termWidth}
-        height={termHeight}
+        height={termHeight - 1}
         backgroundColor={THEME_COLORS.background}
       />
 
@@ -66,7 +67,7 @@ export function Modal({
           <box height={1} justifyContent="flex-start" marginTop={1}>
             <text>
               {shortcuts.map((shortcut, index) => (
-                <>
+                <Fragment key={shortcut.key}>
                   {index > 0 && <span fg={THEME_COLORS.textDim}> </span>}
                   <span fg={THEME_COLORS.textDim}>[</span>
                   <span fg={shortcut.disabled ? THEME_COLORS.textMuted : THEME_COLORS.primary}>
@@ -74,7 +75,7 @@ export function Modal({
                   </span>
                   <span fg={THEME_COLORS.textDim}>]</span>
                   <span fg={THEME_COLORS.textMuted}> {shortcut.description}</span>
-                </>
+                </Fragment>
               ))}
             </text>
           </box>
