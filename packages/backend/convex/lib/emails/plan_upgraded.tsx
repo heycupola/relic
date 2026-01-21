@@ -28,7 +28,7 @@ export const PlanUpgradedEmail = ({
           <Text style={heading}>Welcome to Pro</Text>
           <Text style={paragraph}>Hi {userName},</Text>
           <Text style={paragraph}>
-            Thank you for upgrading to Relic Pro! You now have access to all premium features.
+            Thank you for upgrading to Relic Pro! You now have access to all Pro features.
           </Text>
           <Text style={listHeading}>What's unlocked:</Text>
           <Section style={terminalBlock}>
