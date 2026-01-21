@@ -149,7 +149,7 @@ export default function DashboardPage() {
 
             {/* Bottom row - Quick Actions and Activity Logs */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <QuickActionsCard hasPro={userData?.hasPro || false} />
+              <QuickActionsCard />
               <ActivityLogsCard
                 logs={actionLogs}
                 isLoading={isLoading}
