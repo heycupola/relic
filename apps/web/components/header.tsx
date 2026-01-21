@@ -1,5 +1,6 @@
 "use client";
 
+import { useConvexAuth } from "convex/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth";
@@ -11,6 +12,7 @@ interface HeaderProps {
 
 export function Header({ showLogout = false }: HeaderProps) {
   const router = useRouter();
+  const { isAuthenticated, isLoading } = useConvexAuth();
 
   const handleLogout = async () => {
     await authClient.signOut();
@@ -27,7 +29,7 @@ export function Header({ showLogout = false }: HeaderProps) {
           <button
             type="button"
             onClick={handleLogout}
-            className="text-sm text-muted-foreground transition-colors hover:text-foreground focus:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background rounded-sm px-3 py-1.5 cursor-pointer"
+            className="font-[family-name:var(--font-heading)] text-md text-muted-foreground transition-colors hover:text-foreground focus:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background rounded-sm px-1 cursor-pointer"
           >
             Logout
           </button>
@@ -39,22 +41,14 @@ export function Header({ showLogout = false }: HeaderProps) {
             >
               Docs
             </Link>
-            <Link
-              href="https://github.com/heycupola/relic"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition-colors hover:text-foreground focus:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background rounded-sm px-1"
-            >
-              GitHub
-            </Link>
-            <Link
-              href="https://x.com/heycupola"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition-colors hover:text-foreground focus:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background rounded-sm px-1"
-            >
-              𝕏
-            </Link>
+            {!isLoading && isAuthenticated && (
+              <Link
+                href="/dashboard"
+                className="transition-colors hover:text-foreground focus:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background rounded-sm px-1"
+              >
+                Dashboard
+              </Link>
+            )}
           </nav>
         )}
       </div>
