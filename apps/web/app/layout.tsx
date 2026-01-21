@@ -11,7 +11,7 @@ const _spaceGrotesk = Space_Grotesk({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "relic - Encrypted Secrets, Fully Under Your Control",
   description:
-    "Client-side encrypted secrets management with complete control. Works as CLI, TUI, and through our SDK.",
+    "Zero-knowledge secrets management with complete control. Works as CLI, TUI, and through our SDK.",
   generator: "v0.app",
   icons: {
     icon: [
