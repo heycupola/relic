@@ -259,7 +259,7 @@ export const getBillingPortalUrl = protectedAction({
 
     try {
       const result = await ctx.autumn.customers.billingPortal(ctx, {
-        returnUrl: `${process.env.SITE_URL || "https://relic.so"}/billing/return`,
+        returnUrl: `${process.env.SITE_URL || "https://relic.so"}/dashboard`,
       });
 
       return {
