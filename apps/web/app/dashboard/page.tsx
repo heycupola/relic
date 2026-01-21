@@ -74,6 +74,8 @@ export default function DashboardPage() {
     }
   }, [session, sessionPending, router]);
 
+  const [upgradeError, setUpgradeError] = useState<string>("");
+
   // Handle upgrade action from pricing page
   useEffect(() => {
     const action = searchParams.get("action");
@@ -93,6 +95,7 @@ export default function DashboardPage() {
           }
         } catch (error) {
           console.error("Failed to get checkout link:", error);
+          setUpgradeError("Failed to start checkout. Please try again.");
           // Clean the URL even on error
           const url = new URL(window.location.href);
           url.searchParams.delete("action");
@@ -139,21 +142,27 @@ export default function DashboardPage() {
     : 0;
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-dvh bg-background text-foreground">
       <ContainerLines />
-      <div className="flex flex-col min-h-screen">
+      <div className="flex flex-col min-h-dvh">
         <Header showLogout />
         <main className="mx-auto max-w-6xl px-6 py-8 lg:px-12 flex-1 w-full">
+          <div className="sr-only" role="alert" aria-live="assertive" aria-atomic="true">
+            {upgradeError}
+          </div>
           <div className="space-y-5">
             {isOverProjectLimit && (
               <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-lg">
                 <div className="flex items-start gap-3">
-                  <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 shrink-0 mt-0.5" />
+                  <AlertCircle
+                    className="h-5 w-5 text-yellow-600 dark:text-yellow-400 shrink-0 mt-0.5"
+                    aria-hidden="true"
+                  />
                   <div className="flex-1">
                     <h3 className="font-medium text-yellow-900 dark:text-yellow-100 text-sm">
                       Usage limit exceeded
                     </h3>
-                    <p className="text-sm text-yellow-800 dark:text-yellow-200 mt-1">
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200 mt-1 text-pretty">
                       You're using {projectLimitsData.totalProjectsCount} projects but only have{" "}
                       {projectLimitsData.includedUsage} included. Please archive {excessProjects}{" "}
                       project(s) or upgrade your plan.

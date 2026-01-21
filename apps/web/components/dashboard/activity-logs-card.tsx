@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, Key, Trash2, Upload, Users, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 interface ActionLog {
@@ -46,6 +47,16 @@ function getActionColor(action: string): string {
     return "text-red-600 dark:text-red-400";
   if (action.includes("added")) return "text-blue-600 dark:text-blue-400";
   return "text-foreground";
+}
+
+function getActionIcon(action: string) {
+  if (action.includes("created")) return Check;
+  if (action.includes("updated")) return Key;
+  if (action.includes("deleted")) return Trash2;
+  if (action.includes("revoked")) return X;
+  if (action.includes("added")) return Users;
+  if (action.includes("exported")) return Upload;
+  return null;
 }
 
 function formatActionDescription(log: ActionLog): string {
@@ -157,36 +168,42 @@ export function ActivityLogsCard({
         <h3 className="text-sm font-medium text-foreground/60">Recent Activity</h3>
         <div className="relative max-h-[400px] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-border/20 [&::-webkit-scrollbar-thumb]:bg-foreground/20 [&::-webkit-scrollbar-thumb]:hover:bg-foreground/30">
           <ul className="space-y-0 divide-y divide-border/50">
-            {logs.map((log) => (
-              <li key={log._id} className="py-2.5 first:pt-0">
-                <div className="flex items-start gap-3">
-                  <span className="text-foreground/40 select-none shrink-0 text-xs font-mono mt-0.5">
-                    {formatTimeAgo(log.timestamp)}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start gap-2 flex-wrap text-sm">
-                      <span className={getActionColor(log.action)}>
-                        {formatActionDescription(log)}
-                      </span>
-                      {log.projectName && (
-                        <>
-                          <span className="text-foreground/30">·</span>
-                          <span className="text-foreground/60">
-                            {log.projectName}
-                            {log.environmentName && ` / ${log.environmentName}`}
-                          </span>
-                        </>
-                      )}
+            {logs.map((log) => {
+              const ActionIcon = getActionIcon(log.action);
+              return (
+                <li key={log._id} className="py-2.5 first:pt-0">
+                  <div className="flex items-start gap-3">
+                    <span className="text-foreground/40 select-none shrink-0 text-xs font-mono mt-0.5">
+                      {formatTimeAgo(log.timestamp)}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start gap-2 flex-wrap text-sm">
+                        <span className={`flex items-center gap-1.5 ${getActionColor(log.action)}`}>
+                          {ActionIcon && (
+                            <ActionIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                          )}
+                          {formatActionDescription(log)}
+                        </span>
+                        {log.projectName && (
+                          <>
+                            <span className="text-foreground/30">·</span>
+                            <span className="text-foreground/60">
+                              {log.projectName}
+                              {log.environmentName && ` / ${log.environmentName}`}
+                            </span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
           {canLoadMore && (
             <div ref={observerTarget} className="py-3 text-center border-t border-border/50">
               {isLoadingMore ? (
-                <span className="text-xs text-foreground/40">Loading more...</span>
+                <span className="text-xs text-foreground/40">Loading more…</span>
               ) : (
                 <button
                   type="button"

@@ -6,7 +6,7 @@ export function EmptyState() {
       <div className="space-y-6">
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-semibold text-foreground">Welcome to Relic</h2>
-          <p className="text-foreground/60 max-w-md mx-auto">
+          <p className="text-foreground/60 max-w-md mx-auto text-pretty">
             Get started by installing the CLI and creating your first project.
           </p>
         </div>

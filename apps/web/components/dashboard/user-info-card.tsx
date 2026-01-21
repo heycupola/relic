@@ -66,7 +66,7 @@ export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardPro
             <Badge
               className={
                 hasPro
-                  ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white border-transparent font-bold"
+                  ? "bg-foreground text-background border-transparent font-bold"
                   : "bg-muted text-muted-foreground border-transparent"
               }
             >
@@ -89,9 +89,12 @@ export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardPro
               className="flex items-center justify-between gap-2 w-full p-3 border border-border hover:border-foreground hover:bg-muted/50 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span className="text-sm text-foreground">
-                {isLoadingPortal ? "Loading..." : "Manage subscription"}
+                {isLoadingPortal ? "Loading…" : "Manage subscription"}
               </span>
-              <ExternalLink className="h-4 w-4 text-foreground/40 group-hover:text-foreground transition-colors" />
+              <ExternalLink
+                className="h-4 w-4 text-foreground/40 group-hover:text-foreground transition-colors"
+                aria-hidden="true"
+              />
             </button>
           </div>
         </>
@@ -103,36 +106,51 @@ export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardPro
               <h4 className="text-sm font-semibold text-foreground">Upgrade to Pro</h4>
               <ul className="space-y-2 text-sm">
                 <li className="flex items-start gap-2">
-                  <Check className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+                  <Check
+                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
+                    aria-hidden="true"
+                  />
                   <span className="text-foreground">
                     <strong>Collaborate on projects</strong> - 5 free shares per project
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <Check className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+                  <Check
+                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
+                    aria-hidden="true"
+                  />
                   <span className="text-foreground">
                     <strong>5 free projects</strong> included
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <Check className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+                  <Check
+                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
+                    aria-hidden="true"
+                  />
                   <span className="text-foreground">Activity logs & analytics</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <Check className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+                  <Check
+                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
+                    aria-hidden="true"
+                  />
                   <span className="text-foreground">
                     <strong>Early access</strong> to new features
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <Check className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+                  <Check
+                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
+                    aria-hidden="true"
+                  />
                   <span className="text-foreground">Everything in Free</span>
                 </li>
               </ul>
 
               <div className="pt-2 space-y-1.5">
                 <p className="text-xs font-medium text-foreground/50">Need more?</p>
-                <div className="text-xs text-foreground/60 space-y-0.5">
+                <div className="text-xs text-foreground/60 space-y-0.5 tabular-nums">
                   <p>• Additional projects: $10 each</p>
                   <p>• Additional shares: $5 each</p>
                 </div>
@@ -143,9 +161,9 @@ export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardPro
               type="button"
               onClick={handleUpgradeToPro}
               disabled={isLoadingUpgrade}
-              className="block w-full text-center p-3 border-2 border-foreground bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="block w-full text-center p-3 border-2 border-foreground bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed tabular-nums"
             >
-              {isLoadingUpgrade ? "Loading..." : "Upgrade to Pro - $20/month"}
+              {isLoadingUpgrade ? "Loading…" : "Upgrade to Pro - $20/month"}
             </button>
           </div>
         </>
