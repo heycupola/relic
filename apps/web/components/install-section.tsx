@@ -56,23 +56,25 @@ export function InstallSection({ compact = false, showWrapper = true }: InstallS
         ))}
       </div>
       <div
-        className="flex items-center gap-4 bg-muted/20 px-6 py-4"
+        className="bg-muted/20 px-6 py-4"
         role="tabpanel"
         id={`install-panel-${activeMethod.name}`}
       >
-        <code className="font-mono text-sm text-foreground flex-1">{activeMethod.command}</code>
-        <button
-          type="button"
-          onClick={copyToClipboard}
-          aria-label={copied ? "Copied to clipboard" : "Copy installation command"}
-          className="p-2 text-foreground/70 transition-all hover:bg-foreground hover:text-background focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring border-2 border-border hover:border-foreground"
-        >
-          {copied ? (
-            <Check className="h-4 w-4" aria-hidden="true" />
-          ) : (
-            <Copy className="h-4 w-4" aria-hidden="true" />
-          )}
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <code className="font-mono text-sm text-foreground">{activeMethod.command}</code>
+          <button
+            type="button"
+            onClick={copyToClipboard}
+            aria-label={copied ? "Copied to clipboard" : "Copy installation command"}
+            className="inline-flex items-center p-1.5 text-foreground/70 transition-all hover:bg-foreground hover:text-background focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded"
+          >
+            {copied ? (
+              <Check className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Copy className="h-4 w-4" aria-hidden="true" />
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
