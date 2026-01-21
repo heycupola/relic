@@ -10,6 +10,7 @@ import {
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 import { ErrorCode } from "../convex/lib/errors.ts";
 import * as projectShareModule from "../convex/projectShare";
 import schema from "../convex/schema";
@@ -27,11 +28,11 @@ function assertProjectCreated(result: {
   status: string;
   projectId?: string;
   message?: string;
-}): string {
+}): Id<"project"> {
   if (result.status !== "success" || !result.projectId) {
     throw new Error(`Project creation failed: ${result.message || "Unknown error"}`);
   }
-  return result.projectId;
+  return result.projectId as Id<"project">;
 }
 
 describe("User Key Lifecycle", () => {

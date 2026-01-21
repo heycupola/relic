@@ -2,6 +2,7 @@ import { createProjectKey } from "@repo/crypto";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 import { ErrorCode } from "../convex/lib/errors.ts";
 import schema from "../convex/schema";
 import {
@@ -17,11 +18,11 @@ function assertProjectCreated(result: {
   status: string;
   projectId?: string;
   message?: string;
-}): string {
+}): Id<"project"> {
   if (result.status !== "success" || !result.projectId) {
     throw new Error(`Project creation failed: ${result.message || "Unknown error"}`);
   }
-  return result.projectId;
+  return result.projectId as Id<"project">;
 }
 
 describe("Project Lifecycle", () => {

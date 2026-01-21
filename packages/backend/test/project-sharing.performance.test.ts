@@ -26,11 +26,11 @@ function assertProjectCreated(result: {
   status: string;
   projectId?: string;
   message?: string;
-}): string {
+}): Id<"project"> {
   if (result.status !== "success" || !result.projectId) {
     throw new Error(`Project creation failed: ${result.message || "Unknown error"}`);
   }
-  return result.projectId;
+  return result.projectId as Id<"project">;
 }
 
 describe("Project Sharing Performance", () => {
