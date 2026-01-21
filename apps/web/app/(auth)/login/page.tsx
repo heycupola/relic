@@ -7,7 +7,6 @@ import { useState } from "react";
 import { AuthFooter } from "@/components/auth-footer";
 import { GoogleIcon } from "@/components/icons/google-icon";
 import { OAuthButton } from "@/components/oauth-button";
-import { RelicLogo } from "@/components/relic-logo";
 import { authClient } from "@/lib/auth";
 import { authHeadingStyle, authSubtitleStyle } from "@/lib/styles";
 import { isValidReturnUrl } from "@/lib/url";
@@ -55,7 +54,20 @@ export default function LoginPage() {
         <div className="flex flex-col items-center gap-10">
           <div className="flex flex-col items-center gap-8">
             <Link href="/" className="flex items-center">
-              <RelicLogo className="h-12 text-foreground" />
+              <Image
+                src="/relic-logo-wordmark-dark.svg"
+                alt="Relic"
+                width={119}
+                height={48}
+                className="h-12 w-auto dark:hidden"
+              />
+              <Image
+                src="/relic-logo-wordmark-light.svg"
+                alt="Relic"
+                width={119}
+                height={48}
+                className="h-12 w-auto hidden dark:block"
+              />
             </Link>
 
             <div className="text-center space-y-3">

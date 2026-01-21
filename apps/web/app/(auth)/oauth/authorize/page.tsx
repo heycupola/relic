@@ -4,11 +4,11 @@ import { api } from "@repo/backend";
 import { Button } from "@repo/ui/components/button";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { Check, X } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Component, type ReactNode, Suspense, useEffect, useState } from "react";
 import { AuthFooter } from "@/components/auth-footer";
-import { RelicLogo } from "@/components/relic-logo";
 import { authClient } from "@/lib/auth";
 import { authHeadingStyle, authSubtitleStyle } from "@/lib/styles";
 
@@ -259,7 +259,20 @@ function AuthorizeContent() {
         <div className="flex flex-col items-center gap-10">
           <div className="flex flex-col items-center gap-8">
             <Link href="/" className="flex items-center">
-              <RelicLogo className="h-12 text-foreground" />
+              <Image
+                src="/relic-logo-wordmark-dark.svg"
+                alt="Relic"
+                width={119}
+                height={48}
+                className="h-12 w-auto dark:hidden"
+              />
+              <Image
+                src="/relic-logo-wordmark-light.svg"
+                alt="Relic"
+                width={119}
+                height={48}
+                className="h-12 w-auto hidden dark:block"
+              />
             </Link>
             <div className="w-full max-w-sm">{renderContent()}</div>
           </div>
@@ -293,7 +306,20 @@ function ErrorFallback({ error }: { error: Error }) {
         <div className="flex flex-col items-center gap-10">
           <div className="flex flex-col items-center gap-8">
             <Link href="/" className="flex items-center">
-              <RelicLogo className="h-12 text-foreground" />
+              <Image
+                src="/relic-logo-wordmark-dark.svg"
+                alt="Relic"
+                width={119}
+                height={48}
+                className="h-12 w-auto dark:hidden"
+              />
+              <Image
+                src="/relic-logo-wordmark-light.svg"
+                alt="Relic"
+                width={119}
+                height={48}
+                className="h-12 w-auto hidden dark:block"
+              />
             </Link>
             <div className="w-full max-w-sm">
               <div className="text-center space-y-4">
@@ -328,7 +354,20 @@ export default function AuthorizePage() {
             <div className="flex flex-col items-center gap-10">
               <div className="flex flex-col items-center gap-8">
                 <Link href="/" className="flex items-center">
-                  <RelicLogo className="h-12 text-foreground" />
+                  <Image
+                    src="/relic-logo-wordmark-dark.svg"
+                    alt="Relic"
+                    width={119}
+                    height={48}
+                    className="h-12 w-auto dark:hidden"
+                  />
+                  <Image
+                    src="/relic-logo-wordmark-light.svg"
+                    alt="Relic"
+                    width={119}
+                    height={48}
+                    className="h-12 w-auto hidden dark:block"
+                  />
                 </Link>
                 <div className="text-center space-y-3">
                   <h1 className="text-3xl font-medium text-foreground" style={authHeadingStyle}>
