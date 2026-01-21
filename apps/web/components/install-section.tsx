@@ -96,7 +96,7 @@ export function InstallSection({ showWrapper = true }: InstallSectionProps) {
         ))}
       </div>
       <div
-        className="bg-muted/20 px-6 py-4"
+        className="bg-muted/20 px-6 py-4 overflow-x-auto"
         role="tabpanel"
         id={`install-panel-${activeMethod.name}`}
       >
@@ -106,7 +106,7 @@ export function InstallSection({ showWrapper = true }: InstallSectionProps) {
             type="button"
             onClick={copyToClipboard}
             aria-label={copied ? "Copied to clipboard" : "Copy installation command"}
-            className="inline-flex items-center p-1.5 text-foreground/70 transition-all hover:bg-foreground hover:text-background focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded"
+            className="inline-flex items-center p-1.5 text-foreground/70 transition-all hover:bg-foreground hover:text-background focus-visible:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded"
           >
             {copied ? (
               <Check className="h-4 w-4" aria-hidden="true" />
