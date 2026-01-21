@@ -1,5 +1,14 @@
-import { Body, Button, Container, Head, Hr, Html, Section, Text } from "@react-email/components";
-import React from "react";
+import {
+  Body,
+  Button,
+  Container,
+  Head,
+  Hr,
+  Html,
+  Img,
+  Section,
+  Text,
+} from "@react-email/components";
 
 interface PlanUpgradedEmailProps {
   userName?: string;
@@ -14,14 +23,6 @@ export const PlanUpgradedEmail = ({
     <Head />
     <Body style={main}>
       <Container style={container}>
-        <Section style={terminalHeader}>
-          <Text style={terminalDots}>
-            <span style={dot} />
-            <span style={dot} />
-            <span style={dot} />
-          </Text>
-          <Text style={terminalTitle}>relic --pro</Text>
-        </Section>
         <Section style={section}>
           <Text style={logo}>RELIC</Text>
           <Hr style={divider} />
@@ -31,19 +32,11 @@ export const PlanUpgradedEmail = ({
             Thank you for upgrading to Relic Pro! You now have access to all Pro features.
           </Text>
           <Text style={listHeading}>What's unlocked:</Text>
-          <Section style={terminalBlock}>
-            <Text style={listItem}>
-              <span style={checkmark}>+</span> unlimited projects
-            </Text>
-            <Text style={listItem}>
-              <span style={checkmark}>+</span> share projects with your team
-            </Text>
-            <Text style={listItem}>
-              <span style={checkmark}>+</span> advanced access controls
-            </Text>
-            <Text style={listItem}>
-              <span style={checkmark}>+</span> priority support
-            </Text>
+          <Section style={featureBlock}>
+            <Text style={listItem}>Unlimited projects</Text>
+            <Text style={listItem}>Share projects with your team</Text>
+            <Text style={listItem}>Advanced access controls</Text>
+            <Text style={listItem}>Priority support</Text>
           </Section>
           <Section style={infoBlock}>
             <Text style={infoText}>
@@ -55,7 +48,14 @@ export const PlanUpgradedEmail = ({
           </Button>
         </Section>
         <Section style={footer}>
-          <Text style={footerText}>Relic from Cupola</Text>
+          <Text style={footerText}>Relic from</Text>
+          <Img
+            src={`${process.env.SITE_URL || "https://relic.so"}/cupola-dark.svg`}
+            alt="Cupola"
+            width="100"
+            height="20"
+            style={cupolaLogo}
+          />
           <Text style={footerCopyright}>© 2025</Text>
         </Section>
       </Container>
@@ -75,45 +75,14 @@ const container = {
   backgroundColor: "#ffffff",
   margin: "0 auto",
   maxWidth: "600px",
-  border: "2px solid #e5e5e5",
-};
-
-const terminalHeader = {
-  backgroundColor: "#fafafa",
-  borderBottom: "2px solid #e5e5e5",
-  padding: "12px 16px",
-  display: "flex",
-  alignItems: "center",
-};
-
-const terminalDots = {
-  margin: "0",
-  padding: "0",
-  lineHeight: "1",
-};
-
-const dot = {
-  display: "inline-block",
-  width: "10px",
-  height: "10px",
-  borderRadius: "50%",
-  backgroundColor: "#d4d4d4",
-  marginRight: "6px",
-};
-
-const terminalTitle = {
-  fontFamily: "'Geist Mono', 'Courier New', monospace",
-  fontSize: "12px",
-  color: "#737373",
-  margin: "8px 0 0 0",
+  border: "1px solid #e5e5e5",
 };
 
 const section = {
-  padding: "32px 40px",
+  padding: "40px",
 };
 
 const logo = {
-  fontFamily: "'Geist Mono', 'Courier New', monospace",
   fontSize: "14px",
   fontWeight: "600",
   letterSpacing: "0.1em",
@@ -146,29 +115,22 @@ const listHeading = {
   fontSize: "15px",
   lineHeight: "24px",
   color: "#1a1a1a",
-  margin: "24px 0 12px 0",
+  margin: "24px 0 16px 0",
   fontWeight: "600",
 };
 
-const terminalBlock = {
-  backgroundColor: "#f0fdf4",
-  border: "1px solid #bbf7d0",
-  padding: "16px",
+const featureBlock = {
+  backgroundColor: "#fafafa",
+  border: "1px solid #e5e5e5",
+  padding: "20px",
   marginBottom: "24px",
 };
 
 const listItem = {
-  fontFamily: "'Geist Mono', 'Courier New', monospace",
-  fontSize: "13px",
-  lineHeight: "28px",
-  color: "#1a1a1a",
-  margin: "0",
-};
-
-const checkmark = {
-  color: "#22c55e",
-  marginRight: "8px",
-  fontWeight: "600",
+  fontSize: "14px",
+  lineHeight: "24px",
+  color: "#404040",
+  margin: "0 0 8px 0",
 };
 
 const infoBlock = {
@@ -179,7 +141,6 @@ const infoBlock = {
 };
 
 const infoText = {
-  fontFamily: "'Geist Mono', 'Courier New', monospace",
   fontSize: "13px",
   lineHeight: "22px",
   color: "#525252",
@@ -202,21 +163,26 @@ const button = {
 
 const footer = {
   backgroundColor: "#fafafa",
-  borderTop: "2px solid #e5e5e5",
+  borderTop: "1px solid #e5e5e5",
   padding: "24px 40px",
   textAlign: "center" as const,
 };
 
 const footerText = {
-  fontFamily: "'Geist Mono', 'Courier New', monospace",
   fontSize: "12px",
   color: "#737373",
   margin: "0 0 4px 0",
 };
 
 const footerCopyright = {
-  fontFamily: "'Geist Mono', 'Courier New', monospace",
   fontSize: "12px",
   color: "#a3a3a3",
   margin: "0",
+};
+
+const cupolaLogo = {
+  height: "20px",
+  width: "auto",
+  margin: "4px auto 8px",
+  display: "block",
 };

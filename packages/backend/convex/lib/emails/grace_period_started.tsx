@@ -1,5 +1,14 @@
-import { Body, Button, Container, Head, Hr, Html, Section, Text } from "@react-email/components";
-import React from "react";
+import {
+  Body,
+  Button,
+  Container,
+  Head,
+  Hr,
+  Html,
+  Img,
+  Section,
+  Text,
+} from "@react-email/components";
 
 interface GracePeriodStartedEmailProps {
   userName?: string;
@@ -17,14 +26,6 @@ export const GracePeriodStartedEmail = ({
       <Head />
       <Body style={main}>
         <Container style={container}>
-          <Section style={terminalHeader}>
-            <Text style={terminalDots}>
-              <span style={dot} />
-              <span style={dot} />
-              <span style={dot} />
-            </Text>
-            <Text style={terminalTitle}>relic --grace-period</Text>
-          </Section>
           <Section style={section}>
             <Text style={logo}>RELIC</Text>
             <Hr style={divider} />
@@ -36,25 +37,27 @@ export const GracePeriodStartedEmail = ({
             </Text>
             <Section style={warningBlock}>
               <Text style={warningText}>
-                <span style={warningIcon}>!</span> After the grace period ends, you'll only have
-                access to your 2 most recent projects.
+                After the grace period ends, you'll only have access to your 2 most recent projects.
               </Text>
             </Section>
             <Text style={listHeading}>What you can do:</Text>
-            <Section style={terminalBlock}>
-              <Text style={listItem}>
-                <span style={prompt}>$</span> upgrade to Pro to keep all your projects
-              </Text>
-              <Text style={listItem}>
-                <span style={prompt}>$</span> archive old projects to fit within Free plan limit
-              </Text>
+            <Section style={optionsBlock}>
+              <Text style={listItem}>Upgrade to Pro to keep all your projects</Text>
+              <Text style={listItem}>Archive old projects to fit within Free plan limit</Text>
             </Section>
             <Button style={button} href={upgradeUrl}>
               Upgrade to Pro
             </Button>
           </Section>
           <Section style={footer}>
-            <Text style={footerText}>Relic from Cupola</Text>
+            <Text style={footerText}>Relic from</Text>
+            <Img
+              src={`${process.env.SITE_URL || "https://relic.so"}/cupola-dark.svg`}
+              alt="Cupola"
+              width="100"
+              height="20"
+              style={cupolaLogo}
+            />
             <Text style={footerCopyright}>© 2025</Text>
           </Section>
         </Container>
@@ -75,45 +78,14 @@ const container = {
   backgroundColor: "#ffffff",
   margin: "0 auto",
   maxWidth: "600px",
-  border: "2px solid #e5e5e5",
-};
-
-const terminalHeader = {
-  backgroundColor: "#fafafa",
-  borderBottom: "2px solid #e5e5e5",
-  padding: "12px 16px",
-  display: "flex",
-  alignItems: "center",
-};
-
-const terminalDots = {
-  margin: "0",
-  padding: "0",
-  lineHeight: "1",
-};
-
-const dot = {
-  display: "inline-block",
-  width: "10px",
-  height: "10px",
-  borderRadius: "50%",
-  backgroundColor: "#d4d4d4",
-  marginRight: "6px",
-};
-
-const terminalTitle = {
-  fontFamily: "'Geist Mono', 'Courier New', monospace",
-  fontSize: "12px",
-  color: "#737373",
-  margin: "8px 0 0 0",
+  border: "1px solid #e5e5e5",
 };
 
 const section = {
-  padding: "32px 40px",
+  padding: "40px",
 };
 
 const logo = {
-  fontFamily: "'Geist Mono', 'Courier New', monospace",
   fontSize: "14px",
   fontWeight: "600",
   letterSpacing: "0.1em",
@@ -145,50 +117,37 @@ const paragraph = {
 const warningBlock = {
   backgroundColor: "#fefce8",
   border: "1px solid #fef08a",
-  padding: "16px",
+  padding: "20px",
   marginBottom: "24px",
 };
 
 const warningText = {
-  fontFamily: "'Geist Mono', 'Courier New', monospace",
-  fontSize: "13px",
+  fontSize: "14px",
   lineHeight: "22px",
-  color: "#1a1a1a",
+  color: "#404040",
   margin: "0",
-};
-
-const warningIcon = {
-  color: "#eab308",
-  marginRight: "8px",
-  fontWeight: "600",
 };
 
 const listHeading = {
   fontSize: "15px",
   lineHeight: "24px",
   color: "#1a1a1a",
-  margin: "0 0 12px 0",
+  margin: "0 0 16px 0",
   fontWeight: "600",
 };
 
-const terminalBlock = {
+const optionsBlock = {
   backgroundColor: "#fafafa",
   border: "1px solid #e5e5e5",
-  padding: "16px",
+  padding: "20px",
   marginBottom: "24px",
 };
 
 const listItem = {
-  fontFamily: "'Geist Mono', 'Courier New', monospace",
-  fontSize: "13px",
-  lineHeight: "28px",
-  color: "#1a1a1a",
-  margin: "0",
-};
-
-const prompt = {
-  color: "#22c55e",
-  marginRight: "8px",
+  fontSize: "14px",
+  lineHeight: "24px",
+  color: "#404040",
+  margin: "0 0 8px 0",
 };
 
 const button = {
@@ -207,21 +166,26 @@ const button = {
 
 const footer = {
   backgroundColor: "#fafafa",
-  borderTop: "2px solid #e5e5e5",
+  borderTop: "1px solid #e5e5e5",
   padding: "24px 40px",
   textAlign: "center" as const,
 };
 
 const footerText = {
-  fontFamily: "'Geist Mono', 'Courier New', monospace",
   fontSize: "12px",
   color: "#737373",
   margin: "0 0 4px 0",
 };
 
 const footerCopyright = {
-  fontFamily: "'Geist Mono', 'Courier New', monospace",
   fontSize: "12px",
   color: "#a3a3a3",
   margin: "0",
+};
+
+const cupolaLogo = {
+  height: "20px",
+  width: "auto",
+  margin: "4px auto 8px",
+  display: "block",
 };
