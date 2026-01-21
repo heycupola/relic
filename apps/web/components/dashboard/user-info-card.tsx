@@ -4,7 +4,6 @@ import { api } from "@repo/backend";
 import { Badge } from "@repo/ui/components/badge";
 import { useAction } from "convex/react";
 import { Check, ExternalLink } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 
 interface UserInfoCardProps {
@@ -16,7 +15,9 @@ interface UserInfoCardProps {
 
 export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardProps) {
   const getBillingPortal = useAction(api.user.getBillingPortalUrl);
+  const getProPlan = useAction(api.user.getProPlan);
   const [isLoadingPortal, setIsLoadingPortal] = useState(false);
+  const [isLoadingUpgrade, setIsLoadingUpgrade] = useState(false);
 
   const handleBillingPortal = async () => {
     setIsLoadingPortal(true);
@@ -28,6 +29,19 @@ export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardPro
     } catch (error) {
       console.error("Failed to get billing portal URL:", error);
       setIsLoadingPortal(false);
+    }
+  };
+
+  const handleUpgradeToPro = async () => {
+    setIsLoadingUpgrade(true);
+    try {
+      const result = await getProPlan({});
+      if (result.checkoutLink) {
+        window.location.href = result.checkoutLink;
+      }
+    } catch (error) {
+      console.error("Failed to get checkout link:", error);
+      setIsLoadingUpgrade(false);
     }
   };
 
@@ -125,12 +139,14 @@ export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardPro
               </div>
             </div>
 
-            <Link
-              href="/subscription/success"
-              className="block w-full text-center p-3 border-2 border-foreground bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors"
+            <button
+              type="button"
+              onClick={handleUpgradeToPro}
+              disabled={isLoadingUpgrade}
+              className="block w-full text-center p-3 border-2 border-foreground bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Upgrade to Pro - $20/month
-            </Link>
+              {isLoadingUpgrade ? "Loading..." : "Upgrade to Pro - $20/month"}
+            </button>
           </div>
         </>
       )}

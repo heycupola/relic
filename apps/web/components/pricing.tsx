@@ -1,10 +1,66 @@
 "use client";
 
+import { api } from "@repo/backend";
+import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { Check, X } from "lucide-react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { SectionWrapper } from "./section-wrapper";
 
 export function Pricing() {
+  const router = useRouter();
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const userData = useQuery(api.user.getCurrentUser, isAuthenticated ? {} : "skip");
+  const getProPlan = useAction(api.user.getProPlan);
+  const [isUpgrading, setIsUpgrading] = useState(false);
+
+  const hasPro = userData?.hasPro || false;
+
+  const handleFreeClick = () => {
+    if (isLoading) return;
+
+    if (isAuthenticated) {
+      router.push("/dashboard");
+    } else {
+      router.push("/login?returnUrl=/dashboard");
+    }
+  };
+
+  const handleProClick = async () => {
+    if (isLoading) return;
+
+    if (!isAuthenticated) {
+      router.push("/login?returnUrl=/dashboard&action=upgrade");
+      return;
+    }
+
+    if (hasPro) {
+      return;
+    }
+
+    setIsUpgrading(true);
+    try {
+      const result = await getProPlan({});
+      if (result.checkoutLink) {
+        window.location.href = result.checkoutLink;
+      }
+    } catch (error) {
+      console.error("Failed to get checkout link:", error);
+      setIsUpgrading(false);
+    }
+  };
+
+  const getProButtonText = () => {
+    if (isLoading || isUpgrading) return "Loading...";
+    if (hasPro) return "Current Plan";
+    return "Upgrade to Pro";
+  };
+
+  const getFreeButtonText = () => {
+    if (isLoading) return "Loading...";
+    return "Get started";
+  };
+
   return (
     <SectionWrapper label="Pricing" id="pricing">
       <div className="mx-auto max-w-6xl px-6 py-16 lg:px-12">
@@ -52,12 +108,14 @@ export function Pricing() {
             </div>
 
             <div className="border-t-2 border-border p-6">
-              <Link
-                href="/login"
-                className="block w-full text-center p-3 border-2 border-border bg-background text-foreground font-medium hover:bg-muted/50 transition-colors"
+              <button
+                type="button"
+                onClick={handleFreeClick}
+                disabled={isLoading}
+                className="block w-full text-center p-3 border-2 border-border bg-background text-foreground font-medium hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Get started
-              </Link>
+                {getFreeButtonText()}
+              </button>
             </div>
           </div>
 
@@ -117,12 +175,14 @@ export function Pricing() {
             </div>
 
             <div className="border-t-2 border-border p-6">
-              <Link
-                href="/login"
-                className="block w-full text-center p-3 border-2 border-foreground bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors"
+              <button
+                type="button"
+                onClick={handleProClick}
+                disabled={isLoading || hasPro || isUpgrading}
+                className="block w-full text-center p-3 border-2 border-foreground bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Upgrade to Pro
-              </Link>
+                {getProButtonText()}
+              </button>
             </div>
           </div>
         </div>

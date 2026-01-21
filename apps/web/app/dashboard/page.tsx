@@ -2,7 +2,7 @@
 
 import { api } from "@repo/backend";
 import { useAction, useQuery } from "convex/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ContainerLines } from "@/components/container-lines";
 import { ActivityLogsCard } from "@/components/dashboard/activity-logs-card";
@@ -16,6 +16,7 @@ import { authClient } from "@/lib/auth";
 
 export default function DashboardPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session, isPending: sessionPending } = authClient.useSession();
 
   // Fetch user data
@@ -37,6 +38,7 @@ export default function DashboardPage() {
 
   // Fetch limits using action
   const getLimitsAction = useAction(api.project.getLimits);
+  const getProPlanAction = useAction(api.user.getProPlan);
   const [limitsData, setLimitsData] = useState<{ usage: number; includedUsage: number } | null>(
     null,
   );
@@ -63,6 +65,36 @@ export default function DashboardPage() {
       router.replace("/login?returnUrl=/dashboard");
     }
   }, [session, sessionPending, router]);
+
+  // Handle upgrade action from pricing page
+  useEffect(() => {
+    const action = searchParams.get("action");
+
+    if (action === "upgrade" && userData && !userData.hasPro) {
+      const handleUpgrade = async () => {
+        try {
+          const result = await getProPlanAction({});
+          if (result.checkoutLink) {
+            // Clean the URL before redirecting
+            const url = new URL(window.location.href);
+            url.searchParams.delete("action");
+            window.history.replaceState({}, "", url.toString());
+
+            // Redirect to checkout
+            window.location.href = result.checkoutLink;
+          }
+        } catch (error) {
+          console.error("Failed to get checkout link:", error);
+          // Clean the URL even on error
+          const url = new URL(window.location.href);
+          url.searchParams.delete("action");
+          window.history.replaceState({}, "", url.toString());
+        }
+      };
+
+      handleUpgrade();
+    }
+  }, [searchParams, userData, getProPlanAction]);
 
   // Show nothing while checking auth or redirecting
   if (sessionPending || !session?.user) {
