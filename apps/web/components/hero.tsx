@@ -17,7 +17,7 @@ export function Hero() {
         </p>
         <div className="mt-8 flex flex-wrap items-center gap-4">
           <Button
-            className="gap-2 rounded-none border-2 border-foreground bg-foreground text-background hover:bg-foreground/90 px-6 py-2.5 h-auto font-medium"
+            className="gap-2 rounded-none border-2 border-border bg-background text-foreground hover:bg-muted/50 px-6 py-2.5 h-auto font-medium"
             aria-label="Read documentation"
           >
             Read docs <ArrowRight className="h-4 w-4" aria-hidden="true" />
