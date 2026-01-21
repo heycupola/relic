@@ -2,6 +2,7 @@
 
 import { api } from "@repo/backend";
 import { useAction, useQuery } from "convex/react";
+import { AlertCircle } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ContainerLines } from "@/components/container-lines";
@@ -36,27 +37,34 @@ export default function DashboardPage() {
     loadMore,
   } = usePaginatedActionLogs(!!session?.user);
 
-  // Fetch limits using action
   const getLimitsAction = useAction(api.project.getLimits);
+  const getProjectLimitsAction = useAction(api.project.getProjectLimits);
   const getProPlanAction = useAction(api.user.getProPlan);
   const [limitsData, setLimitsData] = useState<{ usage: number; includedUsage: number } | null>(
     null,
   );
+  const [projectLimitsData, setProjectLimitsData] = useState<{
+    totalProjectsCount: number;
+    includedUsage: number;
+  } | null>(null);
   const [limitsLoading, setLimitsLoading] = useState(true);
 
   useEffect(() => {
     if (!session?.user) return;
 
-    getLimitsAction({})
-      .then((data) => {
-        setLimitsData(data);
+    Promise.all([getLimitsAction({}), getProjectLimitsAction({}).catch(() => null)])
+      .then(([limits, projectLimits]) => {
+        setLimitsData(limits);
+        if (projectLimits) {
+          setProjectLimitsData(projectLimits);
+        }
         setLimitsLoading(false);
       })
       .catch((err) => {
         console.error("Failed to fetch limits:", err);
         setLimitsLoading(false);
       });
-  }, [session?.user, getLimitsAction]);
+  }, [session?.user, getLimitsAction, getProjectLimitsAction]);
 
   // Check auth and redirect if needed
   useEffect(() => {
@@ -124,6 +132,12 @@ export default function DashboardPage() {
     })),
   ];
 
+  const isOverProjectLimit =
+    projectLimitsData && projectLimitsData.totalProjectsCount > projectLimitsData.includedUsage;
+  const excessProjects = isOverProjectLimit
+    ? projectLimitsData.totalProjectsCount - projectLimitsData.includedUsage
+    : 0;
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <ContainerLines />
@@ -131,6 +145,24 @@ export default function DashboardPage() {
         <Header showLogout />
         <main className="mx-auto max-w-6xl px-6 py-8 lg:px-12 flex-1 w-full">
           <div className="space-y-5">
+            {isOverProjectLimit && (
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <h3 className="font-medium text-yellow-900 dark:text-yellow-100 text-sm">
+                      Usage limit exceeded
+                    </h3>
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200 mt-1">
+                      You're using {projectLimitsData.totalProjectsCount} projects but only have{" "}
+                      {projectLimitsData.includedUsage} included. Please archive {excessProjects}{" "}
+                      project(s) or upgrade your plan.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Top row - User Info and Projects */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               <UserInfoCard

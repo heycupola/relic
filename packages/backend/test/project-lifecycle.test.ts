@@ -495,4 +495,86 @@ describe("Project Lifecycle", () => {
       expect(collaboratorEnvironment[0].name).toBe("environment-name");
     });
   });
+
+  describe("Project Subscription Cancellation", () => {
+    beforeEach(async () => {
+      mockAutumn.setFeature(owner.userId, "projects", 10);
+      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
+    });
+
+    test("should block new project when subscription cancelled and over limit", async () => {
+      for (let i = 0; i < 10; i++) {
+        const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+        const result = await owner.asUser.action(api.project.createProject, {
+          encryptedProjectKey,
+          name: `project-${i}`,
+          confirmPayment: true,
+        });
+
+        if (result.status !== "success") {
+          throw new Error(`Project ${i} creation failed: ${result.message || "Unknown error"}`);
+        }
+      }
+
+      mockAutumn.setFeature(owner.userId, "projects", 7, 10);
+
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+      const result = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "new-project",
+        confirmPayment: true,
+      });
+
+      expect(result.status).toBe("requiresRemoval");
+      if (result.status === "requiresRemoval") {
+        expect(result.currentUsage).toBe(10);
+        expect(result.includedUsage).toBe(7);
+        expect(result.excessCount).toBe(3);
+      }
+    });
+
+    test("should allow new project after archiving excess projects", async () => {
+      for (let i = 0; i < 8; i++) {
+        const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+        const result = await owner.asUser.action(api.project.createProject, {
+          encryptedProjectKey,
+          name: `project-${i}`,
+          confirmPayment: true,
+        });
+
+        if (result.status !== "success") {
+          throw new Error(`Project ${i} creation failed: ${result.message || "Unknown error"}`);
+        }
+      }
+
+      mockAutumn.setFeature(owner.userId, "projects", 6, 8);
+
+      const projects = await owner.asUser.query(api.project.listUserProjects, {});
+      const firstProject = projects.projects[0]!;
+      const secondProject = projects.projects[1]!;
+
+      mockAutumn.setFeature(owner.userId, "projects", 8, 8);
+
+      await owner.asUser.action(api.project.archiveProject, {
+        projectId: firstProject.id,
+      });
+
+      mockAutumn.setFeature(owner.userId, "projects", 8, 7);
+
+      await owner.asUser.action(api.project.archiveProject, {
+        projectId: secondProject.id,
+      });
+
+      mockAutumn.setFeature(owner.userId, "projects", 8, 6);
+
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+      const result = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "new-project",
+        confirmPayment: true,
+      });
+
+      expect(result.status).toBe("success");
+    });
+  });
 });

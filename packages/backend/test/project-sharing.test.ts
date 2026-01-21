@@ -156,7 +156,11 @@ describe("Project Sharing", () => {
       });
 
       expect(shareResult2.success).toBe(false);
-      expect(shareResult2.requiresConfirmation || shareResult2.paymentFailed).toBe(true);
+      expect(
+        shareResult2.requiresConfirmation ||
+          shareResult2.paymentFailed ||
+          shareResult2.requiresRemoval,
+      ).toBe(true);
     });
 
     test("should share a project to a collaborator", async () => {
@@ -626,6 +630,116 @@ describe("Project Sharing", () => {
         { projectId },
       );
       expect(share).toBeDefined();
+    });
+  });
+
+  describe("Subscription Cancellation", () => {
+    let freeShareLimitSpy: ReturnType<typeof vi.spyOn>;
+    let additionalUsers: TestUser[];
+
+    beforeEach(async () => {
+      freeShareLimitSpy = vi
+        .spyOn(projectShareModule.shareLimits, "freeShareLimit", "get")
+        .mockReturnValue(5);
+
+      mockAutumn.setFeature(owner.userId, "projects", 2);
+      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
+      mockAutumn.setFeature(owner.userId, "additional_shares", 8);
+
+      mockAutumn.setFeature(collaborator.userId, "projects", 2);
+      mockAutumn.setFeature(collaborator2.userId, "projects", 2);
+
+      additionalUsers = testUsers.slice(5);
+      for (const user of additionalUsers) {
+        mockAutumn.setFeature(user.userId, "projects", 2);
+      }
+    });
+
+    afterEach(() => {
+      freeShareLimitSpy?.mockRestore();
+    });
+
+    test("should block new share when subscription cancelled and over limit", async () => {
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const projectResult = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project-name",
+        confirmPayment: true,
+      });
+      const projectId = assertProjectCreated(projectResult);
+
+      const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
+
+      const usersToShare = [
+        collaborator,
+        collaborator2,
+        collaborator3,
+        ...additionalUsers.slice(0, 5),
+      ];
+
+      for (let i = 0; i < 8; i++) {
+        const targetUser = usersToShare[i]!;
+        const targetPublicKey = await importPublicKey(targetUser.publicKey!);
+        const encryptedKey = await wrapAESKeyWithRSA(projectKey, targetPublicKey);
+
+        const shareResult = await owner.asUser.action(api.projectShare.shareProject, {
+          encryptedProjectKey: encryptedKey,
+          projectId,
+          userEmail: targetUser.email,
+          confirmPayment: true,
+        });
+
+        if (!shareResult.success) {
+          throw new Error(`Share ${i} failed: ${shareResult.message || "Unknown error"}`);
+        }
+      }
+
+      mockAutumn.setFeature(owner.userId, "additional_shares", 6, 8);
+
+      const newUserPublicKey = await importPublicKey(nonCollaborator.publicKey!);
+      const encryptedProjectKeyForNewUser = await wrapAESKeyWithRSA(projectKey, newUserPublicKey);
+
+      const newShareResult = await owner.asUser.action(api.projectShare.shareProject, {
+        encryptedProjectKey: encryptedProjectKeyForNewUser,
+        projectId,
+        userEmail: nonCollaborator.email,
+        confirmPayment: true,
+      });
+
+      expect(newShareResult.success).toBe(false);
+      expect(newShareResult.requiresRemoval).toBe(true);
+      expect(newShareResult.currentUsage).toBe(8);
+      expect(newShareResult.includedUsage).toBe(6);
+      expect(newShareResult.excessCount).toBe(2);
+    });
+
+    test("should allow new share after reducing usage below limit", async () => {
+      mockAutumn.setFeature(owner.userId, "additional_shares", 6, 8);
+
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const projectResult = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project-name",
+        confirmPayment: true,
+      });
+      const projectId = assertProjectCreated(projectResult);
+
+      mockAutumn.setFeature(owner.userId, "additional_shares", 6, 6);
+
+      const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
+      const newUserPublicKey = await importPublicKey(nonCollaborator.publicKey!);
+      const encryptedProjectKeyForNewUser = await wrapAESKeyWithRSA(projectKey, newUserPublicKey);
+
+      const newShareResult = await owner.asUser.action(api.projectShare.shareProject, {
+        encryptedProjectKey: encryptedProjectKeyForNewUser,
+        projectId,
+        userEmail: nonCollaborator.email,
+        confirmPayment: true,
+      });
+
+      expect(newShareResult.success).toBe(true);
     });
   });
 });

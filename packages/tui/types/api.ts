@@ -145,6 +145,10 @@ export interface ShareProjectResult {
   requiresProPlan?: boolean;
   requiresAdditionalShare?: boolean;
   requiresConfirmation?: boolean;
+  requiresRemoval?: boolean;
+  currentUsage?: number;
+  includedUsage?: number;
+  excessCount?: number;
   balance?: number;
   freeLimit?: number;
   paymentFailed?: boolean;
@@ -177,6 +181,13 @@ export type CreateProjectResult =
       status: "requiresConfirmation";
       balance: number;
       freeLimit: number;
+      message?: string;
+    }
+  | {
+      status: "requiresRemoval";
+      currentUsage: number;
+      includedUsage: number;
+      excessCount: number;
       message?: string;
     };
 

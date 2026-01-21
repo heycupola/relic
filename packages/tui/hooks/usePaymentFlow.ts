@@ -10,6 +10,10 @@ type PaymentResult =
       requiresProPlan?: boolean;
       requiresAdditionalProject?: boolean;
       requiresAdditionalShare?: boolean;
+      requiresRemoval?: boolean;
+      currentUsage?: number;
+      includedUsage?: number;
+      excessCount?: number;
       paymentFailed?: boolean;
       checkoutUrl?: string | null;
       billingPortalUrl?: string | null;
@@ -31,6 +35,13 @@ type PaymentResult =
       status: "requiresConfirmation";
       balance: number;
       freeLimit: number;
+      message?: string;
+    }
+  | {
+      status: "requiresRemoval";
+      currentUsage: number;
+      includedUsage: number;
+      excessCount: number;
       message?: string;
     };
 
@@ -124,6 +135,23 @@ export function usePaymentFlow(options: UsePaymentFlowOptions = {}) {
           itemName,
           balance: normalized.balance ?? 0,
         });
+        return;
+      }
+
+      if (
+        normalized.requiresRemoval ||
+        (normalized.currentUsage &&
+          normalized.includedUsage &&
+          normalized.currentUsage > normalized.includedUsage)
+      ) {
+        cancelTask();
+        setConfirmationModal({ visible: false, type: "project", balance: 0 });
+        setBillingPortalModal({ visible: false, url: "" });
+        setCheckoutModal({ visible: false, url: "", reason: "pro_required" });
+        showError(
+          normalized.message ||
+            `Usage limit exceeded (${normalized.currentUsage}/${normalized.includedUsage}). Remove ${normalized.excessCount} item(s) or upgrade.`,
+        );
         return;
       }
 

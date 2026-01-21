@@ -192,7 +192,6 @@ export const shareProject = protectedAction({
     const isPaidShare = currentUsage >= shareLimits.freeShareLimit;
 
     if (isPaidShare) {
-      // Check balance before tracking - prevent auto-charge without user consent
       const additionalShares = await ctx.autumn.check(ctx, {
         featureId: "additional_shares",
       });
@@ -205,11 +204,23 @@ export const shareProject = protectedAction({
         });
       }
 
-      const balance = additionalShares.data.balance;
+      const usage = additionalShares.data.usage ?? 0;
+      const includedUsage = additionalShares.data.included_usage ?? 0;
+      const balance = additionalShares.data.balance ?? 0;
 
-      // If user hasn't confirmed payment, return confirmation request (regardless of balance)
+      if (usage > includedUsage) {
+        const excessCount = usage - includedUsage;
+        return {
+          success: false,
+          requiresRemoval: true,
+          currentUsage: usage,
+          includedUsage: includedUsage,
+          excessCount: excessCount,
+          message: `You're using ${usage} shares but only have ${includedUsage} included. Please remove ${excessCount} share(s) or upgrade.`,
+        };
+      }
+
       if (!args.confirmPayment) {
-        // If no balance, we'll show confirmation modal which will redirect to checkout
         if (!balance || balance <= 0) {
           return {
             success: false,
