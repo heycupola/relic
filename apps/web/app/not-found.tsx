@@ -5,9 +5,9 @@ import { Header } from "@/components/header";
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-dvh bg-background text-foreground">
       <ContainerLines />
-      <div className="flex flex-col min-h-screen">
+      <div className="flex flex-col min-h-dvh">
         <Header />
         <main className="flex-1 flex items-center justify-center px-6">
           <div className="max-w-2xl w-full text-center space-y-6">

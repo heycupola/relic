@@ -30,6 +30,10 @@ export const metadata: Metadata = {
     ],
     apple: "/apple-icon.png",
   },
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#252525" },
+  ],
 };
 
 export default function RootLayout({
@@ -38,7 +42,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning style={{ colorScheme: "dark light" }}>
       <body className={`font-sans antialiased`}>
         <ConvexClientProvider>
           <ThemeProvider

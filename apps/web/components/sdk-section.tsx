@@ -45,11 +45,36 @@ async fn main() {
 export function SDKSection() {
   const [activeLang, setActiveLang] = useState<keyof typeof sdkExamples>("javascript");
 
+  const languages = Object.keys(sdkExamples) as Array<keyof typeof sdkExamples>;
+
+  const handleKeyDown = (e: React.KeyboardEvent, currentLang: keyof typeof sdkExamples) => {
+    const currentIndex = languages.indexOf(currentLang);
+    let newIndex = currentIndex;
+
+    if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+      e.preventDefault();
+      newIndex = currentIndex > 0 ? currentIndex - 1 : languages.length - 1;
+    } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+      e.preventDefault();
+      newIndex = currentIndex < languages.length - 1 ? currentIndex + 1 : 0;
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      newIndex = 0;
+    } else if (e.key === "End") {
+      e.preventDefault();
+      newIndex = languages.length - 1;
+    } else {
+      return;
+    }
+
+    setActiveLang(languages[newIndex] ?? "javascript");
+  };
+
   return (
     <SectionWrapper label="SDK" id="sdk" showStripes>
       <div className="mx-auto max-w-6xl px-6 py-16 lg:px-12">
         <h2 className="text-2xl font-semibold text-foreground">Use it anywhere</h2>
-        <p className="mt-2 text-foreground/60">
+        <p className="mt-2 text-foreground/60 text-pretty">
           Official SDKs for popular languages. Or use the REST API directly.
         </p>
         <div className="mt-6 overflow-hidden border-2 border-border">
@@ -58,16 +83,18 @@ export function SDKSection() {
             role="tablist"
             aria-label="Programming languages"
           >
-            {Object.keys(sdkExamples).map((lang) => (
+            {languages.map((lang) => (
               <button
                 type="button"
                 key={lang}
-                onClick={() => setActiveLang(lang as keyof typeof sdkExamples)}
+                onClick={() => setActiveLang(lang)}
+                onKeyDown={(e) => handleKeyDown(e, lang)}
                 role="tab"
                 aria-selected={activeLang === lang}
                 aria-controls={`sdk-panel-${lang}`}
+                tabIndex={activeLang === lang ? 0 : -1}
                 className={cn(
-                  "px-6 py-3 font-mono text-xs uppercase tracking-wider transition-all focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring border-r-2 border-border",
+                  "px-6 py-3 font-mono text-xs uppercase transition-all focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring border-r-2 border-border",
                   activeLang === lang
                     ? "bg-foreground text-background font-bold"
                     : "text-foreground/60 hover:text-foreground hover:bg-muted",

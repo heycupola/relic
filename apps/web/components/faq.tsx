@@ -46,7 +46,9 @@ export function FAQ() {
     <SectionWrapper label="FAQ" id="faq" showStripes>
       <div className="mx-auto max-w-6xl px-6 py-16 lg:px-12">
         <h2 className="text-2xl font-semibold text-foreground">FAQ</h2>
-        <p className="mt-2 text-foreground/60">Everything you need to know about Relic.</p>
+        <p className="mt-2 text-foreground/60 text-pretty">
+          Everything you need to know about Relic.
+        </p>
 
         <div className="mt-8 border-2 border-border divide-y-2 divide-border">
           {faqs.map((faq, index) => (
@@ -67,6 +69,7 @@ export function FAQ() {
                     "h-5 w-5 shrink-0 text-foreground/50 transition-transform duration-200",
                     openIndex === index && "rotate-180",
                   )}
+                  aria-hidden="true"
                 />
               </div>
               <div
@@ -75,7 +78,9 @@ export function FAQ() {
                   openIndex === index ? "mt-3 max-h-40" : "max-h-0",
                 )}
               >
-                <p className="text-foreground/60 text-sm leading-relaxed pr-8">{faq.answer}</p>
+                <p className="text-foreground/60 text-sm leading-relaxed pr-8 text-pretty">
+                  {faq.answer}
+                </p>
               </div>
             </button>
           ))}

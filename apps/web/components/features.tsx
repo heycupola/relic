@@ -43,7 +43,7 @@ export function Features() {
     <SectionWrapper label="Features" id="features" showStripes>
       <div className="mx-auto max-w-6xl px-6 py-16 lg:px-12">
         <h2 className="text-2xl font-semibold text-foreground">What is Relic?</h2>
-        <p className="mt-2 max-w-2xl text-foreground/60">
+        <p className="mt-2 max-w-2xl text-foreground/60 text-pretty">
           A terminal-native secret manager that encrypts and stores secrets on your behalf with
           complete security.
         </p>
@@ -60,7 +60,7 @@ export function Features() {
                 </span>
                 <h3 className="font-semibold text-foreground">{feature.title}</h3>
               </div>
-              <p className="mt-1.5 text-foreground/60 text-sm">{feature.description}</p>
+              <p className="mt-1.5 text-foreground/60 text-sm text-pretty">{feature.description}</p>
             </div>
           ))}
         </div>
