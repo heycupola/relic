@@ -50,7 +50,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+    <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
       <div className="w-full py-16">
         <div className="flex flex-col items-center gap-10">
           <div className="flex flex-col items-center gap-8">
