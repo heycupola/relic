@@ -1,16 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
 import { AuthFooter } from "@/components/auth-footer";
 import { RelicLogo } from "@/components/relic-logo";
 import { authHeadingStyle, authSubtitleStyle } from "@/lib/styles";
 
-function SuccessContent() {
-  const searchParams = useSearchParams();
-  const sessionId = searchParams.get("session_id");
-
+export default function SubscriptionSuccessPage() {
   return (
     <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
       <div className="w-full py-16">
@@ -55,13 +50,8 @@ function SuccessContent() {
               <div className="text-center space-y-2">
                 <p className="text-sm text-muted-foreground">
                   your pro plan is now active. you can now share projects with your team and access
-                  all premium features.
+                  all Pro features.
                 </p>
-                {sessionId && (
-                  <p className="text-xs text-muted-foreground/60 font-mono">
-                    session: {sessionId.slice(0, 20)}...
-                  </p>
-                )}
               </div>
             </div>
 
@@ -98,13 +88,5 @@ function SuccessContent() {
         </div>
       </div>
     </div>
-  );
-}
-
-export default function SubscriptionSuccessPage() {
-  return (
-    <Suspense fallback={null}>
-      <SuccessContent />
-    </Suspense>
   );
 }
