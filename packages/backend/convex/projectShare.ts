@@ -187,57 +187,23 @@ export const shareProject = protectedAction({
     }
 
     const currentUsage = project.shareUsageCount ?? 0;
-
-    // Check if user has exceeded free share limit
     const isPaidShare = currentUsage >= shareLimits.freeShareLimit;
 
-    if (isPaidShare) {
-      const additionalShares = await ctx.autumn.check(ctx, {
-        featureId: "additional_shares",
+    if (isPaidShare && !args.confirmPayment) {
+      return {
+        success: false,
+        requiresConfirmation: true,
+        freeLimit: shareLimits.freeShareLimit,
+        message: "Adding a share costs $5. Confirm to proceed.",
+      };
+    }
+
+    if (!args.encryptedProjectKey || args.encryptedProjectKey.trim() === "") {
+      throw createError({
+        code: ErrorCode.INVALID_OPERATION,
+        message: "Encrypted project key is required to share a project",
+        severity: ErrorSeverity.High,
       });
-
-      if (additionalShares.error || !additionalShares.data) {
-        throw createError({
-          code: ErrorCode.EXTERNAL_SERVICE_ERROR,
-          message: "Additional shares feature info isn't reachable",
-          severity: ErrorSeverity.High,
-        });
-      }
-
-      const usage = additionalShares.data.usage ?? 0;
-      const includedUsage = additionalShares.data.included_usage ?? 0;
-      const balance = additionalShares.data.balance ?? 0;
-
-      if (usage > includedUsage) {
-        const excessCount = usage - includedUsage;
-        return {
-          success: false,
-          requiresRemoval: true,
-          currentUsage: usage,
-          includedUsage: includedUsage,
-          excessCount: excessCount,
-          message: `You're using ${usage} shares but only have ${includedUsage} included. Please remove ${excessCount} share(s) or upgrade.`,
-        };
-      }
-
-      if (!args.confirmPayment) {
-        if (!balance || balance <= 0) {
-          return {
-            success: false,
-            requiresConfirmation: true,
-            balance: 0,
-            freeLimit: shareLimits.freeShareLimit,
-            message: "No purchased shares available. Adding a share costs $5.",
-          };
-        }
-        return {
-          success: false,
-          requiresConfirmation: true,
-          balance: balance,
-          freeLimit: shareLimits.freeShareLimit,
-          message: `This will use 1 of your ${balance} purchased share${balance !== 1 ? "s" : ""}.`,
-        };
-      }
     }
 
     const { shareId } = await ctx.runMutation(internal.projectShare._insertProjectShare, {
@@ -265,30 +231,23 @@ export const shareProject = protectedAction({
     });
 
     let paymentFailed = false;
+    let billingPortalUrl: string | null = null;
 
     if (isPaidShare) {
-      // Re-verify balance before tracking to avoid relying on error messages
-      const freshCheck = await ctx.autumn.check(ctx, {
-        featureId: "additional_shares",
-      });
-
-      const freshBalance = freshCheck.data?.balance ?? 0;
-      if (freshBalance <= 0) {
-        return {
-          success: false,
-          paymentFailed: true,
-          message: "No purchased shares available. Adding a share costs $5.",
-        };
-      }
-
       try {
         await ctx.autumn.track(ctx, {
           featureId: "additional_shares",
           value: 1,
         });
       } catch (trackError) {
-        console.error("[shareProject] Payment tracking failed after share creation:", trackError);
+        console.error("[shareProject] Payment tracking failed:", trackError);
         paymentFailed = true;
+        try {
+          const portalResult = await ctx.autumn.customers.billingPortal(ctx, {});
+          billingPortalUrl = portalResult.data?.url || null;
+        } catch (portalError) {
+          console.error("[shareProject] Failed to get billing portal URL:", portalError);
+        }
       }
     }
 
@@ -307,7 +266,7 @@ export const shareProject = protectedAction({
       console.error("[Email] Failed to send collaborator added email:", error);
     }
 
-    return { success: true, shareId: sId, paymentFailed };
+    return { success: true, shareId: sId, paymentFailed, billingPortalUrl };
   },
 });
 

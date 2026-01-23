@@ -22,10 +22,11 @@ export function useSharing(
       const api = getProtectedApi();
       await api.ensureAuth();
 
-      // Call backend first to check PRO status - it returns checkout URL if needed
-      // Only proceed with collaborator lookup if we have shares available
-      if (shareLimits?.totalSharesCount === 0 || shareLimits?.unusedShares === 0) {
-        // Let backend handle the PRO/share check by calling shareProject with placeholder
+      const isPaidShare =
+        (shareLimits?.totalSharesCount ?? 0) >= (shareLimits?.freeShareLimit ?? 5);
+      const willReturnEarlyWithoutInsert = !shareLimits?.hasPro || (isPaidShare && !confirmPayment);
+
+      if (willReturnEarlyWithoutInsert) {
         return await api.shareProject({
           projectId,
           userEmail: email,

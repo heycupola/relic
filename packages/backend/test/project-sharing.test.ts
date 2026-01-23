@@ -110,7 +110,7 @@ describe("Project Sharing", () => {
       expect(shareResult.requiresProPlan).toBe(true);
     });
 
-    test("fails when user has no enough shares left", async () => {
+    test("returns paymentFailed when share exceeds limit", async () => {
       mockAutumn.setFeature(owner.userId, "additional_shares", 0);
 
       const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
@@ -156,12 +156,62 @@ describe("Project Sharing", () => {
         confirmPayment: true,
       });
 
-      expect(shareResult2.success).toBe(false);
-      expect(
-        shareResult2.requiresConfirmation ||
-          shareResult2.paymentFailed ||
-          shareResult2.requiresRemoval,
-      ).toBe(true);
+      expect(shareResult2.success).toBe(true);
+      expect(shareResult2.paymentFailed).toBe(true);
+      expect(shareResult2.billingPortalUrl).toBeDefined();
+    });
+
+    test("returns billingPortalUrl when payment tracking fails", async () => {
+      mockAutumn.setFeature(owner.userId, "additional_shares", 0);
+
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const projectResult = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project-name",
+        confirmPayment: true,
+      });
+
+      const projectId = assertProjectCreated(projectResult);
+
+      const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
+
+      const collaboratorPublicKey = await importPublicKey(collaborator.publicKey!);
+
+      const encryptedProjectKeyForCollaborator = await wrapAESKeyWithRSA(
+        projectKey,
+        collaboratorPublicKey,
+      );
+
+      const shareResult1 = await owner.asUser.action(api.projectShare.shareProject, {
+        encryptedProjectKey: encryptedProjectKeyForCollaborator,
+        projectId,
+        userEmail: collaborator.email,
+        confirmPayment: true,
+      });
+
+      if (!shareResult1.success) {
+        throw new Error(`Share 1 failed: ${shareResult1.message || "Unknown error"}`);
+      }
+
+      const collaborator2PublicKey = await importPublicKey(collaborator2.publicKey!);
+
+      const encryptedProjectKeyForCollaborator2 = await wrapAESKeyWithRSA(
+        projectKey,
+        collaborator2PublicKey,
+      );
+
+      const shareResult2 = await owner.asUser.action(api.projectShare.shareProject, {
+        encryptedProjectKey: encryptedProjectKeyForCollaborator2,
+        projectId,
+        userEmail: collaborator2.email,
+        confirmPayment: true,
+      });
+
+      expect(shareResult2.success).toBe(true);
+      expect(shareResult2.paymentFailed).toBe(true);
+      expect(shareResult2.billingPortalUrl).toBeDefined();
+      expect(shareResult2.billingPortalUrl).toContain("billing.relic.so");
     });
 
     test("should share a project to a collaborator", async () => {
