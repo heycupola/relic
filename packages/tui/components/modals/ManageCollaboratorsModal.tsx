@@ -1,8 +1,5 @@
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useState } from "react";
-import { useCursorBlink } from "../../hooks/useCursorBlink";
-import { useSingleLineInput } from "../../hooks/useInput";
-import { usePaste } from "../../hooks/usePaste";
 import { useTaskQueue } from "../../hooks/useTaskQueue";
 import type { ShareLimits } from "../../types/api";
 import { SPINNER_FRAMES, SPINNER_INTERVAL, THEME_COLORS } from "../../utils/constants";
@@ -51,9 +48,7 @@ export function ManageCollaboratorsModal({
   const [confirmingDelete, setConfirmingDelete] = useState<Collaborator | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [spinnerFrame, setSpinnerFrame] = useState(0);
-
-  const input = useSingleLineInput({ maxLength: 50 });
-  const _cursorVisible = useCursorBlink(creatingCollab);
+  const [emailValue, setEmailValue] = useState("");
 
   useEffect(() => {
     if (!pendingEmail) return;
@@ -62,11 +57,6 @@ export function ManageCollaboratorsModal({
     }, SPINNER_INTERVAL);
     return () => clearInterval(interval);
   }, [pendingEmail]);
-
-  usePaste((text) => {
-    if (!creatingCollab) return;
-    input.handlePaste(text.replace(/\s/g, "").slice(0, 50));
-  });
 
   useKeyboard((key) => {
     if (isRunning) return;
@@ -88,9 +78,9 @@ export function ManageCollaboratorsModal({
       if (key.name === "escape") {
         setCreatingCollab(false);
         setEmailError(null);
-        input.setValue("");
+        setEmailValue("");
       } else if (key.name === "return") {
-        const email = input.value.trim();
+        const email = emailValue.trim();
         if (!email) {
           setEmailError("Required");
           return;
@@ -102,9 +92,7 @@ export function ManageCollaboratorsModal({
         onAdd?.(email);
         setCreatingCollab(false);
         setEmailError(null);
-        input.setValue("");
-      } else {
-        input.handleKey(key);
+        setEmailValue("");
       }
       return;
     }
@@ -114,7 +102,7 @@ export function ManageCollaboratorsModal({
     } else if (key.name === "n") {
       setCreatingCollab(true);
       setEmailError(null);
-      input.setValue("");
+      setEmailValue("");
     } else if (key.name === "k" || key.name === "up") {
       setSelectedIndex((p) => (p > 0 ? p - 1 : collaborators.length - 1));
     } else if (key.name === "j" || key.name === "down") {
@@ -244,6 +232,7 @@ export function ManageCollaboratorsModal({
                   showCount={false}
                   icon="[+]"
                   iconColor={THEME_COLORS.success}
+                  onChange={setEmailValue}
                 />
               )}
             </>

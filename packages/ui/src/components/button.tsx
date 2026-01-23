@@ -42,7 +42,11 @@ function Button({
 }: ButtonProps): React.JSX.Element {
   const Comp = asChild ? Slot : "button";
   return (
-    <Comp type="button" className={cn(buttonVariants({ variant, size, className }))} {...props} />
+    <Comp
+      {...(!asChild && { type: "button" })}
+      className={cn(buttonVariants({ variant, size, className }))}
+      {...props}
+    />
   );
 }
 

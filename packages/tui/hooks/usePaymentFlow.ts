@@ -95,13 +95,22 @@ export function usePaymentFlow(options: UsePaymentFlowOptions = {}) {
                   checkoutUrl: result.checkoutUrl,
                   message: result.message,
                 }
-              : {
-                  success: false,
-                  requiresConfirmation: true,
-                  balance: result.balance,
-                  freeLimit: result.freeLimit,
-                  message: result.message,
-                }
+              : result.status === "requiresRemoval"
+                ? {
+                    success: false,
+                    requiresRemoval: true,
+                    currentUsage: result.currentUsage,
+                    includedUsage: result.includedUsage,
+                    excessCount: result.excessCount,
+                    message: result.message,
+                  }
+                : {
+                    success: false,
+                    requiresConfirmation: true,
+                    balance: result.balance,
+                    freeLimit: result.freeLimit,
+                    message: result.message,
+                  }
           : result;
 
       if (normalized.paymentFailed) {
