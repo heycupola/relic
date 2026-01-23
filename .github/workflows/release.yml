@@ -101,7 +101,7 @@ jobs:
         working-directory: apps/cli
         run: |
           mkdir -p prebuilds/${{ matrix.platform }}
-          cp ../../packages/cli-core/target/${{ matrix.target }}/release/librust.* prebuilds/${{ matrix.platform }}/ || true
+          cp ../../packages/cli-core/target/${{ matrix.target }}/release/librelic_core.* prebuilds/${{ matrix.platform }}/ || true
 
       - name: Prepare artifacts (Windows)
         if: runner.os == 'Windows'
@@ -109,7 +109,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p prebuilds/${{ matrix.platform }}
-          cp ../../packages/cli-core/target/${{ matrix.target }}/release/rust.dll prebuilds/${{ matrix.platform }}/ || true
+          cp ../../packages/cli-core/target/${{ matrix.target }}/release/relic_core.dll prebuilds/${{ matrix.platform }}/ || true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

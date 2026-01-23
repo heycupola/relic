@@ -18,7 +18,7 @@
   "private": true,
   "scripts": {
     "build:bindings": "cd ../../packages/cli-core && cargo build",
-    "deva": "bun run build:bindings && bun run index.ts",
+    "dev": "bun run build:bindings && bun run index.ts",
     "logs": "tail -f ~/Library/Application\\ Support/com.cupola.relic/relic.log",
     "lint": "biome check --write .",
     "format": "biome format --write ."

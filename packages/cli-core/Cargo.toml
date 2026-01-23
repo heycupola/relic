@@ -1,5 +1,5 @@
 [package]
-name = "relic"
+name = "relic-core"
 description = "Secret manager that keeps your secrets safe and your workflow simple."
 authors = ["Can Vardar <https://github.com/heycupola/relic>"]
 version = "0.1.0"
