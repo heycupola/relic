@@ -1,7 +1,5 @@
 import { useKeyboard } from "@opentui/react";
 import { useState } from "react";
-import { useSingleLineInput } from "../hooks/useInput";
-import { usePaste } from "../hooks/usePaste";
 import { KEY_SYMBOLS, THEME_COLORS } from "../utils/constants";
 import {
   checkPasswordRequirements,
@@ -41,33 +39,14 @@ export function PasswordInput({
     mode === "change" ? "current" : "password",
   );
   const [showPassword, setShowPassword] = useState(false);
+  const [currentValue, setCurrentValue] = useState("");
+  const [passwordValue, setPasswordValue] = useState("");
+  const [confirmValue, setConfirmValue] = useState("");
 
-  const currentInput = useSingleLineInput({ maxLength: 64 });
-  const passwordInput = useSingleLineInput({ maxLength: 64 });
-  const confirmInput = useSingleLineInput({ maxLength: 64 });
-
-  const requirements = checkPasswordRequirements(passwordInput.value);
-  const validation = validatePassword(passwordInput.value);
-  const passwordsMatch =
-    confirmInput.value.length > 0 && confirmInput.value === passwordInput.value;
+  const requirements = checkPasswordRequirements(passwordValue);
+  const validation = validatePassword(passwordValue);
+  const passwordsMatch = confirmValue.length > 0 && confirmValue === passwordValue;
   const showStrength = mode !== "unlock" && focusedField === "password";
-
-  const handlePaste = (text: string) => {
-    const cleanText = text.replace(/\s/g, "");
-    const activeInput =
-      focusedField === "current"
-        ? currentInput
-        : focusedField === "password"
-          ? passwordInput
-          : confirmInput;
-    const before = activeInput.value.slice(0, activeInput.cursor);
-    const after = activeInput.value.slice(activeInput.cursor);
-    const newValue = (before + cleanText + after).slice(0, 64);
-    activeInput.setValue(newValue);
-    activeInput.setCursor(Math.min(before.length + cleanText.length, 64));
-  };
-
-  usePaste(handlePaste);
 
   const cycleFocus = (direction: "next" | "prev") => {
     type FieldName = "current" | "password" | "confirm";
@@ -87,18 +66,18 @@ export function PasswordInput({
 
   const handleSubmit = () => {
     if (mode === "unlock" || mode === "verify") {
-      if (passwordInput.value.length > 0) onSubmit(passwordInput.value);
+      if (passwordValue.length > 0) onSubmit(passwordValue);
       return;
     }
 
-    if (mode === "change" && currentInput.value.length === 0) return;
+    if (mode === "change" && currentValue.length === 0) return;
     if (!validation.isValid) return;
     if (!passwordsMatch) return;
 
     if (mode === "change") {
-      onSubmit(currentInput.value, passwordInput.value);
+      onSubmit(currentValue, passwordValue);
     } else {
-      onSubmit(passwordInput.value);
+      onSubmit(passwordValue);
     }
   };
 
@@ -120,15 +99,6 @@ export function PasswordInput({
       handleSubmit();
       return;
     }
-    if (key.sequence === " ") return;
-
-    const activeInput =
-      focusedField === "current"
-        ? currentInput
-        : focusedField === "password"
-          ? passwordInput
-          : confirmInput;
-    activeInput.handleKey(key);
   });
 
   return (
@@ -145,6 +115,7 @@ export function PasswordInput({
           showIcon={false}
           showCount={false}
           width={width}
+          onChange={setCurrentValue}
         />
       )}
 
@@ -162,6 +133,7 @@ export function PasswordInput({
         showIcon={false}
         showCount={false}
         width={width}
+        onChange={setPasswordValue}
       />
 
       {showStrength && (
@@ -204,10 +176,11 @@ export function PasswordInput({
           isFocused={focusedField === "confirm"}
           isPassword={true}
           showPassword={showPassword}
-          error={confirmInput.value.length > 0 && !passwordsMatch ? "mismatch" : null}
+          error={confirmValue.length > 0 && !passwordsMatch ? "mismatch" : null}
           showIcon={false}
           showCount={false}
           width={width}
+          onChange={setConfirmValue}
         />
       )}
 
