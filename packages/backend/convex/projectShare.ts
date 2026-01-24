@@ -146,6 +146,27 @@ export const shareProject = protectedAction({
       };
     }
 
+    const additionalShares = await ctx.autumn.check(ctx, {
+      featureId: "additional_shares",
+    });
+
+    if (additionalShares.data && !additionalShares.error) {
+      const usage = additionalShares.data.usage ?? 0;
+      const includedUsage = additionalShares.data.included_usage ?? 0;
+
+      if (usage > includedUsage) {
+        const excessCount = usage - includedUsage;
+        return {
+          success: false,
+          requiresRemoval: true,
+          currentUsage: usage,
+          includedUsage: includedUsage,
+          excessCount: excessCount,
+          message: `You're using ${usage} paid shares across all projects but only have ${includedUsage} included. Please revoke ${excessCount} share(s) from any project to continue.`,
+        };
+      }
+    }
+
     const targetUser = await ctx.runQuery(components.betterAuth.user.loadUserByEmail, {
       email: args.userEmail,
     });
