@@ -26,7 +26,7 @@ import { useRouter } from "../router";
 import type { ModalType, ProjectStatus, SharedUser, ViewLevel } from "../types/models";
 import type { BulkImportFormat, CollisionInfo } from "../utils/bulkImport";
 import { envToJson, jsonToEnv, parseEnvContent, validateBulkImportJson } from "../utils/bulkImport";
-import { KEY_SYMBOLS, STATUS_COLORS, THEME_COLORS } from "../utils/constants";
+import { DASHBOARD_URL, KEY_SYMBOLS, STATUS_COLORS, THEME_COLORS } from "../utils/constants";
 import { logger } from "../utils/debugLog";
 
 interface ProjectPageProps {
@@ -652,7 +652,6 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         setShowSecrets((p) => !p);
         break;
       case "g": {
-        const { DASHBOARD_URL } = require("../utils/constants");
         open(DASHBOARD_URL);
         break;
       }
@@ -784,7 +783,6 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     }
 
     if (key.name === "g" && !key.meta && !key.ctrl) {
-      const { DASHBOARD_URL } = require("../utils/constants");
       open(DASHBOARD_URL);
       return;
     }

@@ -106,7 +106,6 @@ export function useApp(): AppContextValue {
 export function useAuth() {
   const context = useApp();
   const refreshAuth = useCallback(async () => {
-    const { validateSession } = await import("./convex/services/session");
     const validation = await validateSession();
     return validation;
   }, []);

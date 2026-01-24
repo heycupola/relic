@@ -1,6 +1,8 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
+import { createProjectKey } from "@repo/crypto";
 import open from "open";
 import { useEffect, useRef, useState } from "react";
+import { getProtectedApi } from "../api";
 import { InlineInput } from "../components/forms/InlineInput";
 import { CommandPaletteModal } from "../components/modals/CommandPaletteModal";
 import { ConfirmPaymentModal } from "../components/modals/ConfirmPaymentModal";
@@ -20,6 +22,7 @@ import { useTaskQueue } from "../hooks/useTaskQueue";
 import { useRouter } from "../router";
 import type { ModalType, ProjectStatus } from "../types/models";
 import {
+  DASHBOARD_URL,
   KEY_SYMBOLS,
   SPINNER_FRAMES,
   SPINNER_INTERVAL,
@@ -121,9 +124,7 @@ export function HomePage() {
       try {
         if (confirmPayment) {
           const result = await continueTask(async () => {
-            const { createProjectKey } = await import("@repo/crypto");
             const { encryptedProjectKey } = await createProjectKey(publicKey);
-            const { getProtectedApi } = await import("../api");
             const api = getProtectedApi();
             return await api.createProject({ name, encryptedProjectKey, confirmPayment: true });
           });
@@ -144,9 +145,7 @@ export function HomePage() {
         }
 
         const result = await runTask(`Creating project "${name}"...`, async () => {
-          const { createProjectKey } = await import("@repo/crypto");
           const { encryptedProjectKey } = await createProjectKey(publicKey);
-          const { getProtectedApi } = await import("../api");
           const api = getProtectedApi();
           return await api.createProject({ name, encryptedProjectKey, confirmPayment: false });
         });
@@ -186,7 +185,6 @@ export function HomePage() {
     }
     await loading.run("renaming", async () => {
       await runTask(`Renaming project to "${name}"...`, async () => {
-        const { getProtectedApi } = await import("../api");
         const api = getProtectedApi();
         await api.updateProject({ projectId, name });
       });
@@ -199,7 +197,6 @@ export function HomePage() {
     if (!confirmingDelete) return;
     await loading.run("archiving", async () => {
       await runTask(`Archiving "${confirmingDelete.name}"...`, async () => {
-        const { getProtectedApi } = await import("../api");
         const api = getProtectedApi();
         await api.archiveProject(confirmingDelete.id);
       });
@@ -303,7 +300,6 @@ export function HomePage() {
     } else if (key.name === "p") {
       setActiveModal("password");
     } else if (key.name === "g" && !key.meta && !key.ctrl) {
-      const { DASHBOARD_URL } = require("../utils/constants");
       open(DASHBOARD_URL);
     } else if ((key.name === "l" && key.ctrl) || key.sequence === "\x0C") {
       setActiveModal("logout");
