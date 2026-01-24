@@ -1,4 +1,5 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
+import open from "open";
 import { useEffect, useRef, useState } from "react";
 import { InlineInput } from "../components/forms/InlineInput";
 import { CommandPaletteModal } from "../components/modals/CommandPaletteModal";
@@ -303,8 +304,7 @@ export function HomePage() {
       setActiveModal("password");
     } else if (key.name === "g" && !key.meta && !key.ctrl) {
       const { DASHBOARD_URL } = require("../utils/constants");
-      const { exec } = require("node:child_process");
-      exec(`open "${DASHBOARD_URL}"`);
+      open(DASHBOARD_URL);
     } else if ((key.name === "l" && key.ctrl) || key.sequence === "\x0C") {
       setActiveModal("logout");
     } else if (key.sequence === "?") {

@@ -1,4 +1,5 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
+import open from "open";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { InlineInput } from "../components/forms/InlineInput";
 import { BulkImportModal } from "../components/modals/BulkImportModal";
@@ -652,8 +653,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         break;
       case "g": {
         const { DASHBOARD_URL } = require("../utils/constants");
-        const { exec } = require("node:child_process");
-        exec(`open "${DASHBOARD_URL}"`);
+        open(DASHBOARD_URL);
         break;
       }
     }
@@ -785,8 +785,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
 
     if (key.name === "g" && !key.meta && !key.ctrl) {
       const { DASHBOARD_URL } = require("../utils/constants");
-      const { exec } = require("node:child_process");
-      exec(`open "${DASHBOARD_URL}"`);
+      open(DASHBOARD_URL);
       return;
     }
 
