@@ -1,5 +1,5 @@
 import { useKeyboard } from "@opentui/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { KEY_SYMBOLS, THEME_COLORS } from "../utils/constants";
 import {
   checkPasswordRequirements,
@@ -50,9 +50,11 @@ export function PasswordInput({
   const showStrength = mode !== "unlock" && focusedField === "password";
 
   // Clear validation errors when password becomes valid
-  if (showValidationErrors && validation.isValid) {
-    setShowValidationErrors(false);
-  }
+  useEffect(() => {
+    if (showValidationErrors && validation.isValid) {
+      setShowValidationErrors(false);
+    }
+  }, [showValidationErrors, validation.isValid]);
 
   const cycleFocus = (direction: "next" | "prev") => {
     type FieldName = "current" | "password" | "confirm";
