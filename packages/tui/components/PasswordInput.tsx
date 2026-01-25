@@ -42,11 +42,17 @@ export function PasswordInput({
   const [currentValue, setCurrentValue] = useState("");
   const [passwordValue, setPasswordValue] = useState("");
   const [confirmValue, setConfirmValue] = useState("");
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
 
   const requirements = checkPasswordRequirements(passwordValue);
   const validation = validatePassword(passwordValue);
   const passwordsMatch = confirmValue.length > 0 && confirmValue === passwordValue;
   const showStrength = mode !== "unlock" && focusedField === "password";
+
+  // Clear validation errors when password becomes valid
+  if (showValidationErrors && validation.isValid) {
+    setShowValidationErrors(false);
+  }
 
   const cycleFocus = (direction: "next" | "prev") => {
     type FieldName = "current" | "password" | "confirm";
@@ -71,7 +77,10 @@ export function PasswordInput({
     }
 
     if (mode === "change" && currentValue.length === 0) return;
-    if (!validation.isValid) return;
+    if (!validation.isValid) {
+      setShowValidationErrors(true);
+      return;
+    }
     if (!passwordsMatch) return;
 
     if (mode === "change") {
@@ -182,6 +191,19 @@ export function PasswordInput({
           width={width}
           onChange={setConfirmValue}
         />
+      )}
+
+      {showValidationErrors && validation.errors.length > 0 && (
+        <box flexDirection="column">
+          <box height={1}>
+            <text fg={THEME_COLORS.error}>[!] Password requirements not met:</text>
+          </box>
+          {validation.errors.map((err) => (
+            <box key={err} height={1} paddingLeft={4}>
+              <text fg={THEME_COLORS.error}>• {err}</text>
+            </box>
+          ))}
+        </box>
       )}
 
       {error && (

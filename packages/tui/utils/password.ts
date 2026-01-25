@@ -165,8 +165,15 @@ function calculateStrength(requirements: PasswordRequirement[]): {
 export function validatePassword(password: string): PasswordValidationResult {
   const requirements = checkPasswordRequirements(password);
   const { strength, score } = calculateStrength(requirements);
-  const isValid = password.length > 0;
-  const errors = isValid ? [] : ["Password is required"];
+
+  if (password.length === 0) {
+    return { isValid: false, errors: ["Password is required"], strength, strengthScore: score };
+  }
+
+  const unmetRequirements = requirements.filter((r) => !r.met);
+  const isValid = unmetRequirements.length === 0;
+  const errors = unmetRequirements.map((r) => r.label);
+
   return { isValid, errors, strength, strengthScore: score };
 }
 
