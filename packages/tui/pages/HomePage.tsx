@@ -51,6 +51,7 @@ export function HomePage() {
     projects,
     isLoading: isLoadingProjects,
     limits,
+    error: limitsError,
     refetch: refetchProjects,
   } = useProjects();
 
@@ -82,6 +83,7 @@ export function HomePage() {
   const [confirmingDelete, setConfirmingDelete] = useState<{ id: string; name: string } | null>(
     null,
   );
+  const [removalSelectedIndex, setRemovalSelectedIndex] = useState(0);
 
   useEffect(() => {
     if (!pendingProjectName) return;
@@ -100,6 +102,11 @@ export function HomePage() {
 
   const showPendingProject =
     pendingProjectName && !projects.some((p) => p.name === pendingProjectName);
+
+  // Projects that can be archived (owned, non-archived)
+  const archivableProjects = projects.filter(
+    (p) => p.status === "owned" && !p.status.includes("archived"),
+  );
 
   const prevHasProRef = useRef(hasPro);
   useEffect(() => {
@@ -206,6 +213,27 @@ export function HomePage() {
     });
   };
 
+  const handleArchiveFromRemovalModal = async () => {
+    const project = archivableProjects[removalSelectedIndex];
+    if (!project) return;
+    await loading.run("archiving", async () => {
+      await runTask(`Archiving "${project.name}"...`, async () => {
+        const api = getProtectedApi();
+        await api.archiveProject(project.id);
+      });
+      showSuccess(`"${project.name}" archived`);
+      await refetchProjects();
+      // Reset selection if needed
+      if (removalSelectedIndex >= archivableProjects.length - 1) {
+        setRemovalSelectedIndex(Math.max(0, archivableProjects.length - 2));
+      }
+      // Close modal if we've archived enough projects
+      if (payment.removalModal.currentUsage - 1 <= payment.removalModal.includedUsage) {
+        payment.closeRemoval();
+      }
+    });
+  };
+
   const handleLogout = async () => {
     await logout();
   };
@@ -250,6 +278,23 @@ export function HomePage() {
     )
       return;
     if (isProcessing || loading.anyLoading()) return;
+
+    // Handle removal modal keyboard navigation
+    if (payment.removalModal.visible) {
+      if (key.name === "k" || key.name === "up") {
+        setRemovalSelectedIndex((prev) => Math.max(0, prev - 1));
+      } else if (key.name === "j" || key.name === "down") {
+        setRemovalSelectedIndex((prev) => Math.min(archivableProjects.length - 1, prev + 1));
+      } else if (key.name === "return" || key.name === "d") {
+        handleArchiveFromRemovalModal();
+      } else if (key.name === "escape") {
+        payment.closeRemoval();
+        setRemovalSelectedIndex(0);
+      } else if (key.name === "g" && !key.meta && !key.ctrl) {
+        open(DASHBOARD_URL);
+      }
+      return;
+    }
 
     if (activeModal === "logout") {
       if (key.name === "y") handleLogout();
@@ -415,6 +460,12 @@ export function HomePage() {
             {(() => {
               if (isLoadingProjects) {
                 return <text fg={THEME_COLORS.textDim}>...</text>;
+              }
+
+              if (limitsError) {
+                return (
+                  <text fg={THEME_COLORS.warning}>{projects.length} (limits unavailable)</text>
+                );
               }
 
               if (limits !== null && limits.includedUsage !== undefined) {
@@ -656,6 +707,58 @@ export function HomePage() {
         portalUrl={payment.billingPortalModal.url}
         onClose={payment.closeBilling}
       />
+
+      <Modal
+        visible={payment.removalModal.visible}
+        title="Usage Limit Exceeded"
+        width={58}
+        height={Math.min(16, 8 + archivableProjects.length)}
+        shortcuts={[
+          { key: "j/k", description: "navigate", disabled: loading.isLoading("archiving") },
+          { key: "d", description: "archive", disabled: loading.isLoading("archiving") },
+          { key: "g", description: "dashboard", disabled: false },
+          { key: "esc", description: "close", disabled: loading.isLoading("archiving") },
+        ]}
+      >
+        <box flexDirection="column">
+          <text fg={THEME_COLORS.warning}>
+            You're using {payment.removalModal.currentUsage} projects but only have{" "}
+            {payment.removalModal.includedUsage} included.
+          </text>
+          <text fg={THEME_COLORS.textMuted}>
+            Archive {payment.removalModal.excessCount} project(s) to continue.
+          </text>
+          <box height={1} />
+          <text fg={THEME_COLORS.textDim}>Select a project to archive:</text>
+          <box flexDirection="column" marginTop={1}>
+            {archivableProjects.slice(0, 5).map((project, index) => {
+              const isSelected = index === removalSelectedIndex;
+              return (
+                <box
+                  key={project.id}
+                  height={1}
+                  width={54}
+                  flexDirection="row"
+                  justifyContent="space-between"
+                >
+                  <text fg={isSelected ? THEME_COLORS.text : THEME_COLORS.textMuted}>
+                    <span fg={isSelected ? THEME_COLORS.primary : THEME_COLORS.textDim}>
+                      {isSelected ? "› " : "  "}
+                    </span>
+                    {project.name}
+                  </text>
+                  <text fg={THEME_COLORS.textDim}>[{project.status}]</text>
+                </box>
+              );
+            })}
+            {archivableProjects.length > 5 && (
+              <text fg={THEME_COLORS.textDim}>
+                {"  "}... {archivableProjects.length - 5} more
+              </text>
+            )}
+          </box>
+        </box>
+      </Modal>
     </box>
   );
 }

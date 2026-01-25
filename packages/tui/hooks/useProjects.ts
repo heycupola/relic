@@ -12,9 +12,11 @@ export function useProjects() {
 
   const [limits, setLimits] = useState<{ usage: number; includedUsage: number } | null>(null);
   const [limitsLoading, setLimitsLoading] = useState(true);
+  const [limitsError, setLimitsError] = useState<Error | null>(null);
 
   const fetchLimits = useCallback(async () => {
     setLimitsLoading(true);
+    setLimitsError(null);
     try {
       const apiClient = getProtectedApi();
       await apiClient.ensureAuth();
@@ -23,6 +25,7 @@ export function useProjects() {
     } catch (err) {
       logger.error("Failed to fetch limits:", err);
       setLimits(null);
+      setLimitsError(err instanceof Error ? err : new Error("Failed to fetch limits"));
     } finally {
       setLimitsLoading(false);
     }
@@ -111,7 +114,7 @@ export function useProjects() {
     projects,
     limits,
     isLoading,
-    error: null,
+    error: limitsError,
     refetch: fetchLimits,
     createProject,
     renameProject,

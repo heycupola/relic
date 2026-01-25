@@ -72,10 +72,18 @@ export function usePaymentFlow(options: UsePaymentFlowOptions = {}) {
     url: string;
   }>({ visible: false, url: "" });
 
+  const [removalModal, setRemovalModal] = useState<{
+    visible: boolean;
+    currentUsage: number;
+    includedUsage: number;
+    excessCount: number;
+  }>({ visible: false, currentUsage: 0, includedUsage: 0, excessCount: 0 });
+
   const closeAll = useCallback(() => {
     setConfirmationModal({ visible: false, type: "project", balance: 0 });
     setCheckoutModal({ visible: false, url: "", reason: "pro_required" });
     setBillingPortalModal({ visible: false, url: "" });
+    setRemovalModal({ visible: false, currentUsage: 0, includedUsage: 0, excessCount: 0 });
   }, []);
 
   const handleResult = useCallback(
@@ -157,10 +165,12 @@ export function usePaymentFlow(options: UsePaymentFlowOptions = {}) {
         setConfirmationModal({ visible: false, type: "project", balance: 0 });
         setBillingPortalModal({ visible: false, url: "" });
         setCheckoutModal({ visible: false, url: "", reason: "pro_required" });
-        showError(
-          normalized.message ||
-            `Usage limit exceeded (${normalized.currentUsage}/${normalized.includedUsage}). Remove ${normalized.excessCount} item(s) or upgrade.`,
-        );
+        setRemovalModal({
+          visible: true,
+          currentUsage: normalized.currentUsage ?? 0,
+          includedUsage: normalized.includedUsage ?? 0,
+          excessCount: normalized.excessCount ?? 0,
+        });
         return;
       }
 
@@ -200,10 +210,13 @@ export function usePaymentFlow(options: UsePaymentFlowOptions = {}) {
     confirmationModal,
     checkoutModal,
     billingPortalModal,
+    removalModal,
     handleResult,
     closeConfirmation: () => setConfirmationModal({ visible: false, type: "project", balance: 0 }),
     closeCheckout: () => setCheckoutModal({ visible: false, url: "", reason: "pro_required" }),
     closeBilling: () => setBillingPortalModal({ visible: false, url: "" }),
+    closeRemoval: () =>
+      setRemovalModal({ visible: false, currentUsage: 0, includedUsage: 0, excessCount: 0 }),
     closeAll,
   };
 }

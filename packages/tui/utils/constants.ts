@@ -27,6 +27,7 @@ export const THEME_COLORS = {
   secondary: "#bb9af7",
   accent: "#e0af68",
   success: "#9ece6a",
+  warning: "#e0af68",
   error: "#f7768e",
   text: "#c0caf5",
   textMuted: "#565f89",
