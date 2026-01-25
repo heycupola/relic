@@ -111,6 +111,10 @@ export function useSingleLineInput(options: SingleLineInputOptions = {}) {
         return true;
       }
       if (key.sequence && !key.ctrl && !key.meta && !key.option) {
+        const charCode = key.sequence.charCodeAt(0);
+        const isPrintable = key.sequence.length === 1 && charCode >= 32 && charCode !== 127;
+        if (!isPrintable) return false;
+
         const result = insertAt(value, cursor, key.sequence, maxLength);
         setValue(result.value);
         setCursor(result.cursor);
@@ -279,6 +283,10 @@ export function useMultiLineInput(options: MultiLineInputOptions = {}) {
         key.name !== "return" &&
         key.name !== "tab"
       ) {
+        const charCode = key.sequence.charCodeAt(0);
+        const isPrintable = key.sequence.length === 1 && charCode >= 32 && charCode !== 127;
+        if (!isPrintable) return false;
+
         const index = linesToPosition(lines, cursor);
         const newValue = value.slice(0, index) + key.sequence + value.slice(index);
         const newLines = newValue.split("\n");
