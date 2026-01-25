@@ -1,4 +1,4 @@
-import { api } from "@repo/backend";
+import { api, type Id } from "@repo/backend";
 import { useQuery } from "convex/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getProtectedApi } from "../api";
@@ -6,11 +6,11 @@ import type { Project as ApiProject, SharedUser, ShareLimits } from "../types/ap
 import { logger } from "../utils/debugLog";
 
 export function useProject(projectId: string) {
-  // @ts-expect-error - Convex ID type mismatch
-  const projectData = useQuery(api.project.getProject, { projectId });
-  // @ts-expect-error - Convex ID type mismatch
+  const projectData = useQuery(api.project.getProject, {
+    projectId: projectId as Id<"project">,
+  });
   const sharesData = useQuery(api.projectShare.listActiveProjectSharesByProject, {
-    projectId,
+    projectId: projectId as Id<"project">,
   });
 
   const [shareLimits, setShareLimits] = useState<ShareLimits | null>(null);
@@ -38,7 +38,7 @@ export function useProject(projectId: string) {
   const project = useMemo<ApiProject | null>(() => {
     if (!projectData) return null;
     return {
-      id: projectData.id,
+      id: projectData.id as string,
       name: projectData.name,
       slug: projectData.slug,
       description: projectData.description,
@@ -48,16 +48,18 @@ export function useProject(projectId: string) {
       encryptedProjectKey: projectData.encryptedProjectKey,
       createdAt: projectData.createdAt,
       updatedAt: projectData.updatedAt,
+      shareUsageCount: 0,
     };
   }, [projectData]);
 
   const sharedUsers = useMemo<SharedUser[]>(() => {
     if (!sharesData?.shares) return [];
     return sharesData.shares.map((share) => ({
-      id: share.id,
+      id: share.id as string,
       email: share.userEmail,
       name: share.userName,
       publicKey: share.userPublicKey,
+      sharedAt: share.sharedAt,
     }));
   }, [sharesData]);
 

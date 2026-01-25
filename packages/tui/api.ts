@@ -1,3 +1,9 @@
+import {
+  api,
+  SecretValueType as BackendSecretValueType,
+  type Id,
+  type TableNames,
+} from "@repo/backend";
 import { ConvexHttpClient } from "convex/browser";
 import { ensureValidJwt } from "./convex/services/jwt";
 import type {
@@ -26,6 +32,15 @@ function createClient(): ConvexHttpClient {
   return new ConvexHttpClient(CONVEX_URL);
 }
 
+/**
+ * Type-safe helper to cast string IDs to Convex Id type.
+ * Convex Id<T> is a branded string type (string & { __tableName: T }).
+ * This cast is safe because we're passing IDs that came from Convex originally.
+ */
+function toId<T extends TableNames>(id: string): Id<T> {
+  return id as Id<T>;
+}
+
 export class ProtectedApi {
   private client: ConvexHttpClient;
   private authPromise: Promise<void> | null = null;
@@ -52,7 +67,6 @@ export class ProtectedApi {
         if (tokenParts.length !== 3) {
           throw new Error(`Invalid JWT format before setAuth: ${tokenParts.length} parts`);
         }
-        // @ts-expect-error - ConvexHttpClient.setAuth expects a different type but works with string JWT
         this.client.setAuth(token);
       } catch (error) {
         logger.error("Failed to get JWT token:", error);
@@ -77,17 +91,19 @@ export class ProtectedApi {
   }
 
   async getCurrentUser(): Promise<User> {
-    return this.withAuth(() => this.client.query("user:getCurrentUser", {}));
+    const result = await this.withAuth(() => this.client.query(api.user.getCurrentUser, {}));
+    return {
+      ...result,
+      image: result.image ?? undefined,
+    } as User;
   }
 
   async getUserPublicKeyByEmail(email: string): Promise<{ publicKey: string } | null> {
-    return this.withAuth(() => this.client.query("user:getUserPublicKeyByEmail", { email }));
+    return this.withAuth(() => this.client.query(api.user.getUserPublicKeyByEmail, { email }));
   }
 
   async hasUserKeys(): Promise<boolean> {
-    const result = await this.withAuth<{ hasKeys: boolean }>(() =>
-      this.client.query("userKey:hasUserKeys", {}),
-    );
+    const result = await this.withAuth(() => this.client.query(api.userKey.hasUserKeys, {}));
     return result.hasKeys;
   }
 
@@ -96,12 +112,12 @@ export class ProtectedApi {
     encryptedPrivateKey: string;
     salt: string;
   }): Promise<void> {
-    return this.withAuth(() => this.client.mutation("userKey:storeUserKeys", args));
+    await this.withAuth(() => this.client.mutation(api.userKey.storeUserKeys, args));
   }
 
   async updatePassword(args: { encryptedPrivateKey: string; salt: string }): Promise<void> {
-    return this.withAuth(() =>
-      this.client.mutation("userKey:updatePassword", {
+    await this.withAuth(() =>
+      this.client.mutation(api.userKey.updatePassword, {
         newEncryptedPrivateKey: args.encryptedPrivateKey,
         newSalt: args.salt,
       }),
@@ -115,18 +131,40 @@ export class ProtectedApi {
     rewrappedShares: Array<{ shareId: string; newEncryptedProjectKey: string }>;
     rewrappedOwnedProjects: Array<{ projectId: string; newEncryptedProjectKey: string }>;
   }): Promise<void> {
-    return this.withAuth(() => this.client.mutation("userKey:rotateUserKeys", args));
+    await this.withAuth(() =>
+      this.client.mutation(api.userKey.rotateUserKeys, {
+        newPublicKey: args.newPublicKey,
+        newEncryptedPrivateKey: args.newEncryptedPrivateKey,
+        newSalt: args.newSalt,
+        rewrappedShares: args.rewrappedShares.map((s) => ({
+          shareId: toId<"projectShare">(s.shareId),
+          newEncryptedProjectKey: s.newEncryptedProjectKey,
+        })),
+        rewrappedOwnedProjects: args.rewrappedOwnedProjects.map((p) => ({
+          projectId: toId<"project">(p.projectId),
+          newEncryptedProjectKey: p.newEncryptedProjectKey,
+        })),
+      }),
+    );
   }
 
   async listProjects(): Promise<ProjectListItem[]> {
-    const result = await this.withAuth<{ projects: ProjectListItem[] }>(() =>
-      this.client.query("project:listUserProjects", {}),
-    );
-    return result.projects;
+    const result = await this.withAuth(() => this.client.query(api.project.listUserProjects, {}));
+    return result.projects.map((p) => ({
+      ...p,
+      id: String(p.id),
+    })) as ProjectListItem[];
   }
 
   async getProject(projectId: string): Promise<Project> {
-    return this.withAuth(() => this.client.query("project:getProject", { projectId }));
+    const result = await this.withAuth(() =>
+      this.client.query(api.project.getProject, { projectId: toId<"project">(projectId) }),
+    );
+    return {
+      ...result,
+      id: String(result.id),
+      shareUsageCount: 0,
+    } as Project;
   }
 
   async createProject(args: {
@@ -134,39 +172,75 @@ export class ProtectedApi {
     encryptedProjectKey: string;
     confirmPayment?: boolean;
   }): Promise<CreateProjectResult> {
-    return this.withAuth(() => this.client.action("project:createProject", args));
+    return this.withAuth(() => this.client.action(api.project.createProject, args));
   }
 
   async updateProject(args: { projectId: string; name: string }): Promise<void> {
-    return this.withAuth(() => this.client.mutation("project:updateProject", args));
+    await this.withAuth(() =>
+      this.client.mutation(api.project.updateProject, {
+        projectId: toId<"project">(args.projectId),
+        name: args.name,
+      }),
+    );
   }
 
   async archiveProject(projectId: string): Promise<void> {
-    return this.withAuth(() => this.client.action("project:archiveProject", { projectId }));
+    await this.withAuth(() =>
+      this.client.action(api.project.archiveProject, { projectId: toId<"project">(projectId) }),
+    );
   }
 
   async unarchiveProject(projectId: string): Promise<void> {
-    return this.withAuth(() => this.client.action("project:unarchiveProject", { projectId }));
+    await this.withAuth(() =>
+      this.client.action(api.project.unarchiveProject, { projectId: toId<"project">(projectId) }),
+    );
   }
 
   async getLimits(): Promise<{ usage: number; includedUsage: number }> {
-    return this.withAuth(() => this.client.action("project:getLimits", {}));
+    return this.withAuth(() => this.client.action(api.project.getLimits, {}));
   }
 
   async getProjectLimits(): Promise<ProjectLimits> {
-    return this.withAuth(() => this.client.action("project:getProjectLimits", {}));
+    const result = await this.withAuth(() => this.client.action(api.project.getProjectLimits, {}));
+    return {
+      ...result,
+      unusedProjects: result.unusedProjects ?? 0,
+    } as ProjectLimits;
   }
 
   async getProjectEnvironments(projectId: string): Promise<Environment[]> {
-    return this.withAuth(() =>
-      this.client.query("environment:getProjectEnvironments", { projectId }),
+    const result = await this.withAuth(() =>
+      this.client.query(api.environment.getProjectEnvironments, {
+        projectId: toId<"project">(projectId),
+      }),
     );
+    return result.map((e) => ({
+      ...e,
+      id: String(e.id),
+      projectId: String(e.projectId),
+    })) as Environment[];
   }
 
   async getEnvironmentData(environmentId: string): Promise<EnvironmentData> {
-    return this.withAuth(() =>
-      this.client.query("environment:getEnvironmentData", { environmentId }),
+    const result = await this.withAuth(() =>
+      this.client.query(api.environment.getEnvironmentData, {
+        environmentId: toId<"environment">(environmentId),
+      }),
     );
+    return {
+      ...result,
+      secrets: result.secrets.map((s) => ({
+        ...s,
+        id: String(s.id),
+        environmentId: String(s.environmentId),
+        folderId: s.folderId ? String(s.folderId) : undefined,
+      })),
+      folders: result.folders.map((f) => ({
+        ...f,
+        id: String(f.id),
+        environmentId: String(f.environmentId),
+      })),
+    } as EnvironmentData;
   }
 
   async createEnvironment(args: {
@@ -174,7 +248,14 @@ export class ProtectedApi {
     name: string;
     color?: string;
   }): Promise<{ id: string }> {
-    return this.withAuth(() => this.client.mutation("environment:createEnvironment", args));
+    // Note: color parameter is not supported by backend yet
+    const result = await this.withAuth(() =>
+      this.client.mutation(api.environment.createEnvironment, {
+        projectId: toId<"project">(args.projectId),
+        name: args.name,
+      }),
+    );
+    return { id: String(result.id) };
   }
 
   async updateEnvironment(args: {
@@ -182,25 +263,46 @@ export class ProtectedApi {
     name: string;
     color?: string;
   }): Promise<void> {
-    return this.withAuth(() => this.client.mutation("environment:updateEnvironment", args));
+    // Note: color parameter is not supported by backend yet
+    await this.withAuth(() =>
+      this.client.mutation(api.environment.updateEnvironment, {
+        environmentId: toId<"environment">(args.environmentId),
+        name: args.name,
+      }),
+    );
   }
 
   async deleteEnvironment(environmentId: string): Promise<void> {
-    return this.withAuth(() =>
-      this.client.mutation("environment:deleteEnvironment", { environmentId }),
+    await this.withAuth(() =>
+      this.client.mutation(api.environment.deleteEnvironment, {
+        environmentId: toId<"environment">(environmentId),
+      }),
     );
   }
 
   async createFolder(args: { environmentId: string; name: string }): Promise<{ id: string }> {
-    return this.withAuth(() => this.client.mutation("folder:createFolder", args));
+    const result = await this.withAuth(() =>
+      this.client.mutation(api.folder.createFolder, {
+        environmentId: toId<"environment">(args.environmentId),
+        name: args.name,
+      }),
+    );
+    return { id: String(result.id) };
   }
 
   async updateFolder(args: { folderId: string; name: string }): Promise<void> {
-    return this.withAuth(() => this.client.mutation("folder:updateFolder", args));
+    await this.withAuth(() =>
+      this.client.mutation(api.folder.updateFolder, {
+        folderId: toId<"folder">(args.folderId),
+        name: args.name,
+      }),
+    );
   }
 
   async deleteFolder(folderId: string): Promise<void> {
-    return this.withAuth(() => this.client.mutation("folder:deleteFolder", { folderId }));
+    await this.withAuth(() =>
+      this.client.mutation(api.folder.deleteFolder, { folderId: toId<"folder">(folderId) }),
+    );
   }
 
   async createSecret(args: {
@@ -212,7 +314,18 @@ export class ProtectedApi {
     scope?: SecretScope;
     description?: string;
   }): Promise<{ id: string }> {
-    return this.withAuth(() => this.client.mutation("secret:createSecret", args));
+    // Note: description parameter is not supported by backend yet
+    const result = await this.withAuth(() =>
+      this.client.mutation(api.secret.createSecret, {
+        environmentId: toId<"environment">(args.environmentId),
+        folderId: args.folderId ? toId<"folder">(args.folderId) : undefined,
+        key: args.key,
+        encryptedValue: args.encryptedValue,
+        valueType: (args.valueType ?? "string") as "string" | "number" | "boolean",
+        scope: args.scope as "client" | "server" | "shared" | undefined,
+      }),
+    );
+    return { id: String(result.id) };
   }
 
   async updateSecretBulk(args: {
@@ -233,17 +346,51 @@ export class ProtectedApi {
     skippedCount: number;
     secretIds: string[];
   }> {
-    return this.withAuth(() => this.client.mutation("secret:updateSecretBulk", args));
+    const result = await this.withAuth(() =>
+      this.client.mutation(api.secret.updateSecretBulk, {
+        environmentId: toId<"environment">(args.environmentId),
+        folderId: args.folderId ? toId<"folder">(args.folderId) : undefined,
+        secrets: args.secrets.map((s) => ({
+          secretId: s.secretId ? toId<"secret">(s.secretId) : undefined,
+          key: s.key,
+          encryptedValue: s.encryptedValue,
+          valueType: s.valueType as "string" | "number" | "boolean",
+          scope: s.scope as "client" | "server" | "shared" | undefined,
+        })),
+        mode: args.mode,
+      }),
+    );
+    return {
+      ...result,
+      secretIds: result.secretIds.map((id) => String(id)),
+    };
   }
 
   async getSecret(secretId: string): Promise<Secret> {
-    return this.withAuth(() => this.client.query("secret:getSecret", { secretId }));
+    const result = await this.withAuth(() =>
+      this.client.query(api.secret.getSecret, { secretId: toId<"secret">(secretId) }),
+    );
+    return {
+      ...result,
+      id: String(result.id),
+      environmentId: String(result.environmentId),
+      folderId: result.folderId ? String(result.folderId) : undefined,
+    } as Secret;
   }
 
   async getAllSecretsForProject(
     projectId: string,
   ): Promise<Array<{ id: string; environmentId: string; encryptedValue: string }>> {
-    return this.withAuth(() => this.client.query("secret:getAllSecretsForProject", { projectId }));
+    const result = await this.withAuth(() =>
+      this.client.query(api.secret.getAllSecretsForProject, {
+        projectId: toId<"project">(projectId),
+      }),
+    );
+    return result.map((s) => ({
+      id: String(s.id),
+      environmentId: String(s.environmentId),
+      encryptedValue: s.encryptedValue,
+    }));
   }
 
   async updateSecret(args: {
@@ -254,11 +401,24 @@ export class ProtectedApi {
     scope?: SecretScope;
     description?: string;
   }): Promise<void> {
-    return this.withAuth(() => this.client.mutation("secret:updateSecret", args));
+    // Note: description parameter is not supported by backend yet
+    await this.withAuth(() =>
+      this.client.mutation(api.secret.updateSecret, {
+        secretId: toId<"secret">(args.secretId),
+        updates: {
+          key: args.key,
+          encryptedValue: args.encryptedValue,
+          valueType: (args.valueType ?? BackendSecretValueType.String) as BackendSecretValueType,
+          scope: args.scope as "client" | "server" | "shared" | undefined,
+        },
+      }),
+    );
   }
 
   async deleteSecret(secretId: string): Promise<void> {
-    return this.withAuth(() => this.client.mutation("secret:deleteSecret", { secretId }));
+    await this.withAuth(() =>
+      this.client.mutation(api.secret.deleteSecret, { secretId: toId<"secret">(secretId) }),
+    );
   }
 
   async shareProject(args: {
@@ -267,20 +427,31 @@ export class ProtectedApi {
     encryptedProjectKey: string;
     confirmPayment?: boolean;
   }): Promise<ShareProjectResult> {
-    return this.withAuth(() => this.client.action("projectShare:shareProject", args));
+    return this.withAuth(() =>
+      this.client.action(api.projectShare.shareProject, {
+        projectId: toId<"project">(args.projectId),
+        userEmail: args.userEmail,
+        encryptedProjectKey: args.encryptedProjectKey,
+        confirmPayment: args.confirmPayment,
+      }),
+    );
   }
 
   async revokeShare(shareId: string): Promise<void> {
-    return this.withAuth(() => this.client.action("projectShare:revokeShare", { shareId }));
+    await this.withAuth(() =>
+      this.client.action(api.projectShare.revokeShare, { shareId: toId<"projectShare">(shareId) }),
+    );
   }
 
   async listProjectShares(projectId: string): Promise<{ shares: SharedUser[] }> {
-    const result = await this.withAuth<{ shares: ApiShareResponse[] }>(() =>
-      this.client.query("projectShare:listActiveProjectSharesByProject", { projectId }),
+    const result = await this.withAuth(() =>
+      this.client.query(api.projectShare.listActiveProjectSharesByProject, {
+        projectId: toId<"project">(projectId),
+      }),
     );
     return {
-      shares: result.shares.map((share) => ({
-        id: share.id,
+      shares: result.shares.map((share: ApiShareResponse) => ({
+        id: String(share.id),
         email: share.userEmail,
         name: share.userName,
         publicKey: share.userPublicKey,
@@ -290,11 +461,11 @@ export class ProtectedApi {
   }
 
   async listSharedProjects(): Promise<ProjectListItem[]> {
-    const result = await this.withAuth<{ shares: ApiSharedProjectResponse[] }>(() =>
-      this.client.query("projectShare:listActiveSharedProjectsForCurrentUser", {}),
+    const result = await this.withAuth(() =>
+      this.client.query(api.projectShare.listActiveSharedProjectsForCurrentUser, {}),
     );
-    return result.shares.map((share) => ({
-      id: share.projectId,
+    return result.shares.map((share: ApiSharedProjectResponse) => ({
+      id: String(share.projectId),
       name: share.projectName,
       slug: share.projectSlug,
       status: share.status as ProjectListItem["status"],
@@ -308,7 +479,9 @@ export class ProtectedApi {
 
   async getProjectShare(projectId: string): Promise<{ encryptedProjectKey: string } | null> {
     return this.withAuth(() =>
-      this.client.query("projectShare:getProjectShareByProjectForCurrentUser", { projectId }),
+      this.client.query(api.projectShare.getProjectShareByProjectForCurrentUser, {
+        projectId: toId<"project">(projectId),
+      }),
     );
   }
 
@@ -318,28 +491,54 @@ export class ProtectedApi {
     rewrappedShares: Array<{ shareId: string; newEncryptedProjectKey: string }>;
     reEncryptedSecrets: Array<{ secretId: string; newEncryptedValue: string }>;
   }): Promise<void> {
-    return this.withAuth(() => this.client.action("projectShare:revokeShareWithRotation", args));
+    await this.withAuth(() =>
+      this.client.action(api.projectShare.revokeShareWithRotation, {
+        shareId: toId<"projectShare">(args.shareId),
+        newEncryptedProjectKey: args.newEncryptedProjectKey,
+        rewrappedShares: args.rewrappedShares.map((s) => ({
+          shareId: toId<"projectShare">(s.shareId),
+          newEncryptedProjectKey: s.newEncryptedProjectKey,
+        })),
+        reEncryptedSecrets: args.reEncryptedSecrets.map((s) => ({
+          secretId: toId<"secret">(s.secretId),
+          newEncryptedValue: s.newEncryptedValue,
+        })),
+      }),
+    );
   }
 
   async getProPlan(): Promise<{ url: string }> {
-    return this.withAuth(() => this.client.action("user:getProPlan", {}));
+    const result = await this.withAuth(() => this.client.action(api.user.getProPlan, {}));
+    return { url: result.checkoutLink ?? "" };
   }
 
   async checkProPlan(): Promise<{ hasPro: boolean }> {
-    return this.withAuth(() => this.client.action("user:checkProPlan", {}));
+    const result = await this.withAuth(() => this.client.action(api.user.checkProPlan, {}));
+    return { hasPro: result.hasProPlan };
   }
 
   async getShareLimits(projectId: string): Promise<ShareLimits> {
-    return this.withAuth(() => this.client.action("projectShare:getShareLimits", { projectId }));
+    return this.withAuth(() =>
+      this.client.action(api.projectShare.getShareLimits, {
+        projectId: toId<"project">(projectId),
+      }),
+    );
   }
 
   async loadLastPulse(environmentId: string): Promise<ActionLog | null> {
     return this.withAuth(async () => {
-      const result = await this.client.action("actionLog:loadActionLogsByEnvironment", {
-        environmentId,
+      const result = await this.client.action(api.actionLog.loadActionLogsByEnvironment, {
+        environmentId: toId<"environment">(environmentId),
         paginationOpts: { numItems: 1, cursor: null },
       });
-      return result.page[0] || null;
+      const firstLog = result.page[0];
+      if (!firstLog) return null;
+      return {
+        ...firstLog,
+        id: String(firstLog._id),
+        environmentId: String(firstLog.environmentId ?? ""),
+        userId: String(firstLog.userId ?? ""),
+      } as ActionLog;
     });
   }
 }

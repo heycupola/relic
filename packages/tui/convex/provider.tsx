@@ -1,5 +1,5 @@
 import { ConvexProvider, ConvexReactClient } from "convex/react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ComponentProps, type ReactNode, useEffect, useRef, useState } from "react";
 import { logger } from "../utils/debugLog";
 import { ensureValidJwt } from "./services/jwt";
 
@@ -10,6 +10,11 @@ const convexClient = new ConvexReactClient(CONVEX_URL);
 
 interface ConvexAuthProviderProps {
   children: ReactNode;
+}
+
+// Wrapper to fix React 19 type compatibility with Convex
+function TypedConvexProvider(props: ComponentProps<typeof ConvexProvider>) {
+  return ConvexProvider(props) as ReactNode;
 }
 
 export function ConvexAuthProvider({ children }: ConvexAuthProviderProps) {
@@ -51,7 +56,7 @@ export function ConvexAuthProvider({ children }: ConvexAuthProviderProps) {
     return null;
   }
 
-  return <ConvexProvider client={convexClient}>{children}</ConvexProvider>;
+  return <TypedConvexProvider client={convexClient}>{children}</TypedConvexProvider>;
 }
 
 export function getConvexReactClient() {

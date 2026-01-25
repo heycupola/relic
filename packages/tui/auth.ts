@@ -1,3 +1,4 @@
+import { api } from "@repo/backend";
 import { ConvexHttpClient } from "convex/browser";
 import type {
   DeviceCodeRequest,
@@ -20,11 +21,11 @@ export class PublicApi {
   }
 
   async requestDeviceCode(args: DeviceCodeRequest = {}): Promise<DeviceCodeResponse> {
-    return this.client.mutation("deviceAuth:requestDeviceCode", { ...args });
+    return this.client.mutation(api.deviceAuth.requestDeviceCode, { ...args });
   }
 
   async pollDeviceToken(args: DeviceTokenRequest): Promise<DeviceTokenResponse> {
-    return this.client.mutation("deviceAuth:pollDeviceToken", { ...args });
+    return this.client.mutation(api.deviceAuth.pollDeviceToken, { ...args });
   }
 }
 

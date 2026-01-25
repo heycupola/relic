@@ -5,8 +5,7 @@
     "skipLibCheck": true,
     "paths": {
       "@/*": ["./*"],
-      "@repo/ui/*": ["../../packages/ui/src/*"],
-      "@/convex/*": ["./types/convex-stub.d.ts"]
+      "@repo/ui/*": ["../../packages/ui/src/*"]
     }
   },
   "include": [
@@ -16,8 +15,7 @@
     "components/**/*.tsx",
     "lib/**/*.ts",
     "lib/**/*.tsx",
-    "types/**/*.ts",
     "next-env.d.ts"
   ],
-  "exclude": ["node_modules", "convex", "convex/**", ".next"]
+  "exclude": ["node_modules", ".next"]
 }
