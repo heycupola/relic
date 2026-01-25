@@ -1,5 +1,10 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
-import { createProjectKey } from "@repo/crypto";
+import {
+  createProjectKey,
+  decryptPrivateKeyWithPassword,
+  encryptPrivateKeyWithPassword,
+  generateSalt,
+} from "@repo/crypto";
 import open from "open";
 import { useEffect, useRef, useState } from "react";
 import { getProtectedApi } from "../api";
@@ -30,6 +35,7 @@ import {
   THEME_COLORS,
 } from "../utils/constants";
 import { logger } from "../utils/debugLog";
+import { savePassword } from "../utils/password";
 
 const STATUS_ICONS: Record<ProjectStatus, string> = {
   owned: "●",
@@ -55,7 +61,14 @@ export function HomePage() {
     refetch: refetchProjects,
   } = useProjects();
 
-  const { publicKey, hasKeys, isLoading: isLoadingKeys } = useUserKeys();
+  const {
+    publicKey,
+    hasKeys,
+    isLoading: isLoadingKeys,
+    encryptedPrivateKey,
+    salt,
+    updatePassword,
+  } = useUserKeys();
 
   const navigation = useListNavigation({
     items: projects,
@@ -84,6 +97,10 @@ export function HomePage() {
     null,
   );
   const [removalSelectedIndex, setRemovalSelectedIndex] = useState(0);
+  const [passwordChangeStatus, setPasswordChangeStatus] = useState<
+    null | "verifying" | "rewrapping" | "updating"
+  >(null);
+  const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!pendingProjectName) return;
@@ -238,6 +255,76 @@ export function HomePage() {
     await logout();
   };
 
+  const handlePasswordChange = async (currentPassword: string, newPassword: string) => {
+    if (!encryptedPrivateKey || !salt) {
+      setPasswordChangeError("Unable to change password: encryption keys not found");
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      setPasswordChangeError("New password must be different from current password");
+      return;
+    }
+
+    setPasswordChangeError(null);
+    setPasswordChangeStatus("verifying");
+
+    // Step 1: Verify current password by decrypting the private key
+    let privateKey: CryptoKey;
+    try {
+      privateKey = await decryptPrivateKeyWithPassword(encryptedPrivateKey, currentPassword, salt);
+    } catch (error) {
+      logger.error("Failed to verify current password:", error);
+      setPasswordChangeStatus(null);
+      setPasswordChangeError("Incorrect current password");
+      return;
+    }
+
+    // Step 2: Generate new salt and re-encrypt private key with new password
+    setPasswordChangeStatus("rewrapping");
+    let newEncryptedPrivateKey: string;
+    let newSalt: string;
+    try {
+      newSalt = generateSalt();
+      newEncryptedPrivateKey = await encryptPrivateKeyWithPassword(
+        privateKey,
+        newPassword,
+        newSalt,
+      );
+    } catch (error) {
+      logger.error("Failed to rewrap private key:", error);
+      setPasswordChangeStatus(null);
+      setPasswordChangeError("Failed to encrypt with new password");
+      return;
+    }
+
+    // Step 3: Update backend with new encrypted private key and salt
+    setPasswordChangeStatus("updating");
+    try {
+      await updatePassword({
+        encryptedPrivateKey: newEncryptedPrivateKey,
+        salt: newSalt,
+      });
+    } catch (error) {
+      logger.error("Failed to update password on backend:", error);
+      setPasswordChangeStatus(null);
+      setPasswordChangeError("Failed to save new password");
+      return;
+    }
+
+    // Step 4: Update locally stored session password
+    try {
+      await savePassword(newPassword);
+    } catch (error) {
+      logger.error("Failed to save password locally:", error);
+      // Don't fail the operation - backend is already updated
+    }
+
+    setPasswordChangeStatus(null);
+    setActiveModal("none");
+    showSuccess("Password changed successfully");
+  };
+
   const commands = [
     { key: "n", description: "Create project", category: "Create" },
     { key: "u", description: "Rename project", category: "Manage" },
@@ -303,7 +390,10 @@ export function HomePage() {
     }
 
     if (activeModal === "password") {
-      if (key.name === "escape") setActiveModal("none");
+      if (key.name === "escape" && !passwordChangeStatus) {
+        setActiveModal("none");
+        setPasswordChangeError(null);
+      }
       return;
     }
 
@@ -656,24 +746,39 @@ export function HomePage() {
         visible={activeModal === "password"}
         title="Change Password"
         width={55}
-        height={16}
+        height={18}
         shortcuts={[
-          { key: "^v", description: "show/hide", disabled: false },
-          { key: "tab", description: "next field", disabled: false },
-          { key: "enter", description: "save", disabled: false },
-          { key: "esc", description: "cancel", disabled: false },
+          { key: "^v", description: "show/hide", disabled: !!passwordChangeStatus },
+          { key: "tab", description: "next field", disabled: !!passwordChangeStatus },
+          { key: "enter", description: "save", disabled: !!passwordChangeStatus },
+          { key: "esc", description: "cancel", disabled: !!passwordChangeStatus },
         ]}
       >
-        <PasswordInput
-          mode="change"
-          onSubmit={(_current, newPass) => {
-            if (newPass) {
+        <box flexDirection="column" gap={1}>
+          {passwordChangeStatus && (
+            <text fg={THEME_COLORS.accent}>
+              {passwordChangeStatus === "verifying" && "Verifying current password..."}
+              {passwordChangeStatus === "rewrapping" && "Re-encrypting private key..."}
+              {passwordChangeStatus === "updating" && "Updating password..."}
+            </text>
+          )}
+          <PasswordInput
+            mode="change"
+            onSubmit={(currentPass, newPass) => {
+              if (currentPass && newPass) {
+                handlePasswordChange(currentPass, newPass);
+              }
+            }}
+            onCancel={() => {
               setActiveModal("none");
-            }
-          }}
-          onCancel={() => setActiveModal("none")}
-          width={51}
-        />
+              setPasswordChangeError(null);
+              setPasswordChangeStatus(null);
+            }}
+            width={51}
+            disabled={!!passwordChangeStatus}
+            error={passwordChangeError}
+          />
+        </box>
       </Modal>
 
       <CommandPaletteModal
