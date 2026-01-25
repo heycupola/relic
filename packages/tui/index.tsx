@@ -15,7 +15,7 @@ import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
 import { useCallback, useEffect, useState } from "react";
 import { TaskBar } from "./components/shared/TaskBar";
-import { AppProvider } from "./context";
+import { AppProvider, useUser } from "./context";
 import { ConvexAuthProvider } from "./convex/provider";
 import { clearSession, validateSession } from "./convex/services/session";
 import { AppSessionContext } from "./hooks/useAppSession";
@@ -72,9 +72,19 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
 
   if (!isPasswordUnlocked) {
     if (passwordStatus.has) {
-      return <PasswordUnlockPage onUnlock={handlePasswordUnlock} onLogout={handleLogout} />;
+      return (
+        <>
+          <PasswordUnlockPage onUnlock={handlePasswordUnlock} onLogout={handleLogout} />
+          <AuthenticatedTaskBar />
+        </>
+      );
     }
-    return <PasswordSetupPage onComplete={handlePasswordSetup} onLogout={handleLogout} />;
+    return (
+      <>
+        <PasswordSetupPage onComplete={handlePasswordSetup} onLogout={handleLogout} />
+        <AuthenticatedTaskBar />
+      </>
+    );
   }
 
   const sessionContext = {
@@ -103,8 +113,17 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
   };
 
   return (
-    <AppSessionContext.Provider value={sessionContext}>{renderPage()}</AppSessionContext.Provider>
+    <AppSessionContext.Provider value={sessionContext}>
+      {renderPage()}
+      <AuthenticatedTaskBar />
+    </AppSessionContext.Provider>
   );
+}
+
+// NOTE: TaskBar wrapper that has access to user context.
+function AuthenticatedTaskBar() {
+  const { user } = useUser();
+  return <TaskBar userEmail={user?.email} />;
 }
 
 function AppRouter() {
@@ -147,7 +166,12 @@ function AppRouter() {
   }
 
   if (!authState.isAuthenticated) {
-    return <LoginPage onLogin={handleLogin} />;
+    return (
+      <>
+        <LoginPage onLogin={handleLogin} />
+        <TaskBar />
+      </>
+    );
   }
 
   return (
@@ -164,7 +188,6 @@ function App() {
     <TaskProvider>
       <RouterProvider>
         <AppRouter />
-        <TaskBar />
       </RouterProvider>
     </TaskProvider>
   );

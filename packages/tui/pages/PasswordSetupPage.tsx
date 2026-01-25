@@ -226,7 +226,7 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
     <box
       flexDirection="column"
       width={width}
-      height={height}
+      height={height - 1}
       backgroundColor={THEME_COLORS.background}
     >
       <box
