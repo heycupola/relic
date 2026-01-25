@@ -2,19 +2,27 @@ import { api, type Id } from "@repo/backend";
 import { useQuery } from "convex/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getProtectedApi } from "../api";
+import { useUser } from "../context";
 import type { Project as ApiProject, SharedUser, ShareLimits } from "../types/api";
 import { logger } from "../utils/debugLog";
 
 export function useProject(projectId: string) {
+  const { user } = useUser();
+
   const projectData = useQuery(api.project.getProject, {
     projectId: projectId as Id<"project">,
   });
-  const sharesData = useQuery(api.projectShare.listActiveProjectSharesByProject, {
-    projectId: projectId as Id<"project">,
-  });
+
+  // NOTE: Only fetch shares list if the current user is the project owner.
+  // Non-owners (shared users) don't need this data and don't have permission to fetch it.
+  const isOwner = projectData && user ? projectData.ownerId === user.id : false;
+  const sharesData = useQuery(
+    api.projectShare.listActiveProjectSharesByProject,
+    isOwner ? { projectId: projectId as Id<"project"> } : "skip",
+  );
 
   const [shareLimits, setShareLimits] = useState<ShareLimits | null>(null);
-  const [limitsLoading, setLimitsLoading] = useState(true);
+  const [limitsLoading, setLimitsLoading] = useState(false);
 
   const fetchShareLimits = useCallback(async () => {
     setLimitsLoading(true);
@@ -31,9 +39,15 @@ export function useProject(projectId: string) {
     }
   }, [projectId]);
 
+  // NOTE: Only fetch share limits for owners (non-owners don't need this data).
   useEffect(() => {
-    fetchShareLimits();
-  }, [fetchShareLimits]);
+    if (isOwner) {
+      fetchShareLimits();
+    } else {
+      setShareLimits(null);
+      setLimitsLoading(false);
+    }
+  }, [isOwner, fetchShareLimits]);
 
   const project = useMemo<ApiProject | null>(() => {
     if (!projectData) return null;
@@ -63,7 +77,10 @@ export function useProject(projectId: string) {
     }));
   }, [sharesData]);
 
-  const isLoading = projectData === undefined || sharesData === undefined || limitsLoading;
+  // NOTE: For owners: wait for project, shares, and limits.
+  // For non-owners: only wait for project data (shares query is skipped).
+  const isLoading =
+    projectData === undefined || (isOwner && (sharesData === undefined || limitsLoading));
 
   return {
     project,
