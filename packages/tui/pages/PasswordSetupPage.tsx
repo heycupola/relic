@@ -292,15 +292,13 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
         <text fg={THEME_COLORS.textDim}>Are you sure you want to logout?</text>
       </Modal>
 
+      {/* NOTE: shortcuts={[]} because PasswordInput has its own GuideBar with contextual labels */}
       <Modal
         visible={showPasswordWarning}
         title="Password Change Warning"
         width={60}
         height={12}
-        shortcuts={[
-          { key: "enter", description: "confirm", disabled: !!taskStatus },
-          { key: "esc", description: "cancel", disabled: !!taskStatus },
-        ]}
+        shortcuts={[]}
       >
         <box flexDirection="column" width={56} gap={1}>
           <text fg={THEME_COLORS.accent}>[!] New password detected</text>
@@ -312,6 +310,7 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
             width={46}
             disabled={!!taskStatus}
             error={rewrapError}
+            additionalShortcuts={[{ key: "esc", description: "cancel", disabled: !!taskStatus }]}
           />
         </box>
       </Modal>

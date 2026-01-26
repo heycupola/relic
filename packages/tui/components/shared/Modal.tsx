@@ -63,7 +63,7 @@ export function Modal({
 
         <box flexDirection="column">{children}</box>
 
-        {shortcuts && (
+        {shortcuts && shortcuts.length > 0 && (
           <box height={1} justifyContent="flex-start" marginTop={1}>
             <text>
               {shortcuts.map((shortcut, index) => (

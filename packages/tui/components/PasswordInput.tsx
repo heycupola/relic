@@ -219,6 +219,10 @@ export function PasswordInput({
           primary: [
             {
               shortcuts: [
+                ...(mode !== "unlock" && mode !== "verify"
+                  ? [{ key: "tab", description: "next field", disabled }]
+                  : []),
+                { key: "^v", description: showPassword ? "hide" : "show", disabled },
                 {
                   key: KEY_SYMBOLS.enter,
                   description:
@@ -229,10 +233,6 @@ export function PasswordInput({
                         : "continue",
                   disabled,
                 },
-                { key: "^v", description: showPassword ? "hide" : "show", disabled },
-                ...(mode !== "unlock" && mode !== "verify"
-                  ? [{ key: "tab", description: "next field", disabled }]
-                  : []),
                 ...additionalShortcuts,
               ],
             },
