@@ -26,7 +26,7 @@ export const getLimits = protectedAction({
   args: {},
   returns: v.object({
     usage: v.number(),
-    included_usage: v.number(),
+    includedUsage: v.number(),
   }),
   handler: async (ctx: ProtectedActionCtx) => {
     const result = await ctx.autumn.check(ctx, {
@@ -36,13 +36,13 @@ export const getLimits = protectedAction({
     if (result.error || !result.data) {
       return {
         usage: 0,
-        included_usage: 0,
+        includedUsage: 0,
       };
     }
 
     return {
       usage: result.data.usage ?? 0,
-      included_usage: result.data.included_usage ?? 0,
+      includedUsage: result.data.included_usage ?? 0,
     };
   },
 });
@@ -106,6 +106,36 @@ export const createProject = protectedAction({
     encryptedProjectKey: v.string(),
     confirmPayment: v.optional(v.boolean()),
   },
+  returns: v.union(
+    v.object({
+      status: v.literal("success"),
+      projectId: v.id("project"),
+      message: v.optional(v.string()),
+    }),
+    v.object({
+      status: v.literal("paymentFailed"),
+      billingPortalUrl: v.union(v.string(), v.null()),
+      message: v.optional(v.string()),
+    }),
+    v.object({
+      status: v.literal("requiresProPlan"),
+      checkoutUrl: v.union(v.string(), v.null()),
+      message: v.optional(v.string()),
+    }),
+    v.object({
+      status: v.literal("requiresConfirmation"),
+      balance: v.number(),
+      freeLimit: v.number(),
+      message: v.optional(v.string()),
+    }),
+    v.object({
+      status: v.literal("requiresRemoval"),
+      currentUsage: v.number(),
+      includedUsage: v.number(),
+      excessCount: v.number(),
+      message: v.optional(v.string()),
+    }),
+  ),
   handler: async (
     ctx: ProtectedActionCtx,
     args: { name: string; encryptedProjectKey: string; confirmPayment?: boolean },
@@ -162,37 +192,46 @@ export const createProject = protectedAction({
           });
 
           return {
-            success: false,
-            requiresProPlan: true,
+            status: "requiresProPlan" as const,
             checkoutUrl: checkoutResult.data?.url || null,
             message: `Project limit reached (${currentUsage}/${data.included_usage}). Upgrade to Pro for more projects.`,
           };
         } catch (checkoutError) {
           console.error("Autumn checkout failed:", checkoutError);
           return {
-            success: false,
-            requiresProPlan: true,
+            status: "requiresProPlan" as const,
             checkoutUrl: null,
             message: `Project limit reached (${currentUsage}/${data.included_usage}). Upgrade to Pro for more projects.`,
           };
         }
       }
 
+      const usage = data.usage;
+      const includedUsage = data.included_usage;
       const balance = data.balance;
+
+      if (usage > includedUsage) {
+        const excessCount = usage - includedUsage;
+        return {
+          status: "requiresRemoval" as const,
+          currentUsage: usage,
+          includedUsage: includedUsage,
+          excessCount: excessCount,
+          message: `You're using ${usage} projects but only have ${includedUsage} included. Please archive ${excessCount} project(s) or upgrade.`,
+        };
+      }
 
       if (!args.confirmPayment) {
         if (!balance || balance <= 0) {
           return {
-            success: false,
-            requiresConfirmation: true,
+            status: "requiresConfirmation" as const,
             balance: 0,
             freeLimit,
             message: "No purchased projects available. Adding a project costs $10.",
           };
         }
         return {
-          success: false,
-          requiresConfirmation: true,
+          status: "requiresConfirmation" as const,
           balance,
           freeLimit,
           message: `This will use 1 of your ${balance} purchased projects.`,
@@ -207,26 +246,10 @@ export const createProject = protectedAction({
       encryptedProjectKey: args.encryptedProjectKey,
     });
 
-    let paymentFailed = false;
+    const pId: Id<"project"> = projectId;
 
     // Track usage: paid projects (for billing) or free projects within limit (for usage counting)
     if (isPaidProject || data.allowed) {
-      // For paid projects, re-verify balance before tracking to avoid relying on error messages
-      if (isPaidProject) {
-        const freshCheck = await ctx.autumn.check(ctx, {
-          featureId: "projects",
-        });
-
-        const freshBalance = freshCheck.data?.balance ?? 0;
-        if (freshBalance <= 0) {
-          return {
-            success: false,
-            paymentFailed: true,
-            message: "No purchased projects available. Adding a project costs $10.",
-          };
-        }
-      }
-
       try {
         await ctx.autumn.track(ctx, {
           featureId: "projects",
@@ -238,15 +261,29 @@ export const createProject = protectedAction({
           trackError,
         );
         if (isPaidProject) {
-          paymentFailed = true;
+          // Compensate: delete the project we just created
+          await ctx.runMutation(internal.project._deleteProject, { projectId: pId });
+
+          // Get billing portal URL for user to fix payment
+          let billingPortalUrl: string | null = null;
+          try {
+            const portalResult = await ctx.autumn.customers.billingPortal(ctx, {});
+            billingPortalUrl = portalResult.data?.url || null;
+          } catch (portalError) {
+            console.error("[createProject] Failed to get billing portal URL:", portalError);
+          }
+
+          return {
+            status: "paymentFailed" as const,
+            billingPortalUrl,
+            message: "Payment failed. Please update your billing settings.",
+          };
         }
-        // For free tier tracking failures, log but don't fail the operation
+        // For free tier tracking failures, just log - don't fail the operation
       }
     }
 
-    const pId: Id<"project"> = projectId;
-
-    return { success: true, projectId: pId, paymentFailed };
+    return { status: "success" as const, projectId: pId };
   },
 });
 
@@ -286,6 +323,7 @@ export const listUserProjects = protectedQuery({
         isArchived: p.isArchived,
         status,
         ownerId: p.ownerId,
+        shareUsageCount: p.shareUsageCount,
       };
     });
 
@@ -598,6 +636,24 @@ export const _unarchiveProject = internalMutation({
   handler: async (ctx, args) => {
     await ctx.db.patch(args.projectId, { isArchived: false, updatedAt: Date.now() });
 
+    return { success: true };
+  },
+});
+
+// NOTE: This is a HARD DELETE used only as a compensating action when payment
+// tracking fails after project creation. Unlike archiveProject (soft delete that
+// sets isArchived=true and preserves the record), this permanently removes the
+// project from the database to maintain atomicity - either the project AND
+// payment succeed together, or neither exists.
+export const _deleteProject = internalMutation({
+  args: {
+    projectId: v.id("project"),
+  },
+  returns: v.object({
+    success: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    await ctx.db.delete(args.projectId);
     return { success: true };
   },
 });

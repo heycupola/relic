@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { GuideBar } from "../components/shared/GuideBar";
 import { LoginButton } from "../components/shared/LoginButton";
 import { Modal } from "../components/shared/Modal";
-import { type DeviceAuthStatus, useDeviceAuth } from "../convex";
+import { type DeviceAuthStatus, useDeviceAuth } from "../convex/hooks/useDeviceAuth";
 import { KEY_SYMBOLS, THEME_COLORS } from "../utils/constants";
 import { logger } from "../utils/debugLog";
-import { createHyperlink } from "../utils/hyperlink";
+import { createHyperlink } from "../utils/ui";
 
 const getShortcutGroups = (isLoading: boolean) => ({
   primary: [
@@ -159,7 +159,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     <box
       flexDirection="column"
       width={width}
-      height={height}
+      height={height - 1}
       backgroundColor={THEME_COLORS.background}
     >
       <box
@@ -231,7 +231,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               {verificationUri && (
                 <box flexDirection="column" marginTop={1} gap={0}>
                   <box height={1} marginTop={0}>
-                    <text fg={THEME_COLORS.textMuted}>
+                    <text fg={THEME_COLORS.textDim}>
                       {verificationUri.length > 70
                         ? `${verificationUri.substring(0, 70)}...`
                         : verificationUri}

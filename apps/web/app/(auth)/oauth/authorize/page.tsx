@@ -4,11 +4,11 @@ import { api } from "@repo/backend";
 import { Button } from "@repo/ui/components/button";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { Check, X } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Component, type ReactNode, Suspense, useEffect, useState } from "react";
 import { AuthFooter } from "@/components/auth-footer";
-import { RelicLogo } from "@/components/relic-logo";
 import { authClient } from "@/lib/auth";
 import { authHeadingStyle, authSubtitleStyle } from "@/lib/styles";
 
@@ -107,6 +107,7 @@ function AuthorizeContent() {
 
   const handleApprove = async () => {
     setStatus("approving");
+    setErrorMessage("");
     try {
       await approveDevice({ user_code: userCode });
       setStatus("approved");
@@ -118,6 +119,7 @@ function AuthorizeContent() {
 
   const handleDeny = async () => {
     setStatus("denying");
+    setErrorMessage("");
     try {
       await denyDevice({ user_code: userCode });
       setStatus("denied");
@@ -132,7 +134,7 @@ function AuthorizeContent() {
       return (
         <div className="text-center space-y-3">
           <h1 className="text-3xl font-medium text-foreground" style={authHeadingStyle}>
-            loading...
+            loading…
           </h1>
         </div>
       );
@@ -205,31 +207,20 @@ function AuthorizeContent() {
 
         <div className="bg-graphite-grey/30 border border-border rounded-md p-6 space-y-4">
           <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              User Code
-            </p>
-            <p
-              className="text-2xl font-mono font-medium text-electric-ink tracking-wider"
-              style={{ letterSpacing: "0.1em" }}
-            >
-              {userCode}
-            </p>
+            <p className="text-xs font-medium text-muted-foreground uppercase">User Code</p>
+            <p className="text-2xl font-mono font-medium text-electric-ink">{userCode}</p>
           </div>
 
           {deviceCodeInfo?.clientId && (
             <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Client
-              </p>
+              <p className="text-xs font-medium text-muted-foreground uppercase">Client</p>
               <p className="text-sm font-light text-foreground">{deviceCodeInfo.clientId}</p>
             </div>
           )}
 
           {deviceCodeInfo?.scope && (
             <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Permissions
-              </p>
+              <p className="text-xs font-medium text-muted-foreground uppercase">Permissions</p>
               <p className="text-sm font-light text-foreground">{deviceCodeInfo.scope}</p>
             </div>
           )}
@@ -241,7 +232,7 @@ function AuthorizeContent() {
             disabled={status === "approving" || status === "denying"}
             className="w-full h-12 rounded-md bg-electric-ink text-bone-white hover:bg-electric-ink/90 font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {status === "approving" ? "Approving..." : "Approve"}
+            {status === "approving" ? "Approving…" : "Approve"}
           </Button>
 
           <Button
@@ -250,7 +241,7 @@ function AuthorizeContent() {
             variant="secondary"
             className="w-full h-12 rounded-md font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {status === "denying" ? "Denying..." : "Deny"}
+            {status === "denying" ? "Denying…" : "Deny"}
           </Button>
         </div>
       </div>
@@ -258,12 +249,30 @@ function AuthorizeContent() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+    <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
+      <output className="sr-only" aria-live="polite" aria-atomic="true">
+        {status === "approved" && "Device access approved successfully"}
+        {status === "denied" && "Device access denied"}
+        {status === "error" && errorMessage}
+      </output>
       <div className="w-full py-16">
         <div className="flex flex-col items-center gap-10">
           <div className="flex flex-col items-center gap-8">
             <Link href="/" className="flex items-center">
-              <RelicLogo className="h-12 text-foreground" />
+              <Image
+                src="/relic-logo-wordmark-dark.svg"
+                alt="Relic"
+                width={119}
+                height={48}
+                className="h-12 w-auto dark:hidden"
+              />
+              <Image
+                src="/relic-logo-wordmark-light.svg"
+                alt="Relic"
+                width={119}
+                height={48}
+                className="h-12 w-auto hidden dark:block"
+              />
             </Link>
             <div className="w-full max-w-sm">{renderContent()}</div>
           </div>
@@ -292,12 +301,25 @@ function ErrorFallback({ error }: { error: Error }) {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+    <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
       <div className="w-full py-16">
         <div className="flex flex-col items-center gap-10">
           <div className="flex flex-col items-center gap-8">
             <Link href="/" className="flex items-center">
-              <RelicLogo className="h-12 text-foreground" />
+              <Image
+                src="/relic-logo-wordmark-dark.svg"
+                alt="Relic"
+                width={119}
+                height={48}
+                className="h-12 w-auto dark:hidden"
+              />
+              <Image
+                src="/relic-logo-wordmark-light.svg"
+                alt="Relic"
+                width={119}
+                height={48}
+                className="h-12 w-auto hidden dark:block"
+              />
             </Link>
             <div className="w-full max-w-sm">
               <div className="text-center space-y-4">
@@ -327,16 +349,29 @@ export default function AuthorizePage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+        <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
           <div className="w-full py-16">
             <div className="flex flex-col items-center gap-10">
               <div className="flex flex-col items-center gap-8">
                 <Link href="/" className="flex items-center">
-                  <RelicLogo className="h-12 text-foreground" />
+                  <Image
+                    src="/relic-logo-wordmark-dark.svg"
+                    alt="Relic"
+                    width={119}
+                    height={48}
+                    className="h-12 w-auto dark:hidden"
+                  />
+                  <Image
+                    src="/relic-logo-wordmark-light.svg"
+                    alt="Relic"
+                    width={119}
+                    height={48}
+                    className="h-12 w-auto hidden dark:block"
+                  />
                 </Link>
                 <div className="text-center space-y-3">
                   <h1 className="text-3xl font-medium text-foreground" style={authHeadingStyle}>
-                    loading...
+                    loading…
                   </h1>
                 </div>
               </div>

@@ -10,6 +10,7 @@ import {
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 import { ErrorCode } from "../convex/lib/errors.ts";
 import * as projectShareModule from "../convex/projectShare";
 import schema from "../convex/schema";
@@ -22,6 +23,17 @@ import {
   randomString,
   type TestUser,
 } from "./setup";
+
+function assertProjectCreated(result: {
+  status: string;
+  projectId?: string;
+  message?: string;
+}): Id<"project"> {
+  if (result.status !== "success" || !result.projectId) {
+    throw new Error(`Project creation failed: ${result.message || "Unknown error"}`);
+  }
+  return result.projectId as Id<"project">;
+}
 
 describe("User Key Lifecycle", () => {
   let t: TestConvex<typeof schema>;
@@ -106,26 +118,32 @@ describe("User Key Lifecycle", () => {
           owner.publicKey!,
         );
 
-        const { projectId: p1Id } = await owner2.asUser.action(api.project.createProject, {
+        const projectResult1 = await owner2.asUser.action(api.project.createProject, {
           name: "project-name-1",
           encryptedProjectKey: ePK1,
         });
-        const { projectId: p2Id } = await owner2.asUser.action(api.project.createProject, {
+        const projectResult2 = await owner2.asUser.action(api.project.createProject, {
           name: "project-name-2",
           encryptedProjectKey: ePK2,
         });
-        const { projectId: p3Id } = await owner2.asUser.action(api.project.createProject, {
+        const projectResult3 = await owner2.asUser.action(api.project.createProject, {
           name: "project-name-3",
           encryptedProjectKey: ePK3,
         });
-        const { projectId: p4Id } = await owner.asUser.action(api.project.createProject, {
+        const projectResult4 = await owner.asUser.action(api.project.createProject, {
           name: "project-name-4",
           encryptedProjectKey: ePK4,
         });
-        const { projectId: p5Id } = await owner.asUser.action(api.project.createProject, {
+        const projectResult5 = await owner.asUser.action(api.project.createProject, {
           name: "project-name-5",
           encryptedProjectKey: ePK5,
         });
+
+        const p1Id = assertProjectCreated(projectResult1);
+        const p2Id = assertProjectCreated(projectResult2);
+        const p3Id = assertProjectCreated(projectResult3);
+        const p4Id = assertProjectCreated(projectResult4);
+        const p5Id = assertProjectCreated(projectResult5);
 
         const encryptedProjectK1ForOwner = await wrapAESKeyWithRSA(
           pK1,

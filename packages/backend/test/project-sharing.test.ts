@@ -9,6 +9,7 @@ import {
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 import { ErrorCode } from "../convex/lib/errors.ts";
 import * as projectShareModule from "../convex/projectShare";
 import schema from "../convex/schema";
@@ -20,6 +21,17 @@ import {
   modules,
   type TestUser,
 } from "./setup";
+
+function assertProjectCreated(result: {
+  status: string;
+  projectId?: string;
+  message?: string;
+}): Id<"project"> {
+  if (result.status !== "success" || !result.projectId) {
+    throw new Error(`Project creation failed: ${result.message || "Unknown error"}`);
+  }
+  return result.projectId as Id<"project">;
+}
 
 describe("Project Sharing", () => {
   let t: TestConvex<typeof schema>;
@@ -77,9 +89,7 @@ describe("Project Sharing", () => {
         name: "project-name",
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
+      const projectId = assertProjectCreated(projectResult);
 
       const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
 
@@ -92,7 +102,7 @@ describe("Project Sharing", () => {
 
       const shareResult = await owner.asUser.action(api.projectShare.shareProject, {
         encryptedProjectKey: encryptedProjectKeyForCollaborator,
-        projectId: projectResult.projectId,
+        projectId,
         userEmail: collaborator.email,
       });
 
@@ -100,7 +110,7 @@ describe("Project Sharing", () => {
       expect(shareResult.requiresProPlan).toBe(true);
     });
 
-    test("fails when user has no enough shares left", async () => {
+    test("returns paymentFailed when share exceeds limit", async () => {
       mockAutumn.setFeature(owner.userId, "additional_shares", 0);
 
       const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
@@ -110,9 +120,7 @@ describe("Project Sharing", () => {
         name: "project-name",
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
+      const projectId = assertProjectCreated(projectResult);
 
       const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
 
@@ -125,7 +133,7 @@ describe("Project Sharing", () => {
 
       const shareResult1 = await owner.asUser.action(api.projectShare.shareProject, {
         encryptedProjectKey: encryptedProjectKeyForCollaborator,
-        projectId: projectResult.projectId,
+        projectId,
         userEmail: collaborator.email,
         confirmPayment: true,
       });
@@ -143,23 +151,78 @@ describe("Project Sharing", () => {
 
       const shareResult2 = await owner.asUser.action(api.projectShare.shareProject, {
         encryptedProjectKey: encryptedProjectKeyForCollaborator2,
-        projectId: projectResult.projectId,
+        projectId,
         userEmail: collaborator2.email,
         confirmPayment: true,
       });
 
-      expect(shareResult2.success).toBe(false);
-      expect(shareResult2.requiresConfirmation || shareResult2.paymentFailed).toBe(true);
+      expect(shareResult2.success).toBe(true);
+      expect(shareResult2.paymentFailed).toBe(true);
+      expect(shareResult2.billingPortalUrl).toBeDefined();
+    });
+
+    test("returns billingPortalUrl when payment tracking fails", async () => {
+      mockAutumn.setFeature(owner.userId, "additional_shares", 0);
+
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const projectResult = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project-name",
+        confirmPayment: true,
+      });
+
+      const projectId = assertProjectCreated(projectResult);
+
+      const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
+
+      const collaboratorPublicKey = await importPublicKey(collaborator.publicKey!);
+
+      const encryptedProjectKeyForCollaborator = await wrapAESKeyWithRSA(
+        projectKey,
+        collaboratorPublicKey,
+      );
+
+      const shareResult1 = await owner.asUser.action(api.projectShare.shareProject, {
+        encryptedProjectKey: encryptedProjectKeyForCollaborator,
+        projectId,
+        userEmail: collaborator.email,
+        confirmPayment: true,
+      });
+
+      if (!shareResult1.success) {
+        throw new Error(`Share 1 failed: ${shareResult1.message || "Unknown error"}`);
+      }
+
+      const collaborator2PublicKey = await importPublicKey(collaborator2.publicKey!);
+
+      const encryptedProjectKeyForCollaborator2 = await wrapAESKeyWithRSA(
+        projectKey,
+        collaborator2PublicKey,
+      );
+
+      const shareResult2 = await owner.asUser.action(api.projectShare.shareProject, {
+        encryptedProjectKey: encryptedProjectKeyForCollaborator2,
+        projectId,
+        userEmail: collaborator2.email,
+        confirmPayment: true,
+      });
+
+      expect(shareResult2.success).toBe(true);
+      expect(shareResult2.paymentFailed).toBe(true);
+      expect(shareResult2.billingPortalUrl).toBeDefined();
+      expect(shareResult2.billingPortalUrl).toContain("billing.relic.so");
     });
 
     test("should share a project to a collaborator", async () => {
       const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
 
-      const { projectId } = await owner.asUser.action(api.project.createProject, {
+      const projectResult = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey,
         name: "project-name",
         confirmPayment: true,
       });
+      const projectId = assertProjectCreated(projectResult);
 
       const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
 
@@ -220,11 +283,7 @@ describe("Project Sharing", () => {
         confirmPayment: true,
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
-
-      const projectId = projectResult.projectId;
+      const projectId = assertProjectCreated(projectResult);
 
       const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
 
@@ -261,7 +320,7 @@ describe("Project Sharing", () => {
         throw new Error(`Share 2 failed: ${shareResult2.message || "Unknown error"}`);
       }
 
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "test",
         projectId,
       });
@@ -270,7 +329,7 @@ describe("Project Sharing", () => {
       const value = "rk_9c2f1a7e4d8b5a0f3e6c9d2b7a1e4f8c";
       const encryptedValue = await encryptSecret(projectKey, value);
 
-      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+      const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         key,
         encryptedValue,
         valueType: "string",
@@ -400,11 +459,7 @@ describe("Project Sharing", () => {
         confirmPayment: true,
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
-
-      const projectId = projectResult.projectId;
+      const projectId = assertProjectCreated(projectResult);
 
       await expectConvexError(
         () =>
@@ -425,11 +480,7 @@ describe("Project Sharing", () => {
         confirmPayment: true,
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
-
-      const projectId = projectResult.projectId;
+      const projectId = assertProjectCreated(projectResult);
 
       const shareResult1 = await owner.asUser.action(api.projectShare.shareProject, {
         encryptedProjectKey,
@@ -456,10 +507,11 @@ describe("Project Sharing", () => {
 
     test("fails when non-owner tries to share", async () => {
       const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
-      const { projectId } = await owner.asUser.action(api.project.createProject, {
+      const projectResult = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey,
         name: "project-name",
       });
+      const projectId = assertProjectCreated(projectResult);
 
       await expectConvexError(
         () =>
@@ -480,11 +532,7 @@ describe("Project Sharing", () => {
         confirmPayment: true,
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
-
-      const projectId = projectResult.projectId;
+      const projectId = assertProjectCreated(projectResult);
 
       const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
       const collaboratorPublicKey = await importPublicKey(collaborator.publicKey!);
@@ -524,11 +572,7 @@ describe("Project Sharing", () => {
         confirmPayment: true,
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
-
-      const projectId = projectResult.projectId;
+      const projectId = assertProjectCreated(projectResult);
 
       const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
       const collaboratorPublicKey = await importPublicKey(collaborator.publicKey!);
@@ -569,18 +613,14 @@ describe("Project Sharing", () => {
         confirmPayment: true,
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
+      const projectId = assertProjectCreated(projectResult);
 
-      const projectId = projectResult.projectId;
-
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "env",
         projectId,
       });
 
-      const { secretId } = await owner.asUser.mutation(api.secret.createSecret, {
+      const { id: secretId } = await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue: await encryptSecret(projectKey, "value1"),
         environmentId,
         key: "key1",
@@ -641,6 +681,116 @@ describe("Project Sharing", () => {
         { projectId },
       );
       expect(share).toBeDefined();
+    });
+  });
+
+  describe("Subscription Cancellation", () => {
+    let freeShareLimitSpy: ReturnType<typeof vi.spyOn>;
+    let additionalUsers: TestUser[];
+
+    beforeEach(async () => {
+      freeShareLimitSpy = vi
+        .spyOn(projectShareModule.shareLimits, "freeShareLimit", "get")
+        .mockReturnValue(5);
+
+      mockAutumn.setFeature(owner.userId, "projects", 2);
+      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
+      mockAutumn.setFeature(owner.userId, "additional_shares", 8);
+
+      mockAutumn.setFeature(collaborator.userId, "projects", 2);
+      mockAutumn.setFeature(collaborator2.userId, "projects", 2);
+
+      additionalUsers = testUsers.slice(5);
+      for (const user of additionalUsers) {
+        mockAutumn.setFeature(user.userId, "projects", 2);
+      }
+    });
+
+    afterEach(() => {
+      freeShareLimitSpy?.mockRestore();
+    });
+
+    test("should block new share when subscription cancelled and over limit", async () => {
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const projectResult = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project-name",
+        confirmPayment: true,
+      });
+      const projectId = assertProjectCreated(projectResult);
+
+      const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
+
+      const usersToShare = [
+        collaborator,
+        collaborator2,
+        collaborator3,
+        ...additionalUsers.slice(0, 5),
+      ];
+
+      for (let i = 0; i < 8; i++) {
+        const targetUser = usersToShare[i]!;
+        const targetPublicKey = await importPublicKey(targetUser.publicKey!);
+        const encryptedKey = await wrapAESKeyWithRSA(projectKey, targetPublicKey);
+
+        const shareResult = await owner.asUser.action(api.projectShare.shareProject, {
+          encryptedProjectKey: encryptedKey,
+          projectId,
+          userEmail: targetUser.email,
+          confirmPayment: true,
+        });
+
+        if (!shareResult.success) {
+          throw new Error(`Share ${i} failed: ${shareResult.message || "Unknown error"}`);
+        }
+      }
+
+      mockAutumn.setFeature(owner.userId, "additional_shares", 6, 8);
+
+      const newUserPublicKey = await importPublicKey(nonCollaborator.publicKey!);
+      const encryptedProjectKeyForNewUser = await wrapAESKeyWithRSA(projectKey, newUserPublicKey);
+
+      const newShareResult = await owner.asUser.action(api.projectShare.shareProject, {
+        encryptedProjectKey: encryptedProjectKeyForNewUser,
+        projectId,
+        userEmail: nonCollaborator.email,
+        confirmPayment: true,
+      });
+
+      expect(newShareResult.success).toBe(false);
+      expect(newShareResult.requiresRemoval).toBe(true);
+      expect(newShareResult.currentUsage).toBe(8);
+      expect(newShareResult.includedUsage).toBe(6);
+      expect(newShareResult.excessCount).toBe(2);
+    });
+
+    test("should allow new share after reducing usage below limit", async () => {
+      mockAutumn.setFeature(owner.userId, "additional_shares", 6, 8);
+
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const projectResult = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project-name",
+        confirmPayment: true,
+      });
+      const projectId = assertProjectCreated(projectResult);
+
+      mockAutumn.setFeature(owner.userId, "additional_shares", 6, 6);
+
+      const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
+      const newUserPublicKey = await importPublicKey(nonCollaborator.publicKey!);
+      const encryptedProjectKeyForNewUser = await wrapAESKeyWithRSA(projectKey, newUserPublicKey);
+
+      const newShareResult = await owner.asUser.action(api.projectShare.shareProject, {
+        encryptedProjectKey: encryptedProjectKeyForNewUser,
+        projectId,
+        userEmail: nonCollaborator.email,
+        confirmPayment: true,
+      });
+
+      expect(newShareResult.success).toBe(true);
     });
   });
 });

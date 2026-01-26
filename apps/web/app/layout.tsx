@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
@@ -11,7 +11,7 @@ const _spaceGrotesk = Space_Grotesk({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "relic - Encrypted Secrets, Fully Under Your Control",
   description:
-    "Client-side encrypted secrets management with complete control. Works as CLI, TUI, and through our SDK.",
+    "Zero-knowledge secrets management with complete control. Works as CLI, TUI, and through our SDK.",
   generator: "v0.app",
   icons: {
     icon: [
@@ -32,13 +32,20 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#252525" },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning style={{ colorScheme: "dark light" }}>
       <body className={`font-sans antialiased`}>
         <ConvexClientProvider>
           <ThemeProvider

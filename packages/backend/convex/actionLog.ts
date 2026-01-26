@@ -5,9 +5,9 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { assertProjectAccess } from "./lib/access";
-import { protectedAction } from "./lib/middleware";
+import { protectedAction, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
-import type { ProtectedActionCtx } from "./lib/types";
+import type { ProtectedActionCtx, ProtectedQueryCtx } from "./lib/types";
 
 export const _insertActionLog = internalMutation({
   args: {
@@ -210,5 +210,21 @@ export const loadActionLogsByEnvironment = protectedAction({
       environmentId: environment._id,
       paginationOpts: args.paginationOpts,
     });
+  },
+});
+
+export const loadUserActionLogs = protectedQuery({
+  args: {
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (
+    ctx: ProtectedQueryCtx,
+    args: { paginationOpts: PaginationOptions },
+  ): Promise<PaginationResult<Doc<"actionLog">>> => {
+    return await ctx.db
+      .query("actionLog")
+      .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
+      .order("desc")
+      .paginate(args.paginationOpts);
   },
 });

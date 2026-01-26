@@ -2,9 +2,7 @@ import { chmod, mkdir, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { Session, SessionValidation } from "../types";
 
-// Use cross-platform home directory
 const HOME = process.env.HOME || process.env.USERPROFILE || "~";
-// Windows: AppData\Roaming\relic, Unix: ~/.config/relic
 const CONFIG_DIR =
   process.platform === "win32"
     ? resolve(HOME, "AppData", "Roaming", "relic")
@@ -14,12 +12,11 @@ const SESSION_FILE = resolve(CONFIG_DIR, "session.json");
 async function ensureConfigDir(): Promise<void> {
   try {
     await mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
-    // Ensure permissions on Unix-like systems (no-op on Windows)
     if (process.platform !== "win32") {
       await chmod(CONFIG_DIR, 0o700);
     }
   } catch {
-    // ignore - directory may already exist
+    // Ignore - directory may already exist
   }
 }
 
@@ -48,7 +45,7 @@ export async function clearSession(): Promise<void> {
       await unlink(SESSION_FILE);
     }
   } catch {
-    // ignore
+    // Ignore - file may not exist
   }
 }
 
@@ -96,9 +93,9 @@ export async function getJwtToken(): Promise<string | null> {
   }
 
   const now = Date.now();
-  const bufferTime = 60 * 1000; // 1 minute buffer before expiry
+  const bufferTime = 60 * 1000;
   if (session.jwtExpiresAt - bufferTime < now) {
-    return null; // JWT expired or about to expire
+    return null;
   }
 
   return session.jwtToken;

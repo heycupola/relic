@@ -17,7 +17,20 @@ export const getProjectEnvironments = protectedQuery({
   args: {
     projectId: v.id("project"),
   },
-  returns: v.array(doc(schema, "environment")),
+  returns: v.array(
+    v.object({
+      id: v.id("environment"),
+      projectId: v.id("project"),
+      name: v.string(),
+      slug: v.string(),
+      description: v.optional(v.string()),
+      color: v.optional(v.string()),
+      sortOrder: v.number(),
+      createdBy: v.string(),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }),
+  ),
   handler: async (ctx: ProtectedQueryCtx, args: { projectId: Id<"project"> }) => {
     const project = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: args.projectId,
@@ -30,7 +43,20 @@ export const getProjectEnvironments = protectedQuery({
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
 
-    return environments.sort((a, b) => a.sortOrder - b.sortOrder);
+    return environments
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((environment) => ({
+        id: environment._id,
+        projectId: environment.projectId,
+        name: environment.name,
+        slug: environment.slug,
+        description: environment.description,
+        color: environment.color,
+        sortOrder: environment.sortOrder,
+        createdBy: environment.createdBy,
+        createdAt: environment.createdAt,
+        updatedAt: environment.updatedAt,
+      }));
   },
 });
 
@@ -42,6 +68,9 @@ export const createEnvironment = protectedMutation({
     // description: v.optional(v.string()),
     // color: v.optional(v.string()),
   },
+  returns: v.object({
+    id: v.id("environment"),
+  }),
   handler: async (
     ctx: ProtectedMutationCtx,
     args: {
@@ -51,7 +80,7 @@ export const createEnvironment = protectedMutation({
       // description?: string;
       // color?: string;
     },
-  ): Promise<{ success: boolean; environmentId: Id<"environment"> }> => {
+  ): Promise<{ id: Id<"environment"> }> => {
     const project = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: args.projectId,
     });
@@ -93,7 +122,7 @@ export const createEnvironment = protectedMutation({
       projectId: project._id,
     });
 
-    return { success: true, environmentId };
+    return { id: environmentId };
   },
 });
 
@@ -192,6 +221,55 @@ export const getEnvironmentData = protectedQuery({
   args: {
     environmentId: v.id("environment"),
   },
+  returns: v.object({
+    environment: v.object({
+      id: v.id("environment"),
+      projectId: v.id("project"),
+      name: v.string(),
+      slug: v.string(),
+      description: v.optional(v.string()),
+      color: v.optional(v.string()),
+      sortOrder: v.number(),
+      createdBy: v.string(),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }),
+    folders: v.array(
+      v.object({
+        id: v.id("folder"),
+        environmentId: v.id("environment"),
+        projectId: v.id("project"),
+        name: v.string(),
+        slug: v.string(),
+        path: v.string(),
+        description: v.optional(v.string()),
+        parentFolderId: v.optional(v.id("folder")),
+        createdBy: v.string(),
+        createdAt: v.number(),
+        updatedAt: v.number(),
+      }),
+    ),
+    secrets: v.array(
+      v.object({
+        id: v.id("secret"),
+        projectId: v.id("project"),
+        environmentId: v.id("environment"),
+        folderId: v.optional(v.id("folder")),
+        key: v.string(),
+        encryptedValue: v.string(),
+        valueType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
+        scope: v.union(v.literal("client"), v.literal("server"), v.literal("shared")),
+        description: v.optional(v.string()),
+        encryptionKeyVersion: v.number(),
+        tags: v.optional(v.array(v.string())),
+        isDeleted: v.boolean(),
+        createdBy: v.string(),
+        createdAt: v.number(),
+        updatedBy: v.string(),
+        updatedAt: v.number(),
+      }),
+    ),
+  }),
   handler: async (ctx: ProtectedQueryCtx, args: { environmentId: Id<"environment"> }) => {
     const environment: Doc<"environment"> = await ctx.runQuery(
       internal.environment._loadEnvironmentById,
@@ -221,7 +299,7 @@ export const getEnvironmentData = protectedQuery({
 
     return {
       environment: {
-        _id: environment._id,
+        id: environment._id,
         projectId: environment.projectId,
         name: environment.name,
         slug: environment.slug,
@@ -233,7 +311,7 @@ export const getEnvironmentData = protectedQuery({
         updatedAt: environment.updatedAt,
       },
       folders: folders.map((folder: Doc<"folder">) => ({
-        _id: folder._id,
+        id: folder._id,
         environmentId: folder.environmentId,
         projectId: folder.projectId,
         name: folder.name,
@@ -246,7 +324,7 @@ export const getEnvironmentData = protectedQuery({
         updatedAt: folder.updatedAt,
       })),
       secrets: secrets.map((secret: Doc<"secret">) => ({
-        _id: secret._id,
+        id: secret._id,
         projectId: secret.projectId,
         environmentId: secret.environmentId,
         folderId: secret.folderId,

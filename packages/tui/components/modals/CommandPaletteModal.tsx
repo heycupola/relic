@@ -9,40 +9,24 @@ interface Command {
   disabled?: boolean;
 }
 
-/**
- * Props for controlled mode - parent manages selection
- */
 interface ControlledProps {
-  /** Currently selected command index (controlled) */
   selectedIndex: number;
-  /** Called when user executes a command */
   onExecute?: never;
 }
 
-/**
- * Props for smart mode - component manages own state
- */
 interface SmartProps {
-  /** Currently selected command index (controlled) */
   selectedIndex?: never;
-  /** Called when user executes a command (by pressing Enter or direct key) */
   onExecute?: (command: Command) => void;
 }
 
 interface CommonProps {
-  /** Whether the modal is visible */
   visible: boolean;
-  /** List of available commands */
   commands: Command[];
-  /** Called when modal should close */
   onClose: () => void;
 }
 
 type CommandPaletteModalProps = CommonProps & (ControlledProps | SmartProps);
 
-/**
- * Determines if props are for controlled mode
- */
 function isControlled(props: CommandPaletteModalProps): props is CommonProps & ControlledProps {
   return "selectedIndex" in props && props.selectedIndex !== undefined;
 }
@@ -96,23 +80,18 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
   );
 }
 
-/**
- * Smart mode implementation
- */
-function SmartCommandPaletteModal({
-  commands,
-  onClose,
-  onExecute,
-}: CommonProps & SmartProps) {
+function SmartCommandPaletteModal({ commands, onClose, onExecute }: CommonProps & SmartProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  // Find next non-disabled index
   const findNextIndex = (current: number, direction: 1 | -1): number => {
     let next = current;
     let attempts = commands.length;
 
     do {
-      next = direction === 1 ? (next + 1) % commands.length : (next - 1 + commands.length) % commands.length;
+      next =
+        direction === 1
+          ? (next + 1) % commands.length
+          : (next - 1 + commands.length) % commands.length;
       attempts--;
     } while (commands[next]?.disabled && attempts > 0);
 
@@ -159,7 +138,11 @@ interface CommandPaletteDisplayProps {
   onClose: () => void;
 }
 
-function CommandPaletteDisplay({ commands, selectedIndex, onClose: _onClose }: CommandPaletteDisplayProps) {
+function CommandPaletteDisplay({
+  commands,
+  selectedIndex,
+  onClose: _onClose,
+}: CommandPaletteDisplayProps) {
   const { width, height } = useTerminalDimensions();
 
   const modalWidth = 50;
@@ -201,7 +184,7 @@ function CommandPaletteDisplay({ commands, selectedIndex, onClose: _onClose }: C
         left={0}
         top={0}
         width={width}
-        height={height}
+        height={height - 1}
         backgroundColor={THEME_COLORS.background}
       />
       <box
@@ -243,7 +226,6 @@ function CommandPaletteDisplay({ commands, selectedIndex, onClose: _onClose }: C
             const isDisabled = item.command.disabled;
             const cmdWidth = modalWidth - 4;
 
-            // Determine colors based on state
             let descriptionColor: string = THEME_COLORS.text;
             if (isDisabled) descriptionColor = THEME_COLORS.textDim;
             else if (isSelected) descriptionColor = THEME_COLORS.text;

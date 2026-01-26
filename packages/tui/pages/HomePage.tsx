@@ -1,29 +1,41 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
-import { useEffect, useState } from "react";
+import {
+  createProjectKey,
+  decryptPrivateKeyWithPassword,
+  encryptPrivateKeyWithPassword,
+  generateSalt,
+} from "@repo/crypto";
+import open from "open";
+import { useEffect, useRef, useState } from "react";
+import { getProtectedApi } from "../api";
 import { InlineInput } from "../components/forms/InlineInput";
-import { BillingPortalModal } from "../components/modals/BillingPortalModal";
-import { ChangePasswordModal } from "../components/modals/ChangePasswordModal";
-import {
-  type CheckoutReason,
-  CheckoutRedirectModal,
-} from "../components/modals/CheckoutRedirectModal";
 import { CommandPaletteModal } from "../components/modals/CommandPaletteModal";
-import {
-  ConfirmPaymentModal,
-  type PaymentConfirmationType,
-} from "../components/modals/ConfirmPaymentModal";
+import { ConfirmPaymentModal } from "../components/modals/ConfirmPaymentModal";
+import { BillingPortalModal, CheckoutRedirectModal } from "../components/modals/UrlOpenModal";
+import { PasswordInput } from "../components/PasswordInput";
 import { DeleteConfirmation } from "../components/shared/DeleteConfirmation";
 import { GuideBar } from "../components/shared/GuideBar";
 import { Modal } from "../components/shared/Modal";
-import { useUser } from "../convex";
+import { useUser } from "../context";
 import { useUserKeys } from "../convex/hooks/useUserKeys";
 import { useAppSession } from "../hooks/useAppSession";
+import { useListNavigation } from "../hooks/useListNavigation";
+import { useLoadingState } from "../hooks/useLoadingState";
+import { usePaymentFlow } from "../hooks/usePaymentFlow";
 import { useProjects } from "../hooks/useProjects";
 import { useTaskQueue } from "../hooks/useTaskQueue";
 import { useRouter } from "../router";
-import type { ModalType, ProjectStatus } from "../types";
-import { KEY_SYMBOLS, STATUS_COLORS, THEME_COLORS } from "../utils/constants";
+import type { ModalType, ProjectStatus } from "../types/models";
+import {
+  DASHBOARD_URL,
+  KEY_SYMBOLS,
+  SPINNER_FRAMES,
+  SPINNER_INTERVAL,
+  STATUS_COLORS,
+  THEME_COLORS,
+} from "../utils/constants";
 import { logger } from "../utils/debugLog";
+import { savePassword } from "../utils/password";
 
 const STATUS_ICONS: Record<ProjectStatus, string> = {
   owned: "●",
@@ -38,61 +50,66 @@ export function HomePage() {
   const { width, height } = useTerminalDimensions();
   const { navigate } = useRouter();
   const { logout } = useAppSession();
-  const {
-    runTask,
-    setTaskPending,
-    continueTask,
-    cancelTask,
-    showSuccess,
-    showError,
-    isProcessing,
-  } = useTaskQueue();
+  const { runTask, continueTask, cancelTask, showSuccess, showError, isProcessing } =
+    useTaskQueue();
   const { hasPro, isLoading: isLoadingPlan } = useUser();
 
   const {
     projects,
     isLoading: isLoadingProjects,
     limits,
-    isLoadingLimits,
+    error: limitsError,
     refetch: refetchProjects,
-    refetchLimits,
   } = useProjects();
 
-  const { publicKey, hasKeys, isLoading: isLoadingKeys } = useUserKeys();
+  const {
+    publicKey,
+    hasKeys,
+    isLoading: isLoadingKeys,
+    encryptedPrivateKey,
+    salt,
+    updatePassword,
+  } = useUserKeys();
 
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const [scrollOffset, setScrollOffset] = useState(0);
+  const navigation = useListNavigation({
+    items: projects,
+    pageSize: PAGE_SIZE,
+    onSelect: (index) => {
+      const project = projects[index];
+      if (project)
+        navigate({
+          name: "project",
+          projectId: project.id,
+          projectName: project.name,
+          projectStatus: project.status,
+        });
+    },
+  });
+
+  const payment = usePaymentFlow();
+  const loading = useLoadingState(["creating", "renaming", "archiving"] as const);
+
   const [activeModal, setActiveModal] = useState<ModalType>("none");
-
   const [creatingProject, setCreatingProject] = useState(false);
+  const [pendingProjectName, setPendingProjectName] = useState<string | null>(null);
+  const [spinnerFrame, setSpinnerFrame] = useState(0);
   const [editingProject, setEditingProject] = useState<{ id: string; name: string } | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState<{ id: string; name: string } | null>(
     null,
   );
-  const [isCreatingProject, setIsCreatingProject] = useState(false);
-  const [isRenamingProject, setIsRenamingProject] = useState(false);
-  const [isArchivingProject, setIsArchivingProject] = useState(false);
-  const [checkoutModal, setCheckoutModal] = useState<{
-    visible: boolean;
-    url: string;
-    reason: CheckoutReason;
-  }>({ visible: false, url: "", reason: "pro_required" });
-  const [billingPortalModal, setBillingPortalModal] = useState<{
-    visible: boolean;
-    url: string;
-  }>({ visible: false, url: "" });
-  const [confirmationModal, setConfirmationModal] = useState<{
-    visible: boolean;
-    type: PaymentConfirmationType;
-    projectName?: string;
-    balance: number;
-    freeLimit: number;
-  }>({
-    visible: false,
-    type: "project",
-    balance: 0,
-    freeLimit: 0,
-  });
+  const [removalSelectedIndex, setRemovalSelectedIndex] = useState(0);
+  const [passwordChangeStatus, setPasswordChangeStatus] = useState<
+    null | "verifying" | "rewrapping" | "updating"
+  >(null);
+  const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pendingProjectName) return;
+    const interval = setInterval(() => {
+      setSpinnerFrame((prev) => (prev + 1) % SPINNER_FRAMES.length);
+    }, SPINNER_INTERVAL);
+    return () => clearInterval(interval);
+  }, [pendingProjectName]);
 
   const validatedEditingProject =
     editingProject && projects.some((p) => p.id === editingProject.id) ? editingProject : null;
@@ -101,224 +118,212 @@ export function HomePage() {
       ? confirmingDelete
       : null;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: selectedIndex intentionally excluded to avoid unnecessary re-renders when navigating
+  const showPendingProject =
+    pendingProjectName && !projects.some((p) => p.name === pendingProjectName);
+
+  // Projects that can be archived (owned, non-archived)
+  const archivableProjects = projects.filter(
+    (p) => p.status === "owned" && !p.status.includes("archived"),
+  );
+
+  const prevHasProRef = useRef(hasPro);
   useEffect(() => {
-    if (!isLoadingProjects && projects.length > 0 && selectedIndex >= projects.length) {
-      setSelectedIndex(0);
+    if (hasPro && !prevHasProRef.current) {
+      refetchProjects();
+      payment.closeAll();
+      showSuccess("You're now a PRO! Unlimited projects unlocked.", 5000);
     }
-  }, [isLoadingProjects, projects.length]);
-
-  const moveUp = () => {
-    if (projects.length === 0) return;
-    setSelectedIndex((prev) => {
-      const next = prev > 0 ? prev - 1 : projects.length - 1;
-      if (next < scrollOffset) setScrollOffset(next);
-      else if (next >= scrollOffset + PAGE_SIZE)
-        setScrollOffset(Math.max(0, projects.length - PAGE_SIZE));
-      return next;
-    });
-  };
-
-  const moveDown = () => {
-    if (projects.length === 0) return;
-    setSelectedIndex((prev) => {
-      const next = prev < projects.length - 1 ? prev + 1 : 0;
-      if (next >= scrollOffset + PAGE_SIZE) setScrollOffset(next - PAGE_SIZE + 1);
-      else if (next < scrollOffset) setScrollOffset(0);
-      return next;
-    });
-  };
-
-  const selectProject = (projectId: string, projectName: string, projectStatus: ProjectStatus) => {
-    navigate({ name: "project", projectId, projectName, projectStatus });
-  };
+    prevHasProRef.current = hasPro;
+  }, [hasPro, refetchProjects, payment, showSuccess]);
 
   const handleCreateProject = async (name: string, confirmPayment?: boolean) => {
-    if (isCreatingProject) return;
     if (!hasKeys || !publicKey) {
       logger.error("Cannot create project: User has no keys");
       return;
     }
 
-    setIsCreatingProject(true);
-    setCreatingProject(false);
+    await loading.run("creating", async () => {
+      setCreatingProject(false);
+      setPendingProjectName(name);
 
-    try {
-      if (confirmPayment) {
-        const result = await continueTask(async () => {
-          const { createProjectKey } = await import("@repo/crypto");
-          const { encryptedProjectKey } = await createProjectKey(publicKey);
+      try {
+        if (confirmPayment) {
+          const result = await continueTask(async () => {
+            const { encryptedProjectKey } = await createProjectKey(publicKey);
+            const api = getProtectedApi();
+            return await api.createProject({ name, encryptedProjectKey, confirmPayment: true });
+          });
 
-          const { getProtectedApi } = await import("../convex/api/protected");
-          const api = getProtectedApi();
-          return await api.createProject({ name, encryptedProjectKey, confirmPayment: true });
-        });
+          if (!result) {
+            setPendingProjectName(null);
+            payment.closeConfirmation();
+            return;
+          }
 
-        if (!result) {
-          setConfirmationModal({ visible: false, type: "project", balance: 0, freeLimit: 0 });
+          payment.handleResult(result, "project", name);
+          if (result.status === "success") {
+            await refetchProjects();
+          } else {
+            setPendingProjectName(null);
+          }
           return;
         }
 
-        if (result.success) {
-          showSuccess(`Project "${name}" created`);
-          await Promise.all([refetchProjects(), refetchLimits()]);
-          setConfirmationModal({ visible: false, type: "project", balance: 0, freeLimit: 0 });
-        } else if (result.requiresProPlan && result.checkoutUrl) {
-          setConfirmationModal({ visible: false, type: "project", balance: 0, freeLimit: 0 });
-          setCheckoutModal({
-            visible: true,
-            url: result.checkoutUrl,
-            reason: "pro_required",
-          });
-        } else if (result.requiresAdditionalProject && result.checkoutUrl) {
-          setConfirmationModal({ visible: false, type: "project", balance: 0, freeLimit: 0 });
-          setCheckoutModal({
-            visible: true,
-            url: result.checkoutUrl,
-            reason: "project_limit",
-          });
-        } else if (result.paymentFailed && result.billingPortalUrl) {
-          setConfirmationModal({ visible: false, type: "project", balance: 0, freeLimit: 0 });
-          setBillingPortalModal({
-            visible: true,
-            url: result.billingPortalUrl,
-          });
-        } else if (result.paymentFailed) {
-          showError(result.message || "Payment failed. Please update your billing settings.");
-        } else if (result.message) {
-          showError(result.message);
+        const result = await runTask(`Creating project "${name}"...`, async () => {
+          const { encryptedProjectKey } = await createProjectKey(publicKey);
+          const api = getProtectedApi();
+          return await api.createProject({ name, encryptedProjectKey, confirmPayment: false });
+        });
+
+        if (!result) {
+          setPendingProjectName(null);
+          return;
         }
-        return;
+
+        payment.handleResult(result, "project", name);
+        if (result.status === "success") {
+          await refetchProjects();
+        } else {
+          setPendingProjectName(null);
+        }
+      } catch {
+        setPendingProjectName(null);
       }
-
-      // First call - check if confirmation is needed
-      setTaskPending(`Creating project "${name}"...`);
-
-      const { createProjectKey } = await import("@repo/crypto");
-      const { encryptedProjectKey } = await createProjectKey(publicKey);
-
-      const { getProtectedApi } = await import("../convex/api/protected");
-      const api = getProtectedApi();
-      const result = await api.createProject({ name, encryptedProjectKey, confirmPayment: false });
-
-      if (!result) {
-        cancelTask();
-        return;
-      }
-
-      if (result.success) {
-        showSuccess(`Project "${name}" created`);
-        await Promise.all([refetchProjects(), refetchLimits()]);
-        setConfirmationModal({ visible: false, type: "project", balance: 0, freeLimit: 0 });
-      } else if (result.requiresConfirmation) {
-        // Keep task in pending state, show confirmation modal
-        setConfirmationModal({
-          visible: true,
-          type: "project",
-          projectName: name,
-          balance: result.balance ?? 0,
-          freeLimit: result.freeLimit ?? 0,
-        });
-      } else if (result.requiresProPlan && result.checkoutUrl) {
-        cancelTask();
-        setCheckoutModal({
-          visible: true,
-          url: result.checkoutUrl,
-          reason: "pro_required",
-        });
-      } else if (result.requiresAdditionalProject && result.checkoutUrl) {
-        cancelTask();
-        setCheckoutModal({
-          visible: true,
-          url: result.checkoutUrl,
-          reason: "project_limit",
-        });
-      } else if (result.paymentFailed && result.billingPortalUrl) {
-        cancelTask();
-        setBillingPortalModal({
-          visible: true,
-          url: result.billingPortalUrl,
-        });
-      } else if (result.paymentFailed) {
-        cancelTask();
-        showError(result.message || "Payment failed. Please update your billing settings.");
-      } else if (result.message) {
-        cancelTask();
-        showError(result.message);
-      }
-    } finally {
-      setIsCreatingProject(false);
-    }
+    });
   };
 
   const handleConfirmPayment = async () => {
-    if (confirmationModal.projectName) {
-      await handleCreateProject(confirmationModal.projectName, true);
+    if (payment.confirmationModal.itemName) {
+      await handleCreateProject(payment.confirmationModal.itemName, true);
     }
-  };
-
-  const handleCancelPayment = () => {
-    cancelTask();
-    setConfirmationModal({ visible: false, type: "project", balance: 0, freeLimit: 0 });
   };
 
   const handleRenameProject = async (name: string, projectId: string) => {
-    if (isRenamingProject) return;
-    logger.debug("handleRenameProject called", { name, projectId, type: typeof projectId });
     if (!projectId) {
-      logger.error("Cannot rename project: no projectId provided", {
-        name,
-        projectId,
-        editingProject,
-      });
       setEditingProject(null);
       return;
     }
-    // Check if name changed (compare with current project name from list)
     const currentProject = projects.find((p) => p.id === projectId);
     if (currentProject && name === currentProject.name) {
       setEditingProject(null);
       return;
     }
-    setIsRenamingProject(true);
-    try {
+    await loading.run("renaming", async () => {
       await runTask(`Renaming project to "${name}"...`, async () => {
-        const { getProtectedApi } = await import("../convex/api/protected");
         const api = getProtectedApi();
         await api.updateProject({ projectId, name });
       });
       showSuccess(`Project renamed to "${name}"`);
       setEditingProject(null);
-      refetchProjects();
-    } catch (err) {
-      logger.error("Failed to rename project:", err);
-    } finally {
-      setIsRenamingProject(false);
-    }
+    });
   };
 
   const handleArchiveProject = async () => {
-    if (isArchivingProject) return;
     if (!confirmingDelete) return;
-    setIsArchivingProject(true);
-    try {
+    await loading.run("archiving", async () => {
       await runTask(`Archiving "${confirmingDelete.name}"...`, async () => {
-        const { getProtectedApi } = await import("../convex/api/protected");
         const api = getProtectedApi();
         await api.archiveProject(confirmingDelete.id);
       });
       showSuccess(`"${confirmingDelete.name}" archived`);
       setConfirmingDelete(null);
-      await Promise.all([refetchProjects(), refetchLimits()]);
-    } catch (err) {
-      logger.error("Failed to archive project:", err);
-    } finally {
-      setIsArchivingProject(false);
-    }
+      await refetchProjects();
+    });
+  };
+
+  const handleArchiveFromRemovalModal = async () => {
+    const project = archivableProjects[removalSelectedIndex];
+    if (!project) return;
+    await loading.run("archiving", async () => {
+      await runTask(`Archiving "${project.name}"...`, async () => {
+        const api = getProtectedApi();
+        await api.archiveProject(project.id);
+      });
+      showSuccess(`"${project.name}" archived`);
+      await refetchProjects();
+      // Reset selection if needed
+      if (removalSelectedIndex >= archivableProjects.length - 1) {
+        setRemovalSelectedIndex(Math.max(0, archivableProjects.length - 2));
+      }
+      // Close modal if we've archived enough projects
+      if (payment.removalModal.currentUsage - 1 <= payment.removalModal.includedUsage) {
+        payment.closeRemoval();
+      }
+    });
   };
 
   const handleLogout = async () => {
     await logout();
+  };
+
+  const handlePasswordChange = async (currentPassword: string, newPassword: string) => {
+    if (!encryptedPrivateKey || !salt) {
+      setPasswordChangeError("Unable to change password: encryption keys not found");
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      setPasswordChangeError("New password must be different from current password");
+      return;
+    }
+
+    setPasswordChangeError(null);
+    setPasswordChangeStatus("verifying");
+
+    // Step 1: Verify current password by decrypting the private key
+    let privateKey: CryptoKey;
+    try {
+      privateKey = await decryptPrivateKeyWithPassword(encryptedPrivateKey, currentPassword, salt);
+    } catch (error) {
+      logger.error("Failed to verify current password:", error);
+      setPasswordChangeStatus(null);
+      setPasswordChangeError("Incorrect current password");
+      return;
+    }
+
+    // Step 2: Generate new salt and re-encrypt private key with new password
+    setPasswordChangeStatus("rewrapping");
+    let newEncryptedPrivateKey: string;
+    let newSalt: string;
+    try {
+      newSalt = generateSalt();
+      newEncryptedPrivateKey = await encryptPrivateKeyWithPassword(
+        privateKey,
+        newPassword,
+        newSalt,
+      );
+    } catch (error) {
+      logger.error("Failed to rewrap private key:", error);
+      setPasswordChangeStatus(null);
+      setPasswordChangeError("Failed to encrypt with new password");
+      return;
+    }
+
+    // Step 3: Update backend with new encrypted private key and salt
+    setPasswordChangeStatus("updating");
+    try {
+      await updatePassword({
+        encryptedPrivateKey: newEncryptedPrivateKey,
+        salt: newSalt,
+      });
+    } catch (error) {
+      logger.error("Failed to update password on backend:", error);
+      setPasswordChangeStatus(null);
+      setPasswordChangeError("Failed to save new password");
+      return;
+    }
+
+    // Step 4: Update locally stored session password
+    try {
+      await savePassword(newPassword);
+    } catch (error) {
+      logger.error("Failed to save password locally:", error);
+      // Don't fail the operation - backend is already updated
+    }
+
+    setPasswordChangeStatus(null);
+    setActiveModal("none");
+    showSuccess("Password changed successfully");
   };
 
   const commands = [
@@ -327,33 +332,32 @@ export function HomePage() {
     { key: "d", description: "Delete project", category: "Manage" },
     { key: "p", description: "Change password", category: "Account" },
     { key: "^l", description: "Logout", category: "Account" },
-  ].sort((a, b) => {
-    const order = ["Navigate", "Create", "Manage", "View", "Account"];
-    return order.indexOf(a.category) - order.indexOf(b.category);
-  });
+  ];
 
   const executeCommand = (cmd: { key: string }) => {
+    const project = projects[navigation.selectedIndex];
+    const isOwned = project && project.status === "owned";
+    const isAccessible =
+      project && project.status !== "restricted" && project.status !== "archived";
+
     switch (cmd.key) {
       case "n":
-        if (!isLoadingKeys && hasKeys && publicKey) {
-          setCreatingProject(true);
-        }
+        if (!isLoadingKeys && hasKeys && publicKey) setCreatingProject(true);
         break;
-      case "u": {
-        const project = projects[selectedIndex];
-        if (project && project.status !== "restricted" && project.status !== "archived") {
-          logger.debug("Setting editingProject from command", { project, projectId: project.id });
+      case "u":
+        if (isOwned && project.id) {
           setEditingProject({ id: project.id, name: project.name });
+        } else if (isAccessible && !isOwned) {
+          showError("Only project owners can rename projects");
         }
         break;
-      }
-      case "d": {
-        const project = projects[selectedIndex];
-        if (project && project.status !== "restricted" && project.status !== "archived") {
+      case "d":
+        if (isOwned) {
           setConfirmingDelete({ id: project.id, name: project.name });
+        } else if (isAccessible && !isOwned) {
+          showError("Only project owners can delete projects");
         }
         break;
-      }
       case "p":
         setActiveModal("password");
         break;
@@ -365,12 +369,30 @@ export function HomePage() {
 
   useKeyboard((key) => {
     if (creatingProject || editingProject) return;
+    if (
+      payment.confirmationModal.visible ||
+      payment.checkoutModal.visible ||
+      payment.billingPortalModal.visible
+    )
+      return;
+    if (isProcessing || loading.anyLoading()) return;
 
-    // Let modal handle its own keyboard when visible
-    if (confirmationModal.visible || checkoutModal.visible || billingPortalModal.visible) return;
-
-    // Disable keyboard shortcuts during async operations (only when actively running)
-    if (isProcessing || isCreatingProject || isRenamingProject || isArchivingProject) return;
+    // Handle removal modal keyboard navigation
+    if (payment.removalModal.visible) {
+      if (key.name === "k" || key.name === "up") {
+        setRemovalSelectedIndex((prev) => Math.max(0, prev - 1));
+      } else if (key.name === "j" || key.name === "down") {
+        setRemovalSelectedIndex((prev) => Math.min(archivableProjects.length - 1, prev + 1));
+      } else if (key.name === "return" || key.name === "d") {
+        handleArchiveFromRemovalModal();
+      } else if (key.name === "escape") {
+        payment.closeRemoval();
+        setRemovalSelectedIndex(0);
+      } else if (key.name === "g" && !key.meta && !key.ctrl) {
+        open(DASHBOARD_URL);
+      }
+      return;
+    }
 
     if (activeModal === "logout") {
       if (key.name === "y") handleLogout();
@@ -379,7 +401,10 @@ export function HomePage() {
     }
 
     if (activeModal === "password") {
-      if (key.name === "escape") setActiveModal("none");
+      if (key.name === "escape" && !passwordChangeStatus) {
+        setActiveModal("none");
+        setPasswordChangeError(null);
+      }
       return;
     }
 
@@ -392,48 +417,35 @@ export function HomePage() {
     }
 
     if (key.name === "k" || key.name === "up") {
-      moveUp();
+      navigation.moveUp();
       setConfirmingDelete(null);
     } else if (key.name === "j" || key.name === "down") {
-      moveDown();
+      navigation.moveDown();
       setConfirmingDelete(null);
     } else if (key.name === "return") {
-      const project = projects[selectedIndex];
-      if (project) selectProject(project.id, project.name, project.status);
+      navigation.select();
     } else if (key.name === "d") {
-      const project = projects[selectedIndex];
-      if (project && project.status !== "restricted" && project.status !== "archived") {
+      const project = projects[navigation.selectedIndex];
+      if (project && project.status === "owned") {
         setConfirmingDelete({ id: project.id, name: project.name });
+      } else if (project && project.status === "shared") {
+        showError("Only project owners can delete projects");
       }
     } else if (key.name === "n") {
       if (!isLoadingKeys && hasKeys && publicKey) {
         setCreatingProject(true);
-      } else if (!isLoadingKeys && !hasKeys) {
-        logger.error(
-          "Cannot create project: User has no encryption keys. Please set up your password first.",
-        );
       }
     } else if (key.name === "u") {
-      const project = projects[selectedIndex];
-      if (project && project.status !== "restricted" && project.status !== "archived") {
-        logger.debug("Setting editingProject from keyboard", {
-          project,
-          projectId: project.id,
-          hasId: !!project.id,
-          allKeys: Object.keys(project),
-        });
-        if (!project.id) {
-          logger.error("Cannot edit project: project.id is missing!", {
-            project,
-            selectedIndex,
-            projects,
-          });
-          return;
-        }
+      const project = projects[navigation.selectedIndex];
+      if (project && project.status === "owned" && project.id) {
         setEditingProject({ id: project.id, name: project.name });
+      } else if (project && project.status === "shared") {
+        showError("Only project owners can rename projects");
       }
     } else if (key.name === "p") {
       setActiveModal("password");
+    } else if (key.name === "g" && !key.meta && !key.ctrl) {
+      open(DASHBOARD_URL);
     } else if ((key.name === "l" && key.ctrl) || key.sequence === "\x0C") {
       setActiveModal("logout");
     } else if (key.sequence === "?") {
@@ -444,7 +456,7 @@ export function HomePage() {
   });
 
   const getShortcuts = () => {
-    const isDisabled = isProcessing || isCreatingProject || isRenamingProject || isArchivingProject;
+    const isDisabled = isProcessing || loading.anyLoading();
 
     if (creatingProject) {
       return {
@@ -478,8 +490,7 @@ export function HomePage() {
         {
           shortcuts: [
             { key: "n", description: "create project", disabled: isDisabled },
-            { key: "u", description: "rename project", disabled: isDisabled },
-            { key: "d", description: "delete project", disabled: isDisabled },
+            { key: "g", description: "dashboard", disabled: isDisabled },
           ],
         },
       ],
@@ -498,7 +509,7 @@ export function HomePage() {
     <box
       flexDirection="column"
       width={width}
-      height={height}
+      height={height - 1}
       backgroundColor={THEME_COLORS.background}
     >
       <box
@@ -545,16 +556,21 @@ export function HomePage() {
           >
             <text fg={THEME_COLORS.textMuted}>Projects</text>
             {(() => {
-              if (isLoadingProjects || isLoadingLimits) {
+              if (isLoadingProjects) {
                 return <text fg={THEME_COLORS.textDim}>...</text>;
               }
 
-              if (limits !== null && limits.included_usage !== undefined) {
+              if (limitsError) {
+                return (
+                  <text fg={THEME_COLORS.warning}>{projects.length} (limits unavailable)</text>
+                );
+              }
+
+              if (limits !== null && limits.includedUsage !== undefined) {
                 const totalProjects = limits.usage;
-                const freeLimit = limits.included_usage;
+                const freeLimit = limits.includedUsage;
                 const remainingFree = Math.max(0, freeLimit - totalProjects);
 
-                // No remaining free - don't show free
                 if (remainingFree === 0) {
                   return (
                     <text fg={THEME_COLORS.textDim}>
@@ -563,7 +579,6 @@ export function HomePage() {
                   );
                 }
 
-                // Has remaining free - show remaining free
                 return (
                   <text>
                     <span fg={THEME_COLORS.textDim}>
@@ -584,33 +599,38 @@ export function HomePage() {
             flexDirection="column"
             width={52}
             height={
-              projects.length === 0 && !creatingProject
+              isLoadingProjects ||
+              (projects.length === 0 && !creatingProject && !showPendingProject)
                 ? 1
                 : Math.min(
                     projects.length +
                       (creatingProject ? 1 : 0) +
+                      (showPendingProject ? 1 : 0) +
                       (validatedConfirmingDelete ? 1 : 0),
-                    PAGE_SIZE + (validatedConfirmingDelete ? 1 : 0),
+                    PAGE_SIZE + (validatedConfirmingDelete ? 1 : 0) + (showPendingProject ? 1 : 0),
                   ) +
-                  (scrollOffset > 0 ? 1 : 0) +
-                  (scrollOffset + PAGE_SIZE < projects.length ? 1 : 0)
+                  (navigation.hasMore.above ? 1 : 0) +
+                  (navigation.hasMore.below ? 1 : 0)
             }
           >
             {isLoadingProjects ? (
               <text fg={THEME_COLORS.textDim}>Loading projects...</text>
-            ) : projects.length === 0 && !creatingProject ? (
+            ) : projects.length === 0 && !creatingProject && !showPendingProject ? (
               <text fg={THEME_COLORS.textDim}>No projects created. Press 'n' to create one.</text>
             ) : (
               <>
-                {scrollOffset > 0 && (
+                {navigation.hasMore.above && (
                   <text fg={THEME_COLORS.textDim}>
-                    {"  "}... {scrollOffset} more item{scrollOffset > 1 ? "s" : ""} above
+                    {"  "}... {navigation.hasMore.aboveCount} more item
+                    {navigation.hasMore.aboveCount > 1 ? "s" : ""} above
                   </text>
                 )}
-                {projects.slice(scrollOffset, scrollOffset + PAGE_SIZE).map((project, index) => {
-                  const actualIndex = index + scrollOffset;
+                {navigation.visibleItems.map((project, index) => {
+                  const actualIndex = index + navigation.scrollOffset;
                   const isSelected =
-                    actualIndex === selectedIndex && !creatingProject && !validatedEditingProject;
+                    actualIndex === navigation.selectedIndex &&
+                    !creatingProject &&
+                    !validatedEditingProject;
                   const isEditing =
                     validatedEditingProject !== null && validatedEditingProject?.id === project.id;
                   const isDeleting =
@@ -624,27 +644,7 @@ export function HomePage() {
                           active={true}
                           initialValue={project.name}
                           onSubmit={(name) => {
-                            const projectId = project.id;
-                            logger.debug("InlineInput onSubmit called", {
-                              name,
-                              projectId,
-                              project,
-                              projectKeys: Object.keys(project),
-                              projectIdType: typeof project.id,
-                              validatedEditingProject,
-                              editingProject,
-                            });
-                            if (!projectId) {
-                              logger.error("Project ID is missing!", {
-                                project,
-                                projectKeys: Object.keys(project),
-                                projectId,
-                                validatedEditingProject,
-                                editingProject,
-                              });
-                              return;
-                            }
-                            handleRenameProject(name, projectId);
+                            if (project.id) handleRenameProject(name, project.id);
                           }}
                           onCancel={() => setEditingProject(null)}
                           maxWidth={40}
@@ -671,7 +671,7 @@ export function HomePage() {
                             {isSelected && (
                               <span fg={THEME_COLORS.textDim}>[{project.status}] </span>
                             )}
-                            <span fg={STATUS_COLORS[project.status]}>
+                            <span fg={STATUS_COLORS[project.status] || THEME_COLORS.text}>
                               {STATUS_ICONS[project.status]}
                             </span>
                           </text>
@@ -698,10 +698,26 @@ export function HomePage() {
                     iconColor={THEME_COLORS.success}
                   />
                 )}
-                {scrollOffset + PAGE_SIZE < projects.length && (
+                {/* Show pending project in the list with spinner */}
+                {showPendingProject && (
+                  <box
+                    height={1}
+                    width={52}
+                    flexDirection="row"
+                    justifyContent="space-between"
+                    alignItems="center"
+                  >
+                    <text fg={THEME_COLORS.textMuted}>
+                      <span fg={THEME_COLORS.primary}>{SPINNER_FRAMES[spinnerFrame]} </span>
+                      {pendingProjectName}
+                    </text>
+                    <text fg={THEME_COLORS.textDim}>(creating...)</text>
+                  </box>
+                )}
+                {navigation.hasMore.below && (
                   <text fg={THEME_COLORS.textDim}>
-                    {"  "}... {projects.length - (scrollOffset + PAGE_SIZE)} more item
-                    {projects.length - (scrollOffset + PAGE_SIZE) > 1 ? "s" : ""} below
+                    {"  "}... {navigation.hasMore.belowCount} more item
+                    {navigation.hasMore.belowCount > 1 ? "s" : ""} below
                   </text>
                 )}
               </>
@@ -734,11 +750,43 @@ export function HomePage() {
         <text fg={THEME_COLORS.textDim}>Are you sure you want to logout?</text>
       </Modal>
 
-      <ChangePasswordModal
+      {/* NOTE: shortcuts={[]} because PasswordInput has its own GuideBar with contextual labels */}
+      <Modal
         visible={activeModal === "password"}
-        onClose={() => setActiveModal("none")}
-        onSuccess={() => setActiveModal("none")}
-      />
+        title="Change Password"
+        width={55}
+        height={18}
+        shortcuts={[]}
+      >
+        <box flexDirection="column" gap={1}>
+          {passwordChangeStatus && (
+            <text fg={THEME_COLORS.accent}>
+              {passwordChangeStatus === "verifying" && "Verifying current password..."}
+              {passwordChangeStatus === "rewrapping" && "Re-encrypting private key..."}
+              {passwordChangeStatus === "updating" && "Updating password..."}
+            </text>
+          )}
+          <PasswordInput
+            mode="change"
+            onSubmit={(currentPass, newPass) => {
+              if (currentPass && newPass) {
+                handlePasswordChange(currentPass, newPass);
+              }
+            }}
+            onCancel={() => {
+              setActiveModal("none");
+              setPasswordChangeError(null);
+              setPasswordChangeStatus(null);
+            }}
+            additionalShortcuts={[
+              { key: "esc", description: "cancel", disabled: !!passwordChangeStatus },
+            ]}
+            width={51}
+            disabled={!!passwordChangeStatus}
+            error={passwordChangeError}
+          />
+        </box>
+      </Modal>
 
       <CommandPaletteModal
         visible={activeModal === "commandPalette"}
@@ -748,27 +796,81 @@ export function HomePage() {
       />
 
       <CheckoutRedirectModal
-        visible={checkoutModal.visible}
-        checkoutUrl={checkoutModal.url}
-        reason={checkoutModal.reason}
-        onClose={() => setCheckoutModal({ visible: false, url: "", reason: "pro_required" })}
+        visible={payment.checkoutModal.visible}
+        checkoutUrl={payment.checkoutModal.url}
+        reason={payment.checkoutModal.reason}
+        onClose={payment.closeCheckout}
       />
 
       <ConfirmPaymentModal
-        visible={confirmationModal.visible}
-        type={confirmationModal.type}
-        itemName={confirmationModal.projectName}
-        freeLimit={confirmationModal.freeLimit}
-        balance={confirmationModal.balance}
+        visible={payment.confirmationModal.visible}
+        type={payment.confirmationModal.type}
+        itemName={payment.confirmationModal.itemName}
+        balance={payment.confirmationModal.balance}
         onConfirm={handleConfirmPayment}
-        onCancel={handleCancelPayment}
+        onCancel={() => {
+          cancelTask();
+          payment.closeConfirmation();
+        }}
       />
 
       <BillingPortalModal
-        visible={billingPortalModal.visible}
-        portalUrl={billingPortalModal.url}
-        onClose={() => setBillingPortalModal({ visible: false, url: "" })}
+        visible={payment.billingPortalModal.visible}
+        portalUrl={payment.billingPortalModal.url}
+        onClose={payment.closeBilling}
       />
+
+      <Modal
+        visible={payment.removalModal.visible}
+        title="Usage Limit Exceeded"
+        width={58}
+        height={Math.min(16, 8 + archivableProjects.length)}
+        shortcuts={[
+          { key: "j/k", description: "navigate", disabled: loading.isLoading("archiving") },
+          { key: "d", description: "archive", disabled: loading.isLoading("archiving") },
+          { key: "g", description: "dashboard", disabled: false },
+          { key: "esc", description: "close", disabled: loading.isLoading("archiving") },
+        ]}
+      >
+        <box flexDirection="column">
+          <text fg={THEME_COLORS.warning}>
+            You're using {payment.removalModal.currentUsage} projects but only have{" "}
+            {payment.removalModal.includedUsage} included.
+          </text>
+          <text fg={THEME_COLORS.textMuted}>
+            Archive {payment.removalModal.excessCount} project(s) to continue.
+          </text>
+          <box height={1} />
+          <text fg={THEME_COLORS.textDim}>Select a project to archive:</text>
+          <box flexDirection="column" marginTop={1}>
+            {archivableProjects.slice(0, 5).map((project, index) => {
+              const isSelected = index === removalSelectedIndex;
+              return (
+                <box
+                  key={project.id}
+                  height={1}
+                  width={54}
+                  flexDirection="row"
+                  justifyContent="space-between"
+                >
+                  <text fg={isSelected ? THEME_COLORS.text : THEME_COLORS.textMuted}>
+                    <span fg={isSelected ? THEME_COLORS.primary : THEME_COLORS.textDim}>
+                      {isSelected ? "› " : "  "}
+                    </span>
+                    {project.name}
+                  </text>
+                  <text fg={THEME_COLORS.textDim}>[{project.status}]</text>
+                </box>
+              );
+            })}
+            {archivableProjects.length > 5 && (
+              <text fg={THEME_COLORS.textDim}>
+                {"  "}... {archivableProjects.length - 5} more
+              </text>
+            )}
+          </box>
+        </box>
+      </Modal>
     </box>
   );
 }

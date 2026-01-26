@@ -2,6 +2,7 @@ import { createProjectKey } from "@repo/crypto";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 import { ErrorCode } from "../convex/lib/errors.ts";
 import schema from "../convex/schema";
 import {
@@ -12,6 +13,17 @@ import {
   modules,
   type TestUser,
 } from "./setup";
+
+function assertProjectCreated(result: {
+  status: string;
+  projectId?: string;
+  message?: string;
+}): Id<"project"> {
+  if (result.status !== "success" || !result.projectId) {
+    throw new Error(`Project creation failed: ${result.message || "Unknown error"}`);
+  }
+  return result.projectId as Id<"project">;
+}
 
 describe("Project Lifecycle", () => {
   let t: TestConvex<typeof schema>;
@@ -50,7 +62,7 @@ describe("Project Lifecycle", () => {
 
       const limits = await owner.asUser.action(api.project.getLimits, {});
 
-      expect(limits.included_usage).toBe(10);
+      expect(limits.includedUsage).toBe(10);
       expect(limits.usage).toBe(1);
     });
 
@@ -63,8 +75,7 @@ describe("Project Lifecycle", () => {
         confirmPayment: true,
       });
 
-      expect(result.success).toBe(false);
-      expect(result.requiresProPlan).toBe(true);
+      expect(result.status).toBe("requiresProPlan");
     });
 
     test("should create a project with encrypted project key", async () => {
@@ -75,13 +86,10 @@ describe("Project Lifecycle", () => {
         name: "project-name",
       });
 
-      expect(result.success).toBe(true);
-      if (!result.projectId) {
-        throw new Error("Project ID is missing");
-      }
+      const projectId = assertProjectCreated(result);
 
       const project = await owner.asUser.query(api.project.getProject, {
-        projectId: result.projectId,
+        projectId,
       });
       expect(project.encryptedProjectKey).toBe(encryptedProjectKey);
       expect(project.keyVersion).toBe(1);
@@ -98,18 +106,15 @@ describe("Project Lifecycle", () => {
         name: "project-name",
       });
 
-      expect(result.success).toBe(true);
-      if (!result.projectId) {
-        throw new Error("Project ID is missing");
-      }
+      const projectId = assertProjectCreated(result);
 
       await owner.asUser.mutation(api.project.updateProject, {
-        projectId: result.projectId,
+        projectId,
         name: "new-project-name",
       });
 
       const project = await owner.asUser.query(api.project.getProject, {
-        projectId: result.projectId,
+        projectId,
       });
 
       expect(project.name).toBe("new-project-name");
@@ -123,19 +128,16 @@ describe("Project Lifecycle", () => {
         name: "project-name",
       });
 
-      expect(result.success).toBe(true);
-      if (!result.projectId) {
-        throw new Error("Project ID is missing");
-      }
+      const projectId = assertProjectCreated(result);
 
       await owner.asUser.action(api.project.archiveProject, {
-        projectId: result.projectId,
+        projectId,
       });
 
       await expectConvexError(
         () =>
           owner.asUser.query(api.project.getProject, {
-            projectId: result.projectId,
+            projectId,
           }),
         ErrorCode.PROJECT_INACCESSIBLE,
         "archived",
@@ -144,7 +146,7 @@ describe("Project Lifecycle", () => {
       const project = await t.run(async (ctx) => {
         return await ctx.db
           .query("project")
-          .filter((q) => q.eq(q.field("_id"), result.projectId))
+          .filter((q) => q.eq(q.field("_id"), projectId))
           .first();
       });
 
@@ -162,30 +164,27 @@ describe("Project Lifecycle", () => {
         name: "project-name",
       });
 
-      expect(result.success).toBe(true);
-      if (!result.projectId) {
-        throw new Error("Project ID is missing");
-      }
+      const projectId = assertProjectCreated(result);
 
       await owner.asUser.action(api.project.archiveProject, {
-        projectId: result.projectId,
+        projectId,
       });
 
       const archivedProject = await t.run(async (ctx) => {
         return await ctx.db
           .query("project")
-          .filter((q) => q.eq(q.field("_id"), result.projectId))
+          .filter((q) => q.eq(q.field("_id"), projectId))
           .first();
       });
 
       expect(archivedProject?.isArchived).toBe(true);
 
       await owner.asUser.action(api.project.unarchiveProject, {
-        projectId: result.projectId,
+        projectId,
       });
 
       const unarchivedProject = await owner.asUser.query(api.project.getProject, {
-        projectId: result.projectId,
+        projectId,
       });
 
       expect(unarchivedProject?.isArchived).toBe(false);
@@ -204,9 +203,7 @@ describe("Project Lifecycle", () => {
         confirmPayment: true,
       });
 
-      if (!projectResult1.success) {
-        throw new Error(`Project 1 creation failed: ${projectResult1.message || "Unknown error"}`);
-      }
+      assertProjectCreated(projectResult1);
 
       const projectResult2 = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey: ePK2,
@@ -214,9 +211,7 @@ describe("Project Lifecycle", () => {
         confirmPayment: true,
       });
 
-      if (!projectResult2.success) {
-        throw new Error(`Project 2 creation failed: ${projectResult2.message || "Unknown error"}`);
-      }
+      assertProjectCreated(projectResult2);
 
       const result = await owner.asUser.query(api.project.listUserProjects);
 
@@ -236,16 +231,14 @@ describe("Project Lifecycle", () => {
         name: "project-name",
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
+      const projectId = assertProjectCreated(projectResult);
 
-      await owner.asUser.action(api.project.archiveProject, { projectId: projectResult.projectId });
+      await owner.asUser.action(api.project.archiveProject, { projectId });
 
       await expectConvexError(
         () =>
           owner.asUser.action(api.project.archiveProject, {
-            projectId: projectResult.projectId,
+            projectId,
           }),
         ErrorCode.PROJECT_INACCESSIBLE,
         "archived",
@@ -260,16 +253,14 @@ describe("Project Lifecycle", () => {
         name: "project-name",
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
+      const projectId = assertProjectCreated(projectResult);
 
-      await owner.asUser.action(api.project.archiveProject, { projectId: projectResult.projectId });
+      await owner.asUser.action(api.project.archiveProject, { projectId });
 
       await expectConvexError(
         () =>
           owner.asUser.mutation(api.project.updateProject, {
-            projectId: projectResult.projectId,
+            projectId,
           }),
         ErrorCode.PROJECT_INACCESSIBLE,
         "archived",
@@ -286,12 +277,10 @@ describe("Project Lifecycle", () => {
         name: "project-name-1",
       });
 
-      if (!projectResult1.success || !projectResult1.projectId) {
-        throw new Error(`Project creation failed: ${projectResult1.message || "Unknown error"}`);
-      }
+      const projectId1 = assertProjectCreated(projectResult1);
 
       await owner.asUser.action(api.project.archiveProject, {
-        projectId: projectResult1.projectId,
+        projectId: projectId1,
       });
 
       const { encryptedProjectKey: ePK2 } = await createProjectKey(owner.publicKey!);
@@ -301,14 +290,12 @@ describe("Project Lifecycle", () => {
         name: "project-name-2",
       });
 
-      if (!projectResult2.success || !projectResult2.projectId) {
-        throw new Error(`Project creation failed: ${projectResult2.message || "Unknown error"}`);
-      }
+      assertProjectCreated(projectResult2);
 
       await expectConvexError(
         () =>
           owner.asUser.action(api.project.unarchiveProject, {
-            projectId: projectResult1.projectId,
+            projectId: projectId1,
           }),
         ErrorCode.PROJECTS_LIMIT_REACHED,
         "Limit reached",
@@ -323,14 +310,12 @@ describe("Project Lifecycle", () => {
         name: "project-name",
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
+      const projectId = assertProjectCreated(projectResult);
 
       await expectConvexError(
         () =>
           nonCollaborator.asUser.query(api.project.getProject, {
-            projectId: projectResult.projectId,
+            projectId,
           }),
         ErrorCode.INSUFFICIENT_PERMISSION,
         "You don't have permission",
@@ -345,22 +330,20 @@ describe("Project Lifecycle", () => {
         name: "project-name",
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
+      const projectId = assertProjectCreated(projectResult);
 
       const { encryptedProjectKey: newKey } = await createProjectKey(owner.publicKey!);
 
       await t.run(async (ctx) => {
         await ctx.runMutation(internal.project._rotateProjectKey, {
-          projectId: projectResult.projectId,
+          projectId,
           newEncryptedProjectKey: newKey,
           newKeyVersion: 2,
         });
       });
 
       const project = await owner.asUser.query(api.project.getProject, {
-        projectId: projectResult.projectId,
+        projectId,
       });
 
       expect(project.keyVersion).toBe(2);
@@ -378,12 +361,10 @@ describe("Project Lifecycle", () => {
         name: "project-name",
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
+      const projectId = assertProjectCreated(projectResult);
 
       await owner.asUser.action(api.projectShare.shareProject, {
-        projectId: projectResult.projectId,
+        projectId,
         userEmail: collaborator.email,
         encryptedProjectKey,
       });
@@ -391,11 +372,33 @@ describe("Project Lifecycle", () => {
       await expectConvexError(
         () =>
           owner.asUser.action(api.project.archiveProject, {
-            projectId: projectResult.projectId,
+            projectId,
           }),
         ErrorCode.INVALID_OPERATION,
         "Cannot archive project with 1 active share(s)",
       );
+    });
+
+    test("should return paymentFailed and delete project when track fails", async () => {
+      // User is at exactly the limit (3/3), next project requires payment
+      mockAutumn.setFeature(owner.userId, "projects", 3, 3);
+      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true); // Has Pro
+
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+      const result = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "paid-project",
+        confirmPayment: true,
+      });
+
+      expect(result.status).toBe("paymentFailed");
+      if (result.status === "paymentFailed") {
+        expect(result.billingPortalUrl).toBeDefined();
+      }
+
+      // Verify project was deleted (compensating action)
+      const projects = await owner.asUser.query(api.project.listUserProjects, {});
+      expect(projects.projects.find((p) => p.name === "paid-project")).toBeUndefined();
     });
   });
 
@@ -413,19 +416,17 @@ describe("Project Lifecycle", () => {
         name: "project-name",
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
+      const projectId = assertProjectCreated(projectResult);
 
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
-        projectId: projectResult.projectId,
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        projectId,
         name: "environment-name",
       });
 
       expect(environmentId).toBeDefined();
 
       const environment = await owner.asUser.query(api.environment.getProjectEnvironments, {
-        projectId: projectResult.projectId,
+        projectId,
       });
 
       expect(environment.length).toBe(1);
@@ -440,16 +441,14 @@ describe("Project Lifecycle", () => {
         name: "project-name",
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
+      const projectId = assertProjectCreated(projectResult);
 
-      await owner.asUser.action(api.project.archiveProject, { projectId: projectResult.projectId });
+      await owner.asUser.action(api.project.archiveProject, { projectId });
 
       await expectConvexError(
         () =>
           owner.asUser.mutation(api.environment.createEnvironment, {
-            projectId: projectResult.projectId,
+            projectId,
             name: "environment-name",
           }),
         ErrorCode.PROJECT_INACCESSIBLE,
@@ -465,14 +464,12 @@ describe("Project Lifecycle", () => {
         name: "project-name",
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
+      const projectId = assertProjectCreated(projectResult);
 
       await expectConvexError(
         () =>
           nonCollaborator.asUser.query(api.environment.getProjectEnvironments, {
-            projectId: projectResult.projectId,
+            projectId,
           }),
         ErrorCode.INSUFFICIENT_PERMISSION,
         "You don't have permission",
@@ -489,23 +486,21 @@ describe("Project Lifecycle", () => {
         name: "project-name",
       });
 
-      if (!projectResult.success || !projectResult.projectId) {
-        throw new Error(`Project creation failed: ${projectResult.message || "Unknown error"}`);
-      }
+      const projectId = assertProjectCreated(projectResult);
 
       await owner.asUser.action(api.projectShare.shareProject, {
-        projectId: projectResult.projectId,
+        projectId,
         userEmail: collaborator.email,
         encryptedProjectKey,
       });
 
-      const { environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
-        projectId: projectResult.projectId,
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        projectId,
         name: "environment-name",
       });
 
       const environment = await collaborator.asUser.query(api.environment.getProjectEnvironments, {
-        projectId: projectResult.projectId,
+        projectId,
       });
 
       expect(environment).toBeDefined();
@@ -514,13 +509,95 @@ describe("Project Lifecycle", () => {
       const collaboratorEnvironment = await collaborator.asUser.query(
         api.environment.getProjectEnvironments,
         {
-          projectId: projectResult.projectId,
+          projectId,
         },
       );
 
       expect(collaboratorEnvironment).toBeDefined();
       expect(collaboratorEnvironment.length).toBe(1);
       expect(collaboratorEnvironment[0].name).toBe("environment-name");
+    });
+  });
+
+  describe("Project Subscription Cancellation", () => {
+    beforeEach(async () => {
+      mockAutumn.setFeature(owner.userId, "projects", 10);
+      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
+    });
+
+    test("should block new project when subscription cancelled and over limit", async () => {
+      for (let i = 0; i < 10; i++) {
+        const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+        const result = await owner.asUser.action(api.project.createProject, {
+          encryptedProjectKey,
+          name: `project-${i}`,
+          confirmPayment: true,
+        });
+
+        if (result.status !== "success") {
+          throw new Error(`Project ${i} creation failed: ${result.message || "Unknown error"}`);
+        }
+      }
+
+      mockAutumn.setFeature(owner.userId, "projects", 7, 10);
+
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+      const result = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "new-project",
+        confirmPayment: true,
+      });
+
+      expect(result.status).toBe("requiresRemoval");
+      if (result.status === "requiresRemoval") {
+        expect(result.currentUsage).toBe(10);
+        expect(result.includedUsage).toBe(7);
+        expect(result.excessCount).toBe(3);
+      }
+    });
+
+    test("should allow new project after archiving excess projects", async () => {
+      for (let i = 0; i < 8; i++) {
+        const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+        const result = await owner.asUser.action(api.project.createProject, {
+          encryptedProjectKey,
+          name: `project-${i}`,
+          confirmPayment: true,
+        });
+
+        if (result.status !== "success") {
+          throw new Error(`Project ${i} creation failed: ${result.message || "Unknown error"}`);
+        }
+      }
+
+      mockAutumn.setFeature(owner.userId, "projects", 6, 8);
+
+      const projects = await owner.asUser.query(api.project.listUserProjects, {});
+      const firstProject = projects.projects[0]!;
+      const secondProject = projects.projects[1]!;
+
+      mockAutumn.setFeature(owner.userId, "projects", 8, 8);
+
+      await owner.asUser.action(api.project.archiveProject, {
+        projectId: firstProject.id,
+      });
+
+      mockAutumn.setFeature(owner.userId, "projects", 8, 7);
+
+      await owner.asUser.action(api.project.archiveProject, {
+        projectId: secondProject.id,
+      });
+
+      mockAutumn.setFeature(owner.userId, "projects", 8, 6);
+
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+      const result = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "new-project",
+        confirmPayment: true,
+      });
+
+      expect(result.status).toBe("success");
     });
   });
 });

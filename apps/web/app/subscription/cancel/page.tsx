@@ -1,18 +1,31 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { AuthFooter } from "@/components/auth-footer";
-import { RelicLogo } from "@/components/relic-logo";
 import { authHeadingStyle, authSubtitleStyle } from "@/lib/styles";
 
 export default function SubscriptionCancelPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+    <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
       <div className="w-full py-16">
         <div className="flex flex-col items-center gap-10">
           <div className="flex flex-col items-center gap-8">
             <Link href="/" className="flex items-center">
-              <RelicLogo className="h-12 text-foreground" />
+              <Image
+                src="/relic-logo-wordmark-dark.svg"
+                alt="Relic"
+                width={119}
+                height={48}
+                className="h-12 w-auto dark:hidden"
+              />
+              <Image
+                src="/relic-logo-wordmark-light.svg"
+                alt="Relic"
+                width={119}
+                height={48}
+                className="h-12 w-auto hidden dark:block"
+              />
             </Link>
 
             <div className="text-center space-y-3">
@@ -48,7 +61,7 @@ export default function SubscriptionCancelPage() {
           <div className="w-full max-w-sm space-y-4">
             <div className="bg-card border border-border rounded-lg p-6 space-y-4">
               <div className="text-center space-y-2">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground text-pretty">
                   your payment was cancelled and no charges were made. you can upgrade to pro
                   anytime from the cli.
                 </p>
@@ -66,10 +79,8 @@ export default function SubscriptionCancelPage() {
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
-                  role="img"
-                  aria-label="Back arrow"
+                  aria-hidden="true"
                 >
-                  <title>Back</title>
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"

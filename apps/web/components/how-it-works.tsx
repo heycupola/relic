@@ -89,18 +89,52 @@ export function HowItWorks() {
   const [activeMode, setActiveMode] = useState<"cli" | "tui">("cli");
   const steps = activeMode === "cli" ? cliSteps : tuiSteps;
 
+  const modes: ("cli" | "tui")[] = ["cli", "tui"];
+
+  const handleKeyDown = (e: React.KeyboardEvent, currentMode: "cli" | "tui") => {
+    const currentIndex = modes.indexOf(currentMode);
+    let newIndex = currentIndex;
+
+    if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+      e.preventDefault();
+      newIndex = currentIndex > 0 ? currentIndex - 1 : modes.length - 1;
+    } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+      e.preventDefault();
+      newIndex = currentIndex < modes.length - 1 ? currentIndex + 1 : 0;
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      newIndex = 0;
+    } else if (e.key === "End") {
+      e.preventDefault();
+      newIndex = modes.length - 1;
+    } else {
+      return;
+    }
+
+    setActiveMode(modes[newIndex] ?? "cli");
+  };
+
   return (
     <SectionWrapper label="Workflow" id="how-it-works" showStripes>
       <div className="mx-auto max-w-6xl px-6 py-20 lg:py-24 lg:px-12">
         <h2 className="text-2xl font-semibold text-foreground">How it works</h2>
-        <p className="mt-2 text-foreground/60">Simple hierarchy. Maximum security.</p>
+        <p className="mt-2 text-foreground/60 text-pretty">Simple hierarchy. Maximum security.</p>
 
-        <div className="mt-8 flex border-2 border-border w-fit">
+        <div
+          className="mt-8 flex border-2 border-border w-fit"
+          role="tablist"
+          aria-label="Interface type"
+        >
           <button
             type="button"
             onClick={() => setActiveMode("cli")}
+            onKeyDown={(e) => handleKeyDown(e, "cli")}
+            role="tab"
+            aria-selected={activeMode === "cli"}
+            aria-controls="workflow-content"
+            tabIndex={activeMode === "cli" ? 0 : -1}
             className={cn(
-              "px-6 py-3 font-mono text-xs uppercase tracking-wider transition-all border-r-2 border-border",
+              "px-6 py-3 font-mono text-xs uppercase transition-all border-r-2 border-border focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring",
               activeMode === "cli"
                 ? "bg-foreground text-background font-bold"
                 : "text-foreground/60 hover:text-foreground hover:bg-muted",
@@ -111,8 +145,13 @@ export function HowItWorks() {
           <button
             type="button"
             onClick={() => setActiveMode("tui")}
+            onKeyDown={(e) => handleKeyDown(e, "tui")}
+            role="tab"
+            aria-selected={activeMode === "tui"}
+            aria-controls="workflow-content"
+            tabIndex={activeMode === "tui" ? 0 : -1}
             className={cn(
-              "px-6 py-3 font-mono text-xs uppercase tracking-wider transition-all",
+              "px-6 py-3 font-mono text-xs uppercase transition-all focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring",
               activeMode === "tui"
                 ? "bg-foreground text-background font-bold"
                 : "text-foreground/60 hover:text-foreground hover:bg-muted",
@@ -122,7 +161,11 @@ export function HowItWorks() {
           </button>
         </div>
 
-        <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div
+          className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-4"
+          id="workflow-content"
+          role="tabpanel"
+        >
           {steps.map((step, index) => (
             <div
               // biome-ignore lint/suspicious/noArrayIndexKey: steps are static
@@ -134,10 +177,13 @@ export function HowItWorks() {
                   <span className="font-mono text-sm text-foreground/40 font-medium">
                     {step.step}
                   </span>
-                  <step.icon className="h-5 w-5 text-foreground/40 group-hover:text-foreground/70 transition-colors" />
+                  <step.icon
+                    className="h-5 w-5 text-foreground/40 group-hover:text-foreground/70 transition-colors"
+                    aria-hidden="true"
+                  />
                 </div>
                 <h3 className="mt-3 font-semibold text-base text-foreground">{step.title}</h3>
-                <p className="mt-2 text-sm text-foreground/55 leading-relaxed">
+                <p className="mt-2 text-sm text-foreground/55 leading-relaxed text-pretty">
                   {step.description}
                 </p>
               </div>

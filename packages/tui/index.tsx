@@ -1,43 +1,37 @@
-import { initLogger, logger } from "./utils/debugLog";
+import { initLogger } from "./utils/debugLog";
 
-console.log("DEBUG: Before initLogger");
 initLogger();
-console.log("DEBUG: After initLogger");
-logger.log("App starting - logger initialized");
-console.log("DEBUG: After first logger.log");
 
 if (process.env.DEV === "true") {
   try {
     const devtools = await import("react-devtools-core");
-    devtools.connectToDevTools({
-      host: "localhost",
-      port: 8097,
-    });
-    logger.log("Attempted to connect to React DevTools");
-  } catch (err) {
-    logger.error("Failed to connect to React DevTools", err);
+    devtools.connectToDevTools({ host: "localhost", port: 8097 });
+  } catch {
+    // DevTools connection is optional
   }
 }
 
 import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
 import { useCallback, useEffect, useState } from "react";
-import { TaskBar } from "./components/shared";
-import { AuthProvider, UserProvider, useAuth } from "./convex";
+import { TaskBar } from "./components/shared/TaskBar";
+import { AppProvider, useUser } from "./context";
+import { ConvexAuthProvider } from "./convex/provider";
+import { clearSession, validateSession } from "./convex/services/session";
 import { AppSessionContext } from "./hooks/useAppSession";
 import { useCurrentUser } from "./hooks/useCurrentUser";
 import { TaskProvider } from "./hooks/useTaskQueue";
-import { HomePage, LoginPage, PasswordSetupPage, PasswordUnlockPage, ProjectPage } from "./pages";
+import { HomePage } from "./pages/HomePage";
+import { LoginPage } from "./pages/LoginPage";
+import { PasswordSetupPage } from "./pages/PasswordSetupPage";
+import { PasswordUnlockPage } from "./pages/PasswordUnlockPage";
+import { ProjectPage } from "./pages/ProjectPage";
 import { RouterProvider, useRouter } from "./router";
-import { clearPassword, hasPassword, savePassword } from "./utils/passwordStorage";
+import { clearPassword, hasPassword, savePassword } from "./utils/password";
 
-function AppRouter() {
-  logger.log("AppRouter rendered");
-  const { isAuthenticated, isLoading: isAuthLoading, refreshAuth, logout: authLogout } = useAuth();
+function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
   const { route, navigate } = useRouter();
   const { displayName } = useCurrentUser();
-
-  logger.log("AppRouter state:", { isAuthenticated, isAuthLoading });
 
   const [isPasswordUnlocked, setIsPasswordUnlocked] = useState(false);
   const [passwordStatus, setPasswordStatus] = useState<{ has: boolean; loading: boolean }>({
@@ -54,11 +48,11 @@ function AppRouter() {
   }, []);
 
   const handleLogout = useCallback(async () => {
-    await authLogout();
+    await onLogout();
     await clearPassword();
     setIsPasswordUnlocked(false);
     navigate({ name: "login" });
-  }, [authLogout, navigate]);
+  }, [onLogout, navigate]);
 
   const handlePasswordSetup = async (password: string) => {
     await savePassword(password);
@@ -72,32 +66,25 @@ function AppRouter() {
     navigate({ name: "home" });
   };
 
-  const handleLogin = async () => {
-    await refreshAuth();
-    const has = await hasPassword();
-    setPasswordStatus({ has, loading: false });
-    if (has) {
-      navigate({ name: "password-unlock" });
-    } else {
-      navigate({ name: "password-setup" });
-    }
-  };
-
-  if (isAuthLoading || passwordStatus.loading) {
+  if (passwordStatus.loading) {
     return null;
   }
 
-  if (!isAuthenticated) {
-    logger.log("AppRouter: Not authenticated, showing LoginPage");
-    return <LoginPage onLogin={handleLogin} />;
-  }
-
   if (!isPasswordUnlocked) {
-    logger.log("AppRouter: Password not unlocked, passwordStatus:", passwordStatus);
     if (passwordStatus.has) {
-      return <PasswordUnlockPage onUnlock={handlePasswordUnlock} onLogout={handleLogout} />;
+      return (
+        <>
+          <PasswordUnlockPage onUnlock={handlePasswordUnlock} onLogout={handleLogout} />
+          <AuthenticatedTaskBar />
+        </>
+      );
     }
-    return <PasswordSetupPage onComplete={handlePasswordSetup} onLogout={handleLogout} />;
+    return (
+      <>
+        <PasswordSetupPage onComplete={handlePasswordSetup} onLogout={handleLogout} />
+        <AuthenticatedTaskBar />
+      </>
+    );
   }
 
   const sessionContext = {
@@ -105,7 +92,6 @@ function AppRouter() {
     displayName,
   };
 
-  logger.log("AppRouter: Authenticated and unlocked, route:", route.name);
   const renderPage = () => {
     switch (route.name) {
       case "login":
@@ -127,31 +113,85 @@ function AppRouter() {
   };
 
   return (
-    <AppSessionContext.Provider value={sessionContext}>{renderPage()}</AppSessionContext.Provider>
+    <AppSessionContext.Provider value={sessionContext}>
+      {renderPage()}
+      <AuthenticatedTaskBar />
+    </AppSessionContext.Provider>
+  );
+}
+
+// NOTE: TaskBar wrapper that has access to user context.
+function AuthenticatedTaskBar() {
+  const { user } = useUser();
+  return <TaskBar userEmail={user?.email} />;
+}
+
+function AppRouter() {
+  const { navigate } = useRouter();
+  const [authState, setAuthState] = useState<{
+    isAuthenticated: boolean;
+    isLoading: boolean;
+  }>({ isAuthenticated: false, isLoading: true });
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const validation = await validateSession();
+        setAuthState({ isAuthenticated: validation.isValid, isLoading: false });
+      } catch {
+        setAuthState({ isAuthenticated: false, isLoading: false });
+      }
+    };
+    checkAuth();
+  }, []);
+
+  const handleLogin = useCallback(async () => {
+    const validation = await validateSession();
+    setAuthState({ isAuthenticated: validation.isValid, isLoading: false });
+    const has = await hasPassword();
+    if (has) {
+      navigate({ name: "password-unlock" });
+    } else {
+      navigate({ name: "password-setup" });
+    }
+  }, [navigate]);
+
+  const handleLogout = useCallback(async () => {
+    await clearSession();
+    setAuthState({ isAuthenticated: false, isLoading: false });
+  }, []);
+
+  if (authState.isLoading) {
+    return null;
+  }
+
+  if (!authState.isAuthenticated) {
+    return (
+      <>
+        <LoginPage onLogin={handleLogin} />
+        <TaskBar />
+      </>
+    );
+  }
+
+  return (
+    <ConvexAuthProvider>
+      <AppProvider>
+        <AuthenticatedApp onLogout={handleLogout} />
+      </AppProvider>
+    </ConvexAuthProvider>
   );
 }
 
 function App() {
-  console.log("DEBUG: App component rendered");
-  logger.log("App component rendered");
   return (
-    <AuthProvider>
-      <UserProvider>
-        <TaskProvider>
-          <RouterProvider>
-            <AppRouter />
-            <TaskBar />
-          </RouterProvider>
-        </TaskProvider>
-      </UserProvider>
-    </AuthProvider>
+    <TaskProvider>
+      <RouterProvider>
+        <AppRouter />
+      </RouterProvider>
+    </TaskProvider>
   );
 }
 
-const renderer = await createCliRenderer({
-  exitOnCtrlC: true,
-});
-
-logger.log("About to render App component");
+const renderer = await createCliRenderer({ exitOnCtrlC: true });
 createRoot(renderer).render(<App />);
-logger.log("App component rendered to root");

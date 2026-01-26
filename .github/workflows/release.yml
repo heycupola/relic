@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'apps/cli/**'
+      - 'packages/cli-core/**'
 
 jobs:
   check-version:
@@ -88,11 +89,11 @@ jobs:
       - name: Cache cargo build
         uses: actions/cache@v4
         with:
-          path: apps/cli/bindings/target
+          path: packages/cli-core/target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build Rust library
-        working-directory: apps/cli/bindings
+        working-directory: packages/cli-core
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Prepare artifacts (Unix)
@@ -100,7 +101,7 @@ jobs:
         working-directory: apps/cli
         run: |
           mkdir -p prebuilds/${{ matrix.platform }}
-          cp bindings/target/${{ matrix.target }}/release/librust.* prebuilds/${{ matrix.platform }}/ || true
+          cp ../../packages/cli-core/target/${{ matrix.target }}/release/librelic_core.* prebuilds/${{ matrix.platform }}/ || true
 
       - name: Prepare artifacts (Windows)
         if: runner.os == 'Windows'
@@ -108,7 +109,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p prebuilds/${{ matrix.platform }}
-          cp bindings/target/${{ matrix.target }}/release/rust.dll prebuilds/${{ matrix.platform }}/ || true
+          cp ../../packages/cli-core/target/${{ matrix.target }}/release/relic_core.dll prebuilds/${{ matrix.platform }}/ || true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

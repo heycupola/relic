@@ -1,4 +1,4 @@
-import type { ProjectStatus, SecretScope, SecretValueType } from "../convex/api/types";
+import type { ProjectStatus, SecretScope, SecretValueType } from "./api";
 
 export type { ProjectStatus, SecretScope, SecretValueType };
 
@@ -23,6 +23,7 @@ export interface Secret {
   id: string;
   key: string;
   value?: string;
+  encryptedValue?: string;
   type?: SecretValueType;
   folderId?: string;
   environmentId: string;
@@ -44,7 +45,6 @@ export interface LogEntry {
 
 export type ViewLevel = "environments" | "environment" | "folder";
 
-// Unified ModalType that includes all modal types used across the app
 export type ModalType =
   | "none"
   | "createEnv"

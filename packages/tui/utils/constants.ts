@@ -8,12 +8,17 @@ export const CHAR_LIMITS = {
 
 export const INPUT_WIDTH = 38;
 
-export const STATUS_COLORS = {
+export const STATUS_COLORS: Record<string, string> & {
+  owned: string;
+  shared: string;
+  archived: string;
+  restricted: string;
+} = {
   owned: "#9ece6a",
   shared: "#7aa2f7",
   archived: "#565f89",
   restricted: "#f7768e",
-} as const;
+};
 
 export const THEME_COLORS = {
   background: "#0f0f14",
@@ -22,6 +27,7 @@ export const THEME_COLORS = {
   secondary: "#bb9af7",
   accent: "#e0af68",
   success: "#9ece6a",
+  warning: "#e0af68",
   error: "#f7768e",
   text: "#c0caf5",
   textMuted: "#565f89",
@@ -38,3 +44,8 @@ export const PRICING = {
   seatPrice: "$5",
   projectPrice: "$10",
 } as const;
+
+export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
+export const SPINNER_INTERVAL = 80;
+
+export const DASHBOARD_URL = `${process.env.SITE_URL ?? "http://localhost:3000"}/dashboard`;

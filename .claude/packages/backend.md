@@ -24,6 +24,29 @@ Zero-knowledge backend using Convex. Supports real-time database operations and 
 - Plaintext secrets MUST NEVER reach the backend.
 - Use `protectedMutation/Action` to inject `ctx.userId` and `ctx.email`.
 
+## Share Limits Model (Hybrid)
+Project sharing uses a hybrid model:
+
+### Free Shares (Project-based)
+- `shareLimits.freeShareLimit`: 5 free shares per project
+- Tracked locally in `project.shareUsageCount`
+
+### Paid Shares (User-based Pool)
+- `additional_shares` feature in Autumn
+- User-level pool shared across ALL projects
+- Autumn does NOT know which project uses which share
+
+### Overlimit Check (`shareProject`)
+When `additional_shares.usage > additional_shares.included_usage`:
+- User is overlimit across all projects
+- Block new shares on ANY project
+- User must revoke shares from any project(s) to reduce total paid usage
+
+### Important
+- This is intentionally a hybrid model for flexibility
+- Overlimit affects all projects equally (shared pool)
+- Response includes `requiresRemoval: true` with `excessCount`
+
 ## Commands
 - `bun run dev`: Run Convex dev server.
 - `bun run test`: Run backend tests (`convex/test/`).

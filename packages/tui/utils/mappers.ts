@@ -6,63 +6,48 @@ import type {
   Secret as ApiSecret,
   SharedUser as ApiSharedUser,
   User as ApiUser,
-} from "../convex/api/types";
+} from "../types/api";
 import type { Environment, Folder, Project, Secret, SharedUser } from "../types/models";
 
-/**
- * Maps API ProjectListItem to TUI Project type
- */
 export function mapApiProject(apiProject: ApiProject): Project {
-  const projectId = (apiProject as any).id || (apiProject as any)._id;
-  if (!projectId) {
+  if (!apiProject.id) {
     throw new Error(`Project ID is missing in API response: ${JSON.stringify(apiProject)}`);
   }
 
   const status = apiProject.status || "owned";
 
   return {
-    id: projectId,
+    id: apiProject.id,
     name: apiProject.name,
     status,
   };
 }
 
-/**
- * Maps array of API ProjectListItems to TUI Project types
- */
 export function mapApiProjects(apiProjects: ApiProject[]): Project[] {
   return apiProjects.map(mapApiProject);
 }
 
-/**
- * Maps API Environment to TUI Environment type
- */
 export function mapApiEnvironment(apiEnv: ApiEnvironment): Environment {
   return {
-    id: apiEnv._id,
+    id: apiEnv.id,
     name: apiEnv.name,
   };
 }
 
-/**
- * Maps API Folder to TUI Folder type
- */
 export function mapApiFolder(apiFolder: ApiFolder): Folder {
   return {
-    id: apiFolder._id,
+    id: apiFolder.id,
     name: apiFolder.name,
     environmentId: apiFolder.environmentId,
   };
 }
 
-/**
- * Maps API Secret to TUI Secret type
- */
 export function mapApiSecret(apiSecret: ApiSecret): Secret {
   return {
-    id: apiSecret._id,
+    id: apiSecret.id,
     key: apiSecret.key,
     value: undefined,
+    encryptedValue: apiSecret.encryptedValue,
     type:
       apiSecret.valueType === "string"
         ? "string"
@@ -78,7 +63,7 @@ export function mapApiSecret(apiSecret: ApiSecret): Secret {
 
 export function mapApiSharedUser(apiUser: ApiSharedUser): SharedUser {
   return {
-    id: apiUser.id || apiUser._id,
+    id: apiUser.id,
     email: apiUser.email,
     name: apiUser.name,
     publicKey: apiUser.publicKey,
@@ -100,9 +85,6 @@ export function mapApiEnvironmentData(data: ApiEnvironmentData): {
   };
 }
 
-/**
- * Maps API User to display name
- */
 export function getUserDisplayName(user: ApiUser): string {
   return user.name || user.email.split("@")[0] || "User";
 }

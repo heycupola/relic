@@ -78,7 +78,19 @@ export const getCurrentUser = protectedQuery({
       userId: ctx.userId,
     });
 
-    return user;
+    return {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      emailVerified: user.emailVerified,
+      image: user.image,
+      hasPro: user.hasPro,
+      publicKey: user.publicKey,
+      encryptedPrivateKey: user.encryptedPrivateKey,
+      salt: user.salt,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
   },
 });
 
@@ -247,7 +259,7 @@ export const getBillingPortalUrl = protectedAction({
 
     try {
       const result = await ctx.autumn.customers.billingPortal(ctx, {
-        returnUrl: `${process.env.SITE_URL || "https://relic.so"}/billing/return`,
+        returnUrl: `${process.env.SITE_URL || "https://relic.so"}/dashboard`,
       });
 
       return {

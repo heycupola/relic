@@ -1,16 +1,5 @@
 import { useEffect, useRef } from "react";
 
-/**
- * Hook for handling paste operations.
- *
- * Automatically detects paste from terminal (Cmd+V) by listening to stdin
- * and detecting Bracketed Paste Mode sequences.
- *
- * Usage:
- * ```
- * usePaste(handlePaste);
- * ```
- */
 export function usePaste(callback: (text: string) => void): void {
   const callbackRef = useRef(callback);
   callbackRef.current = callback;

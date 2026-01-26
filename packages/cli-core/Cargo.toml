@@ -1,0 +1,27 @@
+[package]
+name = "relic-core"
+description = "Secret manager that keeps your secrets safe and your workflow simple."
+authors = ["Can Vardar <https://github.com/heycupola/relic>"]
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dotenvy = "0.15.7"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+# for convex client
+convex = "0.10.1"
+tokio = { version = "1.48.0", features = ["rt", "rt-multi-thread", "macros"] }
+anyhow = "1.0.100"
+# for cli
+clap = { version = "4.5", features = ["derive"] }
+reqwest = { version = "0.12.24", features = ["json"] }
+tracing-error = "0.2.1"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
+directories = "6.0.0"
+lazy_static = "1.5.0"
+color-eyre = "0.6.5"
+
+[lib]
+crate-type = ["cdylib"]

@@ -8,9 +8,7 @@ export type PaymentConfirmationType = "seat" | "project";
 interface ConfirmPaymentModalProps {
   visible: boolean;
   type: PaymentConfirmationType;
-  /** Project name (for project creation) or email (for collaborator addition) */
   itemName?: string;
-  freeLimit: number;
   balance: number;
   isLoading?: boolean;
   onConfirm: () => void;
@@ -33,7 +31,6 @@ export function ConfirmPaymentModal({
   visible,
   type,
   itemName,
-  freeLimit,
   balance,
   isLoading = false,
   onConfirm,
@@ -42,7 +39,6 @@ export function ConfirmPaymentModal({
   const { isRunning } = useTaskQueue();
 
   useKeyboard((key) => {
-    // Only block when task is actively running, not when pending (waiting for confirmation)
     if (!visible || isLoading || isRunning) return;
 
     if (key.name === "return") {

@@ -16,7 +16,6 @@ import {
 import schema from "./schema";
 
 const MAX_SECRETS_PER_ENVIRONMENT = 1024;
-
 export const createSecret = protectedMutation({
   args: {
     environmentId: v.id("environment"),
@@ -28,6 +27,7 @@ export const createSecret = protectedMutation({
     // description: v.optional(v.string()),
     // tags: v.optional(v.array(v.string())),
   },
+  returns: v.object({ id: v.id("secret") }),
   handler: async (
     ctx: ProtectedMutationCtx,
     args: {
@@ -39,13 +39,15 @@ export const createSecret = protectedMutation({
       scope?: "client" | "server" | "shared";
     },
   ) => {
-    const environment = await ctx.runQuery(internal.environment._loadEnvironmentById, {
+    const environmentResult = await ctx.runQuery(internal.environment._loadEnvironmentById, {
       environmentId: args.environmentId,
     });
+    const environment = environmentResult as Doc<"environment">;
 
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
+    const projectResult = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: environment.projectId,
     });
+    const project = projectResult as Doc<"project">;
 
     await assertProjectAccess(ctx, project);
 
@@ -72,7 +74,7 @@ export const createSecret = protectedMutation({
     }
 
     // create secret using project's current key version
-    const { secretId } = await ctx.runMutation(internal.secret._insertSecret, {
+    const insertResult = await ctx.runMutation(internal.secret._insertSecret, {
       createdBy: ctx.userId,
       encryptedValue: args.encryptedValue,
       encryptionKeyVersion: project.keyVersion,
@@ -83,6 +85,7 @@ export const createSecret = protectedMutation({
       projectId: project._id,
       folderId: args.folderId,
     });
+    const { secretId } = insertResult as { secretId: Id<"secret"> };
 
     await ctx.runMutation(internal.actionLog._logSecretAction, {
       environmentId: environment._id,
@@ -97,9 +100,7 @@ export const createSecret = protectedMutation({
       folderName: folder?.name,
     });
 
-    const sId: Id<"secret"> = secretId;
-
-    return { success: true, secretId: sId };
+    return { id: secretId };
   },
 });
 
@@ -151,10 +152,19 @@ export const getAllSecretsForProject = protectedQuery({
   args: {
     projectId: v.id("project"),
   },
+  returns: v.array(
+    v.object({
+      id: v.id("secret"),
+      environmentId: v.id("environment"),
+      encryptedValue: v.string(),
+    }),
+  ),
   handler: async (
     ctx: ProtectedQueryCtx,
     args: { projectId: Id<"project"> },
-  ): Promise<Array<{ secretId: string; environmentId: string; encryptedValue: string }>> => {
+  ): Promise<
+    Array<{ id: Id<"secret">; environmentId: Id<"environment">; encryptedValue: string }>
+  > => {
     const project = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: args.projectId,
     });
@@ -165,8 +175,8 @@ export const getAllSecretsForProject = protectedQuery({
       projectId: args.projectId,
     });
 
-    return secrets.map((secret) => ({
-      secretId: secret._id,
+    return secrets.map((secret: Doc<"secret">) => ({
+      id: secret._id,
       environmentId: secret.environmentId,
       encryptedValue: secret.encryptedValue,
     }));
