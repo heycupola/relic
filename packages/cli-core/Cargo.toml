@@ -3,7 +3,7 @@ name = "relic-core"
 description = "Secret manager that keeps your secrets safe and your workflow simple."
 authors = ["Can Vardar <https://github.com/heycupola/relic>"]
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 dotenvy = "0.15.7"
