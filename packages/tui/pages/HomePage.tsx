@@ -50,7 +50,8 @@ export function HomePage() {
   const { width, height } = useTerminalDimensions();
   const { navigate } = useRouter();
   const { logout } = useAppSession();
-  const { runTask, continueTask, cancelTask, showSuccess, isProcessing } = useTaskQueue();
+  const { runTask, continueTask, cancelTask, showSuccess, showError, isProcessing } =
+    useTaskQueue();
   const { hasPro, isLoading: isLoadingPlan } = useUser();
 
   const {
@@ -335,17 +336,27 @@ export function HomePage() {
 
   const executeCommand = (cmd: { key: string }) => {
     const project = projects[navigation.selectedIndex];
-    const canModify = project && project.status !== "restricted" && project.status !== "archived";
+    const isOwned = project && project.status === "owned";
+    const isAccessible =
+      project && project.status !== "restricted" && project.status !== "archived";
 
     switch (cmd.key) {
       case "n":
         if (!isLoadingKeys && hasKeys && publicKey) setCreatingProject(true);
         break;
       case "u":
-        if (canModify && project.id) setEditingProject({ id: project.id, name: project.name });
+        if (isOwned && project.id) {
+          setEditingProject({ id: project.id, name: project.name });
+        } else if (isAccessible && !isOwned) {
+          showError("Only project owners can rename projects");
+        }
         break;
       case "d":
-        if (canModify) setConfirmingDelete({ id: project.id, name: project.name });
+        if (isOwned) {
+          setConfirmingDelete({ id: project.id, name: project.name });
+        } else if (isAccessible && !isOwned) {
+          showError("Only project owners can delete projects");
+        }
         break;
       case "p":
         setActiveModal("password");
@@ -415,8 +426,10 @@ export function HomePage() {
       navigation.select();
     } else if (key.name === "d") {
       const project = projects[navigation.selectedIndex];
-      if (project && project.status !== "restricted" && project.status !== "archived") {
+      if (project && project.status === "owned") {
         setConfirmingDelete({ id: project.id, name: project.name });
+      } else if (project && project.status === "shared") {
+        showError("Only project owners can delete projects");
       }
     } else if (key.name === "n") {
       if (!isLoadingKeys && hasKeys && publicKey) {
@@ -424,13 +437,10 @@ export function HomePage() {
       }
     } else if (key.name === "u") {
       const project = projects[navigation.selectedIndex];
-      if (
-        project &&
-        project.status !== "restricted" &&
-        project.status !== "archived" &&
-        project.id
-      ) {
+      if (project && project.status === "owned" && project.id) {
         setEditingProject({ id: project.id, name: project.name });
+      } else if (project && project.status === "shared") {
+        showError("Only project owners can rename projects");
       }
     } else if (key.name === "p") {
       setActiveModal("password");
@@ -480,8 +490,6 @@ export function HomePage() {
         {
           shortcuts: [
             { key: "n", description: "create project", disabled: isDisabled },
-            { key: "u", description: "rename project", disabled: isDisabled },
-            { key: "d", description: "delete project", disabled: isDisabled },
             { key: "g", description: "dashboard", disabled: isDisabled },
           ],
         },
@@ -742,17 +750,13 @@ export function HomePage() {
         <text fg={THEME_COLORS.textDim}>Are you sure you want to logout?</text>
       </Modal>
 
+      {/* NOTE: shortcuts={[]} because PasswordInput has its own GuideBar with contextual labels */}
       <Modal
         visible={activeModal === "password"}
         title="Change Password"
         width={55}
         height={18}
-        shortcuts={[
-          { key: "^v", description: "show/hide", disabled: !!passwordChangeStatus },
-          { key: "tab", description: "next field", disabled: !!passwordChangeStatus },
-          { key: "enter", description: "save", disabled: !!passwordChangeStatus },
-          { key: "esc", description: "cancel", disabled: !!passwordChangeStatus },
-        ]}
+        shortcuts={[]}
       >
         <box flexDirection="column" gap={1}>
           {passwordChangeStatus && (
@@ -774,6 +778,9 @@ export function HomePage() {
               setPasswordChangeError(null);
               setPasswordChangeStatus(null);
             }}
+            additionalShortcuts={[
+              { key: "esc", description: "cancel", disabled: !!passwordChangeStatus },
+            ]}
             width={51}
             disabled={!!passwordChangeStatus}
             error={passwordChangeError}
