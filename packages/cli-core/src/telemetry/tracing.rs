@@ -11,7 +11,7 @@ use super::sentry_layer::SentryLayer;
 const LOG_FILE: &str = "relic.log";
 
 fn project_directory() -> Option<ProjectDirs> {
-    ProjectDirs::from("com", "cupola", env!("CARGO_PKG_NAME"))
+    ProjectDirs::from("com", "cupola", "relic")
 }
 
 pub fn get_data_dir() -> PathBuf {
