@@ -378,6 +378,28 @@ describe("Project Lifecycle", () => {
         "Cannot archive project with 1 active share(s)",
       );
     });
+
+    test("should return paymentFailed and delete project when track fails", async () => {
+      // User is at exactly the limit (3/3), next project requires payment
+      mockAutumn.setFeature(owner.userId, "projects", 3, 3);
+      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true); // Has Pro
+
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+      const result = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "paid-project",
+        confirmPayment: true,
+      });
+
+      expect(result.status).toBe("paymentFailed");
+      if (result.status === "paymentFailed") {
+        expect(result.billingPortalUrl).toBeDefined();
+      }
+
+      // Verify project was deleted (compensating action)
+      const projects = await owner.asUser.query(api.project.listUserProjects, {});
+      expect(projects.projects.find((p) => p.name === "paid-project")).toBeUndefined();
+    });
   });
 
   describe("Environment CRUD Operations", () => {

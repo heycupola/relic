@@ -169,7 +169,11 @@ export type CreateProjectResult =
   | {
       status: "success";
       projectId: string;
-      paymentFailed?: boolean;
+      message?: string;
+    }
+  | {
+      status: "paymentFailed";
+      billingPortalUrl: string | null;
       message?: string;
     }
   | {

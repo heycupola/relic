@@ -23,7 +23,11 @@ type PaymentResult =
     }
   | {
       status: "success";
-      paymentFailed?: boolean;
+      message?: string;
+    }
+  | {
+      status: "paymentFailed";
+      billingPortalUrl: string | null;
       message?: string;
     }
   | {
@@ -92,33 +96,39 @@ export function usePaymentFlow(options: UsePaymentFlowOptions = {}) {
         "status" in result
           ? result.status === "success"
             ? {
-                success: !result.paymentFailed,
-                paymentFailed: result.paymentFailed,
+                success: true,
                 message: result.message,
               }
-            : result.status === "requiresProPlan"
+            : result.status === "paymentFailed"
               ? {
                   success: false,
-                  requiresProPlan: true,
-                  checkoutUrl: result.checkoutUrl,
+                  paymentFailed: true,
+                  billingPortalUrl: result.billingPortalUrl,
                   message: result.message,
                 }
-              : result.status === "requiresRemoval"
+              : result.status === "requiresProPlan"
                 ? {
                     success: false,
-                    requiresRemoval: true,
-                    currentUsage: result.currentUsage,
-                    includedUsage: result.includedUsage,
-                    excessCount: result.excessCount,
+                    requiresProPlan: true,
+                    checkoutUrl: result.checkoutUrl,
                     message: result.message,
                   }
-                : {
-                    success: false,
-                    requiresConfirmation: true,
-                    balance: result.balance,
-                    freeLimit: result.freeLimit,
-                    message: result.message,
-                  }
+                : result.status === "requiresRemoval"
+                  ? {
+                      success: false,
+                      requiresRemoval: true,
+                      currentUsage: result.currentUsage,
+                      includedUsage: result.includedUsage,
+                      excessCount: result.excessCount,
+                      message: result.message,
+                    }
+                  : {
+                      success: false,
+                      requiresConfirmation: true,
+                      balance: result.balance,
+                      freeLimit: result.freeLimit,
+                      message: result.message,
+                    }
           : result;
 
       if (normalized.paymentFailed) {

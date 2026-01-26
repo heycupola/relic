@@ -110,7 +110,11 @@ export const createProject = protectedAction({
     v.object({
       status: v.literal("success"),
       projectId: v.id("project"),
-      paymentFailed: v.optional(v.boolean()),
+      message: v.optional(v.string()),
+    }),
+    v.object({
+      status: v.literal("paymentFailed"),
+      billingPortalUrl: v.union(v.string(), v.null()),
       message: v.optional(v.string()),
     }),
     v.object({
@@ -244,28 +248,8 @@ export const createProject = protectedAction({
 
     const pId: Id<"project"> = projectId;
 
-    let paymentFailed = false;
-
     // Track usage: paid projects (for billing) or free projects within limit (for usage counting)
     if (isPaidProject || data.allowed) {
-      // For paid projects, re-verify balance before tracking to avoid relying on error messages
-      if (isPaidProject) {
-        const freshCheck = await ctx.autumn.check(ctx, {
-          featureId: "projects",
-        });
-
-        const freshBalance = freshCheck.data?.balance ?? 0;
-        if (freshBalance <= 0) {
-          // NOTE: Project already created; callers must check paymentFailed.
-          return {
-            status: "success" as const,
-            paymentFailed: true,
-            message: "No purchased projects available. Adding a project costs $10.",
-            projectId: pId,
-          };
-        }
-      }
-
       try {
         await ctx.autumn.track(ctx, {
           featureId: "projects",
@@ -277,13 +261,29 @@ export const createProject = protectedAction({
           trackError,
         );
         if (isPaidProject) {
-          paymentFailed = true;
+          // Compensate: delete the project we just created
+          await ctx.runMutation(internal.project._deleteProject, { projectId: pId });
+
+          // Get billing portal URL for user to fix payment
+          let billingPortalUrl: string | null = null;
+          try {
+            const portalResult = await ctx.autumn.customers.billingPortal(ctx, {});
+            billingPortalUrl = portalResult.data?.url || null;
+          } catch (portalError) {
+            console.error("[createProject] Failed to get billing portal URL:", portalError);
+          }
+
+          return {
+            status: "paymentFailed" as const,
+            billingPortalUrl,
+            message: "Payment failed. Please update your billing settings.",
+          };
         }
-        // For free tier tracking failures, log but don't fail the operation
+        // For free tier tracking failures, just log - don't fail the operation
       }
     }
 
-    return { status: "success" as const, projectId: pId, paymentFailed };
+    return { status: "success" as const, projectId: pId };
   },
 });
 
@@ -636,6 +636,24 @@ export const _unarchiveProject = internalMutation({
   handler: async (ctx, args) => {
     await ctx.db.patch(args.projectId, { isArchived: false, updatedAt: Date.now() });
 
+    return { success: true };
+  },
+});
+
+// NOTE: This is a HARD DELETE used only as a compensating action when payment
+// tracking fails after project creation. Unlike archiveProject (soft delete that
+// sets isArchived=true and preserves the record), this permanently removes the
+// project from the database to maintain atomicity - either the project AND
+// payment succeed together, or neither exists.
+export const _deleteProject = internalMutation({
+  args: {
+    projectId: v.id("project"),
+  },
+  returns: v.object({
+    success: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    await ctx.db.delete(args.projectId);
     return { success: true };
   },
 });
