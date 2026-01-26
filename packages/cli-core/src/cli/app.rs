@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 
-use crate::{service, util::app_config::AppConfig};
+use crate::util::app_config::AppConfig;
 
 #[derive(Parser)]
 #[command(name = "relic")]
@@ -13,8 +13,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    Login,
-    Logout,
+    Run,
 }
 
 pub async fn run_cli_from_args(mut args: Vec<String>, app_config: AppConfig) -> Result<()> {
@@ -24,11 +23,8 @@ pub async fn run_cli_from_args(mut args: Vec<String>, app_config: AppConfig) -> 
     let cli = Cli::try_parse_from(args).context("Unable to parse args...")?;
 
     match cli.command {
-        Commands::Login => {
-            service::auth::login(&app_config).await?;
-        }
-        Commands::Logout => {
-            service::auth::logout()?;
+        Commands::Run => {
+            println!("running the app");
         }
     }
 

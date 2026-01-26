@@ -7,10 +7,6 @@ pub mod util {
     pub mod app_config;
 }
 
-pub mod service {
-    pub mod auth;
-}
-
 pub mod cli {
     pub mod app;
 }
@@ -27,13 +23,11 @@ pub extern "C" fn run_app(args_json: *const c_char) {
 }
 
 async fn run_app_async(args_json: *const c_char) -> Result<()> {
-    // Create app config first to get the sentry reporter
     let app_config = AppConfig::new().await?;
 
-    // Initialize logging with sentry reporter
     initialize_logging(Some(app_config.sentry_reporter.clone()))?;
 
-    // Parse the JSON string from C (handle null pointer)
+    // NOTE: Parse the JSON string from C (handle null pointer)
     let args: Vec<String> = if args_json.is_null() {
         vec![]
     } else {
@@ -45,9 +39,7 @@ async fn run_app_async(args_json: *const c_char) -> Result<()> {
         serde_json::from_str(c_str).unwrap_or_default()
     };
 
-    // Setup panic handler
     setup_panic_handler(app_config.sentry_reporter.clone());
 
-    // Run CLI with args (empty args will show help)
     cli::app::run_cli_from_args(args, app_config).await
 }
