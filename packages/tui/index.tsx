@@ -13,11 +13,11 @@ if (process.env.DEV === "true") {
 
 import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
+import { clearSession, validateSession } from "@repo/auth";
 import { useCallback, useEffect, useState } from "react";
 import { TaskBar } from "./components/shared/TaskBar";
 import { AppProvider, useUser } from "./context";
 import { ConvexAuthProvider } from "./convex/provider";
-import { clearSession, validateSession } from "./convex/services/session";
 import { AppSessionContext } from "./hooks/useAppSession";
 import { useCurrentUser } from "./hooks/useCurrentUser";
 import { TaskProvider } from "./hooks/useTaskQueue";

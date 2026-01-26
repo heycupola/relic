@@ -1,3 +1,4 @@
+import { clearSession, type Session, validateSession } from "@repo/auth";
 import { api } from "@repo/backend";
 import { useQuery } from "convex/react";
 import {
@@ -9,8 +10,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { clearSession, validateSession } from "./convex/services/session";
-import type { Session } from "./convex/types";
 import type { User } from "./types/api";
 
 interface AppContextValue {

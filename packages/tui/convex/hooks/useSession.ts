@@ -1,6 +1,5 @@
+import { clearSession, type Session, validateSession } from "@repo/auth";
 import { useCallback, useEffect, useState } from "react";
-import { clearSession, validateSession } from "../services/session";
-import type { Session } from "../types";
 
 interface UseSessionReturn {
   isAuthenticated: boolean;

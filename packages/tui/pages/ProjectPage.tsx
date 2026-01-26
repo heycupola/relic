@@ -1,4 +1,5 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
+import { extractErrorMessage } from "@repo/auth";
 import open from "open";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { InlineInput } from "../components/forms/InlineInput";
@@ -17,7 +18,6 @@ import {
 import { DeleteConfirmation } from "../components/shared/DeleteConfirmation";
 import { GuideBar } from "../components/shared/GuideBar";
 import { useUser } from "../context";
-import { extractErrorMessage } from "../convex/types";
 import { useMultiLineInput } from "../hooks/useInput";
 import { usePaste } from "../hooks/usePaste";
 import { useProjectPage } from "../hooks/useProjectPage";

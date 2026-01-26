@@ -1,3 +1,4 @@
+import { ensureValidJwt } from "@repo/auth";
 import {
   api,
   SecretValueType as BackendSecretValueType,
@@ -5,7 +6,6 @@ import {
   type TableNames,
 } from "@repo/backend";
 import { ConvexHttpClient } from "convex/browser";
-import { ensureValidJwt } from "./convex/services/jwt";
 import type {
   ActionLog,
   ApiSharedProjectResponse,

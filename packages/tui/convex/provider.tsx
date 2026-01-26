@@ -1,7 +1,7 @@
+import { ensureValidJwt } from "@repo/auth";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { type ComponentProps, type ReactNode, useEffect, useRef, useState } from "react";
 import { logger } from "../utils/debugLog";
-import { ensureValidJwt } from "./services/jwt";
 
 const CONVEX_URL = process.env.CONVEX_URL ?? "http://localhost:3210";
 

@@ -1,8 +1,7 @@
+import { type DeviceAuthStatus, type DeviceCodeResponse, deviceAuth } from "@repo/auth";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DeviceCodeResponse } from "../../types/api";
-import { deviceAuth } from "../services/deviceAuth";
 
-export type DeviceAuthStatus = "pending" | "approved" | "denied" | "expired" | "error";
+export type { DeviceAuthStatus };
 
 interface UseDeviceAuthOptions {
   onSuccess?: () => void;
