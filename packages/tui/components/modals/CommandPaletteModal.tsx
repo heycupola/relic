@@ -184,7 +184,7 @@ function CommandPaletteDisplay({
         left={0}
         top={0}
         width={width}
-        height={height}
+        height={height - 1}
         backgroundColor={THEME_COLORS.background}
       />
       <box
