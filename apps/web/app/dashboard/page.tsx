@@ -4,7 +4,7 @@ import { api } from "@repo/backend";
 import { useAction, useQuery } from "convex/react";
 import { AlertCircle } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { ContainerLines } from "@/components/container-lines";
 import { ActivityLogsCard } from "@/components/dashboard/activity-logs-card";
 import { ProjectsOverviewCard } from "@/components/dashboard/projects-overview-card";
@@ -15,9 +15,51 @@ import { Header } from "@/components/header";
 import { usePaginatedActionLogs } from "@/hooks/usePaginatedActionLogs";
 import { authClient } from "@/lib/auth";
 
+function UpgradeHandler({
+  userData,
+  onError,
+}: {
+  userData: { hasPro?: boolean } | undefined;
+  onError: (error: string) => void;
+}) {
+  const searchParams = useSearchParams();
+  const getProPlanAction = useAction(api.user.getProPlan);
+
+  useEffect(() => {
+    const action = searchParams.get("action");
+
+    if (action === "upgrade" && userData && !userData.hasPro) {
+      const handleUpgrade = async () => {
+        try {
+          const result = await getProPlanAction({});
+          if (result.checkoutLink) {
+            // Clean the URL before redirecting
+            const url = new URL(window.location.href);
+            url.searchParams.delete("action");
+            window.history.replaceState({}, "", url.toString());
+
+            // Redirect to checkout
+            window.location.href = result.checkoutLink;
+          }
+        } catch (error) {
+          console.error("Failed to get checkout link:", error);
+          onError("Failed to start checkout. Please try again.");
+          // Clean the URL even on error
+          const url = new URL(window.location.href);
+          url.searchParams.delete("action");
+          window.history.replaceState({}, "", url.toString());
+        }
+      };
+
+      handleUpgrade();
+    }
+  }, [searchParams, userData, getProPlanAction, onError]);
+
+  return null;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { data: session, isPending: sessionPending } = authClient.useSession();
 
   // Fetch user data
@@ -39,7 +81,6 @@ export default function DashboardPage() {
 
   const getLimitsAction = useAction(api.project.getLimits);
   const getProjectLimitsAction = useAction(api.project.getProjectLimits);
-  const getProPlanAction = useAction(api.user.getProPlan);
   const [limitsData, setLimitsData] = useState<{ usage: number; includedUsage: number } | null>(
     null,
   );
@@ -75,37 +116,6 @@ export default function DashboardPage() {
   }, [session, sessionPending, router]);
 
   const [upgradeError, setUpgradeError] = useState<string>("");
-
-  // Handle upgrade action from pricing page
-  useEffect(() => {
-    const action = searchParams.get("action");
-
-    if (action === "upgrade" && userData && !userData.hasPro) {
-      const handleUpgrade = async () => {
-        try {
-          const result = await getProPlanAction({});
-          if (result.checkoutLink) {
-            // Clean the URL before redirecting
-            const url = new URL(window.location.href);
-            url.searchParams.delete("action");
-            window.history.replaceState({}, "", url.toString());
-
-            // Redirect to checkout
-            window.location.href = result.checkoutLink;
-          }
-        } catch (error) {
-          console.error("Failed to get checkout link:", error);
-          setUpgradeError("Failed to start checkout. Please try again.");
-          // Clean the URL even on error
-          const url = new URL(window.location.href);
-          url.searchParams.delete("action");
-          window.history.replaceState({}, "", url.toString());
-        }
-      };
-
-      handleUpgrade();
-    }
-  }, [searchParams, userData, getProPlanAction]);
 
   // Show nothing while checking auth or redirecting
   if (sessionPending || !session?.user) {
@@ -144,6 +154,9 @@ export default function DashboardPage() {
   return (
     <div className="min-h-dvh bg-background text-foreground">
       <ContainerLines />
+      <Suspense fallback={null}>
+        <UpgradeHandler userData={userData} onError={setUpgradeError} />
+      </Suspense>
       <div className="flex flex-col min-h-dvh">
         <Header showLogout />
         <main className="mx-auto max-w-6xl px-6 py-8 lg:px-12 flex-1 w-full">
