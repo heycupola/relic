@@ -1,3 +1,10 @@
 {
-  "extends": "@repo/typescript-config/bundler.json"
+  "extends": "@repo/typescript-config/bundler.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@repo/auth": ["../../packages/auth/index.ts"],
+      "@repo/auth/*": ["../../packages/auth/*"]
+    }
+  }
 }

@@ -1,135 +1,158 @@
-# Turborepo starter
+# Relic
 
-This Turborepo starter is maintained by the Turborepo core team.
+Zero-knowledge secret management for your projects. Secrets are fetched at runtime and injected as environment variables - never written to disk.
 
-## Using this example
+## Quick Start
 
-Run the following command:
+```bash
+# Install globally
+npm install -g @relic/cli
 
-```sh
-npx create-turbo@latest
+# Authenticate
+relic login
+
+# Initialize in your project
+relic init
+
+# Run with secrets
+relic run -e development npm start
 ```
 
-## What's inside?
+## CLI Commands
 
-This Turborepo includes the following packages/apps:
-
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+```bash
+relic login                          # Authenticate via browser
+relic logout                         # Clear authentication
+relic init                           # Initialize project (creates relic.json)
+relic run -e <env> <command>         # Run command with secrets injected
+relic whoami                         # Show current user
+relic status                         # Show project and auth state
 ```
 
-You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+## Configuration
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
+### Simple Project
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
+Create `relic.json` in your project root:
 
-### Develop
-
-To develop all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
+```json
+{
+  "project": "my-app"
+}
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+### Monorepo
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
+For monorepos, define workspace-to-folder mappings:
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
+```json
+{
+  "project": "my-turborepo",
+  "workspaces": {
+    "apps/api": { "folder": "api" },
+    "apps/web": { "folder": "web" }
+  }
+}
 ```
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
+## Environment and Folder Syntax
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
+Relic uses the `environment:folder` syntax to specify which secrets to inject:
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
+```bash
+# Just environment (root secrets only)
+relic run -e development npm start
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
+# Environment + folder
+relic run -e production:api npm start
 ```
 
-## Useful Links
+### How Folders Work
 
-Learn more about the power of Turborepo:
+Secrets are organized in environments with optional folders:
 
-- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
-- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
+```
+Environment: production
+├── (root)          # Shared secrets - always injected
+│   ├── APP_NAME
+│   └── LOG_LEVEL
+├── api/            # Only with :api
+│   ├── DATABASE_URL
+│   └── REDIS_URL
+└── web/            # Only with :web
+    └── NEXT_PUBLIC_API_URL
+```
+
+When you run `relic run -e production:api npm start`:
+- Root secrets are injected (APP_NAME, LOG_LEVEL)
+- `api/` folder secrets are merged on top (DATABASE_URL, REDIS_URL)
+
+## Monorepo Auto-Detection
+
+In a configured monorepo, Relic automatically detects the folder based on your current directory:
+
+```bash
+cd apps/api
+relic run -e development npm start
+# Automatically uses "api" folder based on workspace config
+```
+
+The CLI walks up directories to find `relic.json`, then matches your current path against the `workspaces` config.
+
+## Environment Variables
+
+For CI/CD or scripting, use environment variables instead of flags:
+
+```bash
+RELIC_ENV=production relic run npm start
+RELIC_ENV=production:api relic run npm start
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    TypeScript CLI                        │
+│  1. Validate session                                     │
+│  2. Find relic.json (walk up directories)               │
+│  3. Fetch secrets from Convex                           │
+│  4. Call Rust runner via FFI                            │
+└─────────────────────────────┬───────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────┐
+│                     Rust Runner                          │
+│  1. Receive command + secrets as JSON                   │
+│  2. Inject secrets as environment variables             │
+│  3. Spawn process                                       │
+│  4. Return exit code                                    │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Development
+
+```bash
+# Install dependencies
+bun install
+
+# Build the Rust runner
+cd packages/runner && cargo build
+
+# Run CLI in development
+cd apps/cli && bun run dev
+```
+
+## Packages
+
+| Package | Description |
+|---------|-------------|
+| `apps/cli` | CLI application (TypeScript + Ink) |
+| `apps/web` | Web dashboard |
+| `apps/tui` | Terminal UI for secret management |
+| `packages/runner` | Rust library for secure process spawning |
+| `packages/auth` | Shared authentication logic |
+| `packages/backend` | Convex backend |
+
+## License
+
+MIT

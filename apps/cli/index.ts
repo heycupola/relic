@@ -1,14 +1,14 @@
-import { ptr } from "bun:ffi";
-import { Bridge } from "./ffi/bridge";
+import { Command } from "commander";
 
-(async () => {
-  const bridge = await Bridge.getInstance();
+const program = new Command()
+  .name("relic")
+  .description("Zero-knowledge secret management for your projects")
+  .version("0.1.0");
 
-  const args = process.argv.slice(2);
-  const argsJson = JSON.stringify(args);
+// Commands will be added here as we implement them
+// Example:
+// program.command("login").description("Authenticate with Relic").action(login);
+// program.command("logout").description("Clear authentication").action(logout);
+// program.command("run <command...>").description("Run with secrets").action(run);
 
-  const buffer = Buffer.from(`${argsJson}\0`, "utf-8");
-  const pointer = ptr(buffer);
-
-  bridge.runApp(pointer);
-})();
+program.parse();
