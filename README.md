@@ -6,7 +6,7 @@ Zero-knowledge secret management for your projects. Secrets are fetched at runti
 
 ```bash
 # Install globally
-npm install -g @relic/cli
+bun install -g relic    # or: npm install -g relic
 
 # Authenticate
 relic login
