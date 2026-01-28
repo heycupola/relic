@@ -1,0 +1,254 @@
+import { ensureValidJwt } from "@repo/auth";
+import { api, type Id, type TableNames } from "@repo/backend";
+import { ConvexHttpClient } from "convex/browser";
+
+const CONVEX_URL = process.env.CONVEX_URL ?? "http://localhost:3210";
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  image?: string;
+  hasPro: boolean;
+}
+
+export interface ProjectListItem {
+  id: string;
+  name: string;
+  slug: string;
+  status: "active" | "archived" | "deleted";
+  isRestricted: boolean;
+  isArchived: boolean;
+  ownerId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Environment {
+  id: string;
+  name: string;
+  projectId: string;
+  color?: string;
+}
+
+export interface Folder {
+  id: string;
+  name: string;
+  environmentId: string;
+}
+
+export interface Secret {
+  id: string;
+  key: string;
+  encryptedValue: string;
+  environmentId: string;
+  folderId?: string;
+  valueType: "string" | "number" | "boolean";
+  scope: "client" | "server" | "shared";
+}
+
+export interface EnvironmentData {
+  secrets: Secret[];
+  folders: Folder[];
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  slug: string;
+  encryptedProjectKey: string;
+  keyVersion: number;
+  isArchived: boolean;
+}
+
+export interface FullUser extends User {
+  publicKey?: string;
+  encryptedPrivateKey?: string;
+  salt?: string;
+}
+
+function createClient(): ConvexHttpClient {
+  return new ConvexHttpClient(CONVEX_URL);
+}
+
+function toId<T extends TableNames>(id: string): Id<T> {
+  return id as Id<T>;
+}
+
+export class ProtectedApi {
+  private client: ConvexHttpClient;
+  private authPromise: Promise<void> | null = null;
+
+  constructor() {
+    this.client = createClient();
+  }
+
+  private async ensureAuth(): Promise<void> {
+    if (this.authPromise) {
+      await this.authPromise;
+      return;
+    }
+
+    this.authPromise = (async () => {
+      try {
+        const token = await ensureValidJwt();
+        this.client.setAuth(token);
+      } catch (error) {
+        this.client.clearAuth();
+        throw error;
+      } finally {
+        this.authPromise = null;
+      }
+    })();
+
+    await this.authPromise;
+  }
+
+  private async withAuth<T>(fn: () => Promise<T>): Promise<T> {
+    await this.ensureAuth();
+    return fn();
+  }
+
+  async getCurrentUser(): Promise<User> {
+    const result = await this.withAuth(() => this.client.query(api.user.getCurrentUser, {}));
+    return {
+      id: String(result.id),
+      name: result.name,
+      email: result.email,
+      image: result.image ?? undefined,
+      hasPro: result.hasPro ?? false,
+    };
+  }
+
+  async listProjects(): Promise<ProjectListItem[]> {
+    const result = await this.withAuth(() => this.client.query(api.project.listUserProjects, {}));
+    return result.projects.map((p) => ({
+      ...p,
+      id: String(p.id),
+    })) as ProjectListItem[];
+  }
+
+  async listSharedProjects(): Promise<ProjectListItem[]> {
+    const result = await this.withAuth(() =>
+      this.client.query(api.projectShare.listActiveSharedProjectsForCurrentUser, {}),
+    );
+    return result.shares.map(
+      (share: {
+        projectId: string;
+        projectName: string;
+        projectSlug: string;
+        status: string;
+        isRestricted: boolean;
+        isArchived: boolean;
+        ownerId?: string;
+      }) => ({
+        id: String(share.projectId),
+        name: share.projectName,
+        slug: share.projectSlug,
+        status: share.status as ProjectListItem["status"],
+        isRestricted: share.isRestricted,
+        isArchived: share.isArchived,
+        ownerId: share.ownerId,
+        createdAt: 0,
+        updatedAt: 0,
+      }),
+    );
+  }
+
+  async getProjectEnvironments(projectId: string): Promise<Environment[]> {
+    const result = await this.withAuth(() =>
+      this.client.query(api.environment.getProjectEnvironments, {
+        projectId: toId<"project">(projectId),
+      }),
+    );
+    return result.map((e) => ({
+      id: String(e.id),
+      name: e.name,
+      projectId: String(e.projectId),
+      color: e.color,
+    }));
+  }
+
+  async getEnvironmentData(environmentId: string): Promise<EnvironmentData> {
+    const result = await this.withAuth(() =>
+      this.client.query(api.environment.getEnvironmentData, {
+        environmentId: toId<"environment">(environmentId),
+      }),
+    );
+    return {
+      secrets: result.secrets
+        .filter((s) => !s.isDeleted)
+        .map((s) => ({
+          id: String(s.id),
+          key: s.key,
+          encryptedValue: s.encryptedValue,
+          environmentId: String(s.environmentId),
+          folderId: s.folderId ? String(s.folderId) : undefined,
+          valueType: s.valueType,
+          scope: s.scope,
+        })),
+      folders: result.folders.map((f) => ({
+        id: String(f.id),
+        name: f.name,
+        environmentId: String(f.environmentId),
+      })),
+    };
+  }
+
+  async getFullUser(): Promise<FullUser> {
+    const result = await this.withAuth(() => this.client.query(api.user.getCurrentUser, {}));
+    return {
+      id: String(result.id),
+      name: result.name,
+      email: result.email,
+      image: result.image ?? undefined,
+      hasPro: result.hasPro ?? false,
+      publicKey: result.publicKey ?? undefined,
+      encryptedPrivateKey: result.encryptedPrivateKey ?? undefined,
+      salt: result.salt ?? undefined,
+    };
+  }
+
+  async getProject(projectId: string): Promise<Project> {
+    const result = await this.withAuth(() =>
+      this.client.query(api.project.getProject, {
+        projectId: toId<"project">(projectId),
+      }),
+    );
+    return {
+      id: String(result.id),
+      name: result.name,
+      slug: result.slug,
+      encryptedProjectKey: result.encryptedProjectKey,
+      keyVersion: result.keyVersion,
+      isArchived: result.isArchived,
+    };
+  }
+
+  async getProjectShare(projectId: string): Promise<{ encryptedProjectKey: string } | null> {
+    const result = await this.withAuth(() =>
+      this.client.query(api.projectShare.getProjectShareByProjectForCurrentUser, {
+        projectId: toId<"project">(projectId),
+      }),
+    );
+    if (!result) return null;
+    return { encryptedProjectKey: result.encryptedProjectKey };
+  }
+
+  async getSecretsForFolder(environmentId: string, folderId?: string): Promise<Secret[]> {
+    const envData = await this.getEnvironmentData(environmentId);
+    if (folderId) {
+      return envData.secrets.filter((s) => s.folderId === folderId);
+    }
+    return envData.secrets.filter((s) => !s.folderId);
+  }
+}
+
+let instance: ProtectedApi | null = null;
+
+export function getApi(): ProtectedApi {
+  if (!instance) {
+    instance = new ProtectedApi();
+  }
+  return instance;
+}
