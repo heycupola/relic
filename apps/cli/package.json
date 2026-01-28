@@ -26,6 +26,7 @@
   "files": [
     "index.ts",
     "commands/**",
+    "lib/**",
     "ffi/**",
     "prebuilds/**",
     "README.md"
@@ -44,9 +45,13 @@
   },
   "dependencies": {
     "@repo/auth": "*",
+    "@repo/backend": "*",
+    "@repo/crypto": "*",
     "commander": "^13.1.0",
+    "convex": "catalog:",
     "ink": "^6.6.0",
     "ink-spinner": "^5.0.0",
-    "react": "^19.2.4"
+    "react": "^19.2.4",
+    "smol-toml": "^1.6.0"
   }
 }
