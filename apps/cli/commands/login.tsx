@@ -1,10 +1,15 @@
-import { type DeviceAuthStatus, type DeviceCodeResponse, deviceAuth } from "@repo/auth";
+import {
+  type DeviceAuthStatus,
+  type DeviceCodeResponse,
+  deviceAuth,
+  validateSession,
+} from "@repo/auth";
 import { Box, render, Text } from "ink";
 import Spinner from "ink-spinner";
 import { useCallback, useEffect, useState } from "react";
 
 interface LoginState {
-  status: DeviceAuthStatus | "idle" | "starting";
+  status: DeviceAuthStatus | "idle" | "starting" | "already_logged_in";
   userCode: string | null;
   verificationUri: string | null;
   error: Error | null;
@@ -19,6 +24,12 @@ function LoginFlow() {
   });
 
   const startAuth = useCallback(async () => {
+    const sessionValidation = await validateSession();
+    if (sessionValidation.isValid && !sessionValidation.isExpired) {
+      setState((prev) => ({ ...prev, status: "already_logged_in" }));
+      return;
+    }
+
     const result = await deviceAuth.startAuth({
       onCodeReceived: (code: DeviceCodeResponse) => {
         setState((prev) => ({
@@ -61,7 +72,7 @@ function LoginFlow() {
   }, [startAuth]);
 
   useEffect(() => {
-    if (state.status === "approved") {
+    if (state.status === "approved" || state.status === "already_logged_in") {
       setTimeout(() => process.exit(0), 1000);
     }
     if (state.status === "error" || state.status === "denied" || state.status === "expired") {
@@ -115,6 +126,8 @@ function LoginFlow() {
       )}
 
       {state.status === "approved" && <Text color="green">✓ Login successful!</Text>}
+
+      {state.status === "already_logged_in" && <Text color="green">✓ Already logged in</Text>}
 
       {state.status === "denied" && <Text color="red">✗ Authorization denied</Text>}
 
