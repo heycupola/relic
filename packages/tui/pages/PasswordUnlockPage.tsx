@@ -1,9 +1,9 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
+import { verifyPassword } from "@repo/auth";
 import { useState } from "react";
 import { PasswordInput } from "../components/PasswordInput";
 import { Modal } from "../components/shared/Modal";
 import { THEME_COLORS } from "../utils/constants";
-import { verifyPassword } from "../utils/password";
 
 interface PasswordUnlockPageProps {
   onUnlock: () => void;

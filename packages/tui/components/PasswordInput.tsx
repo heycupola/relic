@@ -1,12 +1,12 @@
 import { useKeyboard } from "@opentui/react";
-import { useEffect, useState } from "react";
-import { KEY_SYMBOLS, THEME_COLORS } from "../utils/constants";
 import {
   checkPasswordRequirements,
   getStrengthColor,
   type PasswordRequirement,
   validatePassword,
-} from "../utils/password";
+} from "@repo/auth";
+import { useEffect, useState } from "react";
+import { KEY_SYMBOLS, THEME_COLORS } from "../utils/constants";
 import { InlineInput } from "./forms/InlineInput";
 import { GuideBar } from "./shared/GuideBar";
 
@@ -47,7 +47,7 @@ export function PasswordInput({
   const requirements = checkPasswordRequirements(passwordValue);
   const validation = validatePassword(passwordValue);
   const passwordsMatch = confirmValue.length > 0 && confirmValue === passwordValue;
-  const showStrength = mode !== "unlock" && focusedField === "password";
+  const showStrength = mode !== "unlock" && mode !== "verify" && focusedField === "password";
 
   // Clear validation errors when password becomes valid
   useEffect(() => {
@@ -205,12 +205,6 @@ export function PasswordInput({
               <text fg={THEME_COLORS.error}>• {err}</text>
             </box>
           ))}
-        </box>
-      )}
-
-      {error && (
-        <box height={1}>
-          <text fg={THEME_COLORS.error}>[!] {error}</text>
         </box>
       )}
 

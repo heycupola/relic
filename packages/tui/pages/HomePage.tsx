@@ -1,4 +1,5 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
+import { savePassword } from "@repo/auth";
 import {
   createProjectKey,
   decryptPrivateKeyWithPassword,
@@ -34,8 +35,8 @@ import {
   STATUS_COLORS,
   THEME_COLORS,
 } from "../utils/constants";
+import { clearMasterKeyCache } from "../utils/crypto";
 import { logger } from "../utils/debugLog";
-import { savePassword } from "../utils/password";
 
 const STATUS_ICONS: Record<ProjectStatus, string> = {
   owned: "●",
@@ -313,12 +314,11 @@ export function HomePage() {
       return;
     }
 
-    // Step 4: Update locally stored session password
     try {
       await savePassword(newPassword);
+      clearMasterKeyCache();
     } catch (error) {
       logger.error("Failed to save password locally:", error);
-      // Don't fail the operation - backend is already updated
     }
 
     setPasswordChangeStatus(null);

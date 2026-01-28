@@ -1,5 +1,5 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
-import { extractErrorMessage } from "@repo/auth";
+import { extractErrorMessage, verifyPassword } from "@repo/auth";
 import open from "open";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { InlineInput } from "../components/forms/InlineInput";
@@ -15,8 +15,10 @@ import {
   type CheckoutReason,
   CheckoutRedirectModal,
 } from "../components/modals/UrlOpenModal";
+import { PasswordInput } from "../components/PasswordInput";
 import { DeleteConfirmation } from "../components/shared/DeleteConfirmation";
 import { GuideBar } from "../components/shared/GuideBar";
+import { Modal } from "../components/shared/Modal";
 import { useUser } from "../context";
 import { useMultiLineInput } from "../hooks/useInput";
 import { usePaste } from "../hooks/usePaste";
@@ -136,6 +138,10 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
   const [isCreatingItem, setIsCreatingItem] = useState(false);
   const [isRenamingItem, setIsRenamingItem] = useState(false);
   const [isDeletingItem, setIsDeletingItem] = useState(false);
+
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [isVerifyingPassword, setIsVerifyingPassword] = useState(false);
 
   const isRestricted = projectStatus === "restricted" || projectStatus === "archived";
 
@@ -534,6 +540,42 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     }
   };
 
+  const handleToggleSecrets = () => {
+    if (showSecrets) {
+      setShowSecrets(false);
+    } else {
+      setShowPasswordModal(true);
+      setPasswordError(null);
+    }
+  };
+
+  const handlePasswordVerify = async (password: string) => {
+    if (isVerifyingPassword) return;
+    setIsVerifyingPassword(true);
+    setPasswordError(null);
+
+    try {
+      const isValid = await verifyPassword(password);
+      if (isValid) {
+        setShowSecrets(true);
+        setShowPasswordModal(false);
+        setPasswordError(null);
+      } else {
+        setPasswordError("Incorrect password");
+      }
+    } catch (error) {
+      setPasswordError("Failed to verify password");
+      logger.debug("Password verification failed:", error);
+    } finally {
+      setIsVerifyingPassword(false);
+    }
+  };
+
+  const handlePasswordModalClose = () => {
+    setShowPasswordModal(false);
+    setPasswordError(null);
+  };
+
   const getAllCommands = () => {
     const cmds = [];
     if (viewLevel === "environments") {
@@ -649,7 +691,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         setActiveModal("manageCollaborators");
         break;
       case "v":
-        setShowSecrets((p) => !p);
+        handleToggleSecrets();
         break;
       case "g": {
         open(DASHBOARD_URL);
@@ -690,6 +732,13 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
 
     if (confirmationModal.visible || checkoutModal.visible || billingPortalModal.visible) return;
 
+    if (showPasswordModal) {
+      if (key.name === "escape") {
+        handlePasswordModalClose();
+      }
+      return;
+    }
+
     if (
       isProcessing ||
       isAddingCollaborator ||
@@ -697,7 +746,8 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
       isRevokingWithRotation ||
       isCreatingItem ||
       isRenamingItem ||
-      isDeletingItem
+      isDeletingItem ||
+      isVerifyingPassword
     )
       return;
 
@@ -826,7 +876,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     )
       openBulkImport();
     else if (key.name === "c" && !isRestricted) setActiveModal("manageCollaborators");
-    else if (key.name === "v") setShowSecrets((p) => !p);
+    else if (key.name === "v") handleToggleSecrets();
     else if (key.sequence === "?") setActiveModal("commandPalette");
   });
 
@@ -1154,6 +1204,17 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
           bulkImportInput.reset();
         }}
       />
+
+      <Modal visible={showPasswordModal} title="Enter Password" width={50} height={12}>
+        <PasswordInput
+          mode="verify"
+          onSubmit={handlePasswordVerify}
+          onCancel={handlePasswordModalClose}
+          width={46}
+          disabled={isVerifyingPassword}
+          error={passwordError}
+        />
+      </Modal>
     </box>
   );
 }

@@ -83,7 +83,7 @@ export async function getProjectKey(
   userEncryptedPrivateKey: string,
   userSalt: string,
 ): Promise<CryptoKey> {
-  const { getPasswordFromStorage } = await import("./password");
+  const { getPasswordFromStorage } = await import("@repo/auth");
   const password = await getPasswordFromStorage();
   if (!password) {
     throw new ProjectKeyError(
