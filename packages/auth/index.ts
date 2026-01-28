@@ -1,5 +1,4 @@
 export { PublicApi, publicApi } from "./src/api";
-export { CONVEX_URL, SITE_URL } from "./src/constants";
 export { DeviceAuthService, deviceAuth } from "./src/deviceAuth";
 export {
   ensureValidJwt,
@@ -9,16 +8,37 @@ export {
   setJwtLogger,
 } from "./src/jwt";
 export {
+  checkPasswordRequirements,
+  clearPassword,
+  getPasswordFilePath,
+  getPasswordFromStorage,
+  getRelicDir,
+  getStrengthColor,
+  getStrengthIndicator,
+  hasPassword,
+  isPasswordFromEnv,
+  type PasswordRequirement,
+  type PasswordValidationResult,
+  passwordsMatch,
+  savePassword,
+  validatePassword,
+  verifyPassword,
+  verifyPasswordWithExistingKeys,
+} from "./src/password";
+export {
   clearSession,
   getConfigDir,
   getJwtToken,
   getSessionFilePath,
   getSessionToken,
   hasValidSession,
+  isSessionFromEnv,
   loadSession,
+  type SessionChangeEvent,
   saveSession,
   updateSessionJwt,
   validateSession,
+  watchSession,
 } from "./src/session";
 export type {
   DeviceAuthCallbacks,

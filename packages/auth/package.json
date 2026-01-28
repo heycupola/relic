@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@repo/backend": "*",
+    "@repo/crypto": "*",
     "convex": "catalog:",
     "open": "catalog:"
   },
