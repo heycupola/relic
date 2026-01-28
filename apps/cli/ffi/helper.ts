@@ -11,7 +11,6 @@ const PLATFORM_MAP: Record<string, string> = {
 };
 
 async function detectEnvironment(): Promise<Environment> {
-  // Explicit environment variable takes precedence
   if (process.env.NODE_ENV === "production") {
     return "production";
   }
@@ -19,19 +18,16 @@ async function detectEnvironment(): Promise<Environment> {
     return "development";
   }
 
-  // Check if prebuilds directory exists (production packages include this)
   const prebuildsPath = `${import.meta.dir}/../prebuilds`;
   if (await Bun.file(prebuildsPath).exists()) {
     return "production";
   }
 
-  // Fallback: check for turbo.json (monorepo indicator)
   const turboJsonPath = `${import.meta.dir}/../../../turbo.json`;
   if (await Bun.file(turboJsonPath).exists()) {
     return "development";
   }
 
-  // Default to production for safety (don't expose debug paths)
   return "production";
 }
 
