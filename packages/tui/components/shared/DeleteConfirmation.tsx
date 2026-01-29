@@ -27,10 +27,3 @@ export function DeleteConfirmation({ itemType, itemName, visible }: DeleteConfir
     </box>
   );
 }
-
-export function getDeleteConfirmationShortcuts() {
-  return [
-    { key: "y", description: "confirm" },
-    { key: "n", description: "cancel" },
-  ];
-}
