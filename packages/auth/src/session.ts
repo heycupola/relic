@@ -144,10 +144,6 @@ export async function getJwtToken(): Promise<string | null> {
   return session.jwtToken;
 }
 
-export function getConfigDir(): string {
-  return CONFIG_DIR;
-}
-
 export function getSessionFilePath(): string {
   return SESSION_FILE;
 }

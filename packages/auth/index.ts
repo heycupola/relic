@@ -14,12 +14,10 @@ export {
   getPasswordFromStorage,
   getRelicDir,
   getStrengthColor,
-  getStrengthIndicator,
   hasPassword,
   isPasswordFromEnv,
   type PasswordRequirement,
   type PasswordValidationResult,
-  passwordsMatch,
   savePassword,
   validatePassword,
   verifyPassword,
@@ -27,7 +25,6 @@ export {
 } from "./src/password";
 export {
   clearSession,
-  getConfigDir,
   getJwtToken,
   getSessionFilePath,
   getSessionToken,

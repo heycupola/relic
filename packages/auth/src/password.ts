@@ -201,14 +201,6 @@ export function validatePassword(password: string): PasswordValidationResult {
   return { isValid, errors, strength, strengthScore: score };
 }
 
-export function passwordsMatch(password: string, confirmPassword: string): boolean {
-  return password === confirmPassword && password.length > 0;
-}
-
-export function getStrengthIndicator(score: number): string {
-  return "●".repeat(score) + "○".repeat(5 - score);
-}
-
 export function getStrengthColor(strength: "weak" | "medium" | "strong"): string {
   switch (strength) {
     case "weak":
