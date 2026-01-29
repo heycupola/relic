@@ -26,7 +26,6 @@ import { LoginPage } from "./pages/LoginPage";
 import { PasswordSetupPage } from "./pages/PasswordSetupPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { RouterProvider, useRouter } from "./router";
-import { clearMasterKeyCache } from "./utils/crypto";
 
 function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
   const { route, navigate } = useRouter();
@@ -47,13 +46,11 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
 
   const handleLogout = useCallback(async () => {
     await onLogout();
-    clearMasterKeyCache();
     navigate({ name: "login" });
   }, [onLogout, navigate]);
 
   const handlePasswordSetup = async (password: string) => {
     await savePassword(password);
-    clearMasterKeyCache();
     setPasswordStatus({ has: true, loading: false });
     navigate({ name: "home" });
   };

@@ -35,7 +35,6 @@ import {
   STATUS_COLORS,
   THEME_COLORS,
 } from "../utils/constants";
-import { clearMasterKeyCache } from "../utils/crypto";
 import { logger } from "../utils/debugLog";
 
 const STATUS_ICONS: Record<ProjectStatus, string> = {
@@ -316,7 +315,6 @@ export function HomePage() {
 
     try {
       await savePassword(newPassword);
-      clearMasterKeyCache();
     } catch (error) {
       logger.error("Failed to save password locally:", error);
     }

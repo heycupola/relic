@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getProtectedApi } from "../../api";
-import { clearMasterKeyCache } from "../../utils/crypto";
 import { logger } from "../../utils/debugLog";
 
 interface UseUserKeysOptions {
@@ -161,7 +160,6 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
         setPublicKey(args.newPublicKey);
         setEncryptedPrivateKey(args.newEncryptedPrivateKey);
         setSalt(args.newSalt);
-        clearMasterKeyCache();
       } catch (err) {
         logger.error("Failed to rotate user keys:", err);
         const error = err instanceof Error ? err : new Error("Failed to rotate user keys");
