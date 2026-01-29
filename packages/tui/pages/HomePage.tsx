@@ -7,7 +7,7 @@ import {
   generateSalt,
 } from "@repo/crypto";
 import open from "open";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { getProtectedApi } from "../api";
 import { InlineInput } from "../components/forms/InlineInput";
 import { CommandPaletteModal } from "../components/modals/CommandPaletteModal";
@@ -125,16 +125,6 @@ export function HomePage() {
   const archivableProjects = projects.filter(
     (p) => p.status === "owned" && !p.status.includes("archived"),
   );
-
-  const prevHasProRef = useRef(hasPro);
-  useEffect(() => {
-    if (hasPro && !prevHasProRef.current) {
-      refetchProjects();
-      payment.closeAll();
-      showSuccess("You're now a PRO! Unlimited projects unlocked.", 5000);
-    }
-    prevHasProRef.current = hasPro;
-  }, [hasPro, refetchProjects, payment, showSuccess]);
 
   const handleCreateProject = async (name: string, confirmPayment?: boolean) => {
     if (!hasKeys || !publicKey) {
