@@ -16,7 +16,7 @@ export interface ProjectListItem {
   id: string;
   name: string;
   slug: string;
-  status: "active" | "archived" | "deleted";
+  status: "owned" | "shared" | "archived" | "restricted";
   isRestricted: boolean;
   isArchived: boolean;
   ownerId?: string;
