@@ -68,7 +68,7 @@ export const updateFolder = protectedMutation({
     name: v.optional(v.string()),
   },
   handler: async (ctx: ProtectedMutationCtx, args: { folderId: Id<"folder">; name?: string }) => {
-    const folder = await ctx.runQuery(internal.folder._loadFolderId, {
+    const folder = await ctx.runQuery(internal.folder._loadFolderById, {
       folderId: args.folderId,
     });
 
@@ -111,7 +111,7 @@ export const deleteFolder = protectedMutation({
     folderId: v.id("folder"),
   },
   handler: async (ctx: ProtectedMutationCtx, args: { folderId: Id<"folder"> }) => {
-    const folder = await ctx.runQuery(internal.folder._loadFolderId, {
+    const folder = await ctx.runQuery(internal.folder._loadFolderById, {
       folderId: args.folderId,
     });
 
@@ -143,7 +143,7 @@ export const deleteFolder = protectedMutation({
   },
 });
 
-export const _loadFolderId = internalQuery({
+export const _loadFolderById = internalQuery({
   args: {
     folderId: v.id("folder"),
   },
