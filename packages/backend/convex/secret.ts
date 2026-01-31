@@ -57,7 +57,7 @@ export const createSecret = protectedMutation({
 
     if (args.folderId) {
       // NOTE: loads and checks the folder's existence
-      folder = await ctx.runQuery(internal.folder._loadFolderId, {
+      folder = await ctx.runQuery(internal.folder._loadFolderById, {
         folderId: args.folderId,
       });
     }
@@ -246,7 +246,7 @@ export const updateSecretBulk = protectedMutation({
     let folder: Doc<"folder"> | undefined;
 
     if (args.folderId) {
-      folder = await ctx.runQuery(internal.folder._loadFolderId, {
+      folder = await ctx.runQuery(internal.folder._loadFolderById, {
         folderId: args.folderId,
       });
 
@@ -513,7 +513,7 @@ export const updateSecret = protectedMutation({
     let folder: Doc<"folder"> | undefined;
 
     if (secret.folderId) {
-      folder = await ctx.runQuery(internal.folder._loadFolderId, {
+      folder = await ctx.runQuery(internal.folder._loadFolderById, {
         folderId: secret.folderId,
       });
     }
@@ -580,7 +580,7 @@ export const deleteSecret = protectedMutation({
     let folder: Doc<"folder"> | undefined;
 
     if (secret.folderId) {
-      folder = await ctx.runQuery(internal.folder._loadFolderId, {
+      folder = await ctx.runQuery(internal.folder._loadFolderById, {
         folderId: secret.folderId,
       });
     }
@@ -606,6 +606,79 @@ export const deleteSecret = protectedMutation({
   },
 });
 
+export const exportSecrets = protectedMutation({
+  args: {
+    projectId: v.id("project"),
+    environmentId: v.id("environment"),
+    folderId: v.optional(v.id("folder")),
+    scope: v.optional(v.union(v.literal("client"), v.literal("server"), v.literal("shared"))),
+  },
+  handler: async (ctx, args) => {
+    const project = await ctx.runQuery(internal.project._loadProjectById, {
+      projectId: args.projectId,
+    });
+
+    await assertProjectAccess(ctx, project);
+
+    await checkRateLimit(ctx, "read");
+
+    const environment = await ctx.runQuery(internal.environment._loadEnvironmentById, {
+      environmentId: args.environmentId,
+    });
+
+    if (environment.projectId !== args.projectId) {
+      throw createError({
+        code: ErrorCode.INVALID_ARGUMENTS,
+        message: "Environment does not belong to this project",
+        severity: ErrorSeverity.Medium,
+      });
+    }
+
+    let folder: Doc<"folder"> | undefined;
+    if (args.folderId) {
+      folder = await ctx.runQuery(internal.folder._loadFolderById, {
+        folderId: args.folderId,
+      });
+
+      if (folder.environmentId !== args.environmentId) {
+        throw createError({
+          code: ErrorCode.INVALID_ARGUMENTS,
+          message: "Folder does not belong to this environment",
+          severity: ErrorSeverity.Medium,
+        });
+      }
+    }
+
+    const secrets: Doc<"secret">[] = await ctx.runQuery(internal.secret._loadSecrets, {
+      environmentId: args.environmentId,
+      projectId: args.projectId,
+      folderId: args.folderId,
+    });
+
+    const filteredSecrets = args.scope
+      ? secrets.filter((secret) => secret.scope === args.scope)
+      : secrets;
+
+    await ctx.runMutation(internal.actionLog._logSecretAction, {
+      projectId: project._id,
+      projectName: project.name,
+      environmentId: args.environmentId,
+      environmentName: environment.name,
+      folderId: args.folderId,
+      folderName: folder?.name,
+      secretAction: "secret.exported",
+      userId: ctx.userId,
+      exportCount: filteredSecrets.length,
+      exportFormat: "env",
+    });
+
+    return {
+      secrets: filteredSecrets,
+      count: filteredSecrets.length,
+    };
+  },
+});
+
 export const _loadSecretById = internalQuery({
   args: {
     secretId: v.id("secret"),
@@ -613,6 +686,28 @@ export const _loadSecretById = internalQuery({
   returns: v.union(v.null(), doc(schema, "secret")),
   handler: async (ctx, args: { secretId: Id<"secret"> }) => {
     return await ctx.db.get(args.secretId);
+  },
+});
+
+export const _loadSecrets = internalQuery({
+  args: {
+    projectId: v.id("project"),
+    environmentId: v.id("environment"),
+    folderId: v.optional(v.id("folder")),
+  },
+  returns: v.array(doc(schema, "secret")),
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("secret")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("projectId"), args.projectId),
+          q.eq(q.field("environmentId"), args.environmentId),
+          q.eq(q.field("folderId"), args.folderId),
+          q.eq(q.field("isDeleted"), false),
+        ),
+      )
+      .collect();
   },
 });
 

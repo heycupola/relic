@@ -625,5 +625,130 @@ describe("Secret Management", () => {
       // Verify updatedAt timestamp hasn't changed
       expect(secretAfter.updatedAt).toBe(secretBefore.updatedAt);
     });
+
+    test("should export secrets successfully", async () => {
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const projectResult = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+      const projectId = assertProjectCreated(projectResult);
+
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "environment_" + randomString(),
+        projectId,
+      });
+
+      const { id: folderId } = await owner.asUser.mutation(api.folder.createFolder, {
+        environmentId: environmentId,
+        name: "folder_" + randomString(),
+      });
+
+      for (let i = 0; i < 50; i++) {
+        await owner.asUser.mutation(api.secret.createSecret, {
+          encryptedValue: "encrypted-value",
+          environmentId,
+          folderId,
+          key: "test_" + randomString(),
+          scope: "client",
+          valueType: "string",
+        });
+      }
+
+      for (let i = 0; i < 10; i++) {
+        await owner.asUser.mutation(api.secret.createSecret, {
+          encryptedValue: "encrypted-value",
+          environmentId,
+          folderId,
+          key: "test_" + randomString(),
+          scope: "server",
+          valueType: "string",
+        });
+      }
+
+      const clientSecrets = await owner.asUser.mutation(api.secret.exportSecrets, {
+        environmentId,
+        projectId,
+        folderId,
+        scope: "client",
+      });
+
+      expect(clientSecrets.count).toBe(50);
+
+      const serverSecrets = await owner.asUser.mutation(api.secret.exportSecrets, {
+        environmentId,
+        projectId,
+        folderId,
+        scope: "server",
+      });
+
+      expect(serverSecrets.count).toBe(10);
+
+      const allSecrets = await owner.asUser.mutation(api.secret.exportSecrets, {
+        environmentId,
+        projectId,
+        folderId,
+      });
+
+      expect(allSecrets.count).toBe(60);
+    });
+
+    test("should fail when environment doesn't belong to project", async () => {
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const project1Result = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+      const project1Id = assertProjectCreated(project1Result);
+
+      const project2Result = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+      const project2Id = assertProjectCreated(project2Result);
+
+      const { id: environmentFromProject2Id } = await owner.asUser.mutation(
+        api.environment.createEnvironment,
+        {
+          name: "environment_" + randomString(),
+          projectId: project2Id,
+        },
+      );
+
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.secret.exportSecrets, {
+            projectId: project1Id,
+            environmentId: environmentFromProject2Id,
+          }),
+        ErrorCode.INVALID_ARGUMENTS,
+      );
+    });
+
+    test("should deny access to non-shared user", async () => {
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const projectResult = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+      const projectId = assertProjectCreated(projectResult);
+
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "environment_" + randomString(),
+        projectId,
+      });
+
+      await expectConvexError(
+        () =>
+          nonCollaborator.asUser.mutation(api.secret.exportSecrets, {
+            projectId,
+            environmentId,
+          }),
+        ErrorCode.INSUFFICIENT_PERMISSION,
+      );
+    });
   });
 });
