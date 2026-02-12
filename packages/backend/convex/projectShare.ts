@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { doc } from "convex-helpers/validators";
-import { api, components, internal } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Doc as BetterAuthDoc, Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
@@ -9,7 +9,6 @@ import {
   alreadyExistsError,
   createError,
   ErrorCode,
-  limitReachedError,
   notFoundError,
   permissionError,
 } from "./lib/errors";

@@ -345,9 +345,10 @@ export const getEnvironmentData = protectedQuery({
   },
 });
 
-// NOTE: This function intentionally has no guard; it is used for CLI cache purposes.
+// NOTE: This function intentionally has no access guard; it is used for CLI cache purposes.
 export const getCacheValidation = protectedQuery({
   args: {
+    projectId: v.id("project"),
     environmentId: v.optional(v.id("environment")),
     folderId: v.optional(v.id("folder")),
   },
@@ -356,6 +357,13 @@ export const getCacheValidation = protectedQuery({
       const folder: Doc<"folder"> = await ctx.runQuery(internal.folder._loadFolderById, {
         folderId: args.folderId,
       });
+      if (folder.projectId !== args.projectId) {
+        throw createError({
+          code: ErrorCode.INVALID_ARGUMENTS,
+          message: "Folder does not belong to this project",
+          severity: ErrorSeverity.Medium,
+        });
+      }
       return { updatedAt: folder.updatedAt };
     }
     if (args.environmentId) {
@@ -365,6 +373,13 @@ export const getCacheValidation = protectedQuery({
           environmentId: args.environmentId,
         },
       );
+      if (environment.projectId !== args.projectId) {
+        throw createError({
+          code: ErrorCode.INVALID_ARGUMENTS,
+          message: "Environment does not belong to this project",
+          severity: ErrorSeverity.Medium,
+        });
+      }
       return { updatedAt: environment.updatedAt };
     }
     return null;

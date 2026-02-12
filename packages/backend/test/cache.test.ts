@@ -3,9 +3,11 @@ import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
+import { ErrorCode } from "../convex/lib/errors.ts";
 import schema from "../convex/schema";
 import {
   betterAuthModules,
+  expectConvexError,
   getTestUsers,
   mockAutumn,
   modules,
@@ -255,19 +257,90 @@ describe("Cache", () => {
       });
 
       const envResult = await owner.asUser.query(api.environment.getCacheValidation, {
+        projectId,
         environmentId,
       });
       expect(envResult).not.toBeNull();
       expect(envResult!.updatedAt).toBeGreaterThan(0);
 
       const folderResult = await owner.asUser.query(api.environment.getCacheValidation, {
+        projectId,
         folderId,
       });
       expect(folderResult).not.toBeNull();
       expect(folderResult!.updatedAt).toBeGreaterThan(0);
 
-      const emptyResult = await owner.asUser.query(api.environment.getCacheValidation, {});
+      const emptyResult = await owner.asUser.query(api.environment.getCacheValidation, {
+        projectId,
+      });
       expect(emptyResult).toBeNull();
+    });
+
+    test("should reject environment from wrong project", async () => {
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const project1Result = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project1_" + randomString(),
+      });
+      const project1Id = assertProjectCreated(project1Result);
+
+      const project2Result = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project2_" + randomString(),
+      });
+      const project2Id = assertProjectCreated(project2Result);
+
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "environment_" + randomString(),
+        projectId: project1Id,
+      });
+
+      await expectConvexError(
+        () =>
+          owner.asUser.query(api.environment.getCacheValidation, {
+            projectId: project2Id,
+            environmentId,
+          }),
+        ErrorCode.INVALID_ARGUMENTS,
+        "Environment does not belong to this project",
+      );
+    });
+
+    test("should reject folder from wrong project", async () => {
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const project1Result = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project1_" + randomString(),
+      });
+      const project1Id = assertProjectCreated(project1Result);
+
+      const project2Result = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project2_" + randomString(),
+      });
+      const project2Id = assertProjectCreated(project2Result);
+
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "environment_" + randomString(),
+        projectId: project1Id,
+      });
+
+      const { id: folderId } = await owner.asUser.mutation(api.folder.createFolder, {
+        environmentId,
+        name: "folder_" + randomString(),
+      });
+
+      await expectConvexError(
+        () =>
+          owner.asUser.query(api.environment.getCacheValidation, {
+            projectId: project2Id,
+            folderId,
+          }),
+        ErrorCode.INVALID_ARGUMENTS,
+        "Folder does not belong to this project",
+      );
     });
   });
 });
