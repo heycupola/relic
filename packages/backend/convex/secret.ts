@@ -877,6 +877,16 @@ export const _insertSecret = internalMutation({
       updatedAt: now,
     });
 
+    if (args.folderId) {
+      await ctx.runMutation(internal.folder._updateLastUpdateTime, {
+        folderId: args.folderId,
+      });
+    } else {
+      await ctx.runMutation(internal.environment._updateLastUpdateTime, {
+        environmentId: args.environmentId,
+      });
+    }
+
     return { success: true, secretId };
   },
 });
@@ -947,6 +957,24 @@ export const _updateSecret = internalMutation({
     // if (args.updates.tags !== undefined) updates.tags = args.updates.tags;
 
     await ctx.db.patch(args.secretId, updates);
+
+    const secret = await ctx.runQuery(internal.secret._loadSecretById, {
+      secretId: args.secretId,
+    });
+
+    // NOTE: If the secret is not found, it won't affect the execution of this Convex handler.
+    // However, it may cause issues with the CLI cache.
+    if (secret) {
+      if (secret.folderId) {
+        await ctx.runMutation(internal.folder._updateLastUpdateTime, {
+          folderId: secret.folderId,
+        });
+      } else {
+        await ctx.runMutation(internal.environment._updateLastUpdateTime, {
+          environmentId: secret?.environmentId,
+        });
+      }
+    }
 
     return { success: true };
   },

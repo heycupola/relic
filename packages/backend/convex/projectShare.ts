@@ -522,6 +522,10 @@ export const revokeShareWithRotation = protectedAction({
       secretsReEncrypted = totalEncrypted;
     }
 
+    await ctx.runMutation(internal.environment._invalidateProjectCache, {
+      projectId: share.projectId,
+    });
+
     await ctx.runMutation(internal.projectShare._insertKeyRotation, {
       projectId: share.projectId,
       oldKeyVersion,

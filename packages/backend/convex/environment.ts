@@ -345,6 +345,55 @@ export const getEnvironmentData = protectedQuery({
   },
 });
 
+// NOTE: This function intentionally has no guard; it is used for CLI cache purposes.
+export const getCacheValidation = protectedQuery({
+  args: {
+    environmentId: v.optional(v.id("environment")),
+    folderId: v.optional(v.id("folder")),
+  },
+  handler: async (ctx, args) => {
+    if (args.folderId) {
+      const folder: Doc<"folder"> = await ctx.runQuery(internal.folder._loadFolderById, {
+        folderId: args.folderId,
+      });
+      return { updatedAt: folder.updatedAt };
+    }
+    if (args.environmentId) {
+      const environment: Doc<"environment"> = await ctx.runQuery(
+        internal.environment._loadEnvironmentById,
+        {
+          environmentId: args.environmentId,
+        },
+      );
+      return { updatedAt: environment.updatedAt };
+    }
+    return null;
+  },
+});
+
+export const _invalidateProjectCache = internalMutation({
+  args: {
+    projectId: v.id("project"),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const environments = await ctx.db
+      .query("environment")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    for (const env of environments) {
+      await ctx.db.patch(env._id, { updatedAt: now });
+      const folders = await ctx.db
+        .query("folder")
+        .withIndex("by_environment", (q) => q.eq("environmentId", env._id))
+        .collect();
+      for (const folder of folders) {
+        await ctx.db.patch(folder._id, { updatedAt: now });
+      }
+    }
+  },
+});
+
 export const _loadEnvironmentById = internalQuery({
   args: {
     environmentId: v.id("environment"),
@@ -517,3 +566,16 @@ export const _deleteEnvironmentById = internalMutation({
 //     return { success: true };
 //   },
 // });
+
+// NOTE: This is for the CLI side of the cache.
+// It lets the client know when the folder has been updated.
+export const _updateLastUpdateTime = internalMutation({
+  args: {
+    environmentId: v.id("environment"),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.environmentId, {
+      updatedAt: Date.now(),
+    });
+  },
+});

@@ -269,3 +269,16 @@ export const _deleteFolder = internalMutation({
     return { success: true };
   },
 });
+
+// NOTE: This is for the CLI side of the cache.
+// It lets the client know when the folder has been updated.
+export const _updateLastUpdateTime = internalMutation({
+  args: {
+    folderId: v.id("folder"),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.folderId, {
+      updatedAt: Date.now(),
+    });
+  },
+});
