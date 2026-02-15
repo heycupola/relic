@@ -1,4 +1,11 @@
-import { createProjectKey, decryptSecret, encryptSecret } from "@repo/crypto";
+import {
+  createProjectKey,
+  decryptSecret,
+  encryptSecret,
+  importPublicKey,
+  unwrapAESKeyWithRSA,
+  wrapAESKeyWithRSA,
+} from "@repo/crypto";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, components, internal } from "../convex/_generated/api";
@@ -692,6 +699,7 @@ describe("Secret Management", () => {
       });
 
       expect(allSecrets.count).toBe(60);
+      expect(allSecrets.encryptedProjectKey).toBeDefined();
     });
 
     test("should fail when environment doesn't belong to project", async () => {
@@ -749,6 +757,117 @@ describe("Secret Management", () => {
           }),
         ErrorCode.INSUFFICIENT_PERMISSION,
       );
+    });
+
+    test("should export secrets by environment name", async () => {
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const projectResult = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+      const projectId = assertProjectCreated(projectResult);
+
+      const environmentName = "environment_" + randomString();
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        projectId,
+        name: environmentName,
+      });
+
+      const folderName = "folder_" + randomString();
+      const { id: folderId } = await owner.asUser.mutation(api.folder.createFolder, {
+        environmentId,
+        name: folderName,
+      });
+
+      for (let i = 0; i < 5; i++) {
+        await owner.asUser.mutation(api.secret.createSecret, {
+          encryptedValue: "encrypted-value",
+          environmentId,
+          folderId,
+          key: "test_" + randomString(),
+          scope: "client",
+          valueType: "string",
+        });
+      }
+
+      const result = await owner.asUser.mutation(api.secret.exportSecrets, {
+        projectId,
+        environmentName,
+        folderName,
+      });
+
+      expect(result.count).toBe(5);
+      expect(result.secrets).toHaveLength(5);
+      expect(result.encryptedProjectKey).toBeDefined();
+    });
+
+    test("should return the collaborator encrypted project key for shared project secret export", async () => {
+      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
+      mockAutumn.setFeature(owner.userId, "additional_shares", 2);
+
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const projectResult = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+      const projectId = assertProjectCreated(projectResult);
+
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "environment_" + randomString(),
+        projectId,
+      });
+
+      const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
+      const encryptedValue = await encryptSecret(projectKey, "shared-secret-value");
+
+      await owner.asUser.mutation(api.secret.createSecret, {
+        encryptedValue,
+        environmentId,
+        key: "SHARED_KEY_" + randomString(),
+        valueType: "string",
+        folderId: undefined,
+      });
+
+      const collaboratorPublicKey = await importPublicKey(collaborator.publicKey!);
+      const encryptedProjectKeyForCollaborator = await wrapAESKeyWithRSA(
+        projectKey,
+        collaboratorPublicKey,
+      );
+
+      await owner.asUser.action(api.projectShare.shareProject, {
+        encryptedProjectKey: encryptedProjectKeyForCollaborator,
+        projectId,
+        userEmail: collaborator.email,
+      });
+
+      const ownerResult = await owner.asUser.mutation(api.secret.exportSecrets, {
+        projectId,
+        environmentId,
+      });
+
+      expect(ownerResult.count).toBe(1);
+      expect(ownerResult.encryptedProjectKey).toBe(encryptedProjectKey);
+
+      const collaboratorResult = await collaborator.asUser.mutation(api.secret.exportSecrets, {
+        projectId,
+        environmentId,
+      });
+
+      expect(collaboratorResult.count).toBe(1);
+      expect(collaboratorResult.encryptedProjectKey).toBe(encryptedProjectKeyForCollaborator);
+      expect(collaboratorResult.encryptedProjectKey).not.toBe(ownerResult.encryptedProjectKey);
+
+      const collaboratorProjectKey = await unwrapAESKeyWithRSA(
+        collaboratorResult.encryptedProjectKey,
+        collaborator.privateKey!,
+      );
+      const decryptedValue = await decryptSecret(
+        collaboratorProjectKey,
+        collaboratorResult.secrets[0].encryptedValue,
+      );
+      expect(decryptedValue).toBe("shared-secret-value");
     });
   });
 });

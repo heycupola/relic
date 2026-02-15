@@ -90,6 +90,7 @@ export const getCurrentUser = protectedQuery({
       salt: user.salt,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+      keysUpdatedAt: user.keysUpdatedAt,
     };
   },
 });

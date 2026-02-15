@@ -346,7 +346,7 @@ export const getEnvironmentData = protectedQuery({
 });
 
 // NOTE: This function intentionally has no access guard; it is used for CLI cache purposes.
-export const getCacheValidation = protectedQuery({
+export const getSecretsCacheValidation = protectedQuery({
   args: {
     projectId: v.id("project"),
     environmentId: v.optional(v.id("environment")),
