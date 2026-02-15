@@ -26,8 +26,10 @@ program
   .option("-f, --folder <name>", "Folder name (optional)")
   .option("-s, --scope <scope>", "Scope filter: client, server, or shared (optional)")
   .argument("<command...>", "Command to run")
-  .action((command: string[], options: { env: string; folder?: string; scope?: string }) => {
-    run(command, options);
-  });
+  .action(
+    (command: string[], options: { environment: string; folder?: string; scope?: SecretScope }) => {
+      run(command, options);
+    },
+  );
 
 program.parse();

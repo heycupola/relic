@@ -47,6 +47,14 @@ export interface Secret {
   scope: "client" | "server" | "shared";
 }
 
+export interface SecretData {
+  id: string;
+  key: string;
+  encryptedValue: string;
+  scope: "client" | "server" | "shared";
+  valueType: "string" | "number" | "boolean";
+}
+
 export interface EnvironmentData {
   secrets: Secret[];
   folders: Folder[];
@@ -65,6 +73,7 @@ export interface FullUser extends User {
   publicKey?: string;
   encryptedPrivateKey?: string;
   salt?: string;
+  keysUpdatedAt?: number;
 }
 
 function createClient(): ConvexHttpClient {
@@ -206,6 +215,7 @@ export class ProtectedApi {
       publicKey: result.publicKey ?? undefined,
       encryptedPrivateKey: result.encryptedPrivateKey ?? undefined,
       salt: result.salt ?? undefined,
+      keysUpdatedAt: result.keysUpdatedAt ?? undefined,
     };
   }
 
@@ -241,6 +251,60 @@ export class ProtectedApi {
       return envData.secrets.filter((s) => s.folderId === folderId);
     }
     return envData.secrets.filter((s) => !s.folderId);
+  }
+
+  async getSecretsCacheValidation(
+    projectId: string,
+    environmentId?: string,
+    folderId?: string,
+  ): Promise<{ updatedAt: number } | null> {
+    return await this.withAuth(() =>
+      this.client.query(api.environment.getSecretsCacheValidation, {
+        projectId: toId<"project">(projectId),
+        environmentId: environmentId ? toId<"environment">(environmentId) : undefined,
+        folderId: folderId ? toId<"folder">(folderId) : undefined,
+      }),
+    );
+  }
+
+  async exportSecrets(args: {
+    projectId: string;
+    environmentName?: string;
+    environmentId?: string;
+    folderName?: string;
+    folderId?: string;
+    scope?: "client" | "server" | "shared";
+  }): Promise<{
+    secrets: SecretData[];
+    count: number;
+    encryptedProjectKey: string;
+    environmentId: string;
+    folderId: string | null;
+  }> {
+    const result: {
+      secrets: SecretData[];
+      count: number;
+      encryptedProjectKey: string;
+      environmentId: string;
+      folderId: string | null;
+    } = await this.withAuth(() =>
+      this.client.mutation(api.secret.exportSecrets, {
+        projectId: toId<"project">(args.projectId),
+        environmentName: args.environmentName,
+        environmentId: args.environmentId ? toId<"environment">(args.environmentId) : undefined,
+        folderName: args.folderName,
+        folderId: args.folderId ? toId<"folder">(args.folderId) : undefined,
+        scope: args.scope,
+      }),
+    );
+
+    return {
+      secrets: result.secrets,
+      count: result.count,
+      encryptedProjectKey: result.encryptedProjectKey,
+      environmentId: String(result.environmentId),
+      folderId: result.folderId ? String(result.folderId) : null,
+    };
   }
 }
 
