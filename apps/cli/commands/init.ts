@@ -1,8 +1,14 @@
 import * as p from "@clack/prompts";
-import { validateSession } from "@repo/auth";
+import { AuthenticationError, validateSession } from "@repo/auth";
 import pc from "picocolors";
 import { getApi, type ProjectListItem } from "../lib/api";
-import { configExists, createConfig, getConfigFilePath, saveConfig } from "../lib/config";
+import {
+  configExists,
+  createConfig,
+  createRelicDir,
+  getConfigFilePath,
+  saveConfig,
+} from "../lib/config";
 
 interface ProjectOption extends ProjectListItem {
   isShared: boolean;
@@ -11,14 +17,12 @@ interface ProjectOption extends ProjectListItem {
 export default async function init() {
   p.intro(pc.bgCyan(pc.black(" relic init ")));
 
-  // Check if already initialized
   if (await configExists()) {
     p.log.warn(pc.yellow("Already initialized"));
-    p.outro(pc.dim("Delete .relic/ directory to re-initialize"));
+    p.outro(pc.dim("Delete relic.toml to re-initialize"));
     return;
   }
 
-  // Check authentication
   const spinner = p.spinner();
   spinner.start("Checking authentication...");
 
@@ -30,7 +34,6 @@ export default async function init() {
     process.exit(1);
   }
 
-  // Fetch projects
   spinner.message("Loading projects...");
 
   try {
@@ -48,11 +51,10 @@ export default async function init() {
     spinner.stop("Projects loaded");
 
     if (allProjects.length === 0) {
-      p.log.error(pc.red("No projects found. Create one at app.relic.so"));
+      p.log.warn(pc.yellow("No projects found. Run `relic` to create a new project"));
       process.exit(1);
     }
 
-    // Let user select a project
     const selectedProjectId = await p.select({
       message: "Select a project",
       options: allProjects.map((project) => ({
@@ -72,27 +74,24 @@ export default async function init() {
       process.exit(1);
     }
 
-    // Save config
     spinner.start("Saving configuration...");
-    const config = createConfig(selectedProject.id, selectedProject.name);
+    const config = createConfig(selectedProject.id);
     await saveConfig(config);
+    await createRelicDir();
     spinner.stop("Configuration saved");
 
     p.log.success(pc.green(`Initialized Relic for ${selectedProject.name}`));
     p.outro(pc.dim(`Config saved to ${getConfigFilePath()}`));
   } catch (err) {
     spinner.stop("Failed");
-    const message = err instanceof Error ? err.message : "Failed to initialize";
-    // Handle auth-related errors more gracefully
-    if (
-      message.includes("Not authenticated") ||
-      message.includes("JWT") ||
-      message.includes("token")
-    ) {
+
+    if (err instanceof AuthenticationError) {
       p.log.error(pc.yellow("Not logged in"));
       p.outro(pc.dim("Run `relic login` to authenticate"));
       process.exit(1);
     }
+
+    const message = err instanceof Error ? err.message : "Failed to initialize";
     p.log.error(pc.red(`Error: ${message}`));
     process.exit(1);
   }

@@ -1,4 +1,4 @@
-import { clearSession, validateSession } from "@repo/auth";
+import { clearCachedUserKeys, clearSession, getUserKeyCacheDb, validateSession } from "@repo/auth";
 import ora from "ora";
 import pc from "picocolors";
 
@@ -14,6 +14,8 @@ export default async function logout() {
     }
 
     spinner.text = "Logging out...";
+    const userKeyDb = await getUserKeyCacheDb();
+    clearCachedUserKeys(userKeyDb);
     await clearSession();
     spinner.succeed(pc.green("Logged out"));
   } catch (err) {
