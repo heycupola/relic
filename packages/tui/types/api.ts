@@ -32,6 +32,7 @@ export interface User {
   publicKey?: string;
   encryptedPrivateKey?: string;
   salt?: string;
+  keysUpdatedAt?: number;
   createdAt: number;
   updatedAt: number;
 }

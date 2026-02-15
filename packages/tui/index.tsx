@@ -13,7 +13,15 @@ if (process.env.DEV === "true") {
 
 import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
-import { clearSession, hasPassword, savePassword, validateSession, watchSession } from "@repo/auth";
+import {
+  clearCachedUserKeys,
+  clearSession,
+  getUserKeyCacheDb,
+  hasPassword,
+  savePassword,
+  validateSession,
+  watchSession,
+} from "@repo/auth";
 import { useCallback, useEffect, useState } from "react";
 import { TaskBar } from "./components/shared/TaskBar";
 import { AppProvider, useUser } from "./context";
@@ -149,6 +157,8 @@ function AppRouter() {
   }, [navigate]);
 
   const handleLogout = useCallback(async () => {
+    const userKeyDb = await getUserKeyCacheDb();
+    clearCachedUserKeys(userKeyDb);
     await clearSession();
     setAuthState({ isAuthenticated: false, isLoading: false });
   }, []);

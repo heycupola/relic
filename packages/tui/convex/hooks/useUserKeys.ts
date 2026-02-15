@@ -1,3 +1,4 @@
+import { cacheUserKeys, getUserKeyCacheDb } from "@repo/auth";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getProtectedApi } from "../../api";
 import { logger } from "../../utils/debugLog";
@@ -63,6 +64,16 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
       setPublicKey(user.publicKey ?? null);
       setEncryptedPrivateKey(user.encryptedPrivateKey ?? null);
       setSalt(user.salt ?? null);
+
+      // NOTE: Update local key cache for CLI usage
+      if (user.encryptedPrivateKey && user.salt) {
+        const userKeyDb = await getUserKeyCacheDb();
+        cacheUserKeys(userKeyDb, {
+          encryptedPrivateKey: user.encryptedPrivateKey,
+          salt: user.salt,
+          keysUpdatedAt: user.keysUpdatedAt ?? Date.now(),
+        });
+      }
     } catch (err) {
       logger.error("Failed to fetch user keys:", err);
       const error = err instanceof Error ? err : new Error("Failed to fetch user keys");
@@ -99,6 +110,13 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
         setPublicKey(args.publicKey);
         setEncryptedPrivateKey(args.encryptedPrivateKey);
         setSalt(args.salt);
+
+        const userKeyDb = await getUserKeyCacheDb();
+        cacheUserKeys(userKeyDb, {
+          encryptedPrivateKey: args.encryptedPrivateKey,
+          salt: args.salt,
+          keysUpdatedAt: Date.now(),
+        });
       } catch (err) {
         logger.error("Failed to store user keys:", err);
         const error = err instanceof Error ? err : new Error("Failed to store user keys");
@@ -123,6 +141,13 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
         await api.updatePassword(args);
         setEncryptedPrivateKey(args.encryptedPrivateKey);
         setSalt(args.salt);
+
+        const userKeyDb = await getUserKeyCacheDb();
+        cacheUserKeys(userKeyDb, {
+          encryptedPrivateKey: args.encryptedPrivateKey,
+          salt: args.salt,
+          keysUpdatedAt: Date.now(),
+        });
       } catch (err) {
         logger.error("Failed to update password:", err);
         const error = err instanceof Error ? err : new Error("Failed to update password");
@@ -160,6 +185,13 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
         setPublicKey(args.newPublicKey);
         setEncryptedPrivateKey(args.newEncryptedPrivateKey);
         setSalt(args.newSalt);
+
+        const userKeyDb = await getUserKeyCacheDb();
+        cacheUserKeys(userKeyDb, {
+          encryptedPrivateKey: args.newEncryptedPrivateKey,
+          salt: args.newSalt,
+          keysUpdatedAt: Date.now(),
+        });
       } catch (err) {
         logger.error("Failed to rotate user keys:", err);
         const error = err instanceof Error ? err : new Error("Failed to rotate user keys");

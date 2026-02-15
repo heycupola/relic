@@ -1,4 +1,10 @@
-import { clearSession, type Session, validateSession } from "@repo/auth";
+import {
+  clearCachedUserKeys,
+  clearSession,
+  getUserKeyCacheDb,
+  type Session,
+  validateSession,
+} from "@repo/auth";
 import { api } from "@repo/backend";
 import { useQuery } from "convex/react";
 import {
@@ -55,6 +61,8 @@ export function AppProvider({ children, onProStatusChange }: AppProviderProps) {
   }, []);
 
   const logout = useCallback(async () => {
+    const userKeyDb = await getUserKeyCacheDb();
+    clearCachedUserKeys(userKeyDb);
     await clearSession();
     setIsAuthenticated(false);
     setSession(null);
