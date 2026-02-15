@@ -1,12 +1,13 @@
+import { mkdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { parse, stringify } from "smol-toml";
 
-const CONFIG_DIR = ".relic";
-const CONFIG_FILE = "config.toml";
+const CONFIG_FILE = "relic.toml";
+const RELIC_DIR = ".relic";
+const CACHE_DB = "cache.db";
 
 export interface RelicConfig {
   project_id: string;
-  project_name: string;
 }
 
 export interface ConfigResult {
@@ -15,20 +16,9 @@ export interface ConfigResult {
   rootDir: string;
 }
 
-async function ensureConfigDir(dir: string): Promise<void> {
-  const configDir = join(dir, CONFIG_DIR);
-  try {
-    const { mkdir } = await import("node:fs/promises");
-    await mkdir(configDir, { recursive: true });
-  } catch (_) {
-    void 0;
-  }
-}
-
 export async function loadConfig(dir?: string): Promise<ConfigResult | null> {
   const targetDir = dir ?? process.cwd();
-  const configDir = join(targetDir, CONFIG_DIR);
-  const configPath = join(configDir, CONFIG_FILE);
+  const configPath = join(targetDir, CONFIG_FILE);
 
   try {
     const file = Bun.file(configPath);
@@ -50,10 +40,7 @@ export async function loadConfig(dir?: string): Promise<ConfigResult | null> {
 
 export async function saveConfig(config: RelicConfig, dir?: string): Promise<string> {
   const targetDir = dir ?? process.cwd();
-  await ensureConfigDir(targetDir);
-
-  const configDir = join(targetDir, CONFIG_DIR);
-  const configPath = join(configDir, CONFIG_FILE);
+  const configPath = join(targetDir, CONFIG_FILE);
 
   const content = stringify(config);
   await Bun.write(configPath, content);
@@ -64,25 +51,24 @@ export async function saveConfig(config: RelicConfig, dir?: string): Promise<str
 export async function findConfig(startDir?: string): Promise<ConfigResult | null> {
   let currentDir = resolve(startDir ?? process.cwd());
   const root = resolve("/");
+  const home = process.env.HOME ? resolve(process.env.HOME) : null;
 
   while (currentDir !== root) {
-    const configDir = join(currentDir, CONFIG_DIR);
-    const configPath = join(configDir, CONFIG_FILE);
+    const configPath = join(currentDir, CONFIG_FILE);
 
-    try {
-      const file = Bun.file(configPath);
-      if (await file.exists()) {
+    const file = Bun.file(configPath);
+    if (await file.exists()) {
+      try {
         const content = await file.text();
         const config = parse(content) as unknown as RelicConfig;
-
-        return {
-          config,
-          configPath,
-          rootDir: currentDir,
-        };
+        return { config, configPath, rootDir: currentDir };
+      } catch {
+        return null;
       }
-    } catch {
-      void 0;
+    }
+
+    if (home && currentDir === home) {
+      return null;
     }
 
     const parentDir = dirname(currentDir);
@@ -95,23 +81,38 @@ export async function findConfig(startDir?: string): Promise<ConfigResult | null
 
 export async function configExists(dir?: string): Promise<boolean> {
   const targetDir = dir ?? process.cwd();
-  const configDir = join(targetDir, CONFIG_DIR);
-  const configPath = join(configDir, CONFIG_FILE);
+  const configPath = join(targetDir, CONFIG_FILE);
   const file = Bun.file(configPath);
   return file.exists();
 }
 
-export function createConfig(projectId: string, projectName: string): RelicConfig {
+export function createConfig(projectId: string): RelicConfig {
   return {
     project_id: projectId,
-    project_name: projectName,
   };
 }
 
-export function getConfigDir(): string {
-  return CONFIG_DIR;
+export function getConfigFilePath(): string {
+  return CONFIG_FILE;
 }
 
-export function getConfigFilePath(): string {
-  return `${CONFIG_DIR}/${CONFIG_FILE}`;
+export function getRelicDir(rootDir: string): string {
+  return join(rootDir, RELIC_DIR);
+}
+
+export function getCacheDbPath(rootDir: string): string {
+  return join(rootDir, RELIC_DIR, CACHE_DB);
+}
+
+export async function createRelicDir(dir?: string): Promise<string> {
+  const targetDir = dir ?? process.cwd();
+  const relicDir = join(targetDir, RELIC_DIR);
+  await mkdir(relicDir, { recursive: true });
+  return relicDir;
+}
+
+export async function findRelicDir(startDir?: string): Promise<string | null> {
+  const configResult = await findConfig(startDir);
+  if (!configResult) return null;
+  return getRelicDir(configResult.rootDir);
 }
