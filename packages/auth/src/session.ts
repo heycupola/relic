@@ -89,6 +89,7 @@ export async function clearSession(): Promise<void> {
   } catch (_) {
     void 0;
   }
+
   await clearPassword();
 }
 

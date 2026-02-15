@@ -1,6 +1,11 @@
 export { PublicApi, publicApi } from "./src/api";
 export { DeviceAuthService, deviceAuth } from "./src/deviceAuth";
 export {
+  AuthenticationError,
+  InvalidJwtError,
+  SessionExpiredError,
+} from "./src/errors";
+export {
   ensureValidJwt,
   fetchJwtToken,
   getOrRefreshJwtToken,
@@ -10,9 +15,9 @@ export {
 export {
   checkPasswordRequirements,
   clearPassword,
+  getConfigDir,
   getPasswordFilePath,
   getPasswordFromStorage,
-  getRelicDir,
   getStrengthColor,
   hasPassword,
   isPasswordFromEnv,
@@ -58,3 +63,11 @@ export {
   isDeviceCodeExpired,
   isSystemFunctionTimeout,
 } from "./src/types";
+export {
+  type CachedUserKeys,
+  cacheUserKeys,
+  clearCachedUserKeys,
+  getCachedUserKeys,
+  getUserKeyCacheDb,
+  initializeSchema as initializeUserKeyCacheSchema,
+} from "./src/userKeyCache";

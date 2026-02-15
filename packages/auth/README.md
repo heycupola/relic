@@ -60,19 +60,23 @@ const password = await getPasswordFromStorage();
 
 ## Storage Locations
 
-| Platform | Session | Password |
-|----------|---------|----------|
-| macOS | `~/.config/relic/session.json` | Keychain or `~/.relic/password` |
-| Linux | `~/.config/relic/session.json` | `~/.relic/password` |
-| Windows | `%APPDATA%/relic/session.json` | `%USERPROFILE%/.relic/password` |
+| Platform | Location |
+|----------|----------|
+| macOS | `~/.config/relic/` |
+| Linux | `~/.config/relic/` |
+| Windows | `%APPDATA%/relic/` |
+
+Files stored:
+- `session.json` - Session data
+- `password` - Master password (fallback when keychain unavailable)
 
 ## Priority Order
 
 ### Session
 1. `RELIC_SESSION` environment variable
-2. Local session file
+2. `~/.config/relic/session.json`
 
 ### Password
 1. `RELIC_PASSWORD` environment variable
 2. System keychain (macOS/Windows)
-3. Local password file
+3. `~/.config/relic/password`

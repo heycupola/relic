@@ -1,4 +1,5 @@
 import { SITE_URL } from "./constants";
+import { InvalidJwtError } from "./errors";
 import { getJwtToken, getSessionToken, updateSessionJwt } from "./session";
 import type { JwtTokenResponse } from "./types";
 
@@ -152,7 +153,7 @@ export async function getOrRefreshJwtToken(): Promise<string | null> {
 export async function ensureValidJwt(): Promise<string> {
   const jwt = await getOrRefreshJwtToken();
   if (!jwt) {
-    throw new Error("Not authenticated - no valid JWT token");
+    throw new InvalidJwtError("Not authenticated - no valid JWT token");
   }
   return jwt;
 }

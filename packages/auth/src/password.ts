@@ -2,39 +2,23 @@ import { resolve } from "node:path";
 import { decryptPrivateKeyWithPassword } from "@repo/crypto";
 
 const HOME = process.env.HOME || process.env.USERPROFILE || "~";
-const RELIC_DIR = resolve(HOME, ".relic");
-const RELIC_PASSWORD_FILE = resolve(RELIC_DIR, "password");
+const CONFIG_DIR =
+  process.platform === "win32"
+    ? resolve(HOME, "AppData", "Roaming", "relic")
+    : resolve(HOME, ".config", "relic");
+const PASSWORD_FILE = resolve(CONFIG_DIR, "password");
 
 const SECRETS_SERVICE = "com.relic.tui";
 const SECRETS_NAME = "master-password";
-const LEGACY_PASSWORD_FILE = resolve(HOME, ".relic_password");
 
 const ENV_PASSWORD_KEY = "RELIC_PASSWORD";
 
-async function ensureRelicDir(): Promise<void> {
-  const { mkdir } = await import("node:fs/promises");
+async function ensureConfigDir(): Promise<void> {
+  const { mkdir, chmod } = await import("node:fs/promises");
   try {
-    await mkdir(RELIC_DIR, { recursive: true });
-  } catch (_) {
-    void 0;
-  }
-}
-
-async function migrateLegacyPassword(): Promise<void> {
-  const { unlink } = await import("node:fs/promises");
-  try {
-    const legacyFile = Bun.file(LEGACY_PASSWORD_FILE);
-    if (await legacyFile.exists()) {
-      const password = await legacyFile.text();
-      if (password.length > 0) {
-        await ensureRelicDir();
-        await Bun.write(RELIC_PASSWORD_FILE, password);
-        try {
-          await unlink(LEGACY_PASSWORD_FILE);
-        } catch (_) {
-          void 0;
-        }
-      }
+    await mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
+    if (process.platform !== "win32") {
+      await chmod(CONFIG_DIR, 0o700);
     }
   } catch (_) {
     void 0;
@@ -60,10 +44,8 @@ export async function getPasswordFromStorage(): Promise<string | null> {
     void 0;
   }
 
-  await migrateLegacyPassword();
-
   try {
-    const file = Bun.file(RELIC_PASSWORD_FILE);
+    const file = Bun.file(PASSWORD_FILE);
     if (await file.exists()) {
       const password = await file.text();
       return password.length > 0 ? password : null;
@@ -82,8 +64,8 @@ async function savePasswordToStorage(password: string): Promise<void> {
   try {
     await secrets.set({ service: SECRETS_SERVICE, name: SECRETS_NAME, value: password });
     try {
-      const file = Bun.file(RELIC_PASSWORD_FILE);
-      if (await file.exists()) await unlink(RELIC_PASSWORD_FILE);
+      const file = Bun.file(PASSWORD_FILE);
+      if (await file.exists()) await unlink(PASSWORD_FILE);
     } catch (_) {
       void 0;
     }
@@ -93,8 +75,8 @@ async function savePasswordToStorage(password: string): Promise<void> {
   }
 
   try {
-    await ensureRelicDir();
-    await Bun.write(RELIC_PASSWORD_FILE, password);
+    await ensureConfigDir();
+    await Bun.write(PASSWORD_FILE, password);
   } catch (error) {
     throw new Error(`Failed to save password: ${error}`);
   }
@@ -111,15 +93,8 @@ async function deletePasswordFromStorage(): Promise<void> {
   }
 
   try {
-    const file = Bun.file(RELIC_PASSWORD_FILE);
-    if (await file.exists()) await unlink(RELIC_PASSWORD_FILE);
-  } catch (_) {
-    void 0;
-  }
-
-  try {
-    const legacyFile = Bun.file(LEGACY_PASSWORD_FILE);
-    if (await legacyFile.exists()) await unlink(LEGACY_PASSWORD_FILE);
+    const file = Bun.file(PASSWORD_FILE);
+    if (await file.exists()) await unlink(PASSWORD_FILE);
   } catch (_) {
     void 0;
   }
@@ -228,10 +203,10 @@ export async function verifyPasswordWithExistingKeys(
   }
 }
 
-export function getRelicDir(): string {
-  return RELIC_DIR;
+export function getConfigDir(): string {
+  return CONFIG_DIR;
 }
 
 export function getPasswordFilePath(): string {
-  return RELIC_PASSWORD_FILE;
+  return PASSWORD_FILE;
 }
