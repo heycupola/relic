@@ -8,6 +8,9 @@
     ".": "./index.ts"
   },
   "private": true,
+  "scripts": {
+    "test": "bun test"
+  },
   "dependencies": {
     "argon2": "^0.41.1"
   },

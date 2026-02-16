@@ -828,10 +828,10 @@ export const _loadSecrets = internalQuery({
   handler: async (ctx, args) => {
     return await ctx.db
       .query("secret")
+      .withIndex("by_environment", (q) => q.eq("environmentId", args.environmentId))
       .filter((q) =>
         q.and(
           q.eq(q.field("projectId"), args.projectId),
-          q.eq(q.field("environmentId"), args.environmentId),
           q.eq(q.field("folderId"), args.folderId),
           q.eq(q.field("isDeleted"), false),
         ),

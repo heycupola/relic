@@ -6,7 +6,8 @@
   "scripts": {
     "start": "bun --hot ./index.tsx",
     "debug": "DEV=true bun --hot ./index.tsx",
-    "log:watch": "bun run ./scripts/watchLog.ts"
+    "log:watch": "bun run ./scripts/watchLog.ts",
+    "test": "bun test"
   },
   "devDependencies": {
     "@repo/typescript-config": "*",
