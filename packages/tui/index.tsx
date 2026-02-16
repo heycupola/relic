@@ -13,27 +13,33 @@ if (process.env.DEV === "true") {
 
 import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
+import {
+  clearCachedUserKeys,
+  clearPassword,
+  clearSession,
+  getUserKeyCacheDb,
+  hasPassword,
+  savePassword,
+  validateSession,
+  watchSession,
+} from "@repo/auth";
 import { useCallback, useEffect, useState } from "react";
 import { TaskBar } from "./components/shared/TaskBar";
 import { AppProvider, useUser } from "./context";
 import { ConvexAuthProvider } from "./convex/provider";
-import { clearSession, validateSession } from "./convex/services/session";
 import { AppSessionContext } from "./hooks/useAppSession";
 import { useCurrentUser } from "./hooks/useCurrentUser";
 import { TaskProvider } from "./hooks/useTaskQueue";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { PasswordSetupPage } from "./pages/PasswordSetupPage";
-import { PasswordUnlockPage } from "./pages/PasswordUnlockPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { RouterProvider, useRouter } from "./router";
-import { clearPassword, hasPassword, savePassword } from "./utils/password";
 
 function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
   const { route, navigate } = useRouter();
   const { displayName } = useCurrentUser();
 
-  const [isPasswordUnlocked, setIsPasswordUnlocked] = useState(false);
   const [passwordStatus, setPasswordStatus] = useState<{ has: boolean; loading: boolean }>({
     has: false,
     loading: true,
@@ -49,20 +55,12 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
 
   const handleLogout = useCallback(async () => {
     await onLogout();
-    await clearPassword();
-    setIsPasswordUnlocked(false);
     navigate({ name: "login" });
   }, [onLogout, navigate]);
 
   const handlePasswordSetup = async (password: string) => {
     await savePassword(password);
     setPasswordStatus({ has: true, loading: false });
-    setIsPasswordUnlocked(true);
-    navigate({ name: "home" });
-  };
-
-  const handlePasswordUnlock = () => {
-    setIsPasswordUnlocked(true);
     navigate({ name: "home" });
   };
 
@@ -70,15 +68,7 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
     return null;
   }
 
-  if (!isPasswordUnlocked) {
-    if (passwordStatus.has) {
-      return (
-        <>
-          <PasswordUnlockPage onUnlock={handlePasswordUnlock} onLogout={handleLogout} />
-          <AuthenticatedTaskBar />
-        </>
-      );
-    }
+  if (!passwordStatus.has) {
     return (
       <>
         <PasswordSetupPage onComplete={handlePasswordSetup} onLogout={handleLogout} />
@@ -134,30 +124,44 @@ function AppRouter() {
   }>({ isAuthenticated: false, isLoading: true });
 
   useEffect(() => {
-    const checkAuth = async () => {
+    let cleanup: (() => void) | undefined;
+
+    const setup = async () => {
       try {
         const validation = await validateSession();
         setAuthState({ isAuthenticated: validation.isValid, isLoading: false });
       } catch {
         setAuthState({ isAuthenticated: false, isLoading: false });
       }
+
+      cleanup = await watchSession(async (event) => {
+        if (event === "deleted") {
+          setAuthState({ isAuthenticated: false, isLoading: false });
+        } else if (event === "created") {
+          const validation = await validateSession();
+          if (validation.isValid) {
+            setAuthState({ isAuthenticated: true, isLoading: false });
+          }
+        }
+      });
     };
-    checkAuth();
+
+    setup();
+
+    return () => cleanup?.();
   }, []);
 
   const handleLogin = useCallback(async () => {
     const validation = await validateSession();
     setAuthState({ isAuthenticated: validation.isValid, isLoading: false });
-    const has = await hasPassword();
-    if (has) {
-      navigate({ name: "password-unlock" });
-    } else {
-      navigate({ name: "password-setup" });
-    }
+    navigate({ name: "home" });
   }, [navigate]);
 
   const handleLogout = useCallback(async () => {
+    const userKeyDb = await getUserKeyCacheDb();
+    clearCachedUserKeys(userKeyDb);
     await clearSession();
+    await clearPassword();
     setAuthState({ isAuthenticated: false, isLoading: false });
   }, []);
 

@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { doc } from "convex-helpers/validators";
-import { api, components, internal } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Doc as BetterAuthDoc, Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
@@ -9,7 +9,6 @@ import {
   alreadyExistsError,
   createError,
   ErrorCode,
-  limitReachedError,
   notFoundError,
   permissionError,
 } from "./lib/errors";
@@ -521,6 +520,10 @@ export const revokeShareWithRotation = protectedAction({
       );
       secretsReEncrypted = totalEncrypted;
     }
+
+    await ctx.runMutation(internal.environment._invalidateProjectCache, {
+      projectId: share.projectId,
+    });
 
     await ctx.runMutation(internal.projectShare._insertKeyRotation, {
       projectId: share.projectId,

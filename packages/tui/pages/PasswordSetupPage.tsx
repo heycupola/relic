@@ -1,4 +1,5 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
+import { verifyPasswordWithExistingKeys } from "@repo/auth";
 import {
   createUserKeys,
   decryptPrivateKeyWithPassword,
@@ -12,7 +13,6 @@ import { Modal } from "../components/shared/Modal";
 import { useUserKeys } from "../convex/hooks/useUserKeys";
 import { THEME_COLORS } from "../utils/constants";
 import { logger } from "../utils/debugLog";
-import { verifyPasswordWithExistingKeys } from "../utils/password";
 
 interface PasswordSetupPageProps {
   onComplete: (password: string) => void;

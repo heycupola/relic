@@ -1,12 +1,12 @@
 import { useKeyboard } from "@opentui/react";
-import { useEffect, useState } from "react";
-import { KEY_SYMBOLS, THEME_COLORS } from "../utils/constants";
 import {
   checkPasswordRequirements,
   getStrengthColor,
   type PasswordRequirement,
   validatePassword,
-} from "../utils/password";
+} from "@repo/auth";
+import { useEffect, useState } from "react";
+import { KEY_SYMBOLS, THEME_COLORS } from "../utils/constants";
 import { InlineInput } from "./forms/InlineInput";
 import { GuideBar } from "./shared/GuideBar";
 
@@ -17,7 +17,7 @@ interface Shortcut {
 }
 
 interface PasswordInputProps {
-  mode: "setup" | "change" | "unlock" | "verify";
+  mode: "setup" | "change" | "verify";
   onSubmit: (password: string, newPassword?: string) => void;
   onCancel?: () => void;
   width?: number;
@@ -47,7 +47,7 @@ export function PasswordInput({
   const requirements = checkPasswordRequirements(passwordValue);
   const validation = validatePassword(passwordValue);
   const passwordsMatch = confirmValue.length > 0 && confirmValue === passwordValue;
-  const showStrength = mode !== "unlock" && focusedField === "password";
+  const showStrength = mode !== "verify" && focusedField === "password";
 
   // Clear validation errors when password becomes valid
   useEffect(() => {
@@ -61,7 +61,7 @@ export function PasswordInput({
     const fields: readonly FieldName[] =
       mode === "change"
         ? ["current", "password", "confirm"]
-        : mode === "unlock"
+        : mode === "verify"
           ? ["password"]
           : ["password", "confirm"];
     const currentIndex = fields.indexOf(focusedField);
@@ -73,7 +73,7 @@ export function PasswordInput({
   };
 
   const handleSubmit = () => {
-    if (mode === "unlock" || mode === "verify") {
+    if (mode === "verify") {
       if (passwordValue.length > 0) onSubmit(passwordValue);
       return;
     }
@@ -102,7 +102,7 @@ export function PasswordInput({
       onCancel();
       return;
     }
-    if (key.name === "tab" && mode !== "unlock") {
+    if (key.name === "tab" && mode !== "verify") {
       cycleFocus(key.shift ? "prev" : "next");
       return;
     }
@@ -131,12 +131,10 @@ export function PasswordInput({
       )}
 
       <InlineInput
-        active={mode === "unlock" || mode === "verify" || focusedField === "password"}
+        active={mode === "verify" || focusedField === "password"}
         maxWidth={28}
         maxLength={64}
-        placeholder={
-          mode === "unlock" ? "Password" : mode === "change" ? "New password" : "Password"
-        }
+        placeholder={mode === "change" ? "New password" : "Password"}
         isFocused={focusedField === "password"}
         isPassword={true}
         showPassword={showPassword}
@@ -178,7 +176,7 @@ export function PasswordInput({
         </box>
       )}
 
-      {mode !== "unlock" && mode !== "verify" && (
+      {mode !== "verify" && (
         <InlineInput
           active={focusedField === "confirm"}
           maxWidth={28}
@@ -208,29 +206,17 @@ export function PasswordInput({
         </box>
       )}
 
-      {error && (
-        <box height={1}>
-          <text fg={THEME_COLORS.error}>[!] {error}</text>
-        </box>
-      )}
-
       <GuideBar
         groups={{
           primary: [
             {
               shortcuts: [
-                ...(mode !== "unlock" && mode !== "verify"
-                  ? [{ key: "tab", description: "next field", disabled }]
-                  : []),
+                ...(mode !== "verify" ? [{ key: "tab", description: "next field", disabled }] : []),
                 { key: "^v", description: showPassword ? "hide" : "show", disabled },
                 {
                   key: KEY_SYMBOLS.enter,
                   description:
-                    mode === "unlock" || mode === "verify"
-                      ? "unlock"
-                      : mode === "change"
-                        ? "save"
-                        : "continue",
+                    mode === "verify" ? "unlock" : mode === "change" ? "save" : "continue",
                   disabled,
                 },
                 ...additionalShortcuts,

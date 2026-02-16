@@ -1,4 +1,5 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
+import { savePassword } from "@repo/auth";
 import {
   createProjectKey,
   decryptPrivateKeyWithPassword,
@@ -6,7 +7,7 @@ import {
   generateSalt,
 } from "@repo/crypto";
 import open from "open";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { getProtectedApi } from "../api";
 import { InlineInput } from "../components/forms/InlineInput";
 import { CommandPaletteModal } from "../components/modals/CommandPaletteModal";
@@ -35,7 +36,6 @@ import {
   THEME_COLORS,
 } from "../utils/constants";
 import { logger } from "../utils/debugLog";
-import { savePassword } from "../utils/password";
 
 const STATUS_ICONS: Record<ProjectStatus, string> = {
   owned: "●",
@@ -125,16 +125,6 @@ export function HomePage() {
   const archivableProjects = projects.filter(
     (p) => p.status === "owned" && !p.status.includes("archived"),
   );
-
-  const prevHasProRef = useRef(hasPro);
-  useEffect(() => {
-    if (hasPro && !prevHasProRef.current) {
-      refetchProjects();
-      payment.closeAll();
-      showSuccess("You're now a PRO! Unlimited projects unlocked.", 5000);
-    }
-    prevHasProRef.current = hasPro;
-  }, [hasPro, refetchProjects, payment, showSuccess]);
 
   const handleCreateProject = async (name: string, confirmPayment?: boolean) => {
     if (!hasKeys || !publicKey) {
@@ -313,12 +303,10 @@ export function HomePage() {
       return;
     }
 
-    // Step 4: Update locally stored session password
     try {
       await savePassword(newPassword);
     } catch (error) {
       logger.error("Failed to save password locally:", error);
-      // Don't fail the operation - backend is already updated
     }
 
     setPasswordChangeStatus(null);

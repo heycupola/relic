@@ -1,0 +1,14 @@
+{
+  "extends": "@repo/typescript-config/bundler.json",
+  "compilerOptions": {
+    "moduleDetection": "force",
+    "noUncheckedIndexedAccess": true,
+    "baseUrl": ".",
+    "paths": {
+      "@repo/backend": ["../backend/index.ts"],
+      "@repo/backend/*": ["../backend/*"],
+      "@repo/crypto": ["../crypto/index.ts"],
+      "@repo/crypto/*": ["../crypto/*"]
+    }
+  }
+}

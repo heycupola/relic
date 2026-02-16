@@ -6,7 +6,8 @@
   "scripts": {
     "start": "bun --hot ./index.tsx",
     "debug": "DEV=true bun --hot ./index.tsx",
-    "log:watch": "bun run ./scripts/watchLog.ts"
+    "log:watch": "bun run ./scripts/watchLog.ts",
+    "test": "bun test"
   },
   "devDependencies": {
     "@repo/typescript-config": "*",
@@ -20,8 +21,9 @@
   "dependencies": {
     "@opentui/core": "^0.1.65",
     "@opentui/react": "^0.1.65",
+    "@repo/auth": "*",
     "convex": "catalog:",
-    "open": "^11.0.0",
-    "react": "^19.2.3"
+    "open": "catalog:",
+    "react": "catalog:"
   }
 }

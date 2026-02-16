@@ -1,3 +1,4 @@
+import { ensureValidJwt } from "@repo/auth";
 import {
   api,
   SecretValueType as BackendSecretValueType,
@@ -5,9 +6,7 @@ import {
   type TableNames,
 } from "@repo/backend";
 import { ConvexHttpClient } from "convex/browser";
-import { ensureValidJwt } from "./convex/services/jwt";
 import type {
-  ActionLog,
   ApiSharedProjectResponse,
   ApiShareResponse,
   CreateProjectResult,
@@ -523,23 +522,6 @@ export class ProtectedApi {
         projectId: toId<"project">(projectId),
       }),
     );
-  }
-
-  async loadLastPulse(environmentId: string): Promise<ActionLog | null> {
-    return this.withAuth(async () => {
-      const result = await this.client.action(api.actionLog.loadActionLogsByEnvironment, {
-        environmentId: toId<"environment">(environmentId),
-        paginationOpts: { numItems: 1, cursor: null },
-      });
-      const firstLog = result.page[0];
-      if (!firstLog) return null;
-      return {
-        ...firstLog,
-        id: String(firstLog._id),
-        environmentId: String(firstLog.environmentId ?? ""),
-        userId: String(firstLog.userId ?? ""),
-      } as ActionLog;
-    });
   }
 }
 

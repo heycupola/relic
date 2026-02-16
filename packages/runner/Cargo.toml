@@ -1,0 +1,13 @@
+[package]
+name = "relic-runner"
+description = "Secret injection and process runner for Relic CLI."
+authors = ["Can Vardar <https://github.com/heycupola/relic>"]
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[lib]
+crate-type = ["cdylib"]

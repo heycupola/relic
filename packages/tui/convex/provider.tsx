@@ -1,18 +1,15 @@
+import { ensureValidJwt } from "@repo/auth";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { type ComponentProps, type ReactNode, useEffect, useRef, useState } from "react";
 import { logger } from "../utils/debugLog";
-import { ensureValidJwt } from "./services/jwt";
 
 const CONVEX_URL = process.env.CONVEX_URL ?? "http://localhost:3210";
-
-// Single shared client instance
 const convexClient = new ConvexReactClient(CONVEX_URL);
 
 interface ConvexAuthProviderProps {
   children: ReactNode;
 }
 
-// Wrapper to fix React 19 type compatibility with Convex
 function TypedConvexProvider(props: ComponentProps<typeof ConvexProvider>) {
   return ConvexProvider(props) as ReactNode;
 }
@@ -26,10 +23,8 @@ export function ConvexAuthProvider({ children }: ConvexAuthProviderProps) {
 
     const setupAuth = async () => {
       try {
-        // Verify we can get a token first
         await ensureValidJwt();
 
-        // Set up the auth callback for Convex
         convexClient.setAuth(async () => {
           try {
             return await ensureValidJwt();
@@ -44,7 +39,6 @@ export function ConvexAuthProvider({ children }: ConvexAuthProviderProps) {
         logger.debug("Convex auth provider ready");
       } catch (err) {
         logger.error("Failed to setup Convex auth:", err);
-        // Still render children - HTTP client will work as fallback
         setIsReady(true);
       }
     };

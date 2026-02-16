@@ -3,34 +3,34 @@ import { getLibrary } from "./helper";
 
 type LibraryType = Awaited<ReturnType<typeof getLibrary>>;
 
-export class Bridge {
+export class RunnerBridge {
   private lib: LibraryType;
-  private static instance: Bridge | null = null;
-  private static instancePromise: Promise<Bridge> | null = null;
+  private static instance: RunnerBridge | null = null;
+  private static instancePromise: Promise<RunnerBridge> | null = null;
 
   private constructor(lib: LibraryType) {
     this.lib = lib;
   }
 
-  static async getInstance(): Promise<Bridge> {
-    if (Bridge.instance) {
-      return Bridge.instance;
+  static async getInstance(): Promise<RunnerBridge> {
+    if (RunnerBridge.instance) {
+      return RunnerBridge.instance;
     }
 
-    if (Bridge.instancePromise) {
-      return Bridge.instancePromise;
+    if (RunnerBridge.instancePromise) {
+      return RunnerBridge.instancePromise;
     }
 
-    Bridge.instancePromise = (async () => {
+    RunnerBridge.instancePromise = (async () => {
       const lib = await getLibrary();
-      Bridge.instance = new Bridge(lib);
-      return Bridge.instance;
+      RunnerBridge.instance = new RunnerBridge(lib);
+      return RunnerBridge.instance;
     })();
 
-    return Bridge.instancePromise;
+    return RunnerBridge.instancePromise;
   }
 
-  runApp(args: Pointer): void {
-    this.lib.symbols.run_app(args);
+  runWithSecrets(command: Pointer, secrets: Pointer): number {
+    return this.lib.symbols.run_with_secrets(command, secrets);
   }
 }

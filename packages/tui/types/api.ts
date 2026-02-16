@@ -32,6 +32,7 @@ export interface User {
   publicKey?: string;
   encryptedPrivateKey?: string;
   salt?: string;
+  keysUpdatedAt?: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -220,35 +221,4 @@ export interface ApiSharedProjectResponse {
   isRestricted: boolean;
   isArchived: boolean;
   ownerId: string;
-}
-
-export interface ActionLog {
-  _id: string;
-  action: string;
-  projectId?: string;
-  projectName?: string;
-  environmentId?: string;
-  environmentName?: string;
-  timestamp: number;
-  userId: string;
-  metadata?: {
-    folderId?: string;
-    folderName?: string;
-    secretId?: string;
-    key?: string;
-    newKey?: string;
-    exportFormat?: "relic" | "env" | "json";
-    exportCount?: number;
-    affectedValueCount?: number;
-    deleteCount?: number;
-    sharedUserId?: string;
-    sharedUserEmail?: string;
-    shareId?: string;
-    reason?: string;
-    oldKeyVersion?: number;
-    newKeyVersion?: number;
-    keyRotated?: boolean;
-    secretsReEncrypted?: number;
-    sharesUpdated?: number;
-  };
 }

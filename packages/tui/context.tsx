@@ -1,3 +1,11 @@
+import {
+  clearCachedUserKeys,
+  clearPassword,
+  clearSession,
+  getUserKeyCacheDb,
+  type Session,
+  validateSession,
+} from "@repo/auth";
 import { api } from "@repo/backend";
 import { useQuery } from "convex/react";
 import {
@@ -9,8 +17,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { clearSession, validateSession } from "./convex/services/session";
-import type { Session } from "./convex/types";
 import type { User } from "./types/api";
 
 interface AppContextValue {
@@ -56,7 +62,10 @@ export function AppProvider({ children, onProStatusChange }: AppProviderProps) {
   }, []);
 
   const logout = useCallback(async () => {
+    const userKeyDb = await getUserKeyCacheDb();
+    clearCachedUserKeys(userKeyDb);
     await clearSession();
+    await clearPassword();
     setIsAuthenticated(false);
     setSession(null);
   }, []);

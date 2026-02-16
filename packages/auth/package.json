@@ -1,0 +1,29 @@
+{
+  "name": "@repo/auth",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./index.ts",
+  "module": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "private": true,
+  "scripts": {
+    "lint": "biome check --write .",
+    "format": "biome format --write .",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@repo/backend": "*",
+    "@repo/crypto": "*",
+    "convex": "catalog:",
+    "open": "catalog:"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "*",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

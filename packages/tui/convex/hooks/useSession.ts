@@ -1,6 +1,5 @@
+import { clearPassword, clearSession, type Session, validateSession } from "@repo/auth";
 import { useCallback, useEffect, useState } from "react";
-import { clearSession, validateSession } from "../services/session";
-import type { Session } from "../types";
 
 interface UseSessionReturn {
   isAuthenticated: boolean;
@@ -31,6 +30,7 @@ export function useSession(): UseSessionReturn {
 
   const logout = useCallback(async () => {
     await clearSession();
+    await clearPassword();
     setIsAuthenticated(false);
     setSession(null);
   }, []);

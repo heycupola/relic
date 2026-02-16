@@ -4,7 +4,9 @@
     "baseUrl": ".",
     "paths": {
       "@repo/backend": ["../backend/index.ts"],
-      "@repo/backend/*": ["../backend/*"]
+      "@repo/backend/*": ["../backend/*"],
+      "@repo/auth": ["../auth/index.ts"],
+      "@repo/auth/*": ["../auth/*"]
     },
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "jsxImportSource": "@opentui/react"

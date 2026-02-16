@@ -11,7 +11,6 @@ const PLATFORM_MAP: Record<string, string> = {
 };
 
 async function detectEnvironment(): Promise<Environment> {
-  // Explicit environment variable takes precedence
   if (process.env.NODE_ENV === "production") {
     return "production";
   }
@@ -19,28 +18,25 @@ async function detectEnvironment(): Promise<Environment> {
     return "development";
   }
 
-  // Check if prebuilds directory exists (production packages include this)
   const prebuildsPath = `${import.meta.dir}/../prebuilds`;
   if (await Bun.file(prebuildsPath).exists()) {
     return "production";
   }
 
-  // Fallback: check for turbo.json (monorepo indicator)
   const turboJsonPath = `${import.meta.dir}/../../../turbo.json`;
   if (await Bun.file(turboJsonPath).exists()) {
     return "development";
   }
 
-  // Default to production for safety (don't expose debug paths)
   return "production";
 }
 
-function getCliCorePath(): string {
-  return `${import.meta.dir}/../../../packages/cli-core`;
+function getRunnerPath(): string {
+  return `${import.meta.dir}/../../../packages/runner`;
 }
 
 function getLibraryName(): string {
-  return process.platform === "win32" ? "relic_core.dll" : `librelic_core.${suffix}`;
+  return process.platform === "win32" ? "relic_runner.dll" : `librelic_runner.${suffix}`;
 }
 
 function getProductionError(platform: string): Error {
@@ -56,8 +52,8 @@ function getProductionError(platform: string): Error {
 function getDevelopmentError(platform: string): Error {
   return new Error(
     `Rust library not found for ${platform}.\n\n` +
-      `Build the Rust core first:\n` +
-      `  cd packages/cli-core && cargo build --release`,
+      `Build the runner first:\n` +
+      `  cd packages/runner && cargo build --release`,
   );
 }
 
@@ -78,12 +74,12 @@ async function findLibraryInDevelopment(
   targetPlatform: string,
   libName: string,
 ): Promise<string | null> {
-  const cliCorePath = getCliCorePath();
+  const runnerPath = getRunnerPath();
 
   const paths = [
-    `${cliCorePath}/target/release/${libName}`,
-    `${cliCorePath}/target/debug/${libName}`,
-    `${cliCorePath}/prebuilt/${targetPlatform}/${libName}`,
+    `${runnerPath}/target/release/${libName}`,
+    `${runnerPath}/target/debug/${libName}`,
+    `${runnerPath}/prebuilt/${targetPlatform}/${libName}`,
   ];
 
   for (const path of paths) {
@@ -125,9 +121,9 @@ export async function getPlatformLibrary(): Promise<string> {
 
 export async function getLibrary() {
   const lib = dlopen(await getPlatformLibrary(), {
-    run_app: {
-      args: [FFIType.cstring],
-      returns: FFIType.void,
+    run_with_secrets: {
+      args: [FFIType.cstring, FFIType.cstring],
+      returns: FFIType.i32,
     },
   });
 

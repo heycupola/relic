@@ -17,14 +17,17 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build:bindings": "cd ../../packages/cli-core && cargo build",
-    "dev": "bun run build:bindings && bun run index.ts",
+    "build:runner": "cd ../../packages/runner && cargo build",
+    "dev": "bun run build:runner && bun run index.ts",
     "logs": "tail -f ~/Library/Application\\ Support/com.cupola.relic/relic.log",
     "lint": "biome check --write .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "test": "bun test"
   },
   "files": [
     "index.ts",
+    "commands/**",
+    "lib/**",
     "ffi/**",
     "prebuilds/**",
     "README.md"
@@ -39,5 +42,16 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.11.0",
+    "@repo/auth": "*",
+    "@repo/backend": "*",
+    "@repo/crypto": "*",
+    "commander": "^13.1.0",
+    "convex": "catalog:",
+    "ora": "^8.2.0",
+    "picocolors": "^1.1.1",
+    "smol-toml": "^1.6.0"
   }
 }
