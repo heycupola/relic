@@ -1,4 +1,4 @@
-import { clearSession, type Session, validateSession } from "@repo/auth";
+import { clearPassword, clearSession, type Session, validateSession } from "@repo/auth";
 import { useCallback, useEffect, useState } from "react";
 
 interface UseSessionReturn {
@@ -30,6 +30,7 @@ export function useSession(): UseSessionReturn {
 
   const logout = useCallback(async () => {
     await clearSession();
+    await clearPassword();
     setIsAuthenticated(false);
     setSession(null);
   }, []);

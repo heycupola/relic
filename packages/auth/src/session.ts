@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { chmod, mkdir, unlink, watch } from "node:fs/promises";
 import { resolve } from "node:path";
-import { clearPassword } from "./password";
 import type { Session, SessionValidation } from "./types";
 
 export type SessionChangeEvent = "created" | "deleted" | "changed";
@@ -89,8 +88,6 @@ export async function clearSession(): Promise<void> {
   } catch (_) {
     void 0;
   }
-
-  await clearPassword();
 }
 
 export async function updateSessionJwt(jwtToken: string, jwtExpiresAt: number): Promise<void> {

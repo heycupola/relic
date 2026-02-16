@@ -15,6 +15,7 @@ import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
 import {
   clearCachedUserKeys,
+  clearPassword,
   clearSession,
   getUserKeyCacheDb,
   hasPassword,
@@ -160,6 +161,7 @@ function AppRouter() {
     const userKeyDb = await getUserKeyCacheDb();
     clearCachedUserKeys(userKeyDb);
     await clearSession();
+    await clearPassword();
     setAuthState({ isAuthenticated: false, isLoading: false });
   }, []);
 

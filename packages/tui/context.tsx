@@ -1,5 +1,6 @@
 import {
   clearCachedUserKeys,
+  clearPassword,
   clearSession,
   getUserKeyCacheDb,
   type Session,
@@ -64,6 +65,7 @@ export function AppProvider({ children, onProStatusChange }: AppProviderProps) {
     const userKeyDb = await getUserKeyCacheDb();
     clearCachedUserKeys(userKeyDb);
     await clearSession();
+    await clearPassword();
     setIsAuthenticated(false);
     setSession(null);
   }, []);
