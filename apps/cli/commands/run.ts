@@ -1,7 +1,6 @@
 import { ptr } from "bun:ffi";
 import type { Database } from "bun:sqlite";
 import {
-  type CachedUserKeys,
   cacheUserKeys,
   clearCachedUserKeys,
   getCachedUserKeys,
