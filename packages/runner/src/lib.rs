@@ -9,8 +9,25 @@
 //! by the TypeScript CLI. This runner is purely for secure
 //! process spawning with env var injection.
 
-use std::{collections::HashMap, ffi::CStr, os::raw::c_char, process::Command};
+use std::{
+    collections::HashMap, ffi::CStr, os::raw::c_char, process::Command, sync::atomic::AtomicU32,
+};
 use zeroize::Zeroizing;
+
+/// Holds the PID of the currently running child process. Read by the
+/// signal handler to forward SIGTERM/SIGINT. Zero means no child is active.
+static CHILD_PID: AtomicU32 = AtomicU32::new(0);
+
+/// Forwards the received signal (SIGTERM/SIGINT) to the spawned child process,
+/// ensuring it gets a chance to shut down gracefully instead of becoming orphaned.
+/// Only calls async-signal-safe functions (`AtomicU32::load` + `libc::kill`).
+#[cfg(unix)]
+unsafe extern "C" fn forward_signal(sig: libc::c_int) {
+    let pid = CHILD_PID.load(std::sync::atomic::Ordering::SeqCst);
+    if pid != 0 {
+        libc::kill(pid as libc::pid_t, sig);
+    }
+}
 
 /// Prevents core dumps from being generated on process crash (Unix only).
 ///
@@ -92,10 +109,28 @@ fn run_with_secrets_impl(
         cmd.env(key, value.as_str());
     }
 
-    // Spawn and wait
-    let status = cmd
-        .status()
+    // Register signal forwarding so SIGTERM/SIGINT reach the child
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGTERM, forward_signal as libc::sighandler_t);
+        libc::signal(libc::SIGINT, forward_signal as libc::sighandler_t);
+    }
+
+    // Spawn child process
+    let mut child = cmd
+        .spawn()
         .map_err(|e| format!("failed to execute '{}': {}", program, e))?;
+
+    // Store PID so the signal handler can forward signals to the child
+    CHILD_PID.store(child.id(), std::sync::atomic::Ordering::SeqCst);
+
+    // Wait for child to exit
+    let status = child
+        .wait()
+        .map_err(|e| format!("failed to wait for '{}': {}", program, e))?;
+
+    // Clear PID — child has exited, no more forwarding needed
+    CHILD_PID.store(0, std::sync::atomic::Ordering::SeqCst);
 
     Ok(status.code().unwrap_or(-1))
 }
