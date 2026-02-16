@@ -9,12 +9,8 @@
 //! by the TypeScript CLI. This runner is purely for secure
 //! process spawning with env var injection.
 
-use std::{
-    collections::HashMap,
-    ffi::CStr,
-    os::raw::c_char,
-    process::Command,
-};
+use std::{collections::HashMap, ffi::CStr, os::raw::c_char, process::Command};
+use zeroize::Zeroizing;
 
 /// Run a command with secrets injected as environment variables.
 ///
@@ -28,7 +24,10 @@ use std::{
 /// # Safety
 /// Both pointers must be valid null-terminated C strings or null.
 #[unsafe(no_mangle)]
-pub extern "C" fn run_with_secrets(command_json: *const c_char, secrets_json: *const c_char) -> i32 {
+pub extern "C" fn run_with_secrets(
+    command_json: *const c_char,
+    secrets_json: *const c_char,
+) -> i32 {
     match run_with_secrets_impl(command_json, secrets_json) {
         Ok(code) => code,
         Err(e) => {
@@ -38,20 +37,27 @@ pub extern "C" fn run_with_secrets(command_json: *const c_char, secrets_json: *c
     }
 }
 
-fn run_with_secrets_impl(command_json: *const c_char, secrets_json: *const c_char) -> Result<i32, String> {
+fn run_with_secrets_impl(
+    command_json: *const c_char,
+    secrets_json: *const c_char,
+) -> Result<i32, String> {
     // Parse command
     let command: Vec<String> = parse_json_ptr(command_json, "command")?;
-    
+
     if command.is_empty() {
         return Err("command array is empty".into());
     }
 
-    // Parse secrets (empty object if null)
-    let secrets: HashMap<String, String> = if secrets_json.is_null() {
+    let raw_secrets: HashMap<String, String> = if secrets_json.is_null() {
         HashMap::new()
     } else {
         parse_json_ptr(secrets_json, "secrets")?
     };
+
+    let secrets: HashMap<String, Zeroizing<String>> = raw_secrets
+        .into_iter()
+        .map(|(k, v)| (k, Zeroizing::new(v)))
+        .collect();
 
     // Build command
     let program = &command[0];
@@ -62,7 +68,7 @@ fn run_with_secrets_impl(command_json: *const c_char, secrets_json: *const c_cha
 
     // Inject secrets as environment variables
     for (key, value) in &secrets {
-        cmd.env(key, value);
+        cmd.env(key, value.as_str());
     }
 
     // Spawn and wait
@@ -73,13 +79,18 @@ fn run_with_secrets_impl(command_json: *const c_char, secrets_json: *const c_cha
     Ok(status.code().unwrap_or(-1))
 }
 
-fn parse_json_ptr<T: serde::de::DeserializeOwned>(ptr: *const c_char, name: &str) -> Result<T, String> {
+fn parse_json_ptr<T: serde::de::DeserializeOwned>(
+    ptr: *const c_char,
+    name: &str,
+) -> Result<T, String> {
     if ptr.is_null() {
         return Err(format!("{name} is null"));
     }
 
     let c_str = unsafe { CStr::from_ptr(ptr) };
-    let str = c_str.to_str().map_err(|_| format!("{name} is not valid UTF-8"))?;
-    
+    let str = c_str
+        .to_str()
+        .map_err(|_| format!("{name} is not valid UTF-8"))?;
+
     serde_json::from_str(str).map_err(|e| format!("failed to parse {name}: {e}"))
 }
