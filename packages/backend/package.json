@@ -38,8 +38,8 @@
     "better-auth": "catalog:",
     "convex": "catalog:",
     "convex-helpers": "catalog:",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "react-email": "^5.1.0",
     "resend": "^6.6.0"
   }

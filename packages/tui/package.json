@@ -23,6 +23,6 @@
     "@repo/auth": "*",
     "convex": "catalog:",
     "open": "catalog:",
-    "react": "^19.2.3"
+    "react": "catalog:"
   }
 }
