@@ -12,6 +12,24 @@
 use std::{collections::HashMap, ffi::CStr, os::raw::c_char, process::Command};
 use zeroize::Zeroizing;
 
+/// Prevents core dumps from being generated on process crash (Unix only).
+///
+/// Sets both the soft and hard `RLIMIT_CORE` limits to zero, ensuring that
+/// no crash dump file is written to disk — which could otherwise expose
+/// in-memory secrets. The child process inherits this limit, so it is
+/// also prevented from dumping core. Best-effort: failures are silently
+/// ignored since this is a defense-in-depth measure.
+#[cfg(unix)]
+fn disable_core_dumps() {
+    unsafe {
+        let rlim = libc::rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
+        libc::setrlimit(libc::RLIMIT_CORE, &rlim);
+    }
+}
+
 /// Run a command with secrets injected as environment variables.
 ///
 /// # Arguments
@@ -41,6 +59,9 @@ fn run_with_secrets_impl(
     command_json: *const c_char,
     secrets_json: *const c_char,
 ) -> Result<i32, String> {
+    #[cfg(unix)]
+    disable_core_dumps();
+
     // Parse command
     let command: Vec<String> = parse_json_ptr(command_json, "command")?;
 
