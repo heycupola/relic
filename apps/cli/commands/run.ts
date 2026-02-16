@@ -248,6 +248,9 @@ export default async function run(command: string[], options: RunOptions) {
     console.error(pc.red("Error: --scope must be: client, server, or shared"));
     process.exit(1);
   }
+  if (options.scope) {
+    options.scope = options.scope.toLowerCase() as SecretScope;
+  }
 
   const spinner = ora("Checking authentication...").start();
 

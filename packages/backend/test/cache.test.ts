@@ -256,21 +256,21 @@ describe("Cache", () => {
         name: "folder_" + randomString(),
       });
 
-      const envResult = await owner.asUser.query(api.environment.getCacheValidation, {
+      const envResult = await owner.asUser.query(api.environment.getSecretsCacheValidation, {
         projectId,
         environmentId,
       });
       expect(envResult).not.toBeNull();
       expect(envResult!.updatedAt).toBeGreaterThan(0);
 
-      const folderResult = await owner.asUser.query(api.environment.getCacheValidation, {
+      const folderResult = await owner.asUser.query(api.environment.getSecretsCacheValidation, {
         projectId,
         folderId,
       });
       expect(folderResult).not.toBeNull();
       expect(folderResult!.updatedAt).toBeGreaterThan(0);
 
-      const emptyResult = await owner.asUser.query(api.environment.getCacheValidation, {
+      const emptyResult = await owner.asUser.query(api.environment.getSecretsCacheValidation, {
         projectId,
       });
       expect(emptyResult).toBeNull();
@@ -298,7 +298,7 @@ describe("Cache", () => {
 
       await expectConvexError(
         () =>
-          owner.asUser.query(api.environment.getCacheValidation, {
+          owner.asUser.query(api.environment.getSecretsCacheValidation, {
             projectId: project2Id,
             environmentId,
           }),
@@ -334,7 +334,7 @@ describe("Cache", () => {
 
       await expectConvexError(
         () =>
-          owner.asUser.query(api.environment.getCacheValidation, {
+          owner.asUser.query(api.environment.getSecretsCacheValidation, {
             projectId: project2Id,
             folderId,
           }),
