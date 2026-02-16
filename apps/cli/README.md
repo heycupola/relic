@@ -110,6 +110,30 @@ jobs:
             RELIC_PASSWORD: ${RELIC_PASSWORD}
 ```
 
+## Caching
+
+The CLI uses a local SQLite cache to avoid redundant API calls on repeated runs. The cache is stored at `~/.config/relic/relic.db`.
+
+### What is cached
+
+- **Environment/folder ID mappings** — resolves environment and folder names to their IDs locally.
+- **Encrypted secrets** — stores the encrypted secret payloads per environment/folder.
+- **Encrypted project key** — stores the project's encrypted key for decryption.
+- **User keys** — stores the user's encrypted private key and salt (separate DB).
+
+### How cache invalidation works
+
+1. On each `relic run`, the CLI checks if a cached environment ID exists for the given environment name.
+2. If found, it calls `getSecretsCacheValidation` on the backend, which returns the latest `updatedAt` timestamp for the environment/folder.
+3. If the local `lastCachedAt` is older than the backend's `updatedAt`, the cache is stale — the CLI fetches fresh secrets from the API and updates the cache.
+4. If the cache is valid, secrets are served locally with no API call.
+
+Key rotation (e.g., after revoking a collaborator's share) bumps `updatedAt` on all environments and folders via `_invalidateProjectCache`, which forces the CLI to re-fetch on the next run.
+
+### Scope filtering
+
+The cache always stores the **full** (unscoped) set of secrets. When `--scope` is provided, filtering happens locally against the cached data. This means a scoped run can still be served from cache without an extra API call.
+
 ## Development
 
 ```bash
