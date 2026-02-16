@@ -114,6 +114,7 @@ async function resolveSecrets(
         projectId,
         cachedEnvironmentId,
         cachedFolderId ?? undefined,
+        options.scope,
       );
       const cachedProjectKey = loadCachedEncryptedProjectKey(db, projectId);
 
@@ -128,7 +129,6 @@ async function resolveSecrets(
     projectId,
     environmentName: options.environment,
     folderName: options.folder,
-    scope: options.scope,
   });
 
   if (result.count === 0) {
@@ -152,7 +152,11 @@ async function resolveSecrets(
     Date.now(),
   );
 
-  return { secrets: result.secrets, encryptedProjectKey: result.encryptedProjectKey };
+  const secrets = options.scope
+    ? result.secrets.filter((s) => s.scope === options.scope)
+    : result.secrets;
+
+  return { secrets, encryptedProjectKey: result.encryptedProjectKey };
 }
 
 async function resolveProjectKey(

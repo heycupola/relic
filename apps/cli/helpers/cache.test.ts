@@ -83,7 +83,7 @@ describe("cache", () => {
     const updatedAt = Date.now();
     cacheSecrets(db, "project1_id", "env1_id", "folder1_id", SECRETS, updatedAt);
 
-    const secrets = getCachedSecrets(db, "project1_id", "env1_id", "folder1_id");
+    const secrets = getCachedSecrets(db, "project1_id", "env1_id", "folder1_id", undefined);
 
     expect(secrets).not.toBeNull();
     expect(secrets![0]).toBeDefined();
@@ -116,7 +116,7 @@ describe("cache", () => {
     const updatedAt = Date.now();
     cacheSecrets(db, "project1_id", "env1_id", undefined, SECRETS, updatedAt);
 
-    const secrets = getCachedSecrets(db, "project1_id", "env1_id", undefined);
+    const secrets = getCachedSecrets(db, "project1_id", "env1_id", undefined, undefined);
 
     expect(secrets).not.toBeNull();
     expect(secrets!.length).toBe(2);
@@ -124,7 +124,13 @@ describe("cache", () => {
     expect(secrets!.at(1)!.key).toBe("ROOT_KEY_2");
 
     // NOTE: should not appear when querying with a folder
-    const folderSecrets = getCachedSecrets(db, "project1_id", "env1_id", "some_folder_id");
+    const folderSecrets = getCachedSecrets(
+      db,
+      "project1_id",
+      "env1_id",
+      "some_folder_id",
+      undefined,
+    );
     expect(folderSecrets).toBeNull();
 
     const lastCachedAt = loadSecretsLastCachedTime(db, "project1_id", "env1_id", undefined);

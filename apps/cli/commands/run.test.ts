@@ -339,4 +339,66 @@ describe("prepareSecrets", () => {
     expect(api.getSecretsCacheValidation).toHaveBeenCalled();
     expect(result.count).toBe(2);
   });
+
+  test("should filter cached secrets by scope", async () => {
+    cacheUserKeys(userKeyDb, MOCK_USER_KEYS);
+    seedSecretCache(db);
+    mockDecryptSecrets.mockImplementation(() =>
+      Promise.resolve([{ key: "DB_HOST", value: "localhost:5432" }]),
+    );
+
+    const api = createMockApi({
+      getSecretsCacheValidation: mock(() => Promise.resolve({ updatedAt: 1 })),
+    });
+
+    const options: RunOptions = { environment: "development", scope: "server" };
+    const result = await prepareSecrets(PROJECT_ID, options, db, userKeyDb, api);
+
+    expect(api.exportSecrets).not.toHaveBeenCalled();
+    expect(result.count).toBe(1);
+    expect(result.secrets).toEqual({ DB_HOST: "localhost:5432" });
+  });
+
+  test("should filter API response by scope and cache all secrets", async () => {
+    mockDecryptSecrets.mockImplementation(() =>
+      Promise.resolve([{ key: "DB_HOST", value: "localhost:5432" }]),
+    );
+
+    const api = createMockApi({
+      getSecretsCacheValidation: mock(() => Promise.resolve({ updatedAt: 1 })),
+    });
+
+    const options: RunOptions = { environment: "development", scope: "server" };
+    const result = await prepareSecrets(PROJECT_ID, options, db, userKeyDb, api);
+
+    // Should only return the server-scoped secret
+    expect(api.exportSecrets).toHaveBeenCalledTimes(1);
+    expect(result.count).toBe(1);
+    expect(result.secrets).toEqual({ DB_HOST: "localhost:5432" });
+
+    // But all secrets should be cached (not just server-scoped)
+    const allCached = getCachedSecrets(db, PROJECT_ID, "env_123", undefined, undefined);
+    expect(allCached).not.toBeNull();
+    expect(allCached!.length).toBe(2);
+  });
+
+  test("should serve scoped request from cache after unscoped run", async () => {
+    const api = createMockApi({
+      getSecretsCacheValidation: mock(() => Promise.resolve({ updatedAt: 1 })),
+    });
+
+    // First run: unscoped, populates cache with all secrets
+    await prepareSecrets(PROJECT_ID, DEFAULT_OPTIONS, db, userKeyDb, api);
+    expect(api.exportSecrets).toHaveBeenCalledTimes(1);
+
+    // Second run: scoped, should use cache without hitting API
+    mockDecryptSecrets.mockImplementation(() =>
+      Promise.resolve([{ key: "API_KEY", value: "my-api-key" }]),
+    );
+    const options: RunOptions = { environment: "development", scope: "shared" };
+    const result = await prepareSecrets(PROJECT_ID, options, db, userKeyDb, api);
+    expect(api.exportSecrets).toHaveBeenCalledTimes(1);
+    expect(result.count).toBe(1);
+    expect(result.secrets).toEqual({ API_KEY: "my-api-key" });
+  });
 });

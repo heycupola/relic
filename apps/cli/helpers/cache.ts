@@ -175,19 +175,25 @@ export function getCachedSecrets(
   projectId: string,
   environmentId: string,
   folderId: string | undefined,
+  scope: string | undefined,
 ): SecretData[] | null {
   const resolvedFolderId = folderId ?? null;
+  const scopeFilter = scope ? " AND scope = ?" : "";
+
   const query = resolvedFolderId
     ? db.prepare(
-        "SELECT id, key, encrypted_value AS encryptedValue, scope, value_type AS valueType FROM secrets WHERE project_id = ? AND environment_id = ? AND folder_id = ?",
+        `SELECT id, key, encrypted_value AS encryptedValue, scope, value_type AS valueType FROM secrets WHERE project_id = ? AND environment_id = ? AND folder_id = ?${scopeFilter}`,
       )
     : db.prepare(
-        "SELECT id, key, encrypted_value AS encryptedValue, scope, value_type AS valueType FROM secrets WHERE project_id = ? AND environment_id = ? AND folder_id IS NULL",
+        `SELECT id, key, encrypted_value AS encryptedValue, scope, value_type AS valueType FROM secrets WHERE project_id = ? AND environment_id = ? AND folder_id IS NULL${scopeFilter}`,
       );
 
-  const rows = resolvedFolderId
-    ? query.all(projectId, environmentId, resolvedFolderId)
-    : query.all(projectId, environmentId);
+  const params: string[] = resolvedFolderId
+    ? [projectId, environmentId, resolvedFolderId]
+    : [projectId, environmentId];
+  if (scope) params.push(scope);
+
+  const rows = query.all(...params);
 
   if (rows.length === 0) return null;
   return rows as SecretData[];
