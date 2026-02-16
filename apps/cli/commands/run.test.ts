@@ -11,6 +11,9 @@ import {
   cacheFolders,
   cacheProject,
   cacheSecrets,
+  getCachedEnvironmentId,
+  getCachedFolderId,
+  getCachedSecrets,
   initializeSchema,
 } from "helpers/cache";
 import type { FullUser, ProtectedApi, SecretData } from "../lib/api";
@@ -283,5 +286,57 @@ describe("prepareSecrets", () => {
     expect(prepareSecrets(PROJECT_ID, DEFAULT_OPTIONS, db, userKeyDb, api)).rejects.toThrow(
       "No encryption keys found",
     );
+  });
+
+  test("should cache environment ID after fetching from API", async () => {
+    const api = createMockApi();
+    await prepareSecrets(PROJECT_ID, DEFAULT_OPTIONS, db, userKeyDb, api);
+
+    expect(api.exportSecrets).toHaveBeenCalledTimes(1);
+
+    const cachedEnvId = getCachedEnvironmentId(db, PROJECT_ID, "development");
+    expect(cachedEnvId).toBe("env_123");
+  });
+
+  test("should cache folder ID after fetching from API with folder option", async () => {
+    const api = createMockApi({
+      exportSecrets: mock(() =>
+        Promise.resolve({
+          ...MOCK_EXPORT_RESULT,
+          folderId: "folder_123",
+        }),
+      ),
+    });
+
+    const options: RunOptions = {
+      environment: "development",
+      folder: "backend",
+    };
+
+    await prepareSecrets(PROJECT_ID, options, db, userKeyDb, api);
+
+    expect(api.exportSecrets).toHaveBeenCalledTimes(1);
+
+    const cachedEnvId = getCachedEnvironmentId(db, PROJECT_ID, "development");
+    expect(cachedEnvId).toBe("env_123");
+
+    const cachedFoldId = getCachedFolderId(db, PROJECT_ID, "env_123", "backend");
+    expect(cachedFoldId).toBe("folder_123");
+  });
+
+  test("should use cache on second run after API populates it", async () => {
+    const api = createMockApi({
+      getSecretsCacheValidation: mock(() => Promise.resolve({ updatedAt: 1 })),
+    });
+
+    // First run: hits API, should populate cache
+    await prepareSecrets(PROJECT_ID, DEFAULT_OPTIONS, db, userKeyDb, api);
+    expect(api.exportSecrets).toHaveBeenCalledTimes(1);
+
+    // Second run: should use cache, not hit API again
+    const result = await prepareSecrets(PROJECT_ID, DEFAULT_OPTIONS, db, userKeyDb, api);
+    expect(api.exportSecrets).toHaveBeenCalledTimes(1);
+    expect(api.getSecretsCacheValidation).toHaveBeenCalled();
+    expect(result.count).toBe(2);
   });
 });

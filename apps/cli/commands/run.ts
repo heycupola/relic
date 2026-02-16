@@ -10,6 +10,8 @@ import {
   validateSession,
 } from "@repo/auth";
 import {
+  cacheEnvironments,
+  cacheFolders,
   cacheProject,
   cacheSecrets,
   getCacheDb,
@@ -135,6 +137,12 @@ async function resolveSecrets(
 
   // NOTE: Cache the exported secrets and project key for future runs
   cacheProject(db, projectId, result.encryptedProjectKey);
+  cacheEnvironments(db, projectId, [{ id: result.environmentId, name: options.environment }]);
+  if (result.folderId && options.folder) {
+    cacheFolders(db, projectId, [
+      { id: result.folderId, environmentId: result.environmentId, name: options.folder },
+    ]);
+  }
   cacheSecrets(
     db,
     projectId,
