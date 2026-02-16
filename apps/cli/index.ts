@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import type { SecretScope } from "lib/types";
 import exportSession from "./commands/export-session";
 import init from "./commands/init";
 import login from "./commands/login";
@@ -22,7 +23,7 @@ program.command("export-session").description("Export session for CI/CD").action
 program
   .command("run")
   .description("Run a command with secrets injected as environment variables")
-  .requiredOption("-e, --env <name>", "Environment name (required)")
+  .requiredOption("-e, --environment <name>", "Environment name (required)")
   .option("-f, --folder <name>", "Folder name (optional)")
   .option("-s, --scope <scope>", "Scope filter: client, server, or shared (optional)")
   .argument("<command...>", "Command to run")

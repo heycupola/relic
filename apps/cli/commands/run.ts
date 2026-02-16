@@ -79,49 +79,46 @@ async function resolveSecrets(
 ): Promise<{ secrets: SecretData[]; encryptedProjectKey: string }> {
   // NOTE: Check local cache for environment/folder IDs and secrets
   const cachedEnvironmentId = getCachedEnvironmentId(db, projectId, options.environment);
-  const cachedFolderId = options.folder
-    ? getCachedFolderId(db, projectId, options.environment, options.folder)
-    : null;
 
-  const isCached = options.folder ? !!cachedFolderId : !!cachedEnvironmentId;
+  if (cachedEnvironmentId) {
+    const cachedFolderId = options.folder
+      ? getCachedFolderId(db, projectId, cachedEnvironmentId, options.folder)
+      : null;
 
-  const lastCachedAt =
-    isCached && cachedEnvironmentId
+    const isCached = options.folder ? !!cachedFolderId : true;
+
+    const lastCachedAt = isCached
       ? loadSecretsLastCachedTime(db, projectId, cachedEnvironmentId, cachedFolderId ?? undefined)
       : null;
 
-  let lastUpdatedAt: number | null = null;
+    let lastUpdatedAt: number | null = null;
 
-  if (lastCachedAt !== null) {
-    const secretsCacheValidation = await api.getSecretsCacheValidation(
-      projectId,
-      cachedEnvironmentId ?? undefined,
-      cachedFolderId ?? undefined,
-    );
-    if (secretsCacheValidation) {
-      lastUpdatedAt = secretsCacheValidation.updatedAt;
+    if (lastCachedAt !== null) {
+      const secretsCacheValidation = await api.getSecretsCacheValidation(
+        projectId,
+        cachedEnvironmentId,
+        cachedFolderId ?? undefined,
+      );
+      if (secretsCacheValidation) {
+        lastUpdatedAt = secretsCacheValidation.updatedAt;
+      }
     }
-  }
 
-  const cacheIsValid =
-    isCached &&
-    lastCachedAt &&
-    lastUpdatedAt &&
-    lastCachedAt >= lastUpdatedAt &&
-    cachedEnvironmentId;
+    const cacheIsValid = isCached && lastCachedAt && lastUpdatedAt && lastCachedAt >= lastUpdatedAt;
 
-  // NOTE: Try loading from cache first
-  if (cacheIsValid && cachedEnvironmentId) {
-    const cachedSecrets = getCachedSecrets(
-      db,
-      projectId,
-      cachedEnvironmentId,
-      cachedFolderId ?? undefined,
-    );
-    const cachedProjectKey = loadCachedEncryptedProjectKey(db, projectId);
+    // NOTE: Try loading from cache first
+    if (cacheIsValid) {
+      const cachedSecrets = getCachedSecrets(
+        db,
+        projectId,
+        cachedEnvironmentId,
+        cachedFolderId ?? undefined,
+      );
+      const cachedProjectKey = loadCachedEncryptedProjectKey(db, projectId);
 
-    if (cachedSecrets && cachedProjectKey) {
-      return { secrets: cachedSecrets, encryptedProjectKey: cachedProjectKey };
+      if (cachedSecrets && cachedProjectKey) {
+        return { secrets: cachedSecrets, encryptedProjectKey: cachedProjectKey };
+      }
     }
   }
 
