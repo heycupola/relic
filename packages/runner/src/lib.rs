@@ -1,26 +1,19 @@
-//! Relic Runner - Secret injection and process spawning
+//! Relic Runner - Secure secret injection and process spawning.
 //!
-//! This library provides a single FFI function that:
-//! 1. Receives a command and secrets as JSON
-//! 2. Injects secrets as environment variables
-//! 3. Spawns the process and returns its exit code
-//!
-//! All network operations (auth, fetching secrets) are handled
-//! by the TypeScript CLI. This runner is purely for secure
-//! process spawning with env var injection.
+//! Provides a single FFI entry point (`run_with_secrets`) that receives a
+//! command and secrets as JSON, injects them as environment variables into
+//! a child process, and returns its exit code. All network operations
+//! (auth, fetching secrets) are handled by the TypeScript CLI.
 
 use std::{
     collections::HashMap, ffi::CStr, os::raw::c_char, process::Command, sync::atomic::AtomicU32,
 };
 use zeroize::Zeroizing;
 
-/// Holds the PID of the currently running child process. Read by the
-/// signal handler to forward SIGTERM/SIGINT. Zero means no child is active.
+/// PID of the active child process; read by `forward_signal` to relay signals.
 static CHILD_PID: AtomicU32 = AtomicU32::new(0);
 
-/// Forwards the received signal (SIGTERM/SIGINT) to the spawned child process,
-/// ensuring it gets a chance to shut down gracefully instead of becoming orphaned.
-/// Only calls async-signal-safe functions (`AtomicU32::load` + `libc::kill`).
+/// Relays the incoming signal to the child so it can shut down gracefully.
 #[cfg(unix)]
 unsafe extern "C" fn forward_signal(sig: libc::c_int) {
     let pid = CHILD_PID.load(std::sync::atomic::Ordering::SeqCst);
@@ -29,13 +22,7 @@ unsafe extern "C" fn forward_signal(sig: libc::c_int) {
     }
 }
 
-/// Prevents core dumps from being generated on process crash (Unix only).
-///
-/// Sets both the soft and hard `RLIMIT_CORE` limits to zero, ensuring that
-/// no crash dump file is written to disk — which could otherwise expose
-/// in-memory secrets. The child process inherits this limit, so it is
-/// also prevented from dumping core. Best-effort: failures are silently
-/// ignored since this is a defense-in-depth measure.
+/// Sets `RLIMIT_CORE` to zero to prevent core dumps that could leak secrets.
 #[cfg(unix)]
 fn disable_core_dumps() {
     unsafe {
@@ -46,6 +33,12 @@ fn disable_core_dumps() {
         libc::setrlimit(libc::RLIMIT_CORE, &rlim);
     }
 }
+
+/// Minimal set of env vars re-inherited after `env_clear()` so the child can function.
+#[cfg(unix)]
+const INHERITED_ENV_KEYS: &[&str] = &[
+    "PATH", "HOME", "USER", "SHELL", "TERM", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR", "TZ",
+];
 
 /// Run a command with secrets injected as environment variables.
 ///
@@ -79,7 +72,6 @@ fn run_with_secrets_impl(
     #[cfg(unix)]
     disable_core_dumps();
 
-    // Parse command
     let command: Vec<String> = parse_json_ptr(command_json, "command")?;
 
     if command.is_empty() {
@@ -92,44 +84,49 @@ fn run_with_secrets_impl(
         parse_json_ptr(secrets_json, "secrets")?
     };
 
+    // Wrap values in Zeroizing so they are wiped from memory on drop
     let secrets: HashMap<String, Zeroizing<String>> = raw_secrets
         .into_iter()
         .map(|(k, v)| (k, Zeroizing::new(v)))
         .collect();
 
-    // Build command
     let program = &command[0];
     let args = &command[1..];
 
     let mut cmd = Command::new(program);
     cmd.args(args);
 
-    // Inject secrets as environment variables
+    // Strip inherited env, then re-add only essential vars and secrets
+    cmd.env_clear();
+
+    #[cfg(unix)]
+    for key in INHERITED_ENV_KEYS {
+        if let Ok(val) = std::env::var(key) {
+            cmd.env(key, val);
+        }
+    }
+
     for (key, value) in &secrets {
         cmd.env(key, value.as_str());
     }
 
-    // Register signal forwarding so SIGTERM/SIGINT reach the child
+    // Install signal forwarding before spawning
     #[cfg(unix)]
     unsafe {
         libc::signal(libc::SIGTERM, forward_signal as libc::sighandler_t);
         libc::signal(libc::SIGINT, forward_signal as libc::sighandler_t);
     }
 
-    // Spawn child process
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("failed to execute '{}': {}", program, e))?;
 
-    // Store PID so the signal handler can forward signals to the child
     CHILD_PID.store(child.id(), std::sync::atomic::Ordering::SeqCst);
 
-    // Wait for child to exit
     let status = child
         .wait()
         .map_err(|e| format!("failed to wait for '{}': {}", program, e))?;
 
-    // Clear PID — child has exited, no more forwarding needed
     CHILD_PID.store(0, std::sync::atomic::Ordering::SeqCst);
 
     Ok(status.code().unwrap_or(-1))
