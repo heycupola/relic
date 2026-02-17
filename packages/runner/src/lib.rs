@@ -84,6 +84,19 @@ fn run_with_secrets_impl(
         parse_json_ptr(secrets_json, "secrets")?
     };
 
+    // Validate secret keys
+    for key in raw_secrets.keys() {
+        if key.is_empty() {
+            return Err("secret key must not be empty".into());
+        }
+        if key.contains('\0') {
+            return Err(format!("secret key '{}' contains null byte", key));
+        }
+        if key.contains('=') {
+            return Err(format!("secret key '{}' contains '='", key));
+        }
+    }
+
     // Wrap values in Zeroizing so they are wiped from memory on drop
     let secrets: HashMap<String, Zeroizing<String>> = raw_secrets
         .into_iter()
