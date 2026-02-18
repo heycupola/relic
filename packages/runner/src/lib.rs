@@ -160,3 +160,97 @@ fn parse_json_ptr<T: serde::de::DeserializeOwned>(
 
     serde_json::from_str(str).map_err(|e| format!("failed to parse {name}: {e}"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::CString;
+
+    #[test]
+    fn parses_valid_command() {
+        let json = CString::new(r#"["node", "app.js"]"#).unwrap();
+        let result: Vec<String> = parse_json_ptr(json.as_ptr(), "command").unwrap();
+        assert_eq!(result, vec!["node", "app.js"]);
+    }
+
+    #[test]
+    fn rejects_empty_command() {
+        let cmd = CString::new(r#"[]"#).unwrap();
+        let code = run_with_secrets(cmd.as_ptr(), std::ptr::null());
+        assert_eq!(code, -1);
+    }
+
+    #[test]
+    fn reject_null_pointer() {
+        let result: Result<Vec<String>, _> = parse_json_ptr(std::ptr::null(), "command");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn run_with_null_secrets() {
+        let cmd = CString::new(r#"["echo", "hello"]"#).unwrap();
+        let code = run_with_secrets(cmd.as_ptr(), std::ptr::null());
+        assert_eq!(code, 0);
+    }
+
+    #[test]
+    fn rejects_invalid_json() {
+        let json = CString::new("not json").unwrap();
+        let result: Result<Vec<String>, _> = parse_json_ptr(json.as_ptr(), "command");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejects_empty_key() {
+        let cmd = CString::new(r#"["echo", "hi"]"#).unwrap();
+        let secrets = CString::new(r#"{"": "value"}"#).unwrap();
+        let code = run_with_secrets(cmd.as_ptr(), secrets.as_ptr());
+        assert_eq!(code, -1);
+    }
+
+    #[test]
+    fn rejects_key_with_equals() {
+        let cmd = CString::new(r#"["echo", "hi"]"#).unwrap();
+        let secrets = CString::new(r#"{"FOO=BAR": "value"}"#).unwrap();
+        let code = run_with_secrets(cmd.as_ptr(), secrets.as_ptr());
+        assert_eq!(code, -1);
+    }
+
+    #[test]
+    fn rejects_key_with_null_byte() {
+        let cmd = CString::new(r#"["echo", "hi"]"#).unwrap();
+        let secrets = CString::new(r#"{"FOO\u0000BAR": "value"}"#).unwrap();
+        let code = run_with_secrets(cmd.as_ptr(), secrets.as_ptr());
+        assert_eq!(code, -1);
+    }
+
+    #[test]
+    fn runs_with_valid_secrets() {
+        let cmd = CString::new(r#"["echo", "hello"]"#).unwrap();
+        let secrets = CString::new(r#"{"MY_SECRET": "hunter2"}"#).unwrap();
+        let code = run_with_secrets(cmd.as_ptr(), secrets.as_ptr());
+        assert_eq!(code, 0);
+    }
+
+    #[test]
+    fn rejects_nonexistent_program() {
+        let cmd = CString::new(r#"["this_program_does_not_exist_xyz"]"#).unwrap();
+        let code = run_with_secrets(cmd.as_ptr(), std::ptr::null());
+        assert_eq!(code, -1);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn core_dumps_disabled() {
+        disable_core_dumps();
+        unsafe {
+            let mut rlim = libc::rlimit {
+                rlim_cur: 1,
+                rlim_max: 1,
+            };
+            libc::getrlimit(libc::RLIMIT_CORE, &mut rlim);
+            assert_eq!(rlim.rlim_cur, 0);
+            assert_eq!(rlim.rlim_max, 0);
+        }
+    }
+}

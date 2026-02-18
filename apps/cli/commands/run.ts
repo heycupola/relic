@@ -307,6 +307,8 @@ export default async function run(command: string[], options: RunOptions) {
     const secretsPtr = ptr(secretsBuffer);
 
     const exitCode = runner.runWithSecrets(commandPtr, secretsPtr);
+    commandBuffer.fill(0);
+    secretsBuffer.fill(0);
     process.exit(exitCode);
   } catch (err) {
     spinner.fail(pc.red(err instanceof Error ? err.message : String(err)));
