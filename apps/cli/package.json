@@ -18,7 +18,7 @@
   "private": true,
   "scripts": {
     "build:runner": "cd ../../packages/runner && cargo build --release",
-    "dev": "bun run build:runner && bun run index.ts",
+    "dev:cli": "bun run build:runner && bun run index.ts",
     "logs": "tail -f ~/.relic/logs/",
     "lint": "biome check --write .",
     "format": "biome format --write .",
@@ -49,6 +49,7 @@
     "@repo/auth": "*",
     "@repo/backend": "*",
     "@repo/crypto": "*",
+    "@repo/tui": "*",
     "commander": "^13.1.0",
     "convex": "catalog:",
     "ora": "^8.2.0",

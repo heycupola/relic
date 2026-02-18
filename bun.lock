@@ -24,6 +24,7 @@
         "@repo/auth": "*",
         "@repo/backend": "*",
         "@repo/crypto": "*",
+        "@repo/tui": "*",
         "commander": "^13.1.0",
         "convex": "catalog:",
         "ora": "^8.2.0",

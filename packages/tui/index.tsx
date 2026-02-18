@@ -198,4 +198,6 @@ function App() {
 }
 
 const renderer = await createCliRenderer({ exitOnCtrlC: true });
+// Wait for terminal restore to finish before exiting
+renderer.on("destroy", () => setTimeout(() => process.exit(0), 50));
 createRoot(renderer).render(<App />);
