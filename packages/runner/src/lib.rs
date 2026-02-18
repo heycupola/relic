@@ -109,13 +109,17 @@ fn run_with_secrets_impl(
     let mut cmd = Command::new(program);
     cmd.args(args);
 
-    // Strip inherited env, then re-add only essential vars and secrets
-    cmd.env_clear();
-
     #[cfg(unix)]
-    for key in INHERITED_ENV_KEYS {
-        if let Ok(val) = std::env::var(key) {
-            cmd.env(key, val);
+    {
+        // NOTE: On Windows, env_clear is skipped so the child inherits the full
+        // parent environment. A Windows-specific allowlist should be added when
+        // Windows support is implemented.
+        cmd.env_clear();
+
+        for key in INHERITED_ENV_KEYS {
+            if let Ok(val) = std::env::var(key) {
+                cmd.env(key, val);
+            }
         }
     }
 
