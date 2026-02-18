@@ -17,7 +17,7 @@
       },
     },
     "apps/cli": {
-      "name": "relic",
+      "name": "@repo/cli",
       "version": "0.1.0",
       "dependencies": {
         "@clack/prompts": "^0.11.0",
@@ -608,6 +608,8 @@
 
     "@repo/backend": ["@repo/backend@workspace:packages/backend"],
 
+    "@repo/cli": ["@repo/cli@workspace:apps/cli"],
+
     "@repo/crypto": ["@repo/crypto@workspace:packages/crypto"],
 
     "@repo/runner": ["@repo/runner@workspace:packages/runner"],
@@ -1183,8 +1185,6 @@
     "readdirp": ["readdirp@4.1.2", "", {}, "sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg=="],
 
     "reflect-metadata": ["reflect-metadata@0.2.2", "", {}, "sha512-urBwgfrvVP/eAyXx4hluJivBKzuEbSQs9rKWCrCkbSxNv8mxPcUZKeuoF3Uy4mJl3Lwprp6yy5/39VWigZ4K6Q=="],
-
-    "relic": ["relic@workspace:apps/cli"],
 
     "remeda": ["remeda@2.32.0", "", { "dependencies": { "type-fest": "^4.41.0" } }, "sha512-BZx9DsT4FAgXDTOdgJIc5eY6ECIXMwtlSPQoPglF20ycSWigttDDe88AozEsPPT4OWk5NujroGSBC1phw5uU+w=="],
 
