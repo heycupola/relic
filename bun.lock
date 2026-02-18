@@ -146,6 +146,10 @@
         "typescript": "^5",
       },
     },
+    "packages/runner": {
+      "name": "@repo/runner",
+      "version": "0.1.0",
+    },
     "packages/tui": {
       "name": "@repo/tui",
       "dependencies": {
@@ -605,6 +609,8 @@
     "@repo/backend": ["@repo/backend@workspace:packages/backend"],
 
     "@repo/crypto": ["@repo/crypto@workspace:packages/crypto"],
+
+    "@repo/runner": ["@repo/runner@workspace:packages/runner"],
 
     "@repo/tui": ["@repo/tui@workspace:packages/tui"],
 
