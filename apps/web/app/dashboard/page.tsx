@@ -14,6 +14,7 @@ import { Footer } from "@/components/footer";
 import { Header } from "@/components/header";
 import { usePaginatedActionLogs } from "@/hooks/usePaginatedActionLogs";
 import { authClient } from "@/lib/auth";
+import { trackWebEvent } from "@/lib/posthog";
 
 function UpgradeHandler({
   userData,
@@ -30,6 +31,7 @@ function UpgradeHandler({
 
     if (action === "upgrade" && userData && !userData.hasPro) {
       const handleUpgrade = async () => {
+        trackWebEvent("web_upgrade_started");
         try {
           const result = await getProPlanAction({});
           if (result.checkoutLink) {
@@ -59,6 +61,9 @@ function UpgradeHandler({
 }
 
 export default function DashboardPage() {
+  useEffect(() => {
+    trackWebEvent("web_page_viewed", { page: "dashboard" });
+  }, []);
   const router = useRouter();
   const { data: session, isPending: sessionPending } = authClient.useSession();
 

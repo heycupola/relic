@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/lib/auth";
+import { trackWebEvent } from "@/lib/posthog";
 import { LogoContextMenu } from "./logo-context-menu";
 
 interface HeaderProps {
@@ -23,6 +24,7 @@ export function Header({ showLogout = false }: HeaderProps) {
   } | null>(null);
 
   const handleLogout = async () => {
+    trackWebEvent("web_logout");
     await authClient.signOut();
     router.push("/");
   };

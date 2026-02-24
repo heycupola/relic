@@ -2,10 +2,15 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect } from "react";
 import { AuthFooter } from "@/components/auth-footer";
+import { trackWebEvent } from "@/lib/posthog";
 import { authHeadingStyle, authSubtitleStyle } from "@/lib/styles";
 
 export default function SubscriptionCancelPage() {
+  useEffect(() => {
+    trackWebEvent("web_subscription_cancelled");
+  }, []);
   return (
     <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
       <div className="w-full py-16">

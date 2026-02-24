@@ -8,6 +8,7 @@ import { AuthFooter } from "@/components/auth-footer";
 import { GoogleIcon } from "@/components/icons/google-icon";
 import { OAuthButton } from "@/components/oauth-button";
 import { authClient } from "@/lib/auth";
+import { trackWebEvent } from "@/lib/posthog";
 import { authHeadingStyle, authSubtitleStyle } from "@/lib/styles";
 import { isValidReturnUrl } from "@/lib/url";
 
@@ -20,6 +21,7 @@ export default function LoginPage() {
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
+    trackWebEvent("web_login_started", { provider: "google" });
     try {
       if (safeReturnUrl) {
         await authClient.signIn.social({
@@ -29,12 +31,14 @@ export default function LoginPage() {
       }
     } catch (error) {
       console.error("Google login failed:", error);
+      trackWebEvent("web_login_failed", { provider: "google" });
       setIsLoading(false);
     }
   };
 
   const handleGithubLogin = async () => {
     setIsLoading(true);
+    trackWebEvent("web_login_started", { provider: "github" });
     try {
       if (safeReturnUrl) {
         await authClient.signIn.social({
@@ -44,6 +48,7 @@ export default function LoginPage() {
       }
     } catch (error) {
       console.error("GitHub login failed:", error);
+      trackWebEvent("web_login_failed", { provider: "github" });
       setIsLoading(false);
     }
   };

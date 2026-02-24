@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
-import { ConvexClientProvider, ThemeProvider } from "./providers";
+import { ConvexClientProvider, PostHogProvider, ThemeProvider } from "./providers";
 
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
@@ -47,16 +47,18 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning style={{ colorScheme: "dark light" }}>
       <body className={`font-sans antialiased`}>
-        <ConvexClientProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            {children}
-          </ThemeProvider>
-        </ConvexClientProvider>
+        <PostHogProvider>
+          <ConvexClientProvider>
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange
+            >
+              {children}
+            </ThemeProvider>
+          </ConvexClientProvider>
+        </PostHogProvider>
       </body>
     </html>
   );

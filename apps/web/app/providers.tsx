@@ -5,12 +5,20 @@ import { api } from "@repo/backend";
 import { AutumnProvider } from "autumn-js/react";
 import { ConvexReactClient } from "convex/react";
 import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from "next-themes";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 import { authClient } from "@/lib/auth";
+import { initPostHog } from "@/lib/posthog";
 
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!, {
   expectAuth: true,
 });
+
+export function PostHogProvider({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    initPostHog();
+  }, []);
+  return <>{children}</>;
+}
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
