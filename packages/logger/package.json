@@ -1,0 +1,27 @@
+{
+  "name": "@repo/logger",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./index.ts",
+  "module": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "private": true,
+  "scripts": {
+    "lint": "biome check --write .",
+    "format": "biome format --write .",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "consola": "^3.4.2",
+    "posthog-node": "^5.24.17"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "*",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
