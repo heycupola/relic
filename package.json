@@ -29,7 +29,7 @@
     "packages": [
       "apps/*",
       "packages/*",
-      "!packages/sentry-proxy"
+      "!packages/telemetry-proxy"
     ],
     "catalog": {
       "autumn-js": "^0.1.40",
