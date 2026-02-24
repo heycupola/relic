@@ -1,7 +1,9 @@
 import { cacheUserKeys, getUserKeyCacheDb } from "@repo/auth";
+import { createLogger, trackError } from "@repo/logger";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getProtectedApi } from "../../api";
-import { logger } from "../../utils/debugLog";
+
+const logger = createLogger("tui");
 
 interface UseUserKeysOptions {
   onError?: (error: Error) => void;
@@ -76,6 +78,7 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
       }
     } catch (err) {
       logger.error("Failed to fetch user keys:", err);
+      trackError("tui", err, { action: "fetch_user_keys" });
       const error = err instanceof Error ? err : new Error("Failed to fetch user keys");
       setError(error);
       onErrorRef.current?.(error);
@@ -119,6 +122,7 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
         });
       } catch (err) {
         logger.error("Failed to store user keys:", err);
+        trackError("tui", err, { action: "store_user_keys" });
         const error = err instanceof Error ? err : new Error("Failed to store user keys");
         setError(error);
         onErrorRef.current?.(error);
@@ -150,6 +154,7 @@ export function useUserKeys(options?: UseUserKeysOptions): UseUserKeysReturn {
         });
       } catch (err) {
         logger.error("Failed to update password:", err);
+        trackError("tui", err, { action: "update_password" });
         const error = err instanceof Error ? err : new Error("Failed to update password");
         setError(error);
         onErrorRef.current?.(error);

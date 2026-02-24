@@ -1,5 +1,6 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { extractErrorMessage, verifyPassword } from "@repo/auth";
+import { createLogger, trackEvent } from "@repo/logger";
 import open from "open";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { InlineInput } from "../components/forms/InlineInput";
@@ -29,7 +30,8 @@ import type { ModalType, ProjectStatus, SharedUser, ViewLevel } from "../types/m
 import type { BulkImportFormat, CollisionInfo } from "../utils/bulkImport";
 import { envToJson, jsonToEnv, parseEnvContent, validateBulkImportJson } from "../utils/bulkImport";
 import { DASHBOARD_URL, KEY_SYMBOLS, STATUS_COLORS, THEME_COLORS } from "../utils/constants";
-import { logger } from "../utils/debugLog";
+
+const logger = createLogger("tui");
 
 interface ProjectPageProps {
   projectId: string;
@@ -40,6 +42,9 @@ interface ProjectPageProps {
 const PAGE_SIZE = 10;
 
 export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPageProps) {
+  useEffect(() => {
+    trackEvent("tui_page_viewed", { page: "project" });
+  }, []);
   const { width, height } = useTerminalDimensions();
   const { goBack: routerGoBack } = useRouter();
   const {
@@ -276,16 +281,20 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         await runTask(`Creating environment "${name}"...`, async () => {
           await createEnvironment(name);
         });
+        trackEvent("environment_created", { success: true });
         showSuccess(`Environment "${name}" created`);
       } else if (creatingItem === "folder" && selectedEnvId) {
         await runTask(`Creating folder "${name}"...`, async () => {
           await createFolder(selectedEnvId, name);
         });
+        trackEvent("folder_created", { success: true });
         showSuccess(`Folder "${name}" created`);
       }
       setCreatingItem(null);
     } catch {
-      // Error handled by finally block
+      trackEvent(creatingItem === "env" ? "environment_created" : "folder_created", {
+        success: false,
+      });
     } finally {
       setIsCreatingItem(false);
     }
@@ -303,11 +312,13 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         await runTask(`Renaming environment to "${name}"...`, async () => {
           await updateEnvironment(editingItem.id, name);
         });
+        trackEvent("environment_renamed", { success: true });
         showSuccess(`Environment renamed to "${name}"`);
       } else if (editingItem.type === "folder") {
         await runTask(`Renaming folder to "${name}"...`, async () => {
           await updateFolder(editingItem.id, name);
         });
+        trackEvent("folder_renamed", { success: true });
         showSuccess(`Folder renamed to "${name}"`);
       }
       setEditingItem(null);
@@ -327,6 +338,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         await runTask(`Deleting environment "${confirmingDelete.name}"...`, async () => {
           await deleteEnvironment(confirmingDelete.id);
         });
+        trackEvent("environment_deleted", { success: true });
         showSuccess(`Environment "${confirmingDelete.name}" deleted`);
         if (selectedEnvId === confirmingDelete.id) {
           setSelectedEnvId(null);
@@ -336,6 +348,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         await runTask(`Deleting folder "${confirmingDelete.name}"...`, async () => {
           await deleteFolder(confirmingDelete.id);
         });
+        trackEvent("folder_deleted", { success: true });
         showSuccess(`Folder "${confirmingDelete.name}" deleted`);
         if (selectedFolderId === confirmingDelete.id) {
           setSelectedFolderId(null);
@@ -345,11 +358,12 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         await runTask(`Deleting secret "${confirmingDelete.name}"...`, async () => {
           await deleteSecret(confirmingDelete.id);
         });
+        trackEvent("secret_deleted", { success: true });
         showSuccess(`Secret "${confirmingDelete.name}" deleted`);
       }
       setConfirmingDelete(null);
     } catch {
-      // Error handled by finally block
+      trackEvent(`${confirmingDelete?.type}_deleted`, { success: false });
     } finally {
       setIsDeletingItem(false);
     }
@@ -376,6 +390,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         logger.debug("shareProject result (confirmed):", JSON.stringify(result, null, 2));
 
         if (result.success) {
+          trackEvent("collaborator_added", { success: true, confirmed_payment: true });
           showSuccess(`Collaborator "${email}" added`);
           setConfirmationModal({ visible: false, type: "seat", balance: 0 });
           refetchProjectData();
@@ -432,6 +447,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
       logger.debug("shareProject result:", JSON.stringify(result, null, 2));
 
       if (result.success) {
+        trackEvent("collaborator_added", { success: true });
         showSuccess(`Collaborator "${email}" added`);
         setPendingCollaboratorEmail(null);
         setConfirmationModal({ visible: false, type: "seat", balance: 0 });
@@ -515,9 +531,11 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
       await runTask(`Revoking ${collab.email}...`, async () => {
         await revokeShare(collab.id);
       });
+      trackEvent("collaborator_revoked", { success: true, with_rotation: false });
       showSuccess(`${collab.email} revoked`);
       refetchProjectData();
     } catch (_error) {
+      trackEvent("collaborator_revoked", { success: false });
       logger.debug("Revoke collaborator failed");
     } finally {
       setIsRevokingCollaborator(false);
@@ -531,9 +549,11 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
       await runTask(`Revoking ${collab.email} and rotating keys...`, async () => {
         await revokeShareWithRotation(collab.id, sharedUsers);
       });
+      trackEvent("collaborator_revoked", { success: true, with_rotation: true });
       showSuccess(`${collab.email} revoked and keys rotated`);
       refetchProjectData();
     } catch (_error) {
+      trackEvent("collaborator_revoked", { success: false });
       logger.debug("Revoke with rotation failed");
     } finally {
       setIsRevokingWithRotation(false);
@@ -808,10 +828,12 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
                   mode: "overwrite",
                 });
               });
+              trackEvent("bulk_import_completed", { count: result.secrets.length, success: true });
               showSuccess(`${result.secrets.length} secrets saved`);
               setActiveModal("none");
               bulkImportInput.reset();
             } catch (error) {
+              trackEvent("bulk_import_completed", { success: false });
               logger.debug("Bulk import save failed:", error);
             }
           })();

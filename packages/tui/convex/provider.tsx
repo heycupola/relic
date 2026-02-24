@@ -1,7 +1,9 @@
 import { ensureValidJwt } from "@repo/auth";
+import { createLogger, trackError } from "@repo/logger";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { type ComponentProps, type ReactNode, useEffect, useRef, useState } from "react";
-import { logger } from "../utils/debugLog";
+
+const logger = createLogger("tui");
 
 const CONVEX_URL = process.env.CONVEX_URL ?? "http://localhost:3210";
 const convexClient = new ConvexReactClient(CONVEX_URL);
@@ -30,6 +32,7 @@ export function ConvexAuthProvider({ children }: ConvexAuthProviderProps) {
             return await ensureValidJwt();
           } catch (err) {
             logger.error("Failed to get JWT for Convex auth:", err);
+            trackError("tui", err, { action: "convex_jwt_refresh" });
             return null;
           }
         });
@@ -39,6 +42,7 @@ export function ConvexAuthProvider({ children }: ConvexAuthProviderProps) {
         logger.debug("Convex auth provider ready");
       } catch (err) {
         logger.error("Failed to setup Convex auth:", err);
+        trackError("tui", err, { action: "convex_auth_setup" });
         setIsReady(true);
       }
     };

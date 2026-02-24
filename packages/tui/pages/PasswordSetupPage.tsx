@@ -6,13 +6,15 @@ import {
   encryptPrivateKeyWithPassword,
   generateSalt,
 } from "@repo/crypto";
+import { createLogger, trackEvent } from "@repo/logger";
 import { useState } from "react";
 import { getProtectedApi } from "../api";
 import { PasswordInput } from "../components/PasswordInput";
 import { Modal } from "../components/shared/Modal";
 import { useUserKeys } from "../convex/hooks/useUserKeys";
 import { THEME_COLORS } from "../utils/constants";
-import { logger } from "../utils/debugLog";
+
+const logger = createLogger("tui");
 
 interface PasswordSetupPageProps {
   onComplete: (password: string) => void;
@@ -43,6 +45,7 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
   };
 
   const handlePasswordSubmit = async (password: string) => {
+    trackEvent("password_setup_started");
     setTaskStatus("checking_password");
 
     try {

@@ -1,9 +1,12 @@
+import { createLogger, trackError } from "@repo/logger";
 import { useCallback, useState } from "react";
 import { getProtectedApi } from "../api";
 import type { Secret as ApiSecret } from "../types/api";
 import type { Folder, Secret } from "../types/models";
 import { decryptSecretValue, encryptSecretValue, getProjectKey } from "../utils/crypto";
-import { logger } from "../utils/debugLog";
+
+const logger = createLogger("tui");
+
 import { mapApiFolder, mapApiSecret } from "../utils/mappers";
 
 export function useSecrets(
@@ -40,6 +43,7 @@ export function useSecrets(
                 mapped.value = await decryptSecretValue(projectKey, s.encryptedValue);
               } catch (err) {
                 logger.error(`Failed to decrypt secret ${mapped.key}:`, err);
+                trackError("tui", err, { action: "decrypt_secret" });
               }
             }
             return mapped;
@@ -49,6 +53,7 @@ export function useSecrets(
         setSecrets(decrypted);
       } catch (err) {
         logger.error("Failed to load environment:", err);
+        trackError("tui", err, { action: "load_environment" });
         setError(err instanceof Error ? err : new Error("Failed to load environment"));
       } finally {
         setIsLoading(false);

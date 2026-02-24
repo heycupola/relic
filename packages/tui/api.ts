@@ -5,6 +5,7 @@ import {
   type Id,
   type TableNames,
 } from "@repo/backend";
+import { createLogger, trackError } from "@repo/logger";
 import { ConvexHttpClient } from "convex/browser";
 import type {
   ApiSharedProjectResponse,
@@ -23,7 +24,8 @@ import type {
   ShareProjectResult,
   User,
 } from "./types/api";
-import { logger } from "./utils/debugLog";
+
+const logger = createLogger("tui");
 
 const CONVEX_URL = process.env.CONVEX_URL ?? "http://localhost:3210";
 
@@ -69,6 +71,7 @@ export class ProtectedApi {
         this.client.setAuth(token);
       } catch (error) {
         logger.error("Failed to get JWT token:", error);
+        trackError("tui", error, { action: "jwt_auth" });
         this.client.clearAuth();
         throw error;
       } finally {

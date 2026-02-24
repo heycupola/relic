@@ -5,8 +5,8 @@
   "private": true,
   "scripts": {
     "start": "bun --hot ./index.tsx",
-    "debug": "DEV=true bun --hot ./index.tsx",
-    "log:watch": "bun run ./scripts/watchLog.ts",
+    "dev:tui": "DEV=true bun --hot ./index.tsx",
+    "log:watch": "bun run ../../packages/logger/scripts/watch.ts",
     "lint": "biome check --write .",
     "format": "biome format --write .",
     "test": "bun test"
@@ -24,6 +24,7 @@
     "@opentui/core": "^0.1.65",
     "@opentui/react": "^0.1.65",
     "@repo/auth": "*",
+    "@repo/logger": "*",
     "convex": "catalog:",
     "open": "catalog:",
     "react": "catalog:"

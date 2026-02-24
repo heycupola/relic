@@ -1,8 +1,11 @@
+import { createLogger } from "@repo/logger";
 import { useEffect, useState } from "react";
 import { getProtectedApi } from "../api";
 import { useUser } from "../context";
 import { useUserKeys } from "../convex/hooks/useUserKeys";
-import { logger } from "../utils/debugLog";
+
+const logger = createLogger("tui");
+
 import { useEnvironments } from "./useEnvironments";
 import { useProject } from "./useProject";
 import { useSecrets } from "./useSecrets";
