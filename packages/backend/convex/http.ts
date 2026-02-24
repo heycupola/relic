@@ -3,9 +3,13 @@ import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import { authComponent, createAuth } from "./auth";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
+import { createLogger } from "./lib/logger";
 import { verifyResendSignature } from "./lib/resend";
 import type { EmailKind } from "./lib/types";
 import { handleWebhookEvent, type StripeEvent, verifyStripeSignature } from "./stripe";
+
+const stripeLog = createLogger("stripeWebhook");
+const resendLog = createLogger("resendWebhook");
 
 const http = httpRouter();
 authComponent.registerRoutes(http, createAuth);
@@ -27,19 +31,19 @@ http.route({
     const payload = await request.text();
 
     if (!signature) {
-      console.error("Missing stripe-signature header");
+      stripeLog.error("Missing stripe-signature header");
       return new Response("Missing signature", { status: 400 });
     }
 
     if (!STRIPE_WEBHOOK_SECRET) {
-      console.error("STRIPE_WEBHOOK_SECRET is not configured");
+      stripeLog.error("STRIPE_WEBHOOK_SECRET is not configured");
       return new Response("Server configuration error", { status: 500 });
     }
 
     const isValid = await verifyStripeSignature(payload, signature, STRIPE_WEBHOOK_SECRET);
 
     if (!isValid) {
-      console.error("Invalid webhook signature");
+      stripeLog.error("Invalid webhook signature");
       return new Response("Invalid signature", { status: 401 });
     }
 
@@ -48,15 +52,15 @@ http.route({
     try {
       event = JSON.parse(payload);
     } catch (err) {
-      console.error("Error parsing webhook payload:", err);
+      stripeLog.error("Error parsing webhook payload", { err: String(err) });
       return new Response("Invalid payload", { status: 400 });
     }
 
-    console.log(`[Stripe Webhook] Received: ${event.type} (ID: ${event.id})`);
+    stripeLog.info("Event received", { type: event.type, eventId: event.id });
 
     // Idempotency check - skip if already processed
     if (processedEventIds.has(event.id)) {
-      console.log(`[Stripe Webhook] Event ${event.id} already processed, skipping`);
+      stripeLog.info("Event already processed, skipping", { eventId: event.id });
       return new Response("Already processed", { status: 200 });
     }
 
@@ -72,7 +76,7 @@ http.route({
         if (firstId) processedEventIds.delete(firstId);
       }
     } catch (error) {
-      console.error(`[Stripe Webhook] Error handling ${event.type}:`, error);
+      stripeLog.error("Error handling event", { type: event.type, error: String(error) });
       return new Response("Error processing webhook", { status: 500 });
     }
 
@@ -119,7 +123,7 @@ http.route({
     const rawPayload = await request.text();
 
     if (!RESEND_WEBHOOK_SECRET) {
-      console.error("[Resend Webhook] RESEND_WEBHOOK_SECRET is not configured");
+      resendLog.error("RESEND_WEBHOOK_SECRET is not configured");
       return new Response("Server configuration error", { status: 500 });
     }
 
@@ -134,18 +138,18 @@ http.route({
     );
 
     if (!isValid) {
-      console.error("[Resend Webhook] Invalid signature");
+      resendLog.error("Invalid signature");
       return new Response("Invalid signature", { status: 401 });
     }
 
     if (!svixId) {
-      console.error("[Resend Webhook] Missing svix-id header");
+      resendLog.error("Missing svix-id header");
       return new Response("Missing event ID", { status: 400 });
     }
 
     // Idempotency check - skip if already processed
     if (processedResendEventIds.has(svixId)) {
-      console.log(`[Resend Webhook] Event ${svixId} already processed, skipping`);
+      resendLog.info("Event already processed, skipping", { svixId });
       return new Response("Already processed", { status: 200 });
     }
 
@@ -159,7 +163,7 @@ http.route({
       };
 
       const eventType = payload.type;
-      console.log(`[Resend Webhook] Received: ${eventType} (ID: ${svixId})`);
+      resendLog.info("Event received", { eventType, svixId });
 
       if (eventType === "email.delivered") {
         const tags = payload.data?.tags || {};
@@ -206,7 +210,7 @@ http.route({
 
       return new Response(null, { status: 200 });
     } catch (error) {
-      console.error("[Resend Webhook] Error handling webhook:", error);
+      resendLog.error("Error handling webhook", { error: String(error) });
       return new Response("Webhook handler error", { status: 500 });
     }
   }),

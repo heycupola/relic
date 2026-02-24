@@ -2,9 +2,12 @@ import { v } from "convex/values";
 import { components } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
 import { deviceAuthError } from "./lib/errors";
+import { createLogger } from "./lib/logger";
 import { protectedMutation } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
 import type { ProtectedMutationCtx } from "./lib/types";
+
+const log = createLogger("deviceAuth");
 
 export const requestDeviceCode = mutation({
   args: {
@@ -93,6 +96,8 @@ export const approveDeviceCode = protectedMutation({
       user_code: args.user_code,
     });
 
+    log.info("Device code approved", { userId: ctx.userId, userCode: args.user_code });
+
     return { success: true };
   },
 });
@@ -107,6 +112,8 @@ export const denyDeviceCode = protectedMutation({
     await ctx.runMutation(components.betterAuth.deviceAuth.denyDeviceCode, {
       user_code: args.user_code,
     });
+
+    log.info("Device code denied", { userId: ctx.userId, userCode: args.user_code });
 
     return { success: true };
   },

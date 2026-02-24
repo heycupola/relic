@@ -1,3 +1,7 @@
+import { createLogger } from "./logger";
+
+const log = createLogger("resendSignature");
+
 export async function verifyResendSignature(
   payload: string,
   headers: {
@@ -12,7 +16,7 @@ export async function verifyResendSignature(
   const svixSignature = headers["svix-signature"];
 
   if (!svixId || !svixTimestamp || !svixSignature) {
-    console.error("[Resend Webhook] Missing required Svix headers");
+    log.error("Missing required Svix headers");
     return false;
   }
 
@@ -21,7 +25,7 @@ export async function verifyResendSignature(
   const TOLERANCE_SECONDS = 300;
 
   if (Math.abs(now - timestampNum) > TOLERANCE_SECONDS) {
-    console.error("[Resend Webhook] Timestamp outside tolerance window");
+    log.error("Timestamp outside tolerance window");
     return false;
   }
 
@@ -38,7 +42,7 @@ export async function verifyResendSignature(
       }
       return bytes;
     } catch (_error) {
-      console.error("[Resend Webhook] Invalid base64 in secret");
+      log.error("Invalid base64 in secret");
       throw new Error("Invalid webhook secret format");
     }
   };
@@ -73,6 +77,6 @@ export async function verifyResendSignature(
     }
   }
 
-  console.error("[Resend Webhook] Signature verification failed - no match");
+  log.error("Signature verification failed - no match");
   return false;
 }

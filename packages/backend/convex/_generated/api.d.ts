@@ -25,6 +25,7 @@ import type * as lib_emails_plan_upgraded from "../lib/emails/plan_upgraded.js";
 import type * as lib_emails_welcome from "../lib/emails/welcome.js";
 import type * as lib_errors from "../lib/errors.js";
 import type * as lib_helpers from "../lib/helpers.js";
+import type * as lib_logger from "../lib/logger.js";
 import type * as lib_middleware from "../lib/middleware.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
 import type * as lib_resend from "../lib/resend.js";
@@ -62,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   "lib/emails/welcome": typeof lib_emails_welcome;
   "lib/errors": typeof lib_errors;
   "lib/helpers": typeof lib_helpers;
+  "lib/logger": typeof lib_logger;
   "lib/middleware": typeof lib_middleware;
   "lib/rateLimit": typeof lib_rateLimit;
   "lib/resend": typeof lib_resend;

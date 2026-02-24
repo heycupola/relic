@@ -12,6 +12,7 @@ import {
   notFoundError,
   permissionError,
 } from "./lib/errors";
+import { createLogger } from "./lib/logger";
 import { protectedAction, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
 import {
@@ -22,6 +23,8 @@ import {
 } from "./lib/types";
 import { sendEmail } from "./resend";
 import schema from "./schema";
+
+const log = createLogger("projectShare");
 
 export const shareLimits = {
   freeShareLimit: 5,
@@ -260,13 +263,13 @@ export const shareProject = protectedAction({
           value: 1,
         });
       } catch (trackError) {
-        console.error("[shareProject] Payment tracking failed:", trackError);
+        log.error("Payment tracking failed", { error: String(trackError) });
         paymentFailed = true;
         try {
           const portalResult = await ctx.autumn.customers.billingPortal(ctx, {});
           billingPortalUrl = portalResult.data?.url || null;
         } catch (portalError) {
-          console.error("[shareProject] Failed to get billing portal URL:", portalError);
+          log.error("Failed to get billing portal URL", { error: String(portalError) });
         }
       }
     }
@@ -283,8 +286,15 @@ export const shareProject = protectedAction({
         ownerName: owner?.name || "someone",
       });
     } catch (error) {
-      console.error("[Email] Failed to send collaborator added email:", error);
+      log.error("Failed to send collaborator added email", { error: String(error) });
     }
+
+    log.info("Project shared", {
+      projectId: args.projectId,
+      sharedBy: ctx.userId,
+      targetUser: targetUser._id,
+      isPaidShare,
+    });
 
     return { success: true, shareId: sId, paymentFailed, billingPortalUrl };
   },
@@ -359,7 +369,7 @@ export const revokeShare = protectedAction({
           value: -1,
         });
       } catch (error: unknown) {
-        console.error("Failed to track usage decrease in Autumn:", error);
+        log.error("Failed to track usage decrease in Autumn", { error: String(error) });
 
         await ctx.scheduler.runAfter(5 * 60 * 1000, internal.autumn._retryAutumnTracking, {
           identity: {
@@ -376,6 +386,12 @@ export const revokeShare = protectedAction({
         });
       }
     }
+
+    log.info("Share revoked", {
+      shareId: args.shareId,
+      projectId: share.projectId,
+      userId: ctx.userId,
+    });
 
     return { success: true };
   },
@@ -575,7 +591,7 @@ export const revokeShareWithRotation = protectedAction({
           value: -1,
         });
       } catch (error: unknown) {
-        console.error("Failed to track usage decrease in Autumn:", error);
+        log.error("Failed to track usage decrease in Autumn", { error: String(error) });
 
         await ctx.scheduler.runAfter(5 * 60 * 1000, internal.autumn._retryAutumnTracking, {
           identity: {
@@ -592,6 +608,14 @@ export const revokeShareWithRotation = protectedAction({
         });
       }
     }
+
+    log.info("Share revoked with key rotation", {
+      shareId: args.shareId,
+      projectId: share.projectId,
+      userId: ctx.userId,
+      secretsReEncrypted,
+      sharesRewrapped: args.rewrappedShares.length,
+    });
 
     return { success: true };
   },

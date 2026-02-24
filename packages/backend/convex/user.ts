@@ -2,10 +2,13 @@ import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import { internalAction, internalMutation } from "./_generated/server";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
+import { createLogger } from "./lib/logger";
 import { protectedAction, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
 import { EmailKind, type ProtectedActionCtx, type ProtectedQueryCtx } from "./lib/types";
 import { sendEmail } from "./resend";
+
+const log = createLogger("user");
 
 export const getProPlan = protectedAction({
   args: {},
@@ -136,6 +139,8 @@ export const _handlePlanUpgrade = internalAction({
       userId: user._id,
     });
 
+    log.info("User upgraded to Pro", { userId: user._id });
+
     await sendEmail(ctx, user._id, user.email, {
       kind: EmailKind.PlanUpgraded,
       userName: user.name,
@@ -155,6 +160,8 @@ export const _handlePlanDowngrade = internalAction({
     await ctx.runMutation(components.betterAuth.user.downgradeToFree, {
       userId: user._id,
     });
+
+    log.info("User downgraded to Free, grace period started", { userId: user._id });
 
     await sendEmail(ctx, user._id, user.email, {
       kind: EmailKind.GracePeriodStarted,
@@ -196,9 +203,11 @@ export const _handleEmailFailed = internalMutation({
     failedAt: v.number(),
   },
   handler: async (_ctx, args) => {
-    console.error(
-      `[Email] Failed to deliver ${args.emailKind} to user ${args.userId}: ${args.reason}`,
-    );
+    log.error("Failed to deliver email", {
+      emailKind: args.emailKind,
+      userId: args.userId,
+      reason: args.reason,
+    });
 
     // NOTE: it's enough for the MVP
     // later add retry logic, notification, log table, etc.
@@ -213,6 +222,8 @@ export const _batchSendAccessRestrictedEmails = internalAction({
       components.betterAuth.user.loadUsersToRestrict,
       {},
     );
+
+    log.info("Access restriction cron started", { usersToRestrict: usersToRestrict.length });
 
     for (const user of usersToRestrict) {
       const projects = await ctx.runQuery(internal.project._loadActiveProjectsByOwner, {
@@ -229,6 +240,8 @@ export const _batchSendAccessRestrictedEmails = internalAction({
         userName: user.name,
       });
     }
+
+    log.info("Access restriction cron completed", { processed: usersToRestrict.length });
 
     return { success: true };
   },
@@ -268,7 +281,7 @@ export const getBillingPortalUrl = protectedAction({
         url: result.data?.url || null,
       };
     } catch (error) {
-      console.error("[getBillingPortalUrl] Failed to get billing portal URL:", error);
+      log.error("Failed to get billing portal URL", { error: String(error) });
       return {
         success: false,
         url: null,
