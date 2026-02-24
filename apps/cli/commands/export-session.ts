@@ -1,6 +1,8 @@
 import { loadSession } from "@repo/auth";
+import { trackEvent } from "@repo/logger";
 
 export default async function exportSession() {
+  trackEvent("cli_command_executed", { command: "export-session" });
   const session = await loadSession();
 
   if (!session) {

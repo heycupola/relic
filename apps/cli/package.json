@@ -18,8 +18,8 @@
   "private": true,
   "scripts": {
     "build:runner": "cd ../../packages/runner && cargo build --release",
-    "dev:cli": "bun run build:runner && bun run index.ts",
-    "logs": "tail -f ~/.relic/logs/",
+    "dev:cli": "DEV=true bun run build:runner && bun run index.ts",
+    "log:watch": "bun run ../../packages/logger/scripts/watch.ts",
     "lint": "biome check --write .",
     "format": "biome format --write .",
     "check-types": "tsc --noEmit",
@@ -49,6 +49,7 @@
     "@repo/auth": "*",
     "@repo/backend": "*",
     "@repo/crypto": "*",
+    "@repo/logger": "*",
     "@repo/tui": "*",
     "commander": "^13.1.0",
     "convex": "catalog:",

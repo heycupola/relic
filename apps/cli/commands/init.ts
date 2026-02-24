@@ -1,6 +1,10 @@
 import * as p from "@clack/prompts";
 import { AuthenticationError, validateSession } from "@repo/auth";
+import { createLogger, trackEvent } from "@repo/logger";
 import pc from "picocolors";
+
+const log = createLogger("cli");
+
 import { getApi, type ProjectListItem } from "../lib/api";
 import {
   configExists,
@@ -80,6 +84,7 @@ export default async function init() {
     await createRelicDir();
     spinner.stop("Configuration saved");
 
+    trackEvent("cli_project_initialized", { success: true });
     p.log.success(pc.green(`Initialized Relic for ${selectedProject.name}`));
     p.outro(pc.dim(`Config saved to ${getConfigFilePath()}`));
   } catch (err) {
@@ -91,6 +96,8 @@ export default async function init() {
       process.exit(1);
     }
 
+    log.error("Init failed", err);
+    trackEvent("cli_project_initialized", { success: false });
     const message = err instanceof Error ? err.message : "Failed to initialize";
     p.log.error(pc.red(`Error: ${message}`));
     process.exit(1);

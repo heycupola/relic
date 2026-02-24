@@ -1,5 +1,6 @@
 import { ensureValidJwt } from "@repo/auth";
 import { api, type Id, type TableNames } from "@repo/backend";
+import { trackError } from "@repo/logger";
 import { ConvexHttpClient } from "convex/browser";
 
 const CONVEX_URL = process.env.CONVEX_URL ?? "http://localhost:3210";
@@ -103,6 +104,7 @@ export class ProtectedApi {
         const token = await ensureValidJwt();
         this.client.setAuth(token);
       } catch (error) {
+        trackError("cli", error, { action: "cli_auth" });
         this.client.clearAuth();
         throw error;
       } finally {

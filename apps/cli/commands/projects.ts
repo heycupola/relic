@@ -1,4 +1,5 @@
 import { validateSession } from "@repo/auth";
+import { trackEvent } from "@repo/logger";
 import ora from "ora";
 import pc from "picocolors";
 import { type Environment, type Folder, getApi, type ProjectListItem } from "../lib/api";
@@ -129,6 +130,7 @@ export default async function projects() {
       }),
     );
 
+    trackEvent("cli_command_executed", { command: "projects", count: projectsWithFolders.length });
     spinner.stop();
     renderProjectTree(projectsWithFolders);
   } catch (err) {

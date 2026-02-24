@@ -4,8 +4,11 @@ import {
   deviceAuth,
   validateSession,
 } from "@repo/auth";
+import { createLogger, trackEvent } from "@repo/logger";
 import ora from "ora";
 import pc from "picocolors";
+
+const log = createLogger("cli");
 
 function formatCode(code: string): string {
   if (code.includes("-")) return code;
@@ -23,6 +26,8 @@ export default async function login() {
       spinner.succeed(pc.green("Already logged in"));
       return;
     }
+
+    trackEvent("cli_login_started");
 
     let userCode: string | null = null;
     let verificationUri: string | null = null;
@@ -58,8 +63,10 @@ export default async function login() {
     });
 
     if (result.success) {
+      trackEvent("cli_login_completed", { success: true });
       spinner.succeed(pc.green("Login successful!"));
     } else if (result.error) {
+      trackEvent("cli_login_completed", { success: false, reason: currentStatus });
       if (currentStatus === "denied") {
         spinner.fail(pc.red("Authorization denied"));
       } else if (currentStatus === "expired") {
@@ -70,6 +77,8 @@ export default async function login() {
       process.exit(1);
     }
   } catch (err) {
+    log.error("Login failed", err);
+    trackEvent("cli_login_completed", { success: false });
     spinner.fail(pc.red(err instanceof Error ? err.message : String(err)));
     process.exit(1);
   }

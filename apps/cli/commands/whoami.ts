@@ -1,4 +1,5 @@
 import { validateSession } from "@repo/auth";
+import { trackEvent } from "@repo/logger";
 import ora from "ora";
 import pc from "picocolors";
 import { getApi } from "../lib/api";
@@ -18,6 +19,7 @@ export default async function whoami() {
     const api = getApi();
     const user = await api.getCurrentUser();
 
+    trackEvent("cli_command_executed", { command: "whoami" });
     spinner.stop();
     console.log(pc.bold("Logged in as:"));
     console.log();

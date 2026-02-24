@@ -9,6 +9,7 @@ import {
   hasPassword,
   validateSession,
 } from "@repo/auth";
+import { createLogger, trackEvent } from "@repo/logger";
 import {
   cacheEnvironments,
   cacheFolders,
@@ -28,6 +29,8 @@ import { RunnerBridge } from "../ffi/bridge";
 import { getApi, type ProtectedApi, type SecretData } from "../lib/api";
 import { findConfig } from "../lib/config";
 import { decryptSecrets, getProjectKey, ProjectKeyError } from "../lib/crypto";
+
+const log = createLogger("cli");
 
 export interface RunOptions {
   environment: string;
@@ -256,6 +259,9 @@ export default async function run(command: string[], options: RunOptions) {
     options.scope = options.scope.toLowerCase() as SecretScope;
   }
 
+  const startTime = Date.now();
+  trackEvent("cli_run_started", { has_folder: !!options.folder, has_scope: !!options.scope });
+
   const spinner = ora("Checking authentication...").start();
 
   try {
@@ -313,8 +319,15 @@ export default async function run(command: string[], options: RunOptions) {
       commandBuffer.fill(0);
       secretsBuffer.fill(0);
     }
+    trackEvent("cli_run_completed", {
+      secret_count: count,
+      exit_code: exitCode,
+      duration_ms: Date.now() - startTime,
+    });
     process.exit(exitCode);
   } catch (err) {
+    log.error("Run failed", err);
+    trackEvent("cli_run_completed", { success: false, duration_ms: Date.now() - startTime });
     spinner.fail(pc.red(err instanceof Error ? err.message : String(err)));
     process.exit(1);
   }
