@@ -28,27 +28,31 @@ relic run -e staging -f database -- ./migrate.sh
 relic run -e production -s client -- npm run build    # Client + shared secrets
 relic run -e production -s server -- npm start        # Server + shared secrets
 relic run -e production -f web -s client -- npm run build  # Folder + scope filter
+
+# Specify project ID explicitly
+relic run -e production -p <project_id> -- npm run deploy
 ```
 
 ## CI/CD Usage
 
-For CI/CD environments, use environment variables instead of interactive login:
+For CI/CD environments, use API keys instead of interactive login:
 
 ### Environment Variables
 
 | Variable | Description |
 |----------|-------------|
-| `RELIC_SESSION` | Base64-encoded session JSON |
+| `RELIC_API_KEY` | API key for authentication |
 | `RELIC_PASSWORD` | Master password for decryption |
+| `RELIC_PROJECT_ID` | Project ID (optional if `relic.toml` exists) |
 
-### Getting Your Session
+### Creating an API Key
 
 ```bash
 # Login locally first
 relic login
 
-# Export session as base64
-cat ~/.config/relic/session.json | base64
+# Create an API key (via TUI or future CLI command)
+# The key is shown once — store it in your CI secrets
 ```
 
 ### GitHub Actions
@@ -74,8 +78,10 @@ jobs:
 
       - name: Deploy with secrets
         env:
-          RELIC_SESSION: ${{ secrets.RELIC_SESSION }}
+          RELIC_API_KEY: ${{ secrets.RELIC_API_KEY }}
           RELIC_PASSWORD: ${{ secrets.RELIC_PASSWORD }}
+          RELIC_PROJECT_ID: ${{ secrets.RELIC_PROJECT_ID }}
+          CONVEX_URL: ${{ secrets.CONVEX_URL }}
         run: bunx relic run -e production -- npm run deploy
 ```
 
@@ -87,8 +93,10 @@ deploy:
   script:
     - bunx relic run -e production -- npm run deploy
   variables:
-    RELIC_SESSION: $RELIC_SESSION
+    RELIC_API_KEY: $RELIC_API_KEY
     RELIC_PASSWORD: $RELIC_PASSWORD
+    RELIC_PROJECT_ID: $RELIC_PROJECT_ID
+    CONVEX_URL: $CONVEX_URL
 ```
 
 ### CircleCI
@@ -106,13 +114,17 @@ jobs:
           name: Deploy with secrets
           command: bunx relic run -e production -- npm run deploy
           environment:
-            RELIC_SESSION: ${RELIC_SESSION}
+            RELIC_API_KEY: ${RELIC_API_KEY}
             RELIC_PASSWORD: ${RELIC_PASSWORD}
+            RELIC_PROJECT_ID: ${RELIC_PROJECT_ID}
+            CONVEX_URL: ${CONVEX_URL}
 ```
 
 ## Caching
 
 The CLI uses a local SQLite cache to avoid redundant API calls on repeated runs. The cache is stored at `~/.config/relic/relic.db`.
+
+Caching is only used in session mode (interactive login). API key mode always fetches fresh secrets from the server.
 
 ### What is cached
 
