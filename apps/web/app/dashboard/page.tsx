@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { ContainerLines } from "@/components/container-lines";
 import { ActivityLogsCard } from "@/components/dashboard/activity-logs-card";
+import { ApiKeysCard } from "@/components/dashboard/api-keys-card";
 import { ProjectsOverviewCard } from "@/components/dashboard/projects-overview-card";
 import { QuickActionsCard } from "@/components/dashboard/quick-actions-card";
 import { UserInfoCard } from "@/components/dashboard/user-info-card";
@@ -74,6 +75,7 @@ export default function DashboardPage() {
     api.projectShare.listActiveSharedProjectsForCurrentUser,
     session?.user ? {} : "skip",
   );
+  const apiKeysData = useQuery(api.apiKey.listApiKeys, session?.user ? {} : "skip");
 
   // Paginated action logs
   const {
@@ -217,6 +219,8 @@ export default function DashboardPage() {
                 onLoadMore={loadMore}
               />
             </div>
+
+            <ApiKeysCard apiKeys={apiKeysData ?? []} isLoading={apiKeysData === undefined} />
           </div>
         </main>
         <Footer />
