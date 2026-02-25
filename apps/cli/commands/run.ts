@@ -32,15 +32,128 @@ import { decryptSecrets, getProjectKey, ProjectKeyError } from "../lib/crypto";
 
 const log = createLogger("cli");
 
+const ENV_API_KEY = "RELIC_API_KEY";
+const ENV_PROJECT_ID = "RELIC_PROJECT_ID";
+
 export interface RunOptions {
   environment: string;
   folder?: string;
   scope?: SecretScope;
+  project?: string;
 }
 
 export interface PrepareSecretsResult {
   secrets: Record<string, string>;
   count: number;
+}
+
+function isApiKeyMode(): boolean {
+  return !!process.env[ENV_API_KEY];
+}
+
+function getConvexSiteUrl(): string {
+  const convexUrl = process.env.CONVEX_URL ?? "http://localhost:3210";
+
+  if (convexUrl.includes(".convex.cloud")) {
+    return convexUrl.replace(".convex.cloud", ".convex.site");
+  }
+
+  if (convexUrl.includes("localhost:3210") || convexUrl.includes("127.0.0.1:3210")) {
+    return convexUrl.replace("3210", "3211");
+  }
+
+  return convexUrl.replace("3210", "3211");
+}
+
+interface ExportSecretsHttpResponse {
+  secrets: {
+    id: string;
+    key: string;
+    encryptedValue: string;
+    scope: "client" | "server" | "shared";
+    valueType: "string" | "number" | "boolean";
+  }[];
+  count: number;
+  encryptedProjectKey: string;
+  environmentId: string;
+  folderId: string | null;
+  user: {
+    encryptedPrivateKey: string;
+    salt: string;
+  };
+}
+
+async function exportSecretsViaApiKey(
+  apiKey: string,
+  body: {
+    projectId: string;
+    environmentName: string;
+    folderName?: string;
+    scope?: SecretScope;
+  },
+): Promise<ExportSecretsHttpResponse> {
+  const siteUrl = getConvexSiteUrl();
+  const url = `${siteUrl}/api/secrets/export`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    const message = (errorBody as { error?: string })?.error ?? `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+
+  return (await response.json()) as ExportSecretsHttpResponse;
+}
+
+async function prepareSecretsWithApiKey(
+  projectId: string,
+  options: RunOptions,
+): Promise<PrepareSecretsResult> {
+  const apiKey = process.env[ENV_API_KEY]!;
+
+  const password = await getPasswordFromStorage();
+  if (!password) {
+    throw new Error("RELIC_PASSWORD is required for API key mode.");
+  }
+
+  const result = await exportSecretsViaApiKey(apiKey, {
+    projectId,
+    environmentName: options.environment,
+    folderName: options.folder,
+    scope: options.scope,
+  });
+
+  if (result.count === 0) {
+    throw new Error("No secrets found");
+  }
+
+  const { unwrapProjectKey } = await import("@repo/crypto");
+  const projectKey = await unwrapProjectKey(
+    result.encryptedProjectKey,
+    result.user.encryptedPrivateKey,
+    password,
+    result.user.salt,
+  );
+
+  const decryptedSecrets = await decryptSecrets(
+    projectKey,
+    result.secrets.map((s) => ({ key: s.key, encryptedValue: s.encryptedValue })),
+  );
+
+  const secretsObj: Record<string, string> = {};
+  for (const secret of decryptedSecrets) {
+    secretsObj[secret.key] = secret.value;
+  }
+
+  return { secrets: secretsObj, count: result.count };
 }
 
 async function resolveUserKeys(
@@ -81,7 +194,6 @@ async function resolveSecrets(
   options: RunOptions,
   api: ProtectedApi,
 ): Promise<{ secrets: SecretData[]; encryptedProjectKey: string }> {
-  // NOTE: Check local cache for environment/folder IDs and secrets
   const cachedEnvironmentId = getCachedEnvironmentId(db, projectId, options.environment);
 
   if (cachedEnvironmentId) {
@@ -110,7 +222,6 @@ async function resolveSecrets(
 
     const cacheIsValid = isCached && lastCachedAt && lastUpdatedAt && lastCachedAt >= lastUpdatedAt;
 
-    // NOTE: Try loading from cache first
     if (cacheIsValid) {
       const cachedSecrets = getCachedSecrets(
         db,
@@ -127,7 +238,6 @@ async function resolveSecrets(
     }
   }
 
-  // NOTE: Fallback to API if cache is invalid, empty, or partially missing
   const result = await api.exportSecrets({
     projectId,
     environmentName: options.environment,
@@ -138,7 +248,6 @@ async function resolveSecrets(
     throw new Error("No secrets found");
   }
 
-  // NOTE: Cache the exported secrets and project key for future runs
   cacheProject(db, projectId, result.encryptedProjectKey);
   cacheEnvironments(db, projectId, [{ id: result.environmentId, name: options.environment }]);
   if (result.folderId && options.folder) {
@@ -173,9 +282,6 @@ async function resolveProjectKey(
   try {
     return await getProjectKey(encryptedProjectKey, userEncryptedPrivateKey, userSalt);
   } catch (err) {
-    // NOTE: Only retry with fresh keys if:
-    // 1. We used cached keys (fromCache)
-    // 2. The error is a decryption failure (not a missing password or unknown error)
     const isDecryptionFailure = err instanceof ProjectKeyError && err.code === "DECRYPTION_FAILED";
 
     if (fromCache && isDecryptionFailure) {
@@ -210,13 +316,10 @@ export async function prepareSecrets(
   userKeyDb: Database,
   api: ProtectedApi,
 ): Promise<PrepareSecretsResult> {
-  // Step 1: Resolve user keys (cache-first with API fallback)
   const userKeys = await resolveUserKeys(userKeyDb, api);
 
-  // Step 2: Resolve secrets and project key (cache-first with API fallback)
   const { secrets, encryptedProjectKey } = await resolveSecrets(db, projectId, options, api);
 
-  // Step 3: Decrypt project key (with stale-cache retry)
   const projectKey = await resolveProjectKey(
     encryptedProjectKey,
     userKeys.encryptedPrivateKey,
@@ -226,7 +329,6 @@ export async function prepareSecrets(
     api,
   );
 
-  // Step 4: Decrypt secrets
   const decryptedSecrets = await decryptSecrets(
     projectKey,
     secrets.map((s) => ({ key: s.key, encryptedValue: s.encryptedValue })),
@@ -238,6 +340,127 @@ export async function prepareSecrets(
   }
 
   return { secrets: secretsObj, count: secrets.length };
+}
+
+function resolveProjectId(options: RunOptions): string | null {
+  if (options.project) return options.project;
+  if (process.env[ENV_PROJECT_ID]) return process.env[ENV_PROJECT_ID];
+  return null;
+}
+
+async function runWithApiKey(
+  command: string[],
+  options: RunOptions,
+  startTime: number,
+): Promise<void> {
+  const spinner = ora("Authenticating with API key...").start();
+
+  const projectId = resolveProjectId(options);
+  if (!projectId) {
+    const configResult = await findConfig();
+    if (configResult) {
+      return runWithApiKeyAndProjectId(command, options, configResult.config.project_id, spinner, startTime);
+    }
+    spinner.fail(pc.red("Project ID is required. Use --project <id> or set RELIC_PROJECT_ID."));
+    process.exit(1);
+  }
+
+  return runWithApiKeyAndProjectId(command, options, projectId, spinner, startTime);
+}
+
+async function runWithApiKeyAndProjectId(
+  command: string[],
+  options: RunOptions,
+  projectId: string,
+  spinner: ReturnType<typeof ora>,
+  startTime: number,
+): Promise<void> {
+  spinner.text = "Fetching secrets via API key...";
+  const { secrets, count } = await prepareSecretsWithApiKey(projectId, options);
+
+  spinner.succeed(pc.green(`Injected ${count} secret${count !== 1 ? "s" : ""}`));
+
+  await executeCommand(command, secrets, count, startTime);
+}
+
+async function runWithSession(
+  command: string[],
+  options: RunOptions,
+  startTime: number,
+): Promise<void> {
+  const spinner = ora("Checking authentication...").start();
+
+  const sessionValidation = await validateSession();
+  if (!sessionValidation.isValid || sessionValidation.isExpired) {
+    spinner.fail(pc.red("Not logged in. Run 'relic login' first."));
+    process.exit(1);
+  }
+
+  spinner.text = "Verifying password...";
+  const hasPass = await hasPassword();
+  if (!hasPass) {
+    spinner.fail(pc.red("No password set. Run 'relic tui' to set up your password first."));
+    process.exit(1);
+  }
+
+  if (!(await getPasswordFromStorage())) {
+    spinner.fail(pc.red("Could not retrieve password. Please re-authenticate."));
+    process.exit(1);
+  }
+
+  spinner.text = "Loading configuration...";
+  const configResult = await findConfig();
+  if (!configResult) {
+    spinner.fail(pc.red("No relic.toml found. Run 'relic init' first."));
+    process.exit(1);
+  }
+
+  const projectId = resolveProjectId(options) ?? configResult.config.project_id;
+
+  spinner.text = "Preparing secrets...";
+  const db = await getCacheDb();
+  const userKeyDb = await getUserKeyCacheDb();
+  const api = getApi();
+
+  const { secrets, count } = await prepareSecrets(projectId, options, db, userKeyDb, api);
+
+  spinner.succeed(pc.green(`Injected ${count} secret${count !== 1 ? "s" : ""}`));
+
+  await executeCommand(command, secrets, count, startTime);
+}
+
+async function executeCommand(
+  command: string[],
+  secrets: Record<string, string>,
+  count: number,
+  startTime: number,
+): Promise<void> {
+  const runner = await RunnerBridge.getInstance();
+
+  const commandJson = JSON.stringify(command);
+  const secretsJson = JSON.stringify(secrets);
+
+  const commandBuffer = Buffer.from(`${commandJson}\0`, "utf-8");
+  const secretsBuffer = Buffer.from(`${secretsJson}\0`, "utf-8");
+
+  const commandPtr = ptr(commandBuffer);
+  const secretsPtr = ptr(secretsBuffer);
+
+  let exitCode = -1;
+  try {
+    exitCode = runner.runWithSecrets(commandPtr, secretsPtr);
+  } finally {
+    commandBuffer.fill(0);
+    secretsBuffer.fill(0);
+  }
+
+  trackEvent("cli_run_completed", {
+    secret_count: count,
+    exit_code: exitCode,
+    duration_ms: Date.now() - startTime,
+  });
+
+  process.exit(exitCode);
 }
 
 export default async function run(command: string[], options: RunOptions) {
@@ -260,74 +483,22 @@ export default async function run(command: string[], options: RunOptions) {
   }
 
   const startTime = Date.now();
-  trackEvent("cli_run_started", { has_folder: !!options.folder, has_scope: !!options.scope });
-
-  const spinner = ora("Checking authentication...").start();
+  trackEvent("cli_run_started", {
+    has_folder: !!options.folder,
+    has_scope: !!options.scope,
+    mode: isApiKeyMode() ? "api_key" : "session",
+  });
 
   try {
-    const sessionValidation = await validateSession();
-    if (!sessionValidation.isValid || sessionValidation.isExpired) {
-      spinner.fail(pc.red("Not logged in. Run 'relic login' first."));
-      process.exit(1);
+    if (isApiKeyMode()) {
+      await runWithApiKey(command, options, startTime);
+    } else {
+      await runWithSession(command, options, startTime);
     }
-
-    spinner.text = "Verifying password...";
-    const hasPass = await hasPassword();
-    if (!hasPass) {
-      spinner.fail(pc.red("No password set. Run 'relic tui' to set up your password first."));
-      process.exit(1);
-    }
-
-    if (!(await getPasswordFromStorage())) {
-      spinner.fail(pc.red("Could not retrieve password. Please re-authenticate."));
-      process.exit(1);
-    }
-
-    spinner.text = "Loading configuration...";
-    const configResult = await findConfig();
-    if (!configResult) {
-      spinner.fail(pc.red("No relic.toml found. Run 'relic init' first."));
-      process.exit(1);
-    }
-
-    const projectId = configResult.config.project_id;
-
-    spinner.text = "Preparing secrets...";
-    const db = await getCacheDb();
-    const userKeyDb = await getUserKeyCacheDb();
-    const api = getApi();
-
-    const { secrets, count } = await prepareSecrets(projectId, options, db, userKeyDb, api);
-
-    spinner.succeed(pc.green(`Injected ${count} secret${count !== 1 ? "s" : ""}`));
-
-    const runner = await RunnerBridge.getInstance();
-
-    const commandJson = JSON.stringify(command);
-    const secretsJson = JSON.stringify(secrets);
-
-    const commandBuffer = Buffer.from(`${commandJson}\0`, "utf-8");
-    const secretsBuffer = Buffer.from(`${secretsJson}\0`, "utf-8");
-
-    const commandPtr = ptr(commandBuffer);
-    const secretsPtr = ptr(secretsBuffer);
-
-    let exitCode = -1;
-    try {
-      exitCode = runner.runWithSecrets(commandPtr, secretsPtr);
-    } finally {
-      commandBuffer.fill(0);
-      secretsBuffer.fill(0);
-    }
-    trackEvent("cli_run_completed", {
-      secret_count: count,
-      exit_code: exitCode,
-      duration_ms: Date.now() - startTime,
-    });
-    process.exit(exitCode);
   } catch (err) {
     log.error("Run failed", err);
     trackEvent("cli_run_completed", { success: false, duration_ms: Date.now() - startTime });
+    const spinner = ora();
     spinner.fail(pc.red(err instanceof Error ? err.message : String(err)));
     process.exit(1);
   }
