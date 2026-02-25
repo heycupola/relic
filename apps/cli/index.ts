@@ -1,7 +1,6 @@
 import { initLogger } from "@repo/logger";
 import { Command } from "commander";
 import type { SecretScope } from "lib/types";
-import exportSession from "./commands/export-session";
 import init from "./commands/init";
 import login from "./commands/login";
 import logout from "./commands/logout";
@@ -26,7 +25,6 @@ program.command("logout").description("Clear authentication").action(logout);
 program.command("whoami").description("Show current user").action(whoami);
 program.command("projects").description("List all projects").action(projects);
 program.command("init").description("Initialize Relic for the current project").action(init);
-program.command("export-session").description("Export session for CI/CD").action(exportSession);
 
 const telemetryCmd = program
   .command("telemetry")
@@ -41,9 +39,13 @@ program
   .requiredOption("-e, --environment <name>", "Environment name (required)")
   .option("-f, --folder <name>", "Folder name (optional)")
   .option("-s, --scope <scope>", "Scope filter: client, server, or shared (optional)")
+  .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
   .argument("<command...>", "Command to run")
   .action(
-    (command: string[], options: { environment: string; folder?: string; scope?: SecretScope }) => {
+    (
+      command: string[],
+      options: { environment: string; folder?: string; scope?: SecretScope; project?: string },
+    ) => {
       run(command, options);
     },
   );
