@@ -16,6 +16,20 @@ import {
 } from "./lib/types";
 import schema from "./schema";
 
+type ExportSecretsResult = {
+  secrets: {
+    id: Id<"secret">;
+    key: string;
+    encryptedValue: string;
+    scope: "client" | "server" | "shared";
+    valueType: "string" | "number" | "boolean";
+  }[];
+  count: number;
+  encryptedProjectKey: string;
+  environmentId: Id<"environment">;
+  folderId: Id<"folder"> | null;
+};
+
 const MAX_SECRETS_PER_ENVIRONMENT = 1024;
 export const createSecret = protectedMutation({
   args: {
@@ -607,8 +621,9 @@ export const deleteSecret = protectedMutation({
   },
 });
 
-export const exportSecrets = protectedMutation({
+export const _exportSecretsCore = internalMutation({
   args: {
+    userId: v.string(),
     projectId: v.id("project"),
     environmentName: v.optional(v.string()),
     environmentId: v.optional(v.id("environment")),
@@ -633,35 +648,36 @@ export const exportSecrets = protectedMutation({
   }),
   handler: async (
     ctx,
-    args,
-  ): Promise<{
-    secrets: {
-      id: Id<"secret">;
-      key: string;
-      encryptedValue: string;
-      scope: "shared" | "server" | "client";
-      valueType: "string" | "boolean" | "number";
-    }[];
-    count: number;
-    encryptedProjectKey: string;
-    environmentId: Id<"environment">;
-    folderId: Id<"folder"> | null;
-  }> => {
+    args: {
+      userId: string;
+      projectId: Id<"project">;
+      environmentName?: string;
+      environmentId?: Id<"environment">;
+      folderName?: string;
+      folderId?: Id<"folder">;
+      scope?: "client" | "server" | "shared";
+    },
+  ): Promise<ExportSecretsResult> => {
+    const authCtx = {
+      ...ctx,
+      userId: args.userId,
+      email: undefined,
+      name: undefined,
+    } as unknown as ProtectedMutationCtx;
+
     const project = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: args.projectId,
     });
 
-    await assertProjectAccess(ctx, project);
-
-    await checkRateLimit(ctx, "read");
+    await assertProjectAccess(authCtx, project);
 
     let encryptedProjectKey: string = project.encryptedProjectKey;
-    if (project.ownerId !== ctx.userId) {
+    if (project.ownerId !== args.userId) {
       const projectShare = await ctx.runQuery(
         internal.projectShare._loadActiveShareByProjectAndUser,
         {
           projectId: args.projectId,
-          userId: ctx.userId,
+          userId: args.userId,
         },
       );
 
@@ -739,7 +755,7 @@ export const exportSecrets = protectedMutation({
       folderId: resolvedFolderId,
       folderName: folder?.name,
       secretAction: "secret.exported",
-      userId: ctx.userId,
+      userId: args.userId,
       exportCount: filteredSecrets.length,
       exportFormat: "env",
     });
@@ -757,6 +773,25 @@ export const exportSecrets = protectedMutation({
       environmentId: resolvedEnvironmentId,
       folderId: resolvedFolderId ?? null,
     };
+  },
+});
+
+export const exportSecrets = protectedMutation({
+  args: {
+    projectId: v.id("project"),
+    environmentName: v.optional(v.string()),
+    environmentId: v.optional(v.id("environment")),
+    folderName: v.optional(v.string()),
+    folderId: v.optional(v.id("folder")),
+    scope: v.optional(v.union(v.literal("client"), v.literal("server"), v.literal("shared"))),
+  },
+  handler: async (ctx: ProtectedMutationCtx, args): Promise<ExportSecretsResult> => {
+    await checkRateLimit(ctx, "read");
+
+    return await ctx.runMutation(internal.secret._exportSecretsCore, {
+      userId: ctx.userId,
+      ...args,
+    });
   },
 });
 
