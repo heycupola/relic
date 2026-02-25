@@ -1,7 +1,7 @@
 import { type AuthFunctions, createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
 import { betterAuth } from "better-auth";
-import { deviceAuthorization } from "better-auth/plugins";
+import { deviceAuthorization, lastLoginMethod } from "better-auth/plugins";
 import { components, internal } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import authSchema from "./betterAuth/schema";
@@ -94,6 +94,6 @@ export const createAuth = (
         clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
       },
     },
-    plugins: [convex(), deviceAuthorization()],
+    plugins: [convex(), deviceAuthorization(), lastLoginMethod()],
   });
 };

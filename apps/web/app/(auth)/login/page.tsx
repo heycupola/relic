@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AuthFooter } from "@/components/auth-footer";
 import { GoogleIcon } from "@/components/icons/google-icon";
 import { OAuthButton } from "@/components/oauth-button";
@@ -16,6 +16,11 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const returnUrl = searchParams.get("returnUrl");
   const [isLoading, setIsLoading] = useState(false);
+  const [lastMethod, setLastMethod] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLastMethod(authClient.getLastUsedLoginMethod());
+  }, []);
 
   const safeReturnUrl = isValidReturnUrl(returnUrl) ? returnUrl : "/";
 
@@ -91,6 +96,7 @@ export default function LoginPage() {
               icon={<GoogleIcon />}
               onClick={handleGoogleLogin}
               disabled={isLoading}
+              lastUsed={lastMethod === "google"}
             >
               Continue with Google
             </OAuthButton>
@@ -102,6 +108,7 @@ export default function LoginPage() {
               }
               onClick={handleGithubLogin}
               disabled={isLoading}
+              lastUsed={lastMethod === "github"}
             >
               Continue with GitHub
             </OAuthButton>
