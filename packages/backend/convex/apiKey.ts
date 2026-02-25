@@ -8,8 +8,8 @@ import { createError, ErrorCode } from "./lib/errors";
 import { createLogger } from "./lib/logger";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
-import { ApiKeyScope, ErrorSeverity, hasScopes, validateScopes } from "./lib/types";
 import type { ProtectedMutationCtx, ProtectedQueryCtx } from "./lib/types";
+import { ApiKeyScope, ErrorSeverity, hasScopes, validateScopes } from "./lib/types";
 
 const log = createLogger("apiKey");
 
@@ -80,8 +80,6 @@ export const createApiKey = protectedMutation({
 export const listApiKeys = protectedQuery({
   args: {},
   handler: async (ctx: ProtectedQueryCtx) => {
-    await checkRateLimit(ctx, "read");
-
     const keys = await ctx.db
       .query("apiKey")
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))

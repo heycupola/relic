@@ -1,5 +1,6 @@
 import { httpRouter } from "convex/server";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { httpAction } from "./_generated/server";
 import { authComponent, createAuth } from "./auth";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
@@ -224,10 +225,10 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const authHeader = request.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(
-        JSON.stringify({ error: "Missing or invalid Authorization header" }),
-        { status: 401, headers: { "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     const hashedApiKey = await hashKey(authHeader.slice(7));
@@ -241,17 +242,17 @@ http.route({
     try {
       body = (await request.json()) as Record<string, unknown>;
     } catch {
-      return new Response(
-        JSON.stringify({ error: "Invalid JSON body" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     if (!body.projectId) {
-      return new Response(
-        JSON.stringify({ error: "projectId is required" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ error: "projectId is required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     try {
@@ -263,11 +264,11 @@ http.route({
 
       const result = await ctx.runMutation(internal.secret._exportSecretsCore, {
         userId,
-        projectId: body.projectId as string,
+        projectId: body.projectId as Id<"project">,
         environmentName: body.environmentName as string | undefined,
-        environmentId: body.environmentId as string | undefined,
+        environmentId: body.environmentId as Id<"environment"> | undefined,
         folderName: body.folderName as string | undefined,
-        folderId: body.folderId as string | undefined,
+        folderId: body.folderId as Id<"folder"> | undefined,
         scope: body.scope as "client" | "server" | "shared" | undefined,
       });
 
@@ -287,10 +288,10 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const authHeader = request.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(
-        JSON.stringify({ error: "Missing or invalid Authorization header" }),
-        { status: 401, headers: { "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     const hashedApiKey = await hashKey(authHeader.slice(7));

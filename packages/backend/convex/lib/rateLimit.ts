@@ -1,20 +1,14 @@
 import type { RunMutationCtx } from "@convex-dev/rate-limiter";
-import type { GenericActionCtx, GenericMutationCtx, GenericQueryCtx } from "convex/server";
+import type { GenericActionCtx, GenericMutationCtx } from "convex/server";
 import type { DataModel } from "../_generated/dataModel";
 import { rateLimiter } from "../rateLimiter";
 import { createError, ErrorCode } from "./errors";
 import { createLogger } from "./logger";
-import type { ProtectedActionCtx, ProtectedMutationCtx, ProtectedQueryCtx } from "./types";
+import type { ProtectedActionCtx, ProtectedMutationCtx } from "./types";
 
 const log = createLogger("rateLimit");
 
 type OperationType = "read" | "write" | "delete" | "bulk" | "keyRotation";
-
-export async function checkRateLimit(
-  ctx: ProtectedQueryCtx,
-  type: OperationType,
-  key?: string,
-): Promise<void>;
 
 export async function checkRateLimit(
   ctx: ProtectedMutationCtx,
@@ -24,12 +18,6 @@ export async function checkRateLimit(
 
 export async function checkRateLimit(
   ctx: ProtectedActionCtx,
-  type: OperationType,
-  key?: string,
-): Promise<void>;
-
-export async function checkRateLimit(
-  ctx: GenericQueryCtx<DataModel>,
   type: OperationType,
   key?: string,
 ): Promise<void>;
@@ -48,11 +36,9 @@ export async function checkRateLimit(
 
 export async function checkRateLimit(
   ctx:
-    | ProtectedQueryCtx
     | ProtectedMutationCtx
     | ProtectedActionCtx
     | GenericMutationCtx<DataModel>
-    | GenericQueryCtx<DataModel>
     | GenericActionCtx<DataModel>,
   type: OperationType,
   key?: string,
@@ -65,7 +51,7 @@ export async function checkRateLimit(
     keyRotation: "keyRotation",
   } as const;
 
-  const rateLimitKey = key || (ctx as ProtectedMutationCtx | ProtectedQueryCtx).userId;
+  const rateLimitKey = key || (ctx as ProtectedMutationCtx).userId;
 
   if (!rateLimitKey) {
     throw createError({
