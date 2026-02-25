@@ -201,13 +201,17 @@ export const _getUserCryptoKeys = internalQuery({
   returns: v.object({
     encryptedPrivateKey: v.string(),
     salt: v.string(),
+    publicKey: v.string(),
   }),
-  handler: async (ctx, args): Promise<{ encryptedPrivateKey: string; salt: string }> => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ encryptedPrivateKey: string; salt: string; publicKey: string }> => {
     const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
       userId: args.userId as BetterAuthId<"user">,
     });
 
-    if (!user?.encryptedPrivateKey || !user?.salt) {
+    if (!user?.encryptedPrivateKey || !user?.salt || !user?.publicKey) {
       throw createError({
         code: ErrorCode.USER_NOT_FOUND,
         message: "User encryption keys not found",
@@ -218,6 +222,7 @@ export const _getUserCryptoKeys = internalQuery({
     return {
       encryptedPrivateKey: user.encryptedPrivateKey,
       salt: user.salt,
+      publicKey: user.publicKey,
     };
   },
 });

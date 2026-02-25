@@ -26,7 +26,13 @@ import type { SecretScope } from "lib/types";
 import ora from "ora";
 import pc from "picocolors";
 import { RunnerBridge } from "../ffi/bridge";
-import { exportSecretsViaApiKey, getApi, type ProtectedApi, type SecretData } from "../lib/api";
+import {
+  exportSecretsViaApiKey,
+  fetchUserKeysViaApiKey,
+  getApi,
+  type ProtectedApi,
+  type SecretData,
+} from "../lib/api";
 import { findConfig } from "../lib/config";
 import { decryptSecrets, getProjectKey, ProjectKeyError } from "../lib/crypto";
 
@@ -48,6 +54,27 @@ function isApiKeyMode(): boolean {
   return !!process.env.RELIC_API_KEY;
 }
 
+async function resolveUserKeysWithApiKey(
+  userKeyDb: Database,
+  apiKey: string,
+): Promise<{ encryptedPrivateKey: string; salt: string }> {
+  const cachedKeys = getCachedUserKeys(userKeyDb);
+  if (cachedKeys) {
+    return { encryptedPrivateKey: cachedKeys.encryptedPrivateKey, salt: cachedKeys.salt };
+  }
+
+  const keys = await fetchUserKeysViaApiKey(apiKey);
+
+  cacheUserKeys(userKeyDb, {
+    encryptedPrivateKey: keys.encryptedPrivateKey,
+    salt: keys.salt,
+    publicKey: keys.publicKey,
+    keysUpdatedAt: Date.now(),
+  });
+
+  return { encryptedPrivateKey: keys.encryptedPrivateKey, salt: keys.salt };
+}
+
 async function prepareSecretsWithApiKey(
   projectId: string,
   options: RunOptions,
@@ -61,6 +88,9 @@ async function prepareSecretsWithApiKey(
   if (!password) {
     throw new Error("RELIC_PASSWORD is required for API key mode.");
   }
+
+  const userKeyDb = await getUserKeyCacheDb();
+  const userKeys = await resolveUserKeysWithApiKey(userKeyDb, apiKey);
 
   const result = await exportSecretsViaApiKey(apiKey, {
     projectId,
@@ -76,9 +106,9 @@ async function prepareSecretsWithApiKey(
   const { unwrapProjectKey } = await import("@repo/crypto");
   const projectKey = await unwrapProjectKey(
     result.encryptedProjectKey,
-    result.user.encryptedPrivateKey,
+    userKeys.encryptedPrivateKey,
     password,
-    result.user.salt,
+    userKeys.salt,
   );
 
   const decryptedSecrets = await decryptSecrets(

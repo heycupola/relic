@@ -332,10 +332,12 @@ export interface ExportSecretsHttpResponse {
   encryptedProjectKey: string;
   environmentId: string;
   folderId: string | null;
-  user: {
-    encryptedPrivateKey: string;
-    salt: string;
-  };
+}
+
+export interface UserCryptoKeysResponse {
+  encryptedPrivateKey: string;
+  salt: string;
+  publicKey: string;
 }
 
 export async function exportSecretsViaApiKey(
@@ -365,4 +367,25 @@ export async function exportSecretsViaApiKey(
   }
 
   return (await response.json()) as ExportSecretsHttpResponse;
+}
+
+export async function fetchUserKeysViaApiKey(
+  apiKey: string,
+): Promise<UserCryptoKeysResponse> {
+  const url = `${CONVEX_SITE_URL}/api/user/keys`;
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    const message = (errorBody as { error?: string })?.error ?? `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+
+  return (await response.json()) as UserCryptoKeysResponse;
 }

@@ -23,6 +23,7 @@ export type ProtectedActionCtx = ActionCtx & {
 
 export enum ApiKeyScope {
   SecretsRead = "secrets.read",
+  UserKeysRead = "user.keys.read",
 }
 
 const API_KEY_SCOPE_VALUES = Object.values(ApiKeyScope) as string[];

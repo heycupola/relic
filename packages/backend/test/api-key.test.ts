@@ -466,4 +466,55 @@ describe("API Key Management", () => {
       expect(response.status).toBe(403);
     });
   });
+
+  describe("Get User Keys with API Key (HTTP)", () => {
+    async function fetchKeysViaHttp(apiKey: string): Promise<Response> {
+      return await t.fetch("/api/user/keys", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+      });
+    }
+
+    test("should return user crypto keys with valid API key", async () => {
+      const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
+        name: "Keys Reader",
+        scopes: ["user.keys.read"],
+      });
+
+      const response = await fetchKeysViaHttp(apiKey);
+
+      expect(response.status).toBe(200);
+      const result = await response.json();
+      expect(result.encryptedPrivateKey).toBeDefined();
+      expect(result.salt).toBeDefined();
+      expect(result.publicKey).toBeDefined();
+    });
+
+    test("should reject API key without user.keys.read scope", async () => {
+      const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
+        name: "Secrets Only",
+        scopes: ["secrets.read"],
+      });
+
+      const response = await fetchKeysViaHttp(apiKey);
+
+      expect(response.status).toBe(403);
+    });
+
+    test("should reject missing Authorization header", async () => {
+      const response = await t.fetch("/api/user/keys", {
+        method: "GET",
+      });
+
+      expect(response.status).toBe(401);
+    });
+
+    test("should reject invalid API key", async () => {
+      const response = await fetchKeysViaHttp("relic_sk_invalidkey");
+
+      expect(response.status).toBe(401);
+    });
+  });
 });

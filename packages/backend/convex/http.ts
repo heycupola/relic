@@ -261,32 +261,57 @@ http.route({
         clientIp,
       });
 
-      const [result, userKeys] = await Promise.all([
-        ctx.runMutation(internal.secret._exportSecretsCore, {
-          userId,
-          projectId: body.projectId as string,
-          environmentName: body.environmentName as string | undefined,
-          environmentId: body.environmentId as string | undefined,
-          folderName: body.folderName as string | undefined,
-          folderId: body.folderId as string | undefined,
-          scope: body.scope as "client" | "server" | "shared" | undefined,
-        }),
-        ctx.runQuery(internal.apiKey._getUserCryptoKeys, { userId }),
-      ]);
+      const result = await ctx.runMutation(internal.secret._exportSecretsCore, {
+        userId,
+        projectId: body.projectId as string,
+        environmentName: body.environmentName as string | undefined,
+        environmentId: body.environmentId as string | undefined,
+        folderName: body.folderName as string | undefined,
+        folderId: body.folderId as string | undefined,
+        scope: body.scope as "client" | "server" | "shared" | undefined,
+      });
 
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return toHttpErrorResponse(error);
+    }
+  }),
+});
+
+http.route({
+  path: "/api/user/keys",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
       return new Response(
-        JSON.stringify({
-          ...result,
-          user: {
-            encryptedPrivateKey: userKeys.encryptedPrivateKey,
-            salt: userKeys.salt,
-          },
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        },
+        JSON.stringify({ error: "Missing or invalid Authorization header" }),
+        { status: 401, headers: { "Content-Type": "application/json" } },
       );
+    }
+
+    const hashedApiKey = await hashKey(authHeader.slice(7));
+    const clientIp =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      request.headers.get("cf-connecting-ip") ??
+      "unknown";
+
+    try {
+      const { userId } = await ctx.runMutation(internal.apiKey._validateApiKey, {
+        hashedApiKey,
+        requiredScopes: ["user.keys.read"],
+        clientIp,
+      });
+
+      const keys = await ctx.runQuery(internal.apiKey._getUserCryptoKeys, { userId });
+
+      return new Response(JSON.stringify(keys), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     } catch (error) {
       return toHttpErrorResponse(error);
     }
