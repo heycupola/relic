@@ -135,7 +135,7 @@ export const revokeApiKey = protectedMutation({
 
 export const _validateApiKey = internalMutation({
   args: {
-    apiKey: v.string(),
+    hashedApiKey: v.string(),
     requiredScopes: v.array(v.string()),
     clientIp: v.optional(v.string()),
   },
@@ -144,16 +144,14 @@ export const _validateApiKey = internalMutation({
   }),
   handler: async (
     ctx,
-    args: { apiKey: string; requiredScopes: string[]; clientIp?: string },
+    args: { hashedApiKey: string; requiredScopes: string[]; clientIp?: string },
   ): Promise<{ userId: string }> => {
     const rateLimitKey = args.clientIp ?? "unknown";
     await checkRateLimit(ctx, "read", `apikey:${rateLimitKey}`);
 
-    const hashedKey = await hashKey(args.apiKey);
-
     const keyDoc = await ctx.db
       .query("apiKey")
-      .withIndex("by_hashedKey", (q) => q.eq("hashedKey", hashedKey))
+      .withIndex("by_hashedKey", (q) => q.eq("hashedKey", args.hashedApiKey))
       .unique();
 
     if (!keyDoc) {

@@ -3,6 +3,7 @@ import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import { authComponent, createAuth } from "./auth";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
+import { hashKey } from "./lib/crypto";
 import { toHttpErrorResponse } from "./lib/errors";
 import { createLogger } from "./lib/logger";
 import { verifyResendSignature } from "./lib/resend";
@@ -229,7 +230,7 @@ http.route({
       );
     }
 
-    const apiKey = authHeader.slice(7);
+    const hashedApiKey = await hashKey(authHeader.slice(7));
     const clientIp =
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
       request.headers.get("cf-connecting-ip") ??
@@ -255,7 +256,7 @@ http.route({
 
     try {
       const { userId } = await ctx.runMutation(internal.apiKey._validateApiKey, {
-        apiKey,
+        hashedApiKey,
         requiredScopes: ["secrets.read"],
         clientIp,
       });
