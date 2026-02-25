@@ -32,9 +32,6 @@ import { decryptSecrets, getProjectKey, ProjectKeyError } from "../lib/crypto";
 
 const log = createLogger("cli");
 
-const ENV_API_KEY = "RELIC_API_KEY";
-const ENV_PROJECT_ID = "RELIC_PROJECT_ID";
-
 export interface RunOptions {
   environment: string;
   folder?: string;
@@ -48,14 +45,17 @@ export interface PrepareSecretsResult {
 }
 
 function isApiKeyMode(): boolean {
-  return !!process.env[ENV_API_KEY];
+  return !!process.env.RELIC_API_KEY;
 }
 
 async function prepareSecretsWithApiKey(
   projectId: string,
   options: RunOptions,
 ): Promise<PrepareSecretsResult> {
-  const apiKey = process.env[ENV_API_KEY]!;
+  const apiKey = process.env.RELIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("RELIC_API_KEY is required for API key mode.");
+  }
 
   const password = await getPasswordFromStorage();
   if (!password) {
@@ -282,7 +282,7 @@ export async function prepareSecrets(
 
 function resolveProjectId(options: RunOptions): string | null {
   if (options.project) return options.project;
-  if (process.env[ENV_PROJECT_ID]) return process.env[ENV_PROJECT_ID];
+  if (process.env.RELIC_PROJECT_ID) return process.env.RELIC_PROJECT_ID;
   return null;
 }
 

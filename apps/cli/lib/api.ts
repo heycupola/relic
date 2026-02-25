@@ -4,18 +4,7 @@ import { trackError } from "@repo/logger";
 import { ConvexHttpClient } from "convex/browser";
 
 const CONVEX_URL = process.env.CONVEX_URL ?? "http://localhost:3210";
-
-function getConvexSiteUrl(): string {
-  if (CONVEX_URL.includes(".convex.cloud")) {
-    return CONVEX_URL.replace(".convex.cloud", ".convex.site");
-  }
-
-  if (CONVEX_URL.includes("localhost:3210") || CONVEX_URL.includes("127.0.0.1:3210")) {
-    return CONVEX_URL.replace("3210", "3211");
-  }
-
-  return CONVEX_URL.replace("3210", "3211");
-}
+const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL ?? "http://localhost:3211";
 
 export interface User {
   id: string;
@@ -358,8 +347,7 @@ export async function exportSecretsViaApiKey(
     scope?: string;
   },
 ): Promise<ExportSecretsHttpResponse> {
-  const siteUrl = getConvexSiteUrl();
-  const url = `${siteUrl}/api/secrets/export`;
+  const url = `${CONVEX_SITE_URL}/api/secrets/export`;
 
   const response = await fetch(url, {
     method: "POST",

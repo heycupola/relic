@@ -44,6 +44,7 @@ For CI/CD environments, use API keys instead of interactive login:
 | `RELIC_API_KEY` | API key for authentication |
 | `RELIC_PASSWORD` | Master password for decryption |
 | `RELIC_PROJECT_ID` | Project ID (optional if `relic.toml` exists) |
+| `CONVEX_SITE_URL` | Convex HTTP actions URL |
 
 ### Creating an API Key
 
@@ -82,6 +83,7 @@ jobs:
           RELIC_PASSWORD: ${{ secrets.RELIC_PASSWORD }}
           RELIC_PROJECT_ID: ${{ secrets.RELIC_PROJECT_ID }}
           CONVEX_URL: ${{ secrets.CONVEX_URL }}
+          CONVEX_SITE_URL: ${{ secrets.CONVEX_SITE_URL }}
         run: bunx relic run -e production -- npm run deploy
 ```
 
@@ -97,6 +99,7 @@ deploy:
     RELIC_PASSWORD: $RELIC_PASSWORD
     RELIC_PROJECT_ID: $RELIC_PROJECT_ID
     CONVEX_URL: $CONVEX_URL
+    CONVEX_SITE_URL: $CONVEX_SITE_URL
 ```
 
 ### CircleCI
@@ -118,6 +121,7 @@ jobs:
             RELIC_PASSWORD: ${RELIC_PASSWORD}
             RELIC_PROJECT_ID: ${RELIC_PROJECT_ID}
             CONVEX_URL: ${CONVEX_URL}
+            CONVEX_SITE_URL: ${CONVEX_SITE_URL}
 ```
 
 ## Caching
