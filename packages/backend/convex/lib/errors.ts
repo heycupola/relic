@@ -1,7 +1,6 @@
 import { ConvexError } from "convex/values";
 import { ErrorSeverity } from "./types";
 
-// Standardized error codes - consolidated from 74 to ~40 codes
 export enum ErrorCode {
   // Authentication & Authorization
   UNAUTHORIZED = "UNAUTHORIZED",
@@ -234,5 +233,55 @@ export function deviceAuthError(
   createError({
     code: codeMap[type],
     severity,
+  });
+}
+
+const HTTP_STATUS_MAP: Partial<Record<ErrorCode, number>> = {
+  [ErrorCode.UNAUTHORIZED]: 401,
+  [ErrorCode.INSUFFICIENT_PERMISSION]: 403,
+  [ErrorCode.INSUFFICIENT_ROLE]: 403,
+  [ErrorCode.USER_NOT_FOUND]: 404,
+  [ErrorCode.PROJECT_NOT_FOUND]: 404,
+  [ErrorCode.ENVIRONMENT_NOT_FOUND]: 404,
+  [ErrorCode.FOLDER_NOT_FOUND]: 404,
+  [ErrorCode.SECRET_NOT_FOUND]: 404,
+  [ErrorCode.REQUEST_NOT_FOUND]: 404,
+  [ErrorCode.SHARE_NOT_FOUND]: 404,
+  [ErrorCode.RATE_LIMIT_EXCEEDED]: 429,
+  [ErrorCode.INVALID_ARGUMENTS]: 400,
+  [ErrorCode.INVALID_OPERATION]: 400,
+  [ErrorCode.RESOURCE_ALREADY_EXISTS]: 409,
+  [ErrorCode.DUPLICATE_SLUG]: 409,
+  [ErrorCode.PAYMENT_REQUIRED]: 402,
+  [ErrorCode.PRO_PLAN_REQUIRED]: 402,
+};
+
+export function toHttpErrorResponse(error: unknown): Response {
+  let code = ErrorCode.SERVER_ERROR;
+  let message = "Internal server error";
+
+  if (error instanceof ConvexError) {
+    let errorData = error.data;
+    while (typeof errorData === "string") {
+      try {
+        errorData = JSON.parse(errorData);
+      } catch {
+        break;
+      }
+    }
+
+    if (typeof errorData === "object" && errorData !== null) {
+      code = (errorData as { code?: ErrorCode }).code ?? ErrorCode.SERVER_ERROR;
+      message = (errorData as { message?: string }).message ?? message;
+    }
+  } else if (error instanceof Error) {
+    message = error.message;
+  }
+
+  const status = HTTP_STATUS_MAP[code] ?? 500;
+
+  return new Response(JSON.stringify({ error: message, code }), {
+    status,
+    headers: { "Content-Type": "application/json" },
   });
 }
