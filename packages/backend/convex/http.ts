@@ -3,6 +3,7 @@ import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import { authComponent, createAuth } from "./auth";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
+import { toHttpErrorResponse } from "./lib/errors";
 import { createLogger } from "./lib/logger";
 import { verifyResendSignature } from "./lib/resend";
 import type { EmailKind } from "./lib/types";
@@ -212,6 +213,81 @@ http.route({
     } catch (error) {
       resendLog.error("Error handling webhook", { error: String(error) });
       return new Response("Webhook handler error", { status: 500 });
+    }
+  }),
+});
+
+http.route({
+  path: "/api/secrets/export",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid Authorization header" }),
+        { status: 401, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    const apiKey = authHeader.slice(7);
+    const clientIp =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      request.headers.get("cf-connecting-ip") ??
+      "unknown";
+
+    let body: Record<string, unknown>;
+
+    try {
+      body = (await request.json()) as Record<string, unknown>;
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON body" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    if (!body.projectId) {
+      return new Response(
+        JSON.stringify({ error: "projectId is required" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    try {
+      const { userId } = await ctx.runMutation(internal.apiKey._validateApiKey, {
+        apiKey,
+        requiredScopes: ["secrets.read"],
+        clientIp,
+      });
+
+      const [result, userKeys] = await Promise.all([
+        ctx.runMutation(internal.secret._exportSecretsCore, {
+          userId,
+          projectId: body.projectId as string,
+          environmentName: body.environmentName as string | undefined,
+          environmentId: body.environmentId as string | undefined,
+          folderName: body.folderName as string | undefined,
+          folderId: body.folderId as string | undefined,
+          scope: body.scope as "client" | "server" | "shared" | undefined,
+        }),
+        ctx.runQuery(internal.apiKey._getUserCryptoKeys, { userId }),
+      ]);
+
+      return new Response(
+        JSON.stringify({
+          ...result,
+          user: {
+            encryptedPrivateKey: userKeys.encryptedPrivateKey,
+            salt: userKeys.salt,
+          },
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    } catch (error) {
+      return toHttpErrorResponse(error);
     }
   }),
 });
