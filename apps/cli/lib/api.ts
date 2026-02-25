@@ -5,6 +5,18 @@ import { ConvexHttpClient } from "convex/browser";
 
 const CONVEX_URL = process.env.CONVEX_URL ?? "http://localhost:3210";
 
+function getConvexSiteUrl(): string {
+  if (CONVEX_URL.includes(".convex.cloud")) {
+    return CONVEX_URL.replace(".convex.cloud", ".convex.site");
+  }
+
+  if (CONVEX_URL.includes("localhost:3210") || CONVEX_URL.includes("127.0.0.1:3210")) {
+    return CONVEX_URL.replace("3210", "3211");
+  }
+
+  return CONVEX_URL.replace("3210", "3211");
+}
+
 export interface User {
   id: string;
   name: string;
@@ -317,4 +329,52 @@ export function getApi(): ProtectedApi {
     instance = new ProtectedApi();
   }
   return instance;
+}
+
+export interface ExportSecretsHttpResponse {
+  secrets: {
+    id: string;
+    key: string;
+    encryptedValue: string;
+    scope: "client" | "server" | "shared";
+    valueType: "string" | "number" | "boolean";
+  }[];
+  count: number;
+  encryptedProjectKey: string;
+  environmentId: string;
+  folderId: string | null;
+  user: {
+    encryptedPrivateKey: string;
+    salt: string;
+  };
+}
+
+export async function exportSecretsViaApiKey(
+  apiKey: string,
+  body: {
+    projectId: string;
+    environmentName: string;
+    folderName?: string;
+    scope?: string;
+  },
+): Promise<ExportSecretsHttpResponse> {
+  const siteUrl = getConvexSiteUrl();
+  const url = `${siteUrl}/api/secrets/export`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    const message = (errorBody as { error?: string })?.error ?? `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+
+  return (await response.json()) as ExportSecretsHttpResponse;
 }

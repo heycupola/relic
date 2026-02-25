@@ -26,7 +26,7 @@ import type { SecretScope } from "lib/types";
 import ora from "ora";
 import pc from "picocolors";
 import { RunnerBridge } from "../ffi/bridge";
-import { getApi, type ProtectedApi, type SecretData } from "../lib/api";
+import { exportSecretsViaApiKey, getApi, type ProtectedApi, type SecretData } from "../lib/api";
 import { findConfig } from "../lib/config";
 import { decryptSecrets, getProjectKey, ProjectKeyError } from "../lib/crypto";
 
@@ -49,68 +49,6 @@ export interface PrepareSecretsResult {
 
 function isApiKeyMode(): boolean {
   return !!process.env[ENV_API_KEY];
-}
-
-function getConvexSiteUrl(): string {
-  const convexUrl = process.env.CONVEX_URL ?? "http://localhost:3210";
-
-  if (convexUrl.includes(".convex.cloud")) {
-    return convexUrl.replace(".convex.cloud", ".convex.site");
-  }
-
-  if (convexUrl.includes("localhost:3210") || convexUrl.includes("127.0.0.1:3210")) {
-    return convexUrl.replace("3210", "3211");
-  }
-
-  return convexUrl.replace("3210", "3211");
-}
-
-interface ExportSecretsHttpResponse {
-  secrets: {
-    id: string;
-    key: string;
-    encryptedValue: string;
-    scope: "client" | "server" | "shared";
-    valueType: "string" | "number" | "boolean";
-  }[];
-  count: number;
-  encryptedProjectKey: string;
-  environmentId: string;
-  folderId: string | null;
-  user: {
-    encryptedPrivateKey: string;
-    salt: string;
-  };
-}
-
-async function exportSecretsViaApiKey(
-  apiKey: string,
-  body: {
-    projectId: string;
-    environmentName: string;
-    folderName?: string;
-    scope?: SecretScope;
-  },
-): Promise<ExportSecretsHttpResponse> {
-  const siteUrl = getConvexSiteUrl();
-  const url = `${siteUrl}/api/secrets/export`;
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    const message = (errorBody as { error?: string })?.error ?? `HTTP ${response.status}`;
-    throw new Error(message);
-  }
-
-  return (await response.json()) as ExportSecretsHttpResponse;
 }
 
 async function prepareSecretsWithApiKey(
@@ -359,7 +297,13 @@ async function runWithApiKey(
   if (!projectId) {
     const configResult = await findConfig();
     if (configResult) {
-      return runWithApiKeyAndProjectId(command, options, configResult.config.project_id, spinner, startTime);
+      return runWithApiKeyAndProjectId(
+        command,
+        options,
+        configResult.config.project_id,
+        spinner,
+        startTime,
+      );
     }
     spinner.fail(pc.red("Project ID is required. Use --project <id> or set RELIC_PROJECT_ID."));
     process.exit(1);
