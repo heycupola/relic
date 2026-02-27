@@ -57,10 +57,14 @@ function isApiKeyMode(): boolean {
 async function resolveUserKeysWithApiKey(
   userKeyDb: Database,
   apiKey: string,
-): Promise<{ encryptedPrivateKey: string; salt: string }> {
+): Promise<{ encryptedPrivateKey: string; salt: string; fromCache: boolean }> {
   const cachedKeys = getCachedUserKeys(userKeyDb);
   if (cachedKeys) {
-    return { encryptedPrivateKey: cachedKeys.encryptedPrivateKey, salt: cachedKeys.salt };
+    return {
+      encryptedPrivateKey: cachedKeys.encryptedPrivateKey,
+      salt: cachedKeys.salt,
+      fromCache: true,
+    };
   }
 
   const keys = await fetchUserKeysViaApiKey(apiKey);
@@ -72,10 +76,10 @@ async function resolveUserKeysWithApiKey(
     keysUpdatedAt: Date.now(),
   });
 
-  return { encryptedPrivateKey: keys.encryptedPrivateKey, salt: keys.salt };
+  return { encryptedPrivateKey: keys.encryptedPrivateKey, salt: keys.salt, fromCache: false };
 }
 
-async function prepareSecretsWithApiKey(
+export async function prepareSecretsWithApiKey(
   projectId: string,
   options: RunOptions,
 ): Promise<PrepareSecretsResult> {
@@ -104,12 +108,35 @@ async function prepareSecretsWithApiKey(
   }
 
   const { unwrapProjectKey } = await import("@repo/crypto");
-  const projectKey = await unwrapProjectKey(
-    result.encryptedProjectKey,
-    userKeys.encryptedPrivateKey,
-    password,
-    userKeys.salt,
-  );
+  let projectKey: CryptoKey;
+  try {
+    projectKey = await unwrapProjectKey(
+      result.encryptedProjectKey,
+      userKeys.encryptedPrivateKey,
+      password,
+      userKeys.salt,
+    );
+  } catch (err) {
+    if (!userKeys.fromCache) {
+      throw err;
+    }
+
+    clearCachedUserKeys(userKeyDb);
+    const freshKeys = await fetchUserKeysViaApiKey(apiKey);
+    cacheUserKeys(userKeyDb, {
+      encryptedPrivateKey: freshKeys.encryptedPrivateKey,
+      salt: freshKeys.salt,
+      publicKey: freshKeys.publicKey,
+      keysUpdatedAt: Date.now(),
+    });
+
+    projectKey = await unwrapProjectKey(
+      result.encryptedProjectKey,
+      freshKeys.encryptedPrivateKey,
+      password,
+      freshKeys.salt,
+    );
+  }
 
   const decryptedSecrets = await decryptSecrets(
     projectKey,
