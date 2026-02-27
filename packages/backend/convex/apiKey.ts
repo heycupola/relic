@@ -48,7 +48,9 @@ export const createApiKey = protectedMutation({
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
       .collect();
 
-    const activeKeys = existing.filter((k) => !k.revokedAt);
+    const activeKeys = existing.filter(
+      (k) => !k.revokedAt && (!k.expiresAt || k.expiresAt >= Date.now()),
+    );
     if (activeKeys.length >= MAX_API_KEYS_PER_USER) {
       throw createError({
         code: ErrorCode.RATE_LIMIT_EXCEEDED,
