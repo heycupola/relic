@@ -664,6 +664,7 @@ export const _exportSecretsCore = internalMutation({
       email: undefined,
       name: undefined,
     } as unknown as ProtectedMutationCtx;
+    await checkRateLimit(authCtx, "read");
 
     const project = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: args.projectId,
@@ -786,8 +787,6 @@ export const exportSecrets = protectedMutation({
     scope: v.optional(v.union(v.literal("client"), v.literal("server"), v.literal("shared"))),
   },
   handler: async (ctx: ProtectedMutationCtx, args): Promise<ExportSecretsResult> => {
-    await checkRateLimit(ctx, "read");
-
     return await ctx.runMutation(internal.secret._exportSecretsCore, {
       userId: ctx.userId,
       ...args,
