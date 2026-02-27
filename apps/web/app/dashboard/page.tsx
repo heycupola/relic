@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { ContainerLines } from "@/components/container-lines";
 import { ActivityLogsCard } from "@/components/dashboard/activity-logs-card";
+import { ApiKeysCard } from "@/components/dashboard/api-keys-card";
 import { ProjectsOverviewCard } from "@/components/dashboard/projects-overview-card";
 import { QuickActionsCard } from "@/components/dashboard/quick-actions-card";
 import { UserInfoCard } from "@/components/dashboard/user-info-card";
@@ -14,6 +15,7 @@ import { Footer } from "@/components/footer";
 import { Header } from "@/components/header";
 import { usePaginatedActionLogs } from "@/hooks/usePaginatedActionLogs";
 import { authClient } from "@/lib/auth";
+import { trackWebEvent } from "@/lib/posthog";
 
 function UpgradeHandler({
   userData,
@@ -30,6 +32,7 @@ function UpgradeHandler({
 
     if (action === "upgrade" && userData && !userData.hasPro) {
       const handleUpgrade = async () => {
+        trackWebEvent("web_upgrade_started");
         try {
           const result = await getProPlanAction({});
           if (result.checkoutLink) {
@@ -59,6 +62,9 @@ function UpgradeHandler({
 }
 
 export default function DashboardPage() {
+  useEffect(() => {
+    trackWebEvent("web_page_viewed", { page: "dashboard" });
+  }, []);
   const router = useRouter();
   const { data: session, isPending: sessionPending } = authClient.useSession();
 
@@ -69,6 +75,7 @@ export default function DashboardPage() {
     api.projectShare.listActiveSharedProjectsForCurrentUser,
     session?.user ? {} : "skip",
   );
+  const apiKeysData = useQuery(api.apiKey.listApiKeys, session?.user ? {} : "skip");
 
   // Paginated action logs
   const {
@@ -212,6 +219,8 @@ export default function DashboardPage() {
                 onLoadMore={loadMore}
               />
             </div>
+
+            <ApiKeysCard apiKeys={apiKeysData ?? []} isLoading={apiKeysData === undefined} />
           </div>
         </main>
         <Footer />

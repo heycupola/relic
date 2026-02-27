@@ -12,7 +12,11 @@ import {
   notFoundError,
 } from "./lib/errors";
 import { generateSlug } from "./lib/helpers";
+import { createLogger } from "./lib/logger";
 import { protectedAction, protectedMutation, protectedQuery } from "./lib/middleware";
+
+const log = createLogger("project");
+
 import { checkRateLimit } from "./lib/rateLimit";
 import {
   ErrorSeverity,
@@ -197,7 +201,7 @@ export const createProject = protectedAction({
             message: `Project limit reached (${currentUsage}/${data.included_usage}). Upgrade to Pro for more projects.`,
           };
         } catch (checkoutError) {
-          console.error("Autumn checkout failed:", checkoutError);
+          log.error("Autumn checkout failed", { error: String(checkoutError) });
           return {
             status: "requiresProPlan" as const,
             checkoutUrl: null,
@@ -256,10 +260,9 @@ export const createProject = protectedAction({
           value: 1,
         });
       } catch (trackError) {
-        console.error(
-          "[createProject] Payment tracking failed after project creation:",
-          trackError,
-        );
+        log.error("Payment tracking failed after project creation", {
+          error: String(trackError),
+        });
         if (isPaidProject) {
           // Compensate: delete the project we just created
           await ctx.runMutation(internal.project._deleteProject, { projectId: pId });
@@ -270,7 +273,7 @@ export const createProject = protectedAction({
             const portalResult = await ctx.autumn.customers.billingPortal(ctx, {});
             billingPortalUrl = portalResult.data?.url || null;
           } catch (portalError) {
-            console.error("[createProject] Failed to get billing portal URL:", portalError);
+            log.error("Failed to get billing portal URL", { error: String(portalError) });
           }
 
           return {
@@ -282,6 +285,8 @@ export const createProject = protectedAction({
         // For free tier tracking failures, just log - don't fail the operation
       }
     }
+
+    log.info("Project created", { projectId: pId, userId: ctx.userId, isPaidProject });
 
     return { status: "success" as const, projectId: pId };
   },
@@ -439,6 +444,8 @@ export const archiveProject = protectedAction({
       value: -1,
     });
 
+    log.info("Project archived", { projectId: args.projectId, userId: ctx.userId });
+
     return { success: true };
   },
 });
@@ -489,6 +496,8 @@ export const unarchiveProject = protectedAction({
       featureId: "projects",
       value: 1,
     });
+
+    log.info("Project unarchived", { projectId: args.projectId, userId: ctx.userId });
 
     return { success: true };
   },

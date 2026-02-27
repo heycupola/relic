@@ -10,6 +10,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Component, type ReactNode, Suspense, useEffect, useState } from "react";
 import { AuthFooter } from "@/components/auth-footer";
 import { authClient } from "@/lib/auth";
+import { trackWebEvent } from "@/lib/posthog";
 import { authHeadingStyle, authSubtitleStyle } from "@/lib/styles";
 
 type AuthStatus = "loading" | "ready" | "approving" | "denying" | "approved" | "denied" | "error";
@@ -110,6 +111,7 @@ function AuthorizeContent() {
     setErrorMessage("");
     try {
       await approveDevice({ user_code: userCode });
+      trackWebEvent("web_device_approved");
       setStatus("approved");
     } catch (error) {
       setStatus("error");
@@ -122,6 +124,7 @@ function AuthorizeContent() {
     setErrorMessage("");
     try {
       await denyDevice({ user_code: userCode });
+      trackWebEvent("web_device_denied");
       setStatus("denied");
     } catch (error) {
       setStatus("error");

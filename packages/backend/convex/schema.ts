@@ -142,4 +142,17 @@ export default defineSchema({
     .index("by_project", ["projectId", "timestamp"])
     .index("by_environment", ["environmentId", "timestamp"])
     .index("by_user", ["userId", "timestamp"]),
+  apiKey: defineTable({
+    userId: v.string(),
+    name: v.string(),
+    hashedKey: v.string(),
+    prefix: v.string(),
+    scopes: v.array(v.string()),
+    lastUsedAt: v.optional(v.number()),
+    expiresAt: v.optional(v.number()),
+    revokedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_hashedKey", ["hashedKey"]),
 });

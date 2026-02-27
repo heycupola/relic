@@ -7,6 +7,7 @@ const DB_PATH = resolve(getConfigDir(), "relic.db");
 export interface CachedUserKeys {
   encryptedPrivateKey: string;
   salt: string;
+  publicKey?: string;
   keysUpdatedAt: number;
 }
 
@@ -31,6 +32,7 @@ export function initializeSchema(db: Database): void {
       id INTEGER PRIMARY KEY CHECK (id = 1),
       encrypted_private_key TEXT NOT NULL,
       salt TEXT NOT NULL,
+      public_key TEXT,
       keys_updated_at INTEGER NOT NULL
     )
   `);
@@ -50,10 +52,13 @@ export async function getUserKeyCacheDb(): Promise<Database> {
 export function getCachedUserKeys(db: Database): CachedUserKeys | null {
   try {
     const row = db
-      .prepare("SELECT encrypted_private_key, salt, keys_updated_at FROM user_keys WHERE id = 1")
+      .prepare(
+        "SELECT encrypted_private_key, salt, public_key, keys_updated_at FROM user_keys WHERE id = 1",
+      )
       .get() as {
       encrypted_private_key: string;
       salt: string;
+      public_key: string | null;
       keys_updated_at: number;
     } | null;
 
@@ -62,6 +67,7 @@ export function getCachedUserKeys(db: Database): CachedUserKeys | null {
     return {
       encryptedPrivateKey: row.encrypted_private_key,
       salt: row.salt,
+      publicKey: row.public_key ?? undefined,
       keysUpdatedAt: row.keys_updated_at,
     };
   } catch (_) {
@@ -72,10 +78,9 @@ export function getCachedUserKeys(db: Database): CachedUserKeys | null {
 export function cacheUserKeys(db: Database, keys: CachedUserKeys): void {
   try {
     db.prepare(
-      "INSERT OR REPLACE INTO user_keys (id, encrypted_private_key, salt, keys_updated_at) VALUES (1, ?, ?, ?)",
-    ).run(keys.encryptedPrivateKey, keys.salt, keys.keysUpdatedAt);
+      "INSERT OR REPLACE INTO user_keys (id, encrypted_private_key, salt, public_key, keys_updated_at) VALUES (1, ?, ?, ?, ?)",
+    ).run(keys.encryptedPrivateKey, keys.salt, keys.publicKey ?? null, keys.keysUpdatedAt);
   } catch (_) {
-    // NOTE: Caching is best-effort — never block the main flow
     void 0;
   }
 }

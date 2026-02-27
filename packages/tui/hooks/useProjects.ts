@@ -1,10 +1,12 @@
 import { api } from "@repo/backend";
+import { createLogger, trackError } from "@repo/logger";
 import { useQuery } from "convex/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getProtectedApi } from "../api";
 import type { CreateProjectResult } from "../types/api";
 import type { Project } from "../types/models";
-import { logger } from "../utils/debugLog";
+
+const logger = createLogger("tui");
 
 export function useProjects() {
   const ownedProjectsData = useQuery(api.project.listUserProjects);
@@ -24,6 +26,7 @@ export function useProjects() {
       setLimits(limitsData);
     } catch (err) {
       logger.error("Failed to fetch limits:", err);
+      trackError("tui", err, { action: "fetch_limits" });
       setLimits(null);
       setLimitsError(err instanceof Error ? err : new Error("Failed to fetch limits"));
     } finally {

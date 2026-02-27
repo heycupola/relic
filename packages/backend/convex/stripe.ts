@@ -1,6 +1,9 @@
 import { internal } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
 import type { Id } from "./betterAuth/_generated/dataModel";
+import { createLogger } from "./lib/logger";
+
+const log = createLogger("stripeWebhook");
 
 const WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS = 300; // 5 minutes
 
@@ -55,7 +58,7 @@ export async function verifyStripeSignature(
   const timestampSeconds = parseInt(timestamp, 10);
   const now = Math.floor(Date.now() / 1000);
   if (Math.abs(now - timestampSeconds) > WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS) {
-    console.error("[Stripe Webhook] Timestamp outside tolerance window");
+    log.error("Timestamp outside tolerance window");
     return false;
   }
 
@@ -82,12 +85,12 @@ export async function handleWebhookEvent(ctx: WebhookContext, event: StripeEvent
   const { metadata, status, items } = data.object;
 
   if (!metadata?.userId) {
-    console.log("[Stripe Webhook] No userId in metadata, skipping");
+    log.info("No userId in metadata, skipping");
     return;
   }
 
   if (!isValidUserId(metadata.userId)) {
-    console.error(`[Stripe Webhook] Invalid userId format: ${metadata.userId}`);
+    log.error("Invalid userId format", { userId: metadata.userId });
     return;
   }
 
@@ -111,22 +114,18 @@ export async function handleWebhookEvent(ctx: WebhookContext, event: StripeEvent
     }
 
     case "checkout.session.completed": {
-      console.log(`[Stripe Webhook] Checkout completed for user ${userId}`);
-      // Handle the upgrade directly here since subscription events don't have userId in metadata
-      // The checkout session metadata contains userId, but Stripe doesn't copy it to subscription
+      log.info("Checkout completed", { userId });
       await ctx.scheduler.runAfter(0, internal.user._handlePlanUpgrade, { userId });
       break;
     }
 
     case "invoice.payment_failed": {
-      console.log(
-        `[Stripe Webhook] Payment failed for user ${userId}, handled by subscription.updated`,
-      );
+      log.info("Payment failed, handled by subscription.updated", { userId });
       break;
     }
 
     default:
-      console.log(`[Stripe Webhook] Unhandled event type: ${type}`);
+      log.info("Unhandled event type", { type });
   }
 }
 
@@ -139,10 +138,10 @@ async function handleUserSubscriptionChange(
   const isProPlan = priceId === process.env.STRIPE_PRO_PRICE_ID;
 
   if (isActive && isProPlan) {
-    console.log(`[User Webhook] Upgrading user ${userId} to Pro`);
+    log.info("Upgrading user to Pro", { userId });
     await ctx.scheduler.runAfter(0, internal.user._handlePlanUpgrade, { userId });
   } else {
-    console.log(`[User Webhook] Downgrading user ${userId} to Free`);
+    log.info("Downgrading user to Free", { userId });
     await ctx.scheduler.runAfter(0, internal.user._handlePlanDowngrade, { userId });
   }
 }

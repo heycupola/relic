@@ -2,9 +2,12 @@ import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { createError, ErrorCode, notFoundError, permissionError } from "./lib/errors";
+import { createLogger } from "./lib/logger";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
 import { ErrorSeverity, type ProtectedMutationCtx, type ProtectedQueryCtx } from "./lib/types";
+
+const log = createLogger("userKey");
 
 export const storeUserKeys = protectedMutation({
   args: {
@@ -220,6 +223,12 @@ export const rotateUserKeys = protectedMutation({
 
       projectsUpdatedCount++;
     }
+
+    log.info("User keys rotated", {
+      userId: ctx.userId,
+      sharesUpdated: sharesUpdatedCount,
+      ownedProjectsUpdated: projectsUpdatedCount,
+    });
 
     return {
       success: true,

@@ -1,5 +1,6 @@
 import { getPasswordFromStorage } from "@repo/auth";
 import { decryptSecret, unwrapProjectKey } from "@repo/crypto";
+import { trackError } from "@repo/logger";
 
 export class ProjectKeyError extends Error {
   constructor(
@@ -29,6 +30,8 @@ export async function getProjectKey(
     return await unwrapProjectKey(encryptedProjectKey, userEncryptedPrivateKey, password, userSalt);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+
+    trackError("cli", error, { action: "decrypt_project_key" });
 
     if (errorMessage.includes("DECRYPTION_FAILED") || errorMessage.includes("incorrect password")) {
       throw new ProjectKeyError(
@@ -69,6 +72,7 @@ export async function decryptSecrets(
       const value = await decryptSecretValue(projectKey, secret.encryptedValue);
       decrypted.push({ key: secret.key, value });
     } catch (error) {
+      trackError("cli", error, { action: "decrypt_secret" });
       throw new Error(`Failed to decrypt secret "${secret.key}": ${error}`);
     }
   }

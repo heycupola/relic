@@ -1,5 +1,5 @@
 {
-  "name": "relic",
+  "name": "@repo/cli",
   "version": "0.1.0",
   "description": "Manage project secrets the way you want with Relic – securely store and share them with your team.",
   "keywords": [
@@ -17,11 +17,12 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build:runner": "cd ../../packages/runner && cargo build",
-    "dev": "bun run build:runner && bun run index.ts",
-    "logs": "tail -f ~/Library/Application\\ Support/com.cupola.relic/relic.log",
+    "build:runner": "cd ../../packages/runner && cargo build --release",
+    "dev:cli": "DEV=true bun run build:runner && bun run index.ts",
+    "log:watch": "bun run ../../packages/logger/scripts/watch.ts",
     "lint": "biome check --write .",
     "format": "biome format --write .",
+    "check-types": "tsc --noEmit",
     "test": "bun test"
   },
   "files": [
@@ -48,6 +49,8 @@
     "@repo/auth": "*",
     "@repo/backend": "*",
     "@repo/crypto": "*",
+    "@repo/logger": "*",
+    "@repo/tui": "*",
     "commander": "^13.1.0",
     "convex": "catalog:",
     "ora": "^8.2.0",

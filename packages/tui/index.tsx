@@ -1,6 +1,6 @@
-import { initLogger } from "./utils/debugLog";
+import { initLogger, trackEvent } from "@repo/logger";
 
-initLogger();
+await initLogger();
 
 if (process.env.DEV === "true") {
   try {
@@ -11,7 +11,7 @@ if (process.env.DEV === "true") {
   }
 }
 
-import { createCliRenderer } from "@opentui/core";
+import { ConsolePosition, createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
 import {
   clearCachedUserKeys,
@@ -60,6 +60,7 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
 
   const handlePasswordSetup = async (password: string) => {
     await savePassword(password);
+    trackEvent("password_setup_completed", { success: true });
     setPasswordStatus({ has: true, loading: false });
     navigate({ name: "home" });
   };
@@ -197,5 +198,19 @@ function App() {
   );
 }
 
-const renderer = await createCliRenderer({ exitOnCtrlC: true });
+trackEvent("tui_launched", { source: process.env._RELIC_FROM_CLI ? "cli" : "standalone" });
+
+const isDev = process.env.DEV === "true";
+
+const renderer = await createCliRenderer({
+  exitOnCtrlC: true,
+  ...(isDev && {
+    consoleOptions: {
+      position: ConsolePosition.BOTTOM,
+      sizePercent: 30,
+    },
+  }),
+});
+// Wait for terminal restore to finish before exiting
+renderer.on("destroy", () => setTimeout(() => process.exit(0), 50));
 createRoot(renderer).render(<App />);

@@ -34,7 +34,6 @@ export {
   getSessionFilePath,
   getSessionToken,
   hasValidSession,
-  isSessionFromEnv,
   loadSession,
   type SessionChangeEvent,
   saveSession,

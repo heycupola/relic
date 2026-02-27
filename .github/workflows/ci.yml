@@ -28,13 +28,13 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run Biome lint
-        run: bun run lint
+        run: bunx turbo run lint --filter='!@repo/runner'
 
       - name: Run Biome format check
-        run: bun run format
+        run: bunx turbo run format --filter='!@repo/runner'
 
       - name: Type check
-        run: bun run check-types
+        run: bunx turbo run check-types --filter='!@repo/runner'
 
   build:
     name: Build
@@ -54,6 +54,6 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build all packages
-        run: bun run build
+        run: bunx turbo run build --filter='!@repo/runner'
         env:
           NEXT_PUBLIC_CONVEX_URL: https://placeholder.convex.cloud

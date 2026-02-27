@@ -12,8 +12,6 @@ const CONFIG_DIR =
     : resolve(HOME, ".config", "relic");
 const SESSION_FILE = resolve(CONFIG_DIR, "session.json");
 
-const ENV_SESSION_KEY = "RELIC_SESSION";
-
 async function ensureConfigDir(): Promise<void> {
   try {
     await mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
@@ -25,49 +23,13 @@ async function ensureConfigDir(): Promise<void> {
   }
 }
 
-export function isSessionFromEnv(): boolean {
-  return !!process.env[ENV_SESSION_KEY];
-}
-
-function parseSessionFromBase64(encoded: string): Session | null {
-  try {
-    const decoded = Buffer.from(encoded, "base64").toString("utf-8");
-    const parsed = JSON.parse(decoded) as unknown;
-
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      typeof (parsed as Session).sessionToken !== "string" ||
-      typeof (parsed as Session).tokenType !== "string" ||
-      typeof (parsed as Session).expiresAt !== "number"
-    ) {
-      return null;
-    }
-
-    return parsed as Session;
-  } catch {
-    return null;
-  }
-}
-
 export async function saveSession(session: Session): Promise<void> {
-  if (isSessionFromEnv()) {
-    return;
-  }
   await ensureConfigDir();
   const data = JSON.stringify(session, null, 2);
   await Bun.write(SESSION_FILE, data);
 }
 
 export async function loadSession(): Promise<Session | null> {
-  const envSession = process.env[ENV_SESSION_KEY];
-  if (envSession) {
-    const session = parseSessionFromBase64(envSession);
-    if (session) {
-      return session;
-    }
-  }
-
   try {
     const file = Bun.file(SESSION_FILE);
     if (!(await file.exists())) {
@@ -149,11 +111,6 @@ export function getSessionFilePath(): string {
 export async function watchSession(
   callback: (event: SessionChangeEvent) => void,
 ): Promise<() => void> {
-  if (isSessionFromEnv()) {
-    // No-op cleanup when session is from env
-    return () => undefined;
-  }
-
   await ensureConfigDir();
 
   let previousExists = existsSync(SESSION_FILE);

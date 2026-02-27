@@ -4,6 +4,9 @@ import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
+import { createLogger } from "./lib/logger";
+
+const log = createLogger("autumn");
 
 type AutumnContext = GenericActionCtx<DataModel>;
 
@@ -106,7 +109,7 @@ export const _retryAutumnTracking = internalMutation({
           attemptCount: args.attemptCount + 1,
         });
       } else {
-        console.error("Max retries exceeded for Autumn tracking:", {
+        log.error("Max retries exceeded for Autumn tracking", {
           projectId: args.projectId,
           featureId: args.featureId,
           customerId: args.identity.customerId,

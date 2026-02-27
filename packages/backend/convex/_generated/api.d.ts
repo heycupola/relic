@@ -9,6 +9,7 @@
  */
 
 import type * as actionLog from "../actionLog.js";
+import type * as apiKey from "../apiKey.js";
 import type * as auth from "../auth.js";
 import type * as autumn from "../autumn.js";
 import type * as crons from "../crons.js";
@@ -17,6 +18,7 @@ import type * as environment from "../environment.js";
 import type * as folder from "../folder.js";
 import type * as http from "../http.js";
 import type * as lib_access from "../lib/access.js";
+import type * as lib_crypto from "../lib/crypto.js";
 import type * as lib_emails_access_restricted from "../lib/emails/access_restricted.js";
 import type * as lib_emails_collaborator_added from "../lib/emails/collaborator_added.js";
 import type * as lib_emails_grace_period_started from "../lib/emails/grace_period_started.js";
@@ -25,6 +27,7 @@ import type * as lib_emails_plan_upgraded from "../lib/emails/plan_upgraded.js";
 import type * as lib_emails_welcome from "../lib/emails/welcome.js";
 import type * as lib_errors from "../lib/errors.js";
 import type * as lib_helpers from "../lib/helpers.js";
+import type * as lib_logger from "../lib/logger.js";
 import type * as lib_middleware from "../lib/middleware.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
 import type * as lib_resend from "../lib/resend.js";
@@ -46,6 +49,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   actionLog: typeof actionLog;
+  apiKey: typeof apiKey;
   auth: typeof auth;
   autumn: typeof autumn;
   crons: typeof crons;
@@ -54,6 +58,7 @@ declare const fullApi: ApiFromModules<{
   folder: typeof folder;
   http: typeof http;
   "lib/access": typeof lib_access;
+  "lib/crypto": typeof lib_crypto;
   "lib/emails/access_restricted": typeof lib_emails_access_restricted;
   "lib/emails/collaborator_added": typeof lib_emails_collaborator_added;
   "lib/emails/grace_period_started": typeof lib_emails_grace_period_started;
@@ -62,6 +67,7 @@ declare const fullApi: ApiFromModules<{
   "lib/emails/welcome": typeof lib_emails_welcome;
   "lib/errors": typeof lib_errors;
   "lib/helpers": typeof lib_helpers;
+  "lib/logger": typeof lib_logger;
   "lib/middleware": typeof lib_middleware;
   "lib/rateLimit": typeof lib_rateLimit;
   "lib/resend": typeof lib_resend;

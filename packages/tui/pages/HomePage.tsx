@@ -6,6 +6,7 @@ import {
   encryptPrivateKeyWithPassword,
   generateSalt,
 } from "@repo/crypto";
+import { createLogger, trackEvent } from "@repo/logger";
 import open from "open";
 import { useEffect, useState } from "react";
 import { getProtectedApi } from "../api";
@@ -35,7 +36,8 @@ import {
   STATUS_COLORS,
   THEME_COLORS,
 } from "../utils/constants";
-import { logger } from "../utils/debugLog";
+
+const logger = createLogger("tui");
 
 const STATUS_ICONS: Record<ProjectStatus, string> = {
   owned: "●",
@@ -47,6 +49,9 @@ const STATUS_ICONS: Record<ProjectStatus, string> = {
 const PAGE_SIZE = 5;
 
 export function HomePage() {
+  useEffect(() => {
+    trackEvent("tui_page_viewed", { page: "home" });
+  }, []);
   const { width, height } = useTerminalDimensions();
   const { navigate } = useRouter();
   const { logout } = useAppSession();
@@ -172,11 +177,13 @@ export function HomePage() {
 
         payment.handleResult(result, "project", name);
         if (result.status === "success") {
+          trackEvent("project_created", { success: true });
           await refetchProjects();
         } else {
           setPendingProjectName(null);
         }
       } catch {
+        trackEvent("project_created", { success: false });
         setPendingProjectName(null);
       }
     });
@@ -203,6 +210,7 @@ export function HomePage() {
         const api = getProtectedApi();
         await api.updateProject({ projectId, name });
       });
+      trackEvent("project_renamed", { success: true });
       showSuccess(`Project renamed to "${name}"`);
       setEditingProject(null);
     });
@@ -215,6 +223,7 @@ export function HomePage() {
         const api = getProtectedApi();
         await api.archiveProject(confirmingDelete.id);
       });
+      trackEvent("project_archived", { success: true });
       showSuccess(`"${confirmingDelete.name}" archived`);
       setConfirmingDelete(null);
       await refetchProjects();
@@ -309,6 +318,7 @@ export function HomePage() {
       logger.error("Failed to save password locally:", error);
     }
 
+    trackEvent("password_changed", { success: true });
     setPasswordChangeStatus(null);
     setActiveModal("none");
     showSuccess("Password changed successfully");
@@ -433,6 +443,7 @@ export function HomePage() {
     } else if (key.name === "p") {
       setActiveModal("password");
     } else if (key.name === "g" && !key.meta && !key.ctrl) {
+      trackEvent("tui_open_dashboard");
       open(DASHBOARD_URL);
     } else if ((key.name === "l" && key.ctrl) || key.sequence === "\x0C") {
       setActiveModal("logout");

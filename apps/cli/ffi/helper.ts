@@ -11,10 +11,7 @@ const PLATFORM_MAP: Record<string, string> = {
 };
 
 async function detectEnvironment(): Promise<Environment> {
-  if (process.env.NODE_ENV === "production") {
-    return "production";
-  }
-  if (process.env.NODE_ENV === "development") {
+  if (process.env.DEV === "true") {
     return "development";
   }
 

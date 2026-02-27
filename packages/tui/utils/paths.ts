@@ -11,7 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = resolve(__filename, "..");
 export const DEV_LOG_FILE = resolve(__dirname, "..", "debug.log");
 
-export const isDev = process.env.DEV === "true" || process.env.NODE_ENV === "development";
+export const isDev = process.env.DEV === "true";
 
 export async function ensureRelicDir(): Promise<void> {
   const relicDir = Bun.file(RELIC_DIR);

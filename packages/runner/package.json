@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "build": "cargo build --release",
+    "lint": "cargo clippy -- -D warnings",
+    "format": "cargo fmt --check",
     "test": "cargo test"
   }
 }

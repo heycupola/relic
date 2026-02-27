@@ -3,11 +3,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AuthFooter } from "@/components/auth-footer";
 import { GoogleIcon } from "@/components/icons/google-icon";
 import { OAuthButton } from "@/components/oauth-button";
 import { authClient } from "@/lib/auth";
+import { trackWebEvent } from "@/lib/posthog";
 import { authHeadingStyle, authSubtitleStyle } from "@/lib/styles";
 import { isValidReturnUrl } from "@/lib/url";
 
@@ -15,11 +16,17 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const returnUrl = searchParams.get("returnUrl");
   const [isLoading, setIsLoading] = useState(false);
+  const [lastMethod, setLastMethod] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLastMethod(authClient.getLastUsedLoginMethod());
+  }, []);
 
   const safeReturnUrl = isValidReturnUrl(returnUrl) ? returnUrl : "/";
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
+    trackWebEvent("web_login_started", { provider: "google" });
     try {
       if (safeReturnUrl) {
         await authClient.signIn.social({
@@ -29,12 +36,14 @@ export default function LoginPage() {
       }
     } catch (error) {
       console.error("Google login failed:", error);
+      trackWebEvent("web_login_failed", { provider: "google" });
       setIsLoading(false);
     }
   };
 
   const handleGithubLogin = async () => {
     setIsLoading(true);
+    trackWebEvent("web_login_started", { provider: "github" });
     try {
       if (safeReturnUrl) {
         await authClient.signIn.social({
@@ -44,6 +53,7 @@ export default function LoginPage() {
       }
     } catch (error) {
       console.error("GitHub login failed:", error);
+      trackWebEvent("web_login_failed", { provider: "github" });
       setIsLoading(false);
     }
   };
@@ -86,6 +96,7 @@ export default function LoginPage() {
               icon={<GoogleIcon />}
               onClick={handleGoogleLogin}
               disabled={isLoading}
+              lastUsed={lastMethod === "google"}
             >
               Continue with Google
             </OAuthButton>
@@ -97,6 +108,7 @@ export default function LoginPage() {
               }
               onClick={handleGithubLogin}
               disabled={isLoading}
+              lastUsed={lastMethod === "github"}
             >
               Continue with GitHub
             </OAuthButton>

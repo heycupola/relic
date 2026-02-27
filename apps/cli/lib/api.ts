@@ -1,8 +1,10 @@
 import { ensureValidJwt } from "@repo/auth";
 import { api, type Id, type TableNames } from "@repo/backend";
+import { trackError } from "@repo/logger";
 import { ConvexHttpClient } from "convex/browser";
 
 const CONVEX_URL = process.env.CONVEX_URL ?? "http://localhost:3210";
+const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL ?? "http://localhost:3211";
 
 export interface User {
   id: string;
@@ -103,6 +105,7 @@ export class ProtectedApi {
         const token = await ensureValidJwt();
         this.client.setAuth(token);
       } catch (error) {
+        trackError("cli", error, { action: "cli_auth" });
         this.client.clearAuth();
         throw error;
       } finally {
@@ -315,4 +318,74 @@ export function getApi(): ProtectedApi {
     instance = new ProtectedApi();
   }
   return instance;
+}
+
+export interface ExportSecretsHttpResponse {
+  secrets: {
+    id: string;
+    key: string;
+    encryptedValue: string;
+    scope: "client" | "server" | "shared";
+    valueType: "string" | "number" | "boolean";
+  }[];
+  count: number;
+  encryptedProjectKey: string;
+  environmentId: string;
+  folderId: string | null;
+}
+
+export interface UserCryptoKeysResponse {
+  encryptedPrivateKey: string;
+  salt: string;
+  publicKey: string;
+}
+
+export async function exportSecretsViaApiKey(
+  apiKey: string,
+  body: {
+    projectId: string;
+    environmentName: string;
+    folderName?: string;
+    scope?: string;
+  },
+): Promise<ExportSecretsHttpResponse> {
+  const url = `${CONVEX_SITE_URL}/api/secrets/export`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    const message = (errorBody as { error?: string })?.error ?? `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+
+  return (await response.json()) as ExportSecretsHttpResponse;
+}
+
+export async function fetchUserKeysViaApiKey(
+  apiKey: string,
+): Promise<UserCryptoKeysResponse> {
+  const url = `${CONVEX_SITE_URL}/api/user/keys`;
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    const message = (errorBody as { error?: string })?.error ?? `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+
+  return (await response.json()) as UserCryptoKeysResponse;
 }

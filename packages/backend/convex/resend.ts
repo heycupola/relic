@@ -3,6 +3,10 @@ import { render } from "@react-email/render";
 import { Resend } from "resend";
 import { components } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
+import { createLogger } from "./lib/logger";
+
+const log = createLogger("resend");
+
 import {
   AccessRestrictedEmail,
   CollaboratorAddedEmail,
@@ -117,6 +121,10 @@ export const sendEmail = async (
   to: string,
   data: EmailData,
 ): Promise<{ emailId: string }> => {
+  if (!process.env.RESEND_API_KEY) {
+    return { emailId: "skipped" };
+  }
+
   const subject = getEmailSubject(data.kind);
   const html = await renderEmailTemplate(data);
 
@@ -140,16 +148,20 @@ export const sendEmail = async (
       });
 
       if (error) {
-        throw new Error(`[Email] Failed to send: ${error.message}`);
+        log.error("Resend API error", { kind: data.kind, to, error: error.message });
+        throw new Error(`Failed to send: ${error.message}`);
       }
 
       if (!resendData?.id) {
-        throw new Error("[Email] No email ID returned from Resend");
+        log.error("No email ID returned from Resend", { kind: data.kind, to });
+        throw new Error("No email ID returned from Resend");
       }
 
       return resendData.id;
     },
   );
+
+  log.info("Email sent", { kind: data.kind, to, emailId });
 
   return { emailId };
 };

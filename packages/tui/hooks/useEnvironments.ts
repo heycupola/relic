@@ -1,7 +1,10 @@
+import { createLogger, trackError } from "@repo/logger";
 import { useCallback, useEffect, useState } from "react";
 import { getProtectedApi } from "../api";
 import type { Environment } from "../types/models";
-import { logger } from "../utils/debugLog";
+
+const logger = createLogger("tui");
+
 import { mapApiEnvironment } from "../utils/mappers";
 
 export function useEnvironments(projectId: string) {
@@ -19,6 +22,7 @@ export function useEnvironments(projectId: string) {
       setEnvironments(envs.map(mapApiEnvironment));
     } catch (err) {
       logger.error("Failed to fetch environments:", err);
+      trackError("tui", err, { action: "fetch_environments" });
       setError(err instanceof Error ? err : new Error("Failed to fetch environments"));
       setEnvironments([]);
     } finally {

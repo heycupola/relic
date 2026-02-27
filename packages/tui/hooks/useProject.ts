@@ -1,10 +1,12 @@
 import { api, type Id } from "@repo/backend";
+import { createLogger, trackError } from "@repo/logger";
 import { useQuery } from "convex/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getProtectedApi } from "../api";
 import { useUser } from "../context";
 import type { Project as ApiProject, SharedUser, ShareLimits } from "../types/api";
-import { logger } from "../utils/debugLog";
+
+const logger = createLogger("tui");
 
 export function useProject(projectId: string) {
   const { user } = useUser();
@@ -33,6 +35,7 @@ export function useProject(projectId: string) {
       setShareLimits(limits);
     } catch (err) {
       logger.error("Failed to fetch share limits:", err);
+      trackError("tui", err, { action: "fetch_share_limits" });
       setShareLimits(null);
     } finally {
       setLimitsLoading(false);

@@ -25,6 +25,18 @@ export function Footer() {
               >
                 𝕏
               </Link>
+              <Link
+                href="/privacy-policy"
+                className="text-muted-foreground transition-colors hover:text-foreground focus:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background rounded-sm px-1"
+              >
+                Privacy
+              </Link>
+              <Link
+                href="/terms-of-service"
+                className="text-muted-foreground transition-colors hover:text-foreground focus:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background rounded-sm px-1"
+              >
+                Terms
+              </Link>
             </div>
           </div>
           <a

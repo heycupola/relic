@@ -1,26 +1,22 @@
 import { watch } from "node:fs";
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { ensureLogDir, getConfig } from "../config";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = resolve(__filename, "..");
-const LOG_FILE = resolve(__dirname, "..", "debug.log");
+const config = getConfig();
+const LOG_FILE = process.argv[2] || config.logFile;
+
+ensureLogDir(LOG_FILE);
 
 let lastSize = 0;
 
 async function readNewContent() {
   const file = Bun.file(LOG_FILE);
-  if (!(await file.exists())) {
-    return;
-  }
+  if (!(await file.exists())) return;
 
   const currentSize = file.size;
   if (currentSize > lastSize) {
     const content = await file.text();
     const newContent = content.slice(lastSize);
-    if (newContent) {
-      process.stdout.write(newContent);
-    }
+    if (newContent) process.stdout.write(newContent);
     lastSize = currentSize;
   } else if (currentSize < lastSize) {
     lastSize = 0;

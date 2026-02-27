@@ -1,4 +1,5 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
+import { createLogger, trackEvent } from "@repo/logger";
 import open from "open";
 import { useEffect, useRef, useState } from "react";
 import { GuideBar } from "../components/shared/GuideBar";
@@ -6,7 +7,9 @@ import { LoginButton } from "../components/shared/LoginButton";
 import { Modal } from "../components/shared/Modal";
 import { type DeviceAuthStatus, useDeviceAuth } from "../convex/hooks/useDeviceAuth";
 import { KEY_SYMBOLS, THEME_COLORS } from "../utils/constants";
-import { logger } from "../utils/debugLog";
+
+const logger = createLogger("tui");
+
 import { createHyperlink } from "../utils/ui";
 
 const getShortcutGroups = (isLoading: boolean) => ({
@@ -77,12 +80,14 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
   const { status, userCode, verificationUri, isLoading, error, startAuth, cancel } = useDeviceAuth({
     onSuccess: () => {
+      trackEvent("tui_login_completed", { success: true });
       setTimeout(() => {
         onLogin();
       }, 500);
     },
     onError: (err) => {
       logger.error("Device auth error:", err);
+      trackEvent("tui_login_completed", { success: false });
     },
   });
 
@@ -112,13 +117,15 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     setSelectedProviderIndex(0);
   };
 
-  const handleLogin = async (_provider?: Provider) => {
+  const handleLogin = async (provider?: Provider) => {
     if (isModalOpen) return;
     setIsModalOpen(true);
+    trackEvent("tui_login_started", { provider: provider || "unknown" });
     try {
       await startAuth();
     } catch (err) {
       logger.error("Failed to start auth:", err);
+      trackEvent("tui_login_completed", { success: false });
     }
   };
 

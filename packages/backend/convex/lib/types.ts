@@ -21,6 +21,25 @@ export type ProtectedActionCtx = ActionCtx & {
   name: string | undefined;
 };
 
+export enum ApiKeyScope {
+  SecretsRead = "secrets.read",
+  UserKeysRead = "user.keys.read",
+}
+
+const API_KEY_SCOPE_VALUES = Object.values(ApiKeyScope) as string[];
+
+export function isValidScope(scope: string): scope is ApiKeyScope {
+  return API_KEY_SCOPE_VALUES.includes(scope);
+}
+
+export function validateScopes(scopes: string[]): scopes is ApiKeyScope[] {
+  return scopes.length > 0 && scopes.every(isValidScope);
+}
+
+export function hasScopes(scopes: ApiKeyScope[], required: ApiKeyScope[]): boolean {
+  return required.every((r) => scopes.includes(r));
+}
+
 export enum ErrorSeverity {
   High = "high",
   Medium = "medium",
