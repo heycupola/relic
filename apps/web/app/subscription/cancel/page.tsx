@@ -3,102 +3,51 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect } from "react";
-import { AuthFooter } from "@/components/auth-footer";
+import { StatusBox } from "@/components/status-box";
 import { trackWebEvent } from "@/lib/posthog";
-import { authHeadingStyle, authSubtitleStyle } from "@/lib/styles";
+import { authHeadingStyle } from "@/lib/styles";
 
 export default function SubscriptionCancelPage() {
   useEffect(() => {
     trackWebEvent("web_subscription_cancelled");
   }, []);
+
   return (
     <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
-      <div className="w-full py-16">
-        <div className="flex flex-col items-center gap-10">
-          <div className="flex flex-col items-center gap-8">
-            <Link href="/" className="flex items-center">
-              <Image
-                src="/relic-logo-wordmark-dark.svg"
-                alt="Relic"
-                width={119}
-                height={48}
-                className="h-12 w-auto dark:hidden"
-              />
-              <Image
-                src="/relic-logo-wordmark-light.svg"
-                alt="Relic"
-                width={119}
-                height={48}
-                className="h-12 w-auto hidden dark:block"
-              />
-            </Link>
+      <div className="w-full max-w-md px-6 py-16">
+        <div className="flex flex-col gap-8">
+          <Link href="/" className="flex items-center">
+            <Image
+              src="/relic-logo-dark.svg"
+              alt="Relic"
+              width={40}
+              height={40}
+              className="h-10 w-auto dark:hidden"
+            />
+            <Image
+              src="/relic-logo-light.svg"
+              alt="Relic"
+              width={40}
+              height={40}
+              className="h-10 w-auto hidden dark:block"
+            />
+          </Link>
 
-            <div className="text-center space-y-3">
-              <div className="flex items-center justify-center mb-6">
-                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
-                  <svg
-                    className="w-8 h-8 text-muted-foreground"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    role="img"
-                    aria-label="Cancelled"
-                  >
-                    <title>Cancelled</title>
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </div>
-              </div>
-              <h1 className="text-3xl font-medium text-foreground" style={authHeadingStyle}>
-                payment cancelled
-              </h1>
-              <p className="text-sm font-light text-muted-foreground" style={authSubtitleStyle}>
-                no worries, you can try again anytime
-              </p>
-            </div>
-          </div>
+          <h1 className="text-2xl font-medium text-foreground" style={authHeadingStyle}>
+            Payment cancelled
+          </h1>
 
-          <div className="w-full max-w-sm space-y-4">
-            <div className="bg-card border border-border rounded-lg p-6 space-y-4">
-              <div className="text-center space-y-2">
-                <p className="text-sm text-muted-foreground text-pretty">
-                  your payment was cancelled and no charges were made. you can upgrade to pro
-                  anytime from the cli.
-                </p>
-              </div>
-            </div>
+          <StatusBox variant="info">
+            Your payment was cancelled and no charges were made. You can upgrade to Pro anytime from
+            the CLI.
+          </StatusBox>
 
-            <div className="text-center space-y-3">
-              <p className="text-sm text-muted-foreground">return to the cli to continue</p>
-              <Link
-                href="/"
-                className="inline-flex items-center justify-center gap-2 text-sm text-foreground hover:text-muted-foreground transition-colors"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M10 19l-7-7m0 0l7-7m-7 7h18"
-                  />
-                </svg>
-                back to home
-              </Link>
-            </div>
-          </div>
-
-          <AuthFooter />
+          <Link
+            href="/"
+            className="w-full p-3 text-sm font-medium text-center border-2 border-border bg-foreground text-background hover:bg-foreground/90 transition-colors"
+          >
+            Back to home
+          </Link>
         </div>
       </div>
     </div>

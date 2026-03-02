@@ -9,7 +9,7 @@ import { GoogleIcon } from "@/components/icons/google-icon";
 import { OAuthButton } from "@/components/oauth-button";
 import { authClient } from "@/lib/auth";
 import { trackWebEvent } from "@/lib/posthog";
-import { authHeadingStyle, authSubtitleStyle } from "@/lib/styles";
+import { authHeadingStyle } from "@/lib/styles";
 import { isValidReturnUrl } from "@/lib/url";
 
 export default function LoginPage() {
@@ -60,37 +60,32 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
-      <div className="w-full py-16">
-        <div className="flex flex-col items-center gap-10">
-          <div className="flex flex-col items-center gap-8">
+      <div className="w-full max-w-md px-6 py-16">
+        <div className="flex flex-col gap-8">
+          <div className="flex flex-col gap-6">
             <Link href="/" className="flex items-center">
               <Image
-                src="/relic-logo-wordmark-dark.svg"
+                src="/relic-logo-dark.svg"
                 alt="Relic"
-                width={119}
-                height={48}
-                className="h-12 w-auto dark:hidden"
+                width={40}
+                height={40}
+                className="h-10 w-auto dark:hidden"
               />
               <Image
-                src="/relic-logo-wordmark-light.svg"
+                src="/relic-logo-light.svg"
                 alt="Relic"
-                width={119}
-                height={48}
-                className="h-12 w-auto hidden dark:block"
+                width={40}
+                height={40}
+                className="h-10 w-auto hidden dark:block"
               />
             </Link>
 
-            <div className="text-center space-y-3">
-              <h1 className="text-3xl font-medium text-foreground" style={authHeadingStyle}>
-                sign in to relic
-              </h1>
-              <p className="text-sm font-light text-soft-silver" style={authSubtitleStyle}>
-                encrypted client-side, zero-knowledge
-              </p>
-            </div>
+            <h1 className="text-2xl font-medium text-foreground" style={authHeadingStyle}>
+              Sign in to Relic
+            </h1>
           </div>
 
-          <div className="w-full max-w-sm space-y-3">
+          <div className="w-full space-y-3">
             <OAuthButton
               provider="google"
               icon={<GoogleIcon />}
