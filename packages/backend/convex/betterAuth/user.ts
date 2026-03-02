@@ -170,6 +170,20 @@ export const loadUsersToRestrict = query({
   },
 });
 
+export const markOnboardingCompleted = mutation({
+  args: {
+    userId: v.id("user"),
+  },
+  returns: v.object({ success: v.boolean() }),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.userId, { hasCompletedOnboarding: true, updatedAt: Date.now() });
+
+    return {
+      success: true,
+    };
+  },
+});
+
 export const _loadUserById = internalQuery({
   args: { userId: v.id("user") },
   returns: v.union(v.null(), doc(schema, "user")),

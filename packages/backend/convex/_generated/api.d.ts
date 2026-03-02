@@ -124,6 +124,7 @@ export declare const components: {
                   emailVerified: boolean;
                   encryptedPrivateKey?: null | string;
                   gracePeriodEmailSent?: null | boolean;
+                  hasCompletedOnboarding?: null | boolean;
                   hasPro: boolean;
                   image?: null | string;
                   keysUpdatedAt?: null | number;
@@ -227,6 +228,7 @@ export declare const components: {
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
+                    | "hasCompletedOnboarding"
                     | "id";
                   operator?:
                     | "lt"
@@ -447,6 +449,7 @@ export declare const components: {
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
+                    | "hasCompletedOnboarding"
                     | "id";
                   operator?:
                     | "lt"
@@ -732,6 +735,7 @@ export declare const components: {
                   emailVerified?: boolean;
                   encryptedPrivateKey?: null | string;
                   gracePeriodEmailSent?: null | boolean;
+                  hasCompletedOnboarding?: null | boolean;
                   hasPro?: boolean;
                   image?: null | string;
                   keysUpdatedAt?: null | number;
@@ -760,6 +764,7 @@ export declare const components: {
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
+                    | "hasCompletedOnboarding"
                     | "id";
                   operator?:
                     | "lt"
@@ -1015,6 +1020,7 @@ export declare const components: {
                   emailVerified?: boolean;
                   encryptedPrivateKey?: null | string;
                   gracePeriodEmailSent?: null | boolean;
+                  hasCompletedOnboarding?: null | boolean;
                   hasPro?: boolean;
                   image?: null | string;
                   keysUpdatedAt?: null | number;
@@ -1043,6 +1049,7 @@ export declare const components: {
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
+                    | "hasCompletedOnboarding"
                     | "id";
                   operator?:
                     | "lt"
@@ -1337,6 +1344,7 @@ export declare const components: {
             emailVerified: boolean;
             encryptedPrivateKey?: null | string;
             gracePeriodEmailSent?: null | boolean;
+            hasCompletedOnboarding?: null | boolean;
             hasPro: boolean;
             image?: null | string;
             keysUpdatedAt?: null | number;
@@ -1362,6 +1370,7 @@ export declare const components: {
           emailVerified: boolean;
           encryptedPrivateKey?: null | string;
           gracePeriodEmailSent?: null | boolean;
+          hasCompletedOnboarding?: null | boolean;
           hasPro: boolean;
           image?: null | string;
           keysUpdatedAt?: null | number;
@@ -1386,6 +1395,7 @@ export declare const components: {
           emailVerified: boolean;
           encryptedPrivateKey?: null | string;
           gracePeriodEmailSent?: null | boolean;
+          hasCompletedOnboarding?: null | boolean;
           hasPro: boolean;
           image?: null | string;
           keysUpdatedAt?: null | number;
@@ -1412,6 +1422,7 @@ export declare const components: {
             emailVerified: boolean;
             encryptedPrivateKey?: null | string;
             gracePeriodEmailSent?: null | boolean;
+            hasCompletedOnboarding?: null | boolean;
             hasPro: boolean;
             image?: null | string;
             keysUpdatedAt?: null | number;
@@ -1423,6 +1434,12 @@ export declare const components: {
             userId?: null | string;
           }>;
         }
+      >;
+      markOnboardingCompleted: FunctionReference<
+        "mutation",
+        "internal",
+        { userId: string },
+        { success: boolean }
       >;
       setKeysAndSalt: FunctionReference<
         "mutation",
@@ -1464,6 +1481,7 @@ export declare const components: {
             emailVerified: boolean;
             encryptedPrivateKey?: null | string;
             gracePeriodEmailSent?: null | boolean;
+            hasCompletedOnboarding?: null | boolean;
             hasPro: boolean;
             image?: null | string;
             keysUpdatedAt?: null | number;

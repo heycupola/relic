@@ -2,10 +2,16 @@ import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import { internalAction, internalMutation } from "./_generated/server";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
+import { createError, ErrorCode } from "./lib/errors";
 import { createLogger } from "./lib/logger";
-import { protectedAction, protectedQuery } from "./lib/middleware";
+import { protectedAction, protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
-import { EmailKind, type ProtectedActionCtx, type ProtectedQueryCtx } from "./lib/types";
+import {
+  EmailKind,
+  ErrorSeverity,
+  type ProtectedActionCtx,
+  type ProtectedQueryCtx,
+} from "./lib/types";
 import { sendEmail } from "./resend";
 
 const log = createLogger("user");
@@ -94,6 +100,7 @@ export const getCurrentUser = protectedQuery({
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
       keysUpdatedAt: user.keysUpdatedAt,
+      hasCompletedOnboarding: user.hasCompletedOnboarding,
     };
   },
 });
@@ -123,6 +130,72 @@ export const getUserPublicKeyByEmail = protectedQuery({
     }
 
     return { publicKey: user.publicKey };
+  },
+});
+
+export const completeOnboarding = protectedMutation({
+  args: {
+    source: v.optional(
+      v.union(
+        v.literal("google_search"),
+        v.literal("github"),
+        v.literal("reddit"),
+        v.literal("x"),
+        v.literal("youtube"),
+        v.literal("discord"),
+        v.literal("friend"),
+        v.literal("blog_post"),
+        v.literal("other"),
+      ),
+    ),
+    sourceOther: v.optional(v.string()),
+    teamSize: v.optional(
+      v.union(
+        v.literal("1"),
+        v.literal("2-5"),
+        v.literal("6-20"),
+        v.literal("21-50"),
+        v.literal("50+"),
+        v.literal("other"),
+      ),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: ctx.userId,
+    });
+
+    const onboarding = await ctx.db
+      .query("onboarding")
+      .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
+      .first();
+
+    if (onboarding !== null || user.hasCompletedOnboarding === true) {
+      throw createError({
+        code: ErrorCode.UNABLE_TO_PERFORM_THIS_ACTION,
+        message: "Onboarding is already completed",
+        severity: ErrorSeverity.Low,
+      });
+    }
+
+    await ctx.db.insert("onboarding", {
+      userId: ctx.userId,
+      createdAt: Date.now(),
+      teamSize: args.teamSize,
+      source: args.source,
+      sourceOther: args.sourceOther,
+    });
+
+    await ctx.runMutation(components.betterAuth.user.markOnboardingCompleted, {
+      userId: ctx.userId,
+    });
+
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      action: "onboarding.completed",
+      userId: ctx.userId,
+    });
+
+    return { success: true };
   },
 });
 
