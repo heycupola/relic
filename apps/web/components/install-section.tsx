@@ -5,21 +5,24 @@ import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import { SectionWrapper } from "./section-wrapper";
 
-const installMethods = [
+type InstallMethod = {
+  name: string;
+  command: string;
+};
+
+const installMethods: InstallMethod[] = [
   { name: "curl", command: "curl -fsSL https://relic.so/install | bash" },
   { name: "brew", command: "brew install heycupola/tap/relic" },
   { name: "npm", command: "npm install -g relic" },
   { name: "bun", command: "bun add -g relic" },
 ];
 
-type InstallMethod = (typeof installMethods)[number];
-
 interface InstallSectionProps {
   showWrapper?: boolean;
 }
 
 export function InstallSection({ showWrapper = true }: InstallSectionProps) {
-  const [activeMethod, setActiveMethod] = useState<InstallMethod>(installMethods[0]);
+  const [activeMethod, setActiveMethod] = useState<InstallMethod>(installMethods[0]!);
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = async () => {
@@ -64,7 +67,7 @@ export function InstallSection({ showWrapper = true }: InstallSectionProps) {
       return;
     }
 
-    setActiveMethod(installMethods[newIndex]);
+    setActiveMethod(installMethods[newIndex]!);
   };
 
   const installContent = (

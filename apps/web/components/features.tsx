@@ -1,13 +1,10 @@
-"use client";
-
-import { useRef } from "react";
 import { SectionWrapper } from "./section-wrapper";
 
 interface VideoFeature {
   title: string;
   badge: "Free" | "Pro";
   description: string;
-  video: string;
+  youtubeId: string;
 }
 
 interface CompactFeature {
@@ -21,21 +18,21 @@ const videoFeatures: VideoFeature[] = [
     title: "Built-in Secret Editor",
     badge: "Free",
     description: "Paste your .env file or edit secrets directly in the TUI. No context switching.",
-    video: "/videos/feature-secret-editor.mp4",
+    youtubeId: "dQw4w9WgXcQ",
   },
   {
     title: "Collaboration",
     badge: "Pro",
     description:
       "Share projects with your team via email. Each person gets their own encryption keys.",
-    video: "/videos/feature-collaboration.mp4",
+    youtubeId: "dQw4w9WgXcQ",
   },
   {
     title: "Run Anywhere",
     badge: "Free",
     description:
       "Inject secrets into any process with API keys. Works in GitHub Actions, GitLab CI, and more.",
-    video: "/videos/feature-cicd.mp4",
+    youtubeId: "dQw4w9WgXcQ",
   },
 ];
 
@@ -66,19 +63,6 @@ const compactFeatures: CompactFeature[] = [
 ];
 
 function VideoCard({ feature }: { feature: VideoFeature }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  const handleMouseEnter = () => {
-    videoRef.current?.play();
-  };
-
-  const handleMouseLeave = () => {
-    if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.currentTime = 0;
-    }
-  };
-
   return (
     <div className="border-2 border-border bg-card flex flex-col hover:border-foreground/30 transition-colors">
       <div className="p-5 flex-1">
@@ -97,16 +81,12 @@ function VideoCard({ feature }: { feature: VideoFeature }) {
         <p className="mt-2 text-sm text-foreground/60 text-pretty">{feature.description}</p>
       </div>
       <div className="border-t-2 border-border bg-muted/20">
-        <video
-          ref={videoRef}
-          src={feature.video}
-          muted
-          loop
-          playsInline
-          preload="metadata"
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-          className="w-full aspect-video object-cover"
+        <iframe
+          src={`https://www.youtube.com/embed/${feature.youtubeId}?mute=1&loop=1&playlist=${feature.youtubeId}`}
+          title={feature.title}
+          allow="autoplay; encrypted-media"
+          allowFullScreen
+          className="w-full aspect-video"
         />
       </div>
     </div>

@@ -8,6 +8,7 @@ import { InstallSection } from "@/components/install-section";
 
 export function QuickActionsCard() {
   const [isContactExpanded, setIsContactExpanded] = useState(false);
+  const docsUrl = "https://docs.relic.so";
 
   return (
     <div className="border-2 border-border bg-card p-5">
@@ -31,7 +32,9 @@ export function QuickActionsCard() {
           </Link>
 
           <Link
-            href="/docs"
+            href={docsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex items-center justify-between gap-2 p-3 border border-border hover:border-foreground hover:bg-muted/50 transition-all group"
           >
             <span className="text-sm text-foreground">Documentation</span>

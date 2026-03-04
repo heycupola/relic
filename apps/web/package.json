@@ -4,12 +4,15 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack --port 3000",
-    "build": "next build",
-    "start": "next start",
+    "dev": "vinext dev --port 3000",
+    "build": "vinext build",
+    "start": "vinext start",
     "lint": "biome check --write .",
     "format": "biome format --write .",
-    "check-types": "tsc --noEmit --project tsconfig.check.json"
+    "check-types": "tsc --noEmit --project tsconfig.check.json",
+    "check": "vinext check",
+    "predeploy": "printf 'import handler from \"./server/index.js\";\\nexport default {\\n  async fetch(request) {\\n    return handler(request);\\n  },\\n};\\n' > dist/worker-entry.js",
+    "deploy": "bunx vinext build && bun run predeploy && bunx wrangler deploy"
   },
   "dependencies": {
     "@convex-dev/better-auth": "catalog:",
@@ -20,8 +23,6 @@
     "better-auth": "catalog:",
     "convex": "catalog:",
     "lucide-react": "^0.546.0",
-    "next": "^15.5.7",
-    "next-themes": "^0.4.6",
     "postcss": "catalog:",
     "posthog-js": "^1.352.0",
     "react": "catalog:",
@@ -29,11 +30,17 @@
     "tailwindcss": "catalog:"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.26.0",
     "@repo/typescript-config": "*",
     "@types/node": "^22.15.3",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-rsc": "^0.5.21",
+    "react-server-dom-webpack": "^19.2.4",
     "tw-animate-css": "catalog:",
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "vinext": "^0.0.19",
+    "vite": "^7.3.1",
+    "wrangler": "^4.70.0"
   }
 }
