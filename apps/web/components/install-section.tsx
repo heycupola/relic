@@ -6,20 +6,20 @@ import { useState } from "react";
 import { SectionWrapper } from "./section-wrapper";
 
 const installMethods = [
-  { name: "bun", command: "bun install -g relic" },
   { name: "curl", command: "curl -fsSL https://relic.so/install | bash" },
+  { name: "brew", command: "brew install heycupola/tap/relic" },
   { name: "npm", command: "npm install -g relic" },
-  { name: "brew", command: "brew install relic" },
-  { name: "cargo", command: "cargo install relic" },
+  { name: "bun", command: "bun add -g relic" },
 ];
+
+type InstallMethod = (typeof installMethods)[number];
 
 interface InstallSectionProps {
   showWrapper?: boolean;
 }
 
 export function InstallSection({ showWrapper = true }: InstallSectionProps) {
-  const defaultMethod = { name: "bun", command: "bun install -g relic" };
-  const [activeMethod, setActiveMethod] = useState(installMethods[0] ?? defaultMethod);
+  const [activeMethod, setActiveMethod] = useState<InstallMethod>(installMethods[0]);
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = async () => {
@@ -64,7 +64,7 @@ export function InstallSection({ showWrapper = true }: InstallSectionProps) {
       return;
     }
 
-    setActiveMethod(installMethods[newIndex] ?? defaultMethod);
+    setActiveMethod(installMethods[newIndex]);
   };
 
   const installContent = (
@@ -78,6 +78,7 @@ export function InstallSection({ showWrapper = true }: InstallSectionProps) {
           <button
             type="button"
             key={method.name}
+            id={`install-tab-${method.name}`}
             onClick={() => setActiveMethod(method)}
             onKeyDown={(e) => handleKeyDown(e, index)}
             role="tab"
@@ -99,14 +100,17 @@ export function InstallSection({ showWrapper = true }: InstallSectionProps) {
         className="bg-muted/20 px-6 py-4 overflow-x-auto"
         role="tabpanel"
         id={`install-panel-${activeMethod.name}`}
+        aria-labelledby={`install-tab-${activeMethod.name}`}
       >
-        <div className="flex items-center gap-2 flex-wrap">
-          <code className="font-mono text-sm text-foreground">{activeMethod.command}</code>
+        <div className="flex items-center gap-2">
+          <code className="font-mono text-sm text-foreground whitespace-nowrap">
+            {activeMethod.command}
+          </code>
           <button
             type="button"
             onClick={copyToClipboard}
             aria-label={copied ? "Copied to clipboard" : "Copy installation command"}
-            className="inline-flex items-center p-1.5 text-foreground/70 transition-all hover:bg-foreground hover:text-background focus-visible:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded"
+            className="inline-flex shrink-0 items-center p-1.5 text-foreground/70 transition-all hover:bg-foreground hover:text-background focus-visible:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded"
           >
             {copied ? (
               <Check className="h-4 w-4" aria-hidden="true" />
@@ -127,7 +131,7 @@ export function InstallSection({ showWrapper = true }: InstallSectionProps) {
   }
 
   return (
-    <SectionWrapper label="Install">
+    <SectionWrapper label="Install" showStripes>
       <div className="mx-auto max-w-6xl px-6 py-16 lg:px-12">{installContent}</div>
     </SectionWrapper>
   );

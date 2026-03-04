@@ -1,67 +1,146 @@
+"use client";
+
+import { useRef } from "react";
 import { SectionWrapper } from "./section-wrapper";
 
-export function Features() {
-  const features = [
-    {
-      command: "encrypt",
-      title: "Client-side Encryption",
-      description:
-        "All secrets are encrypted on your machine before storage. Zero-knowledge architecture.",
-    },
-    {
-      command: "cli",
-      title: "Command Line Interface",
-      description:
-        "Powerful CLI for automation, scripts, and CI/CD pipelines. Manage secrets directly from your terminal.",
-    },
-    {
-      command: "tui",
-      title: "Terminal User Interface",
-      description:
-        "Interactive visual interface in your terminal. Navigate, search, and manage secrets with ease.",
-    },
-    {
-      command: "sdk",
-      title: "SDK Integration",
-      description:
-        "Official SDKs for JavaScript, Python, Go, and Rust. Access secrets programmatically in any language.",
-    },
-    {
-      command: "organize",
-      title: "Project Organization",
-      description: "Organize secrets by project, environment (dev, staging, prod), and folders.",
-    },
-    {
-      command: "structure",
-      title: "Folder Structure",
-      description:
-        "Additional layer of organization with backend, frontend, or custom folder types.",
-    },
-  ];
+interface VideoFeature {
+  title: string;
+  badge: "Free" | "Pro";
+  description: string;
+  video: string;
+}
+
+interface CompactFeature {
+  keyword: string;
+  title: string;
+  description: string;
+}
+
+const videoFeatures: VideoFeature[] = [
+  {
+    title: "Built-in Secret Editor",
+    badge: "Free",
+    description: "Paste your .env file or edit secrets directly in the TUI. No context switching.",
+    video: "/videos/feature-secret-editor.mp4",
+  },
+  {
+    title: "Collaboration",
+    badge: "Pro",
+    description:
+      "Share projects with your team via email. Each person gets their own encryption keys.",
+    video: "/videos/feature-collaboration.mp4",
+  },
+  {
+    title: "Run Anywhere",
+    badge: "Free",
+    description:
+      "Inject secrets into any process with API keys. Works in GitHub Actions, GitLab CI, and more.",
+    video: "/videos/feature-cicd.mp4",
+  },
+];
+
+const compactFeatures: CompactFeature[] = [
+  {
+    keyword: "run",
+    title: "Language Agnostic",
+    description: "Any language, any framework. Secrets are injected as environment variables.",
+  },
+  {
+    keyword: "init",
+    title: "Quick Setup",
+    description:
+      "Run relic init to connect your project, then relic run to inject your secrets. Ready in seconds.",
+  },
+  {
+    keyword: "organize",
+    title: "Projects, Envs, Folders",
+    description:
+      "A clean hierarchy to keep your secrets structured, from project level down to individual folders.",
+  },
+  {
+    keyword: "encrypt",
+    title: "Encrypted by Default",
+    description:
+      "AES-256 + Argon2id. Your secrets are encrypted before they ever leave your machine.",
+  },
+];
+
+function VideoCard({ feature }: { feature: VideoFeature }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const handleMouseEnter = () => {
+    videoRef.current?.play();
+  };
+
+  const handleMouseLeave = () => {
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+  };
 
   return (
-    <SectionWrapper label="Features" id="features" showStripes>
+    <div className="border-2 border-border bg-card flex flex-col hover:border-foreground/30 transition-colors">
+      <div className="p-5 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="font-semibold text-foreground">{feature.title}</h3>
+          <span
+            className={
+              feature.badge === "Pro"
+                ? "px-2 py-0.5 text-[10px] font-bold uppercase bg-foreground text-background"
+                : "px-2 py-0.5 text-[10px] font-bold uppercase border border-border text-foreground/50"
+            }
+          >
+            {feature.badge}
+          </span>
+        </div>
+        <p className="mt-2 text-sm text-foreground/60 text-pretty">{feature.description}</p>
+      </div>
+      <div className="border-t-2 border-border bg-muted/20">
+        <video
+          ref={videoRef}
+          src={feature.video}
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          className="w-full aspect-video object-cover"
+        />
+      </div>
+    </div>
+  );
+}
+
+function CompactCard({ feature }: { feature: CompactFeature }) {
+  return (
+    <div className="border-2 border-border bg-card p-5 hover:border-foreground/30 transition-colors">
+      <span className="font-mono text-xs text-electric-ink">{feature.keyword}</span>
+      <h3 className="mt-1.5 font-semibold text-foreground text-sm">{feature.title}</h3>
+      <p className="mt-2 text-sm text-foreground/60 text-pretty">{feature.description}</p>
+    </div>
+  );
+}
+
+export function Features() {
+  return (
+    <SectionWrapper label="Features" id="features">
       <div className="mx-auto max-w-6xl px-6 py-16 lg:px-12">
-        <h2 className="text-2xl font-semibold text-foreground">What is Relic?</h2>
+        <h2 className="text-2xl font-semibold text-foreground">Features</h2>
         <p className="mt-2 max-w-2xl text-foreground/60 text-pretty">
-          A terminal-native secret manager that encrypts and stores secrets on your behalf with
-          complete security.
+          Everything you need to manage secrets, from editing to sharing to deployment.
         </p>
-        <div className="mt-8 border-2 border-border divide-y-2 divide-border">
-          {features.map((feature, index) => (
-            <div
-              // biome-ignore lint/suspicious/noArrayIndexKey: features are static
-              key={index}
-              className="px-6 py-5 hover:bg-muted/50 transition-colors"
-            >
-              <div className="flex items-baseline gap-2">
-                <span className="font-mono text-xs text-green-600 dark:text-green-400">
-                  {feature.command}
-                </span>
-                <h3 className="font-semibold text-foreground">{feature.title}</h3>
-              </div>
-              <p className="mt-1.5 text-foreground/60 text-sm text-pretty">{feature.description}</p>
-            </div>
+
+        <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {videoFeatures.map((feature) => (
+            <VideoCard key={feature.title} feature={feature} />
+          ))}
+        </div>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {compactFeatures.map((feature) => (
+            <CompactCard key={feature.keyword} feature={feature} />
           ))}
         </div>
       </div>

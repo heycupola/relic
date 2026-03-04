@@ -106,44 +106,29 @@ export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardPro
               <h4 className="text-sm font-semibold text-foreground">Upgrade to Pro</h4>
               <ul className="space-y-2 text-sm">
                 <li className="flex items-start gap-2">
-                  <Check
-                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
-                    aria-hidden="true"
-                  />
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground">
                     <strong>Collaborate on projects</strong> - 5 free shares per project
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <Check
-                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
-                    aria-hidden="true"
-                  />
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground">
                     <strong>5 free projects</strong> included
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <Check
-                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
-                    aria-hidden="true"
-                  />
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground">Activity logs & analytics</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <Check
-                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
-                    aria-hidden="true"
-                  />
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground">
                     <strong>Early access</strong> to new features
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <Check
-                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
-                    aria-hidden="true"
-                  />
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground">Everything in Free</span>
                 </li>
               </ul>
@@ -161,7 +146,7 @@ export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardPro
               type="button"
               onClick={handleUpgradeToPro}
               disabled={isLoadingUpgrade}
-              className="block w-full text-center p-3 border-2 border-foreground bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed tabular-nums"
+              className="block w-full text-center p-3 border-2 border-border bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed tabular-nums"
             >
               {isLoadingUpgrade ? "Loading…" : "Upgrade to Pro - $20/month"}
             </button>

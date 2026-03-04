@@ -65,9 +65,7 @@ export function Pricing() {
     <SectionWrapper label="Pricing" id="pricing">
       <div className="mx-auto max-w-6xl px-6 py-16 lg:px-12">
         <h2 className="text-2xl font-semibold text-foreground">Pricing</h2>
-        <p className="mt-2 text-foreground/60 text-pretty">
-          Built for collaboration, flexible for your needs.
-        </p>
+        <p className="mt-2 text-foreground/60 text-pretty">Simple pricing. No surprises.</p>
 
         <div className="mt-12 grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Free Plan */}
@@ -83,39 +81,20 @@ export function Pricing() {
 
               <ul className="space-y-3 text-sm">
                 <li className="flex items-start gap-2">
-                  <Check
-                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
-                    aria-hidden="true"
-                  />
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground">1 project</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <Check
-                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
-                    aria-hidden="true"
-                  />
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground">Activity logs & analytics</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <Check
-                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
-                    aria-hidden="true"
-                  />
-                  <span className="text-foreground">Zero-knowledge encryption</span>
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
+                  <span className="text-foreground">Fully encrypted</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <Check
-                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
-                    aria-hidden="true"
-                  />
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground">CLI & TUI access</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check
-                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
-                    aria-hidden="true"
-                  />
-                  <span className="text-foreground">SDK support (JS, Python, Go, Rust)</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <X className="h-4 w-4 text-foreground/30 shrink-0 mt-0.5" aria-hidden="true" />
@@ -155,44 +134,29 @@ export function Pricing() {
 
               <ul className="space-y-3 text-sm">
                 <li className="flex items-start gap-2">
-                  <Check
-                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
-                    aria-hidden="true"
-                  />
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground">
                     <strong>Collaborate on projects</strong> - 5 free shares per project
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <Check
-                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
-                    aria-hidden="true"
-                  />
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground">
                     <strong>5 free projects</strong> included
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <Check
-                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
-                    aria-hidden="true"
-                  />
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground">Activity logs & analytics</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <Check
-                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
-                    aria-hidden="true"
-                  />
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground">
                     <strong>Early access</strong> to new features
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <Check
-                    className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5"
-                    aria-hidden="true"
-                  />
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground">Everything in Free</span>
                 </li>
               </ul>
