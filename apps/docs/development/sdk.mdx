@@ -1,0 +1,63 @@
+---
+title: SDK
+description: Access secrets programmatically with official SDKs.
+---
+
+Use the Relic SDK to access secrets programmatically in your applications.
+
+## Installation
+
+```bash
+bun add @heycupola/relic-sdk
+```
+
+## Quick example
+
+```typescript
+import { Relic } from '@heycupola/relic-sdk'
+
+const relic = new Relic({
+  projectId: 'my-app',
+  environment: 'production'
+})
+
+const dbUrl = await relic.get('DATABASE_URL')
+console.log(dbUrl)
+```
+
+## Multi-language support
+
+```python
+from relic import Relic
+
+relic = Relic(
+    project_id="my-app",
+    environment="production"
+)
+
+db_url = relic.get("DATABASE_URL")
+```
+
+## Callout examples
+
+<Note>
+  The SDK caches secrets locally to avoid redundant API calls. Cache is invalidated automatically when secrets change on the server.
+</Note>
+
+<Tip>
+  Use environment variables for `projectId` and `environment` to avoid hardcoding values in your source code.
+</Tip>
+
+<Warning>
+  Never log or print secret values in production. The SDK zeroes memory after use, but logged values persist in your log output.
+</Warning>
+
+<Info>
+  The SDK requires Node.js 18+ or Bun 1.0+. For browser environments, use the REST API directly.
+</Info>
+
+## Initialize the client
+
+```bash
+relic sdk init
+```
