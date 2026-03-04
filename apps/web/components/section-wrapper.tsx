@@ -11,14 +11,24 @@ interface SectionWrapperProps {
 
 export function SectionWrapper({
   children,
-  label: _label,
+  label,
   id,
   className,
-  showStripes: _showStripes = false,
+  showStripes = false,
 }: SectionWrapperProps) {
   return (
-    <section id={id} className={cn("relative", className)}>
-      <div className="border-b border-border">{children}</div>
+    <section id={id} aria-label={label} className={cn("relative", className)}>
+      {showStripes && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-[0.02]"
+          style={{
+            backgroundImage:
+              "repeating-linear-gradient(135deg, currentColor 0px, currentColor 1px, transparent 1px, transparent 12px)",
+          }}
+        />
+      )}
+      <div className="relative border-b border-border">{children}</div>
     </section>
   );
 }

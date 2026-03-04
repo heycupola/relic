@@ -8,19 +8,24 @@ import { SectionWrapper } from "./section-wrapper";
 
 const faqs = [
   {
-    question: "Is Relic really zero-knowledge?",
+    question: "Can you see my secrets?",
     answer:
-      "Yes. All encryption and decryption happens locally on your machine. Your secrets are encrypted before they ever leave your device, and only you hold the keys. We never have access to your unencrypted data.",
+      "No. Your secrets are encrypted on your device before anything is sent to us. We literally cannot read them. Only you hold the keys.",
   },
   {
-    question: "Where are my secrets stored?",
+    question: "Where does my data go?",
     answer:
-      "Secrets are stored locally in an encrypted vault on your machine. You have full control over your data, and you can back it up or sync it however you prefer.",
+      "Your secrets are encrypted on your machine, then stored safely on our servers. We only ever see encrypted data, never the real values.",
   },
   {
-    question: "What encryption does Relic use?",
+    question: "How secure is Relic?",
     answer:
-      "Relic uses industry-standard AES-256-GCM encryption with keys derived using Argon2id. This provides strong protection against both brute-force attacks and side-channel attacks.",
+      "Very. We use the same encryption standards trusted by banks and governments (AES-256 + Argon2id). Everything is encrypted before it leaves your device.",
+  },
+  {
+    question: "Can I share secrets with my team?",
+    answer:
+      "Yes, invite teammates by email and they get access to the project. Each person's secrets are encrypted with their own keys, so sharing stays fully secure.",
   },
   {
     question: "Can I use Relic in CI/CD pipelines?",
@@ -28,14 +33,14 @@ const faqs = [
       "Absolutely. The CLI is designed for automation. You can easily integrate Relic into GitHub Actions, GitLab CI, Jenkins, or any other CI/CD system.",
   },
   {
-    question: "Is there a cloud sync option?",
+    question: "Do my secrets sync across devices?",
     answer:
-      "Relic is designed as a local-first tool. However, you can use your own sync solution (like git, Syncthing, or cloud storage) to sync your encrypted vault across machines.",
+      "Yes, automatically. Your encrypted secrets sync through our servers, but since everything is encrypted on your device first, we never see the actual values.",
   },
   {
     question: "Which programming languages are supported?",
     answer:
-      "We provide official SDKs for JavaScript/TypeScript, Python, Go, and Rust. You can also use the REST API directly from any language.",
+      "All of them. Relic is completely language agnostic. Any language, any framework. Just use relic run to inject secrets as environment variables into any process.",
   },
 ];
 
@@ -43,7 +48,7 @@ export function FAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
-    <SectionWrapper label="FAQ" id="faq" showStripes>
+    <SectionWrapper label="FAQ" id="faq">
       <div className="mx-auto max-w-6xl px-6 py-16 lg:px-12">
         <h2 className="text-2xl font-semibold text-foreground">FAQ</h2>
         <p className="mt-2 text-foreground/60 text-pretty">
@@ -53,8 +58,7 @@ export function FAQ() {
         <div className="mt-8 border-2 border-border divide-y-2 divide-border">
           {faqs.map((faq, index) => (
             <button
-              // biome-ignore lint/suspicious/noArrayIndexKey: faqs are static
-              key={index}
+              key={faq.question}
               type="button"
               onClick={() => setOpenIndex(openIndex === index ? null : index)}
               className={cn(

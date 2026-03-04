@@ -20,20 +20,22 @@ export function Hero() {
     fetch("/api/github-stars")
       .then((res) => res.json())
       .then((data) => setStars(data.stars))
-      .catch(() => setStars(0));
+      .catch((error) => {
+        console.debug("Failed to fetch GitHub stars", error);
+      });
   }, []);
 
   return (
-    <SectionWrapper label="Introduction" showStripes>
+    <SectionWrapper label="Introduction">
       <div className="mx-auto max-w-6xl px-6 py-16 md:py-20 lg:px-12">
         {/* <p className="mb-4 font-mono text-sm text-foreground/50">{"What's new in v1.0.0"}</p> */}
         <p className="mb-4 font-mono text-sm text-foreground/50">{"Closed beta now open!"}</p>
         <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-balance text-foreground md:text-5xl lg:text-6xl">
-          The secret manager developers actually trust
+          The secrets layer developers actually trust
         </h1>
         <p className="mt-6 max-w-2xl text-lg text-foreground/60 text-pretty">
-          Zero-knowledge secrets management with complete control. Works as CLI, TUI, and through
-          our SDK. Your secrets never leave your machine unencrypted.
+          Manage and share secrets. Encrypted on your device, never exposed to anyone else. Not even
+          us.
         </p>
         <div className="mt-8 flex flex-wrap items-center gap-4">
           <Button

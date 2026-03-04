@@ -37,6 +37,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                   emailVerified: boolean;
                   encryptedPrivateKey?: null | string;
                   gracePeriodEmailSent?: null | boolean;
+                  hasCompletedOnboarding?: null | boolean;
                   hasPro: boolean;
                   image?: null | string;
                   keysUpdatedAt?: null | number;
@@ -141,6 +142,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
+                    | "hasCompletedOnboarding"
                     | "id";
                   operator?:
                     | "lt"
@@ -362,6 +364,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
+                    | "hasCompletedOnboarding"
                     | "id";
                   operator?:
                     | "lt"
@@ -650,6 +653,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                   emailVerified?: boolean;
                   encryptedPrivateKey?: null | string;
                   gracePeriodEmailSent?: null | boolean;
+                  hasCompletedOnboarding?: null | boolean;
                   hasPro?: boolean;
                   image?: null | string;
                   keysUpdatedAt?: null | number;
@@ -678,6 +682,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
+                    | "hasCompletedOnboarding"
                     | "id";
                   operator?:
                     | "lt"
@@ -934,6 +939,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                   emailVerified?: boolean;
                   encryptedPrivateKey?: null | string;
                   gracePeriodEmailSent?: null | boolean;
+                  hasCompletedOnboarding?: null | boolean;
                   hasPro?: boolean;
                   image?: null | string;
                   keysUpdatedAt?: null | number;
@@ -962,6 +968,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "encryptedPrivateKey"
                     | "salt"
                     | "keysUpdatedAt"
+                    | "hasCompletedOnboarding"
                     | "id";
                   operator?:
                     | "lt"
@@ -1262,6 +1269,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             emailVerified: boolean;
             encryptedPrivateKey?: null | string;
             gracePeriodEmailSent?: null | boolean;
+            hasCompletedOnboarding?: null | boolean;
             hasPro: boolean;
             image?: null | string;
             keysUpdatedAt?: null | number;
@@ -1288,6 +1296,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           emailVerified: boolean;
           encryptedPrivateKey?: null | string;
           gracePeriodEmailSent?: null | boolean;
+          hasCompletedOnboarding?: null | boolean;
           hasPro: boolean;
           image?: null | string;
           keysUpdatedAt?: null | number;
@@ -1313,6 +1322,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           emailVerified: boolean;
           encryptedPrivateKey?: null | string;
           gracePeriodEmailSent?: null | boolean;
+          hasCompletedOnboarding?: null | boolean;
           hasPro: boolean;
           image?: null | string;
           keysUpdatedAt?: null | number;
@@ -1340,6 +1350,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             emailVerified: boolean;
             encryptedPrivateKey?: null | string;
             gracePeriodEmailSent?: null | boolean;
+            hasCompletedOnboarding?: null | boolean;
             hasPro: boolean;
             image?: null | string;
             keysUpdatedAt?: null | number;
@@ -1351,6 +1362,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             userId?: null | string;
           }>;
         },
+        Name
+      >;
+      markOnboardingCompleted: FunctionReference<
+        "mutation",
+        "internal",
+        { userId: string },
+        { success: boolean },
         Name
       >;
       setKeysAndSalt: FunctionReference<
@@ -1395,6 +1413,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             emailVerified: boolean;
             encryptedPrivateKey?: null | string;
             gracePeriodEmailSent?: null | boolean;
+            hasCompletedOnboarding?: null | boolean;
             hasPro: boolean;
             image?: null | string;
             keysUpdatedAt?: null | number;

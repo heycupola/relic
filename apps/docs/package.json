@@ -1,27 +1,12 @@
 {
   "name": "docs",
   "version": "0.1.0",
-  "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack --port 3001",
-    "build": "next build",
-    "start": "next start",
-    "lint": "biome check --write .",
-    "format": "biome format --write .",
-    "check-types": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@repo/ui": "*",
-    "next": "^15.5.7",
-    "react": "catalog:",
-    "react-dom": "catalog:"
+    "dev": "mint dev --port 3001",
+    "build": "mint build"
   },
   "devDependencies": {
-    "@repo/typescript-config": "*",
-    "@types/node": "^22.15.3",
-    "@types/react": "^19.1.2",
-    "@types/react-dom": "^19.1.2",
-    "typescript": "5.9.2"
+    "mint": "^4"
   }
 }

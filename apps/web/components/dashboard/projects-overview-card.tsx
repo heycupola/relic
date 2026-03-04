@@ -2,6 +2,7 @@
 
 import { cn } from "@repo/ui/lib/utils";
 import { Archive, Check, Lock, Users } from "lucide-react";
+import { StatusBox } from "@/components/status-box";
 
 interface Project {
   id: string;
@@ -89,7 +90,7 @@ export function ProjectsOverviewCard({
 
   return (
     <div className="border-2 border-border bg-card p-5">
-      <div className="space-y-3">
+      <div className="space-y-4">
         <h3 className="text-sm font-medium text-foreground/60">Projects</h3>
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 font-mono text-sm">
           <div>
@@ -112,7 +113,12 @@ export function ProjectsOverviewCard({
           </div>
         </div>
 
-        {recentProjects.length > 0 && (
+        {recentProjects.length === 0 ? (
+          <StatusBox variant="info">
+            No projects yet. Run <code className="font-mono text-foreground/50">relic</code> to
+            create one.
+          </StatusBox>
+        ) : (
           <div className="space-y-2">
             <p className="text-xs font-medium text-foreground/50">Recent projects</p>
             <div className="relative">

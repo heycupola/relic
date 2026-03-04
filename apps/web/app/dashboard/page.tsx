@@ -2,7 +2,6 @@
 
 import { api } from "@repo/backend";
 import { useAction, useQuery } from "convex/react";
-import { AlertCircle } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { ContainerLines } from "@/components/container-lines";
@@ -13,6 +12,7 @@ import { QuickActionsCard } from "@/components/dashboard/quick-actions-card";
 import { UserInfoCard } from "@/components/dashboard/user-info-card";
 import { Footer } from "@/components/footer";
 import { Header } from "@/components/header";
+import { StatusBox } from "@/components/status-box";
 import { usePaginatedActionLogs } from "@/hooks/usePaginatedActionLogs";
 import { authClient } from "@/lib/auth";
 import { trackWebEvent } from "@/lib/posthog";
@@ -172,24 +172,14 @@ export default function DashboardPage() {
           </div>
           <div className="space-y-5">
             {isOverProjectLimit && (
-              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-lg">
-                <div className="flex items-start gap-3">
-                  <AlertCircle
-                    className="h-5 w-5 text-yellow-600 dark:text-yellow-400 shrink-0 mt-0.5"
-                    aria-hidden="true"
-                  />
-                  <div className="flex-1">
-                    <h3 className="font-medium text-yellow-900 dark:text-yellow-100 text-sm">
-                      Usage limit exceeded
-                    </h3>
-                    <p className="text-sm text-yellow-800 dark:text-yellow-200 mt-1 text-pretty">
-                      You're using {projectLimitsData.totalProjectsCount} projects but only have{" "}
-                      {projectLimitsData.includedUsage} included. Please archive {excessProjects}{" "}
-                      project(s) or upgrade your plan.
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <StatusBox variant="warning">
+                <h3 className="font-medium text-foreground text-sm">Usage limit exceeded</h3>
+                <p className="text-sm text-foreground/70 mt-1 text-pretty">
+                  You're using {projectLimitsData.totalProjectsCount} projects but only have{" "}
+                  {projectLimitsData.includedUsage} included. Please archive {excessProjects}{" "}
+                  project(s) or upgrade your plan.
+                </p>
+              </StatusBox>
             )}
 
             {/* Top row - User Info and Projects */}

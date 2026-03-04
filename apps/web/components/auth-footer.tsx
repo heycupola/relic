@@ -2,14 +2,16 @@ import Link from "next/link";
 
 export function AuthFooter() {
   return (
-    <div className="flex items-center gap-4 text-xs font-light text-muted-foreground">
-      <Link href="/privacy-policy" className="hover:text-foreground transition-colors">
-        privacy
+    <p className="text-sm text-muted-foreground leading-relaxed">
+      By signing in, you agree to the{" "}
+      <Link href="/terms-of-service" className="underline hover:text-foreground transition-colors">
+        Terms of Service
+      </Link>{" "}
+      and{" "}
+      <Link href="/privacy-policy" className="underline hover:text-foreground transition-colors">
+        Privacy Policy
       </Link>
-      <span className="text-border">•</span>
-      <Link href="/terms-of-service" className="hover:text-foreground transition-colors">
-        terms
-      </Link>
-    </div>
+      .
+    </p>
   );
 }

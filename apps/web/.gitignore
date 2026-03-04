@@ -28,6 +28,9 @@ yarn-error.log*
 # env files (can opt-in for commiting if needed)
 .env*
 
+# videos
+/public/videos/*.mp4
+
 # vercel
 .vercel
 

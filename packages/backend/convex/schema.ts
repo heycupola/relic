@@ -114,6 +114,7 @@ export default defineSchema({
       v.literal("share.revoked"),
       v.literal("share.key_updated"),
       v.literal("keys.rotated"),
+      v.literal("onboarding.completed"),
     ),
     metadata: v.optional(
       v.object({
@@ -155,4 +156,32 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_hashedKey", ["hashedKey"]),
+  onboarding: defineTable({
+    userId: v.string(),
+    source: v.optional(
+      v.union(
+        v.literal("google_search"),
+        v.literal("github"),
+        v.literal("reddit"),
+        v.literal("x"),
+        v.literal("youtube"),
+        v.literal("discord"),
+        v.literal("friend"),
+        v.literal("blog_post"),
+        v.literal("other"),
+      ),
+    ),
+    sourceOther: v.optional(v.string()),
+    teamSize: v.optional(
+      v.union(
+        v.literal("1"),
+        v.literal("2-5"),
+        v.literal("6-20"),
+        v.literal("21-50"),
+        v.literal("50+"),
+        v.literal("other"),
+      ),
+    ),
+    createdAt: v.number(),
+  }).index("by_user", ["userId"]),
 });

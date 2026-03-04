@@ -28,6 +28,7 @@ export const _insertActionLog = internalMutation({
       v.literal("share.revoked"),
       v.literal("share.key_updated"),
       v.literal("keys.rotated"),
+      v.literal("onboarding.completed"),
     ),
     environmentId: v.optional(v.id("environment")),
     environmentName: v.optional(v.string()),

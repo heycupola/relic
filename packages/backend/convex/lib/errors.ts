@@ -50,6 +50,7 @@ export enum ErrorCode {
   CANNOT_DELETE_NON_EMPTY = "CANNOT_DELETE_NON_EMPTY",
   CANNOT_PERFORM_ACTION_ON_SELF = "CANNOT_PERFORM_ACTION_ON_SELF",
   PAYMENT_REQUIRED = "PAYMENT_REQUIRED",
+  UNABLE_TO_PERFORM_THIS_ACTION = "UNABLE_TO_PERFORM_THIS_ACTION",
 
   // Server Errors
   SERVER_ERROR = "SERVER_ERROR",
@@ -106,6 +107,7 @@ const ERROR_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCode.CANNOT_DELETE_NON_EMPTY]: "Cannot delete non-empty resource",
   [ErrorCode.CANNOT_PERFORM_ACTION_ON_SELF]: "Cannot perform this action on yourself",
   [ErrorCode.PAYMENT_REQUIRED]: "Payment required to access this feature",
+  [ErrorCode.UNABLE_TO_PERFORM_THIS_ACTION]: "Unable to perform this action",
 
   // Server
   [ErrorCode.SERVER_ERROR]: "An internal server error occurred",

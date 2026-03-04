@@ -77,6 +77,12 @@ export const createAuth = (
           input: true,
           required: false,
         },
+        hasCompletedOnboarding: {
+          type: "boolean",
+          input: true,
+          required: false,
+          defaultValue: false,
+        },
       },
     },
     logger: {

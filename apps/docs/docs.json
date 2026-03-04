@@ -1,0 +1,82 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "linden",
+  "name": "Relic",
+  "colors": {
+    "primary": "#6E56CF",
+    "light": "#9B8AE8",
+    "dark": "#5B45B0"
+  },
+  "background": {
+    "color": {
+      "light": "#FFFFFF",
+      "dark": "#0A0A0A"
+    },
+    "decoration": "grid"
+  },
+  "logo": {
+    "light": "/assets/logo-light.svg",
+    "dark": "/assets/logo-dark.svg",
+    "href": "https://relic.so"
+  },
+  "favicon": "/assets/favicon.svg",
+  "appearance": {
+    "default": "system"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Website",
+        "href": "https://relic.so"
+      },
+      {
+        "type": "discord",
+        "label": "Discord",
+        "href": "https://discord.gg/heycupola"
+      },
+      {
+        "type": "github",
+        "href": "https://github.com/heycupola/relic"
+      }
+    ]
+  },
+  "feedback": {
+    "suggestEdit": true,
+    "raiseIssue": {
+      "url": "https://github.com/heycupola/relic/issues/new"
+    }
+  },
+  "metadata": {
+    "timestamp": true
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Getting Started",
+        "pages": ["introduction", "troubleshooting", "enterprise"]
+      },
+      {
+        "group": "Guides",
+        "pages": [
+          "guides/cli",
+          "guides/tui",
+          "guides/project-collaboration",
+          "guides/github-integration"
+        ]
+      },
+      {
+        "group": "Configuration",
+        "pages": [
+          "configuration/telemetry",
+          "configuration/session",
+          "configuration/keybindings",
+          "configuration/themes"
+        ]
+      },
+      {
+        "group": "Development",
+        "pages": ["development/sdk", "development/runner"]
+      }
+    ]
+  }
+}

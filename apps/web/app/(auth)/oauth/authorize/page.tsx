@@ -1,14 +1,12 @@
 "use client";
 
 import { api } from "@repo/backend";
-import { Button } from "@repo/ui/components/button";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
-import { Check, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Component, type ReactNode, Suspense, useEffect, useState } from "react";
-import { AuthFooter } from "@/components/auth-footer";
+import { StatusBox } from "@/components/status-box";
 import { authClient } from "@/lib/auth";
 import { trackWebEvent } from "@/lib/posthog";
 import { authHeadingStyle, authSubtitleStyle } from "@/lib/styles";
@@ -135,8 +133,8 @@ function AuthorizeContent() {
   const renderContent = () => {
     if (status === "loading") {
       return (
-        <div className="text-center space-y-3">
-          <h1 className="text-3xl font-medium text-foreground" style={authHeadingStyle}>
+        <div className="space-y-3">
+          <h1 className="text-2xl font-medium text-foreground" style={authHeadingStyle}>
             loading…
           </h1>
         </div>
@@ -145,107 +143,93 @@ function AuthorizeContent() {
 
     if (status === "error") {
       return (
-        <div className="text-center space-y-4">
-          <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
-            <X className="w-6 h-6 text-destructive" />
-          </div>
-          <div className="space-y-2">
-            <h1 className="text-3xl font-medium text-foreground" style={authHeadingStyle}>
-              authorization failed
-            </h1>
-            <p className="text-sm font-light text-soft-silver" style={authSubtitleStyle}>
-              {errorMessage}
-            </p>
-          </div>
+        <div className="space-y-6">
+          <h1 className="text-2xl font-medium text-foreground" style={authHeadingStyle}>
+            Authorization failed
+          </h1>
+          <StatusBox variant="error">{errorMessage}</StatusBox>
         </div>
       );
     }
 
     if (status === "approved") {
       return (
-        <div className="text-center space-y-4">
-          <div className="w-12 h-12 rounded-full bg-electric-ink/10 flex items-center justify-center mx-auto">
-            <Check className="w-6 h-6 text-electric-ink" />
-          </div>
-          <div className="space-y-2">
-            <h1 className="text-3xl font-medium text-foreground" style={authHeadingStyle}>
-              access granted
-            </h1>
-            <p className="text-sm font-light text-soft-silver" style={authSubtitleStyle}>
-              You can close this window and return to your terminal
-            </p>
-          </div>
+        <div className="space-y-6">
+          <h1 className="text-2xl font-medium text-foreground" style={authHeadingStyle}>
+            Access granted
+          </h1>
+          <StatusBox variant="success">
+            You can close this window and return to your terminal.
+          </StatusBox>
         </div>
       );
     }
 
     if (status === "denied") {
       return (
-        <div className="text-center space-y-4">
-          <div className="w-12 h-12 rounded-full bg-soft-silver/10 flex items-center justify-center mx-auto">
-            <X className="w-6 h-6 text-soft-silver" />
-          </div>
-          <div className="space-y-2">
-            <h1 className="text-3xl font-medium text-foreground" style={authHeadingStyle}>
-              access denied
-            </h1>
-            <p className="text-sm font-light text-soft-silver" style={authSubtitleStyle}>
-              You can close this window
-            </p>
-          </div>
+        <div className="space-y-6">
+          <h1 className="text-2xl font-medium text-foreground" style={authHeadingStyle}>
+            Access denied
+          </h1>
+          <StatusBox variant="info">You can close this window.</StatusBox>
         </div>
       );
     }
 
     return (
       <div className="space-y-8">
-        <div className="text-center space-y-3">
-          <h1 className="text-3xl font-medium text-foreground" style={authHeadingStyle}>
-            authorize cli access
+        <div className="space-y-2">
+          <h1 className="text-2xl font-medium text-foreground" style={authHeadingStyle}>
+            Authorize CLI access
           </h1>
-          <p className="text-sm font-light text-soft-silver" style={authSubtitleStyle}>
+          <p className="text-sm text-muted-foreground" style={authSubtitleStyle}>
             The Relic CLI is requesting access to your account
           </p>
         </div>
 
-        <div className="bg-graphite-grey/30 border border-border rounded-md p-6 space-y-4">
+        <StatusBox variant="info">
+          Make sure the code below matches the one shown in your terminal.
+        </StatusBox>
+
+        <div className="bg-muted/20 border-2 border-border p-6 space-y-4">
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground uppercase">User Code</p>
-            <p className="text-2xl font-mono font-medium text-electric-ink">{userCode}</p>
+            <p className="text-2xl font-mono font-medium text-foreground">{userCode}</p>
           </div>
 
           {deviceCodeInfo?.clientId && (
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground uppercase">Client</p>
-              <p className="text-sm font-light text-foreground">{deviceCodeInfo.clientId}</p>
+              <p className="text-sm text-foreground">{deviceCodeInfo.clientId}</p>
             </div>
           )}
 
           {deviceCodeInfo?.scope && (
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground uppercase">Permissions</p>
-              <p className="text-sm font-light text-foreground">{deviceCodeInfo.scope}</p>
+              <p className="text-sm text-foreground">{deviceCodeInfo.scope}</p>
             </div>
           )}
         </div>
 
-        <div className="space-y-3">
-          <Button
+        <div className="flex gap-3">
+          <button
+            type="button"
             onClick={handleApprove}
             disabled={status === "approving" || status === "denying"}
-            className="w-full h-12 rounded-md bg-electric-ink text-bone-white hover:bg-electric-ink/90 font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 h-12 bg-foreground text-background border-2 border-foreground font-medium transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {status === "approving" ? "Approving…" : "Approve"}
-          </Button>
+          </button>
 
-          <Button
+          <button
+            type="button"
             onClick={handleDeny}
             disabled={status === "approving" || status === "denying"}
-            variant="secondary"
-            className="w-full h-12 rounded-md font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 h-12 bg-background text-foreground border-2 border-border font-medium transition-all hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {status === "denying" ? "Denying…" : "Deny"}
-          </Button>
+          </button>
         </div>
       </div>
     );
@@ -258,29 +242,26 @@ function AuthorizeContent() {
         {status === "denied" && "Device access denied"}
         {status === "error" && errorMessage}
       </output>
-      <div className="w-full py-16">
-        <div className="flex flex-col items-center gap-10">
-          <div className="flex flex-col items-center gap-8">
-            <Link href="/" className="flex items-center">
-              <Image
-                src="/relic-logo-wordmark-dark.svg"
-                alt="Relic"
-                width={119}
-                height={48}
-                className="h-12 w-auto dark:hidden"
-              />
-              <Image
-                src="/relic-logo-wordmark-light.svg"
-                alt="Relic"
-                width={119}
-                height={48}
-                className="h-12 w-auto hidden dark:block"
-              />
-            </Link>
-            <div className="w-full max-w-sm">{renderContent()}</div>
-          </div>
+      <div className="w-full max-w-md px-6 py-16">
+        <div className="flex flex-col gap-8">
+          <Link href="/" className="flex items-center">
+            <Image
+              src="/relic-logo-dark.svg"
+              alt="Relic"
+              width={40}
+              height={40}
+              className="h-10 w-auto dark:hidden"
+            />
+            <Image
+              src="/relic-logo-light.svg"
+              alt="Relic"
+              width={40}
+              height={40}
+              className="h-10 w-auto hidden dark:block"
+            />
+          </Link>
 
-          <AuthFooter />
+          {renderContent()}
         </div>
       </div>
     </div>
@@ -305,43 +286,31 @@ function ErrorFallback({ error }: { error: Error }) {
 
   return (
     <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
-      <div className="w-full py-16">
-        <div className="flex flex-col items-center gap-10">
-          <div className="flex flex-col items-center gap-8">
-            <Link href="/" className="flex items-center">
-              <Image
-                src="/relic-logo-wordmark-dark.svg"
-                alt="Relic"
-                width={119}
-                height={48}
-                className="h-12 w-auto dark:hidden"
-              />
-              <Image
-                src="/relic-logo-wordmark-light.svg"
-                alt="Relic"
-                width={119}
-                height={48}
-                className="h-12 w-auto hidden dark:block"
-              />
-            </Link>
-            <div className="w-full max-w-sm">
-              <div className="text-center space-y-4">
-                <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
-                  <X className="w-6 h-6 text-destructive" />
-                </div>
-                <div className="space-y-2">
-                  <h1 className="text-3xl font-medium text-foreground" style={authHeadingStyle}>
-                    authorization failed
-                  </h1>
-                  <p className="text-sm font-light text-soft-silver" style={authSubtitleStyle}>
-                    {displayMessage}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div className="w-full max-w-md px-6 py-16">
+        <div className="flex flex-col gap-8">
+          <Link href="/" className="flex items-center">
+            <Image
+              src="/relic-logo-dark.svg"
+              alt="Relic"
+              width={40}
+              height={40}
+              className="h-10 w-auto dark:hidden"
+            />
+            <Image
+              src="/relic-logo-light.svg"
+              alt="Relic"
+              width={40}
+              height={40}
+              className="h-10 w-auto hidden dark:block"
+            />
+          </Link>
 
-          <AuthFooter />
+          <div className="space-y-6">
+            <h1 className="text-2xl font-medium text-foreground" style={authHeadingStyle}>
+              Authorization failed
+            </h1>
+            <StatusBox variant="error">{displayMessage}</StatusBox>
+          </div>
         </div>
       </div>
     </div>
@@ -353,30 +322,28 @@ export default function AuthorizePage() {
     <Suspense
       fallback={
         <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
-          <div className="w-full py-16">
-            <div className="flex flex-col items-center gap-10">
-              <div className="flex flex-col items-center gap-8">
-                <Link href="/" className="flex items-center">
-                  <Image
-                    src="/relic-logo-wordmark-dark.svg"
-                    alt="Relic"
-                    width={119}
-                    height={48}
-                    className="h-12 w-auto dark:hidden"
-                  />
-                  <Image
-                    src="/relic-logo-wordmark-light.svg"
-                    alt="Relic"
-                    width={119}
-                    height={48}
-                    className="h-12 w-auto hidden dark:block"
-                  />
-                </Link>
-                <div className="text-center space-y-3">
-                  <h1 className="text-3xl font-medium text-foreground" style={authHeadingStyle}>
-                    loading…
-                  </h1>
-                </div>
+          <div className="w-full max-w-md px-6 py-16">
+            <div className="flex flex-col gap-8">
+              <Link href="/" className="flex items-center">
+                <Image
+                  src="/relic-logo-dark.svg"
+                  alt="Relic"
+                  width={40}
+                  height={40}
+                  className="h-10 w-auto dark:hidden"
+                />
+                <Image
+                  src="/relic-logo-light.svg"
+                  alt="Relic"
+                  width={40}
+                  height={40}
+                  className="h-10 w-auto hidden dark:block"
+                />
+              </Link>
+              <div className="space-y-3">
+                <h1 className="text-2xl font-medium text-foreground" style={authHeadingStyle}>
+                  loading…
+                </h1>
               </div>
             </div>
           </div>
