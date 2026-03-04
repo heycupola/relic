@@ -5,7 +5,6 @@ import { api } from "@repo/backend";
 import { AutumnProvider } from "autumn-js/react";
 import { ConvexReactClient, useQuery } from "convex/react";
 import { usePathname, useRouter } from "next/navigation";
-import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from "next-themes";
 import { type ReactNode, useEffect } from "react";
 import { authClient } from "@/lib/auth";
 import { initPostHog } from "@/lib/posthog";
@@ -69,6 +68,41 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  return <NextThemesProvider {...props}>{children}</NextThemesProvider>;
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    const themeStorageKey = "relic-theme";
+    const getTheme = () => {
+      const storedTheme = localStorage.getItem(themeStorageKey);
+      if (storedTheme === "dark" || storedTheme === "light") {
+        return storedTheme;
+      }
+
+      if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        return "dark";
+      }
+
+      return "light";
+    };
+
+    const applyTheme = (nextTheme: string) => {
+      const isDark = nextTheme === "dark";
+      document.documentElement.classList.toggle("dark", isDark);
+    };
+
+    const theme = getTheme();
+    applyTheme(theme);
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleThemeChange = (event: MediaQueryListEvent) => {
+      applyTheme(event.matches ? "dark" : "light");
+    };
+
+    mediaQuery.addEventListener("change", handleThemeChange);
+
+    return () => {
+      mediaQuery.removeEventListener("change", handleThemeChange);
+    };
+  }, []);
+
+  return <>{children}</>;
 }

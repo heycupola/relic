@@ -14,6 +14,8 @@ interface HeaderProps {
   showLogout?: boolean;
 }
 
+const DOCS_URL = "https://docs.relic.so";
+
 export function Header({ showLogout = false }: HeaderProps) {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -76,7 +78,9 @@ export function Header({ showLogout = false }: HeaderProps) {
           <>
             <nav className="hidden items-center gap-8 font-[family-name:var(--font-heading)] text-md text-muted-foreground md:flex">
               <Link
-                href="/docs"
+                href={DOCS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm px-1"
               >
                 Docs
@@ -112,7 +116,9 @@ export function Header({ showLogout = false }: HeaderProps) {
         <div id="mobile-menu" className="md:hidden border-t border-border bg-background">
           <nav className="flex flex-col px-6 py-4 gap-4 font-[family-name:var(--font-heading)] text-md">
             <Link
-              href="/docs"
+              href={DOCS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm px-1 py-2"
               onClick={() => setMobileMenuOpen(false)}
             >

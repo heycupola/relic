@@ -42,7 +42,7 @@ export function Hero() {
             asChild
             className="gap-2 rounded-none border-2 border-border bg-foreground text-background hover:bg-foreground/90 px-6 py-2.5 h-auto font-medium"
           >
-            <Link href="/docs">
+            <Link href="https://docs.relic.so" target="_blank" rel="noopener noreferrer">
               Get Started <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
           </Button>
