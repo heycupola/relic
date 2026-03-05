@@ -99,7 +99,22 @@ export default function LoginPage() {
             <OAuthButton
               provider="github"
               icon={
-                <Image src="/github-logo.svg" alt="" width={20} height={20} className="w-5 h-5" />
+                <>
+                  <Image
+                    src="/github-logo-dark.svg"
+                    alt=""
+                    width={20}
+                    height={20}
+                    className="w-5 h-5 dark:hidden"
+                  />
+                  <Image
+                    src="/github-logo.svg"
+                    alt=""
+                    width={20}
+                    height={20}
+                    className="w-5 h-5 hidden dark:block"
+                  />
+                </>
               }
               onClick={handleGithubLogin}
               disabled={isLoading}
