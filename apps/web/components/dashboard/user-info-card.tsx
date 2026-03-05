@@ -58,11 +58,11 @@ export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardPro
 
   return (
     <div className="border-2 border-border bg-card">
-      <div className="p-5 space-y-3">
+      <div className="p-4 space-y-3 sm:p-5">
         <h3 className="text-sm font-medium text-foreground/60">Account</h3>
         <div className="space-y-1.5">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-lg font-semibold text-foreground">{name}</span>
+            <span className="text-base font-semibold text-foreground sm:text-lg">{name}</span>
             <Badge
               className={
                 hasPro
@@ -80,7 +80,7 @@ export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardPro
       {hasPro ? (
         <>
           <div className="border-t-2 border-border" />
-          <div className="p-5 space-y-3">
+          <div className="p-4 space-y-3 sm:p-5">
             <h4 className="text-sm font-medium text-foreground/60">Subscription</h4>
             <button
               type="button"
@@ -101,7 +101,7 @@ export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardPro
       ) : (
         <>
           <div className="border-t-2 border-border" />
-          <div className="p-5 space-y-4 bg-muted/20">
+          <div className="p-4 space-y-4 bg-muted/20 sm:p-5">
             <div className="space-y-3">
               <h4 className="text-sm font-semibold text-foreground">Upgrade to Pro</h4>
               <ul className="space-y-2 text-sm">

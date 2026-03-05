@@ -139,7 +139,7 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
-      <div className="w-full max-w-lg px-6 py-16">
+      <div className="w-full max-w-lg px-4 py-8 sm:px-6 sm:py-16">
         <div className="flex flex-col gap-8">
           <Link href="/" className="flex items-center">
             <Image
@@ -199,7 +199,7 @@ export default function OnboardingPage() {
                 />
               )}
 
-              <div className="flex gap-3">
+              <div className="flex flex-col-reverse gap-3 sm:flex-row">
                 <button
                   type="button"
                   onClick={handleNext}
@@ -248,7 +248,7 @@ export default function OnboardingPage() {
                 ))}
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex flex-col-reverse gap-3 sm:flex-row">
                 <button
                   type="button"
                   onClick={handleBack}
@@ -288,7 +288,7 @@ export default function OnboardingPage() {
 
               <InstallSection showWrapper={false} />
 
-              <div className="flex gap-3">
+              <div className="flex flex-col-reverse gap-3 sm:flex-row">
                 <button
                   type="button"
                   onClick={handleBack}

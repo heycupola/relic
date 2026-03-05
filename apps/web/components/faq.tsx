@@ -49,25 +49,27 @@ export function FAQ() {
 
   return (
     <SectionWrapper label="FAQ" id="faq">
-      <div className="mx-auto max-w-6xl px-6 py-16 lg:px-12">
-        <h2 className="text-2xl font-semibold text-foreground">FAQ</h2>
-        <p className="mt-2 text-foreground/60 text-pretty">
+      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-12">
+        <h2 className="text-xl font-semibold text-foreground sm:text-2xl">FAQ</h2>
+        <p className="mt-2 text-sm text-foreground/60 text-pretty sm:text-base">
           Everything you need to know about Relic.
         </p>
 
-        <div className="mt-8 border-2 border-border divide-y-2 divide-border">
+        <div className="mt-6 border-2 border-border divide-y-2 divide-border sm:mt-8">
           {faqs.map((faq, index) => (
             <button
               key={faq.question}
               type="button"
               onClick={() => setOpenIndex(openIndex === index ? null : index)}
               className={cn(
-                "w-full text-left px-6 py-5 transition-colors",
+                "w-full text-left px-4 py-4 transition-colors sm:px-6 sm:py-5",
                 openIndex === index ? "bg-foreground/5" : "hover:bg-muted/50",
               )}
             >
-              <div className="flex items-center justify-between gap-4">
-                <span className="font-medium text-foreground">{faq.question}</span>
+              <div className="flex items-center justify-between gap-3 sm:gap-4">
+                <span className="font-medium text-foreground text-sm sm:text-base">
+                  {faq.question}
+                </span>
                 <ChevronDown
                   className={cn(
                     "h-5 w-5 shrink-0 text-foreground/50 transition-transform duration-200",
@@ -82,7 +84,7 @@ export function FAQ() {
                   openIndex === index ? "mt-3 max-h-40" : "max-h-0",
                 )}
               >
-                <p className="text-foreground/60 text-sm leading-relaxed pr-8 text-pretty">
+                <p className="text-foreground/60 text-sm leading-relaxed text-pretty sm:pr-8">
                   {faq.answer}
                 </p>
               </div>
@@ -90,7 +92,7 @@ export function FAQ() {
           ))}
         </div>
 
-        <div className="mt-8 flex items-center gap-3 text-foreground/60">
+        <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-foreground/60 sm:mt-8 sm:text-base">
           <span>Have more questions?</span>
           <Link
             href="https://x.com/heycupola"

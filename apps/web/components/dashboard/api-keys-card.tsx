@@ -79,9 +79,9 @@ export function ApiKeysCard({ apiKeys, isLoading }: ApiKeysCardProps) {
 
   return (
     <>
-      <div className="border-2 border-border bg-card p-5">
+      <div className="border-2 border-border bg-card p-4 sm:p-5">
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <h3 className="text-sm font-medium text-foreground/60">API Keys</h3>
             <button
               type="button"
@@ -110,8 +110,8 @@ export function ApiKeysCard({ apiKeys, isLoading }: ApiKeysCardProps) {
                 const isActive = status === "active";
 
                 return (
-                  <div key={key.id} className="py-3 first:pt-0 last:pb-0">
-                    <div className="flex items-center justify-between gap-3">
+                  <div key={key.id} className="py-2.5 first:pt-0 last:pb-0 sm:py-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-foreground truncate">
@@ -158,7 +158,7 @@ export function ApiKeysCard({ apiKeys, isLoading }: ApiKeysCardProps) {
                         <button
                           type="button"
                           onClick={() => setKeyToRevoke(key)}
-                          className="px-3 py-1.5 text-xs font-medium border border-border text-foreground/60 hover:border-red-600 hover:text-red-600 dark:hover:border-red-400 dark:hover:text-red-400 transition-all shrink-0"
+                          className="self-start px-3 py-1.5 text-xs font-medium border border-border text-foreground/60 hover:border-red-600 hover:text-red-600 dark:hover:border-red-400 dark:hover:text-red-400 transition-all shrink-0 sm:self-auto"
                         >
                           Revoke
                         </button>

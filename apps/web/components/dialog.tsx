@@ -37,7 +37,7 @@ export function Dialog({ open, onClose, children, closeOnBackdrop = true }: Dial
   if (!mounted || !open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center p-0 sm:items-center sm:p-4">
       <button
         type="button"
         className="fixed inset-0 bg-black/50"
@@ -49,7 +49,7 @@ export function Dialog({ open, onClose, children, closeOnBackdrop = true }: Dial
       />
       <div
         ref={panelRef}
-        className="relative z-10 w-full max-w-md border-2 border-border bg-background"
+        className="relative z-10 w-full max-w-md border-2 border-border bg-background max-h-[85dvh] overflow-y-auto sm:max-h-none sm:overflow-y-visible"
         role="dialog"
         aria-modal="true"
       >

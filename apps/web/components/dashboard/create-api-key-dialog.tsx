@@ -119,7 +119,7 @@ export function CreateApiKeyDialog({ open, onClose, activeKeyCount }: CreateApiK
     >
       {step === "form" ? (
         <>
-          <div className="flex items-center justify-between p-4 border-b-2 border-border">
+          <div className="flex items-center justify-between p-3 border-b-2 border-border sm:p-4">
             <h2 className="text-sm font-semibold text-foreground">Create API Key</h2>
             <button
               type="button"
@@ -137,7 +137,7 @@ export function CreateApiKeyDialog({ open, onClose, activeKeyCount }: CreateApiK
               handleCreate();
             }}
           >
-            <div className="p-4 space-y-4">
+            <div className="p-3 space-y-4 sm:p-4">
               <div className="space-y-1.5">
                 <label
                   htmlFor="api-key-name"
@@ -212,7 +212,7 @@ export function CreateApiKeyDialog({ open, onClose, activeKeyCount }: CreateApiK
               {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
             </div>
 
-            <div className="flex items-center justify-end gap-2 p-4 border-t-2 border-border">
+            <div className="flex flex-col-reverse gap-2 p-3 border-t-2 border-border sm:flex-row sm:items-center sm:justify-end sm:p-4">
               <button
                 type="button"
                 onClick={handleClose}
@@ -232,11 +232,11 @@ export function CreateApiKeyDialog({ open, onClose, activeKeyCount }: CreateApiK
         </>
       ) : (
         <>
-          <div className="p-4 border-b-2 border-border">
+          <div className="p-3 border-b-2 border-border sm:p-4">
             <h2 className="text-sm font-semibold text-foreground">API Key Created</h2>
           </div>
 
-          <div className="p-4 space-y-4">
+          <div className="p-3 space-y-4 sm:p-4">
             <div className="flex items-start gap-2 p-3 border border-yellow-600/30 bg-yellow-600/5">
               <span className="text-yellow-600 dark:text-yellow-400 text-xs shrink-0">⚠</span>
               <p className="text-xs text-yellow-600 dark:text-yellow-400 leading-relaxed">
@@ -263,7 +263,7 @@ export function CreateApiKeyDialog({ open, onClose, activeKeyCount }: CreateApiK
             </div>
           </div>
 
-          <div className="flex items-center justify-end p-4 border-t-2 border-border">
+          <div className="flex items-center justify-end p-3 border-t-2 border-border sm:p-4">
             <button
               type="button"
               onClick={handleClose}

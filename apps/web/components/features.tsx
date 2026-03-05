@@ -65,7 +65,7 @@ const compactFeatures: CompactFeature[] = [
 function VideoCard({ feature }: { feature: VideoFeature }) {
   return (
     <div className="border-2 border-border bg-card flex flex-col hover:border-foreground/30 transition-colors">
-      <div className="p-5 flex-1">
+      <div className="p-4 flex-1 sm:p-5">
         <div className="flex items-center justify-between gap-2">
           <h3 className="font-semibold text-foreground">{feature.title}</h3>
           <span
@@ -95,7 +95,7 @@ function VideoCard({ feature }: { feature: VideoFeature }) {
 
 function CompactCard({ feature }: { feature: CompactFeature }) {
   return (
-    <div className="border-2 border-border bg-card p-5 hover:border-foreground/30 transition-colors">
+    <div className="border-2 border-border bg-card p-4 hover:border-foreground/30 transition-colors sm:p-5">
       <span className="font-mono text-xs text-electric-ink">{feature.keyword}</span>
       <h3 className="mt-1.5 font-semibold text-foreground text-sm">{feature.title}</h3>
       <p className="mt-2 text-sm text-foreground/60 text-pretty">{feature.description}</p>
@@ -106,19 +106,19 @@ function CompactCard({ feature }: { feature: CompactFeature }) {
 export function Features() {
   return (
     <SectionWrapper label="Features" id="features">
-      <div className="mx-auto max-w-6xl px-6 py-16 lg:px-12">
-        <h2 className="text-2xl font-semibold text-foreground">Features</h2>
-        <p className="mt-2 max-w-2xl text-foreground/60 text-pretty">
+      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-12">
+        <h2 className="text-xl font-semibold text-foreground sm:text-2xl">Features</h2>
+        <p className="mt-2 max-w-2xl text-sm text-foreground/60 text-pretty sm:text-base">
           Everything you need to manage secrets, from editing to sharing to deployment.
         </p>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-6 grid grid-cols-1 gap-3 sm:mt-8 sm:gap-4 md:grid-cols-2 lg:grid-cols-3">
           {videoFeatures.map((feature) => (
             <VideoCard key={feature.title} feature={feature} />
           ))}
         </div>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:mt-4 sm:gap-4 lg:grid-cols-4">
           {compactFeatures.map((feature) => (
             <CompactCard key={feature.keyword} feature={feature} />
           ))}

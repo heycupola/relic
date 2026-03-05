@@ -11,7 +11,7 @@ export function QuickActionsCard() {
   const docsUrl = "https://docs.relic.so";
 
   return (
-    <div className="border-2 border-border bg-card p-5">
+    <div className="border-2 border-border bg-card p-4 sm:p-5">
       <div className="space-y-3">
         <h3 className="text-sm font-medium text-foreground/60">Quick Actions</h3>
 

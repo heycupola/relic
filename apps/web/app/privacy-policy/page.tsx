@@ -17,15 +17,19 @@ export default function PrivacyPolicyPage() {
       <Header />
       <main className="flex-1">
         <div className="border-b border-border">
-          <div className="mx-auto max-w-6xl px-6 lg:px-12 py-16 md:py-20">
-            <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">Privacy Policy</h1>
-            <p className="mt-3 text-sm text-muted-foreground">Last updated: February 25, 2026</p>
+          <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-16 md:py-20 lg:px-12">
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+              Privacy Policy
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground sm:mt-3">
+              Last updated: February 25, 2026
+            </p>
           </div>
         </div>
 
-        <div className="mx-auto max-w-6xl px-6 lg:px-12">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-12">
           <div className="divide-y divide-border">
-            <section className="py-10">
+            <section className="py-8 sm:py-10">
               <p className="text-sm text-foreground/70 leading-relaxed">
                 Relic is a zero-knowledge secrets management platform operated by Cupola Labs, LLC.
                 Our architecture is built so that your secrets are encrypted on your device before
@@ -62,8 +66,8 @@ export default function PrivacyPolicyPage() {
                 <h3 className="text-sm font-medium">Usage Analytics</h3>
                 <p className="mt-2 text-sm text-foreground/70 leading-relaxed">
                   We use PostHog to collect anonymized product analytics including feature usage
-                  patterns, page views, and error events. Analytics data does not include your secret
-                  values or encryption keys.
+                  patterns, page views, and error events. Analytics data does not include your
+                  secret values or encryption keys.
                 </p>
               </div>
 
@@ -83,9 +87,7 @@ export default function PrivacyPolicyPage() {
                 <li>Provide, maintain, and improve the Service</li>
                 <li>Authenticate your identity and manage your account</li>
                 <li>Process payments and manage subscriptions</li>
-                <li>
-                  Store and transmit your encrypted data as necessary to operate the Service
-                </li>
+                <li>Store and transmit your encrypted data as necessary to operate the Service</li>
                 <li>Analyze anonymized usage patterns to improve the product</li>
                 <li>Communicate with you about your account or changes to the Service</li>
                 <li>Enforce our Terms of Service and protect against misuse</li>
@@ -129,9 +131,7 @@ export default function PrivacyPolicyPage() {
             <section className="py-10">
               <h2 className="text-lg font-semibold">Data Storage and Security</h2>
               <ul className="mt-4 space-y-2 text-sm text-foreground/70 list-disc pl-5 leading-relaxed">
-                <li>
-                  All data is stored on Convex infrastructure located in the United States
-                </li>
+                <li>All data is stored on Convex infrastructure located in the United States</li>
                 <li>
                   Secret values are encrypted client-side before transmission using AES-256-GCM
                 </li>
@@ -154,7 +154,8 @@ export default function PrivacyPolicyPage() {
                 <li>Export your secrets in multiple formats</li>
                 <li>Delete your account and request removal of your associated data</li>
                 <li>
-                  Revoke OAuth connections through your Google or GitHub account settings at any time
+                  Revoke OAuth connections through your Google or GitHub account settings at any
+                  time
                 </li>
                 <li>
                   Request information about what data we hold about you by contacting us at{" "}
@@ -192,10 +193,10 @@ export default function PrivacyPolicyPage() {
             <section className="py-10">
               <h2 className="text-lg font-semibold">Children&apos;s Privacy</h2>
               <p className="mt-4 text-sm text-foreground/70 leading-relaxed">
-                Relic is not intended for use by individuals under the age of 18. We do not knowingly
-                collect personal information from anyone under 18. If we become aware that we have
-                collected information from someone under 18, we will take steps to delete that
-                information promptly.
+                Relic is not intended for use by individuals under the age of 18. We do not
+                knowingly collect personal information from anyone under 18. If we become aware that
+                we have collected information from someone under 18, we will take steps to delete
+                that information promptly.
               </p>
             </section>
 

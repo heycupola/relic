@@ -191,7 +191,7 @@ function AuthorizeContent() {
           Make sure the code below matches the one shown in your terminal.
         </StatusBox>
 
-        <div className="bg-muted/20 border-2 border-border p-6 space-y-4">
+        <div className="bg-muted/20 border-2 border-border p-4 space-y-4 sm:p-6">
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground uppercase">User Code</p>
             <p className="text-2xl font-mono font-medium text-foreground">{userCode}</p>
@@ -212,12 +212,12 @@ function AuthorizeContent() {
           )}
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <button
             type="button"
             onClick={handleApprove}
             disabled={status === "approving" || status === "denying"}
-            className="flex-1 h-12 bg-foreground text-background border-2 border-foreground font-medium transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 h-11 bg-foreground text-background border-2 border-foreground font-medium transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed sm:h-12"
           >
             {status === "approving" ? "Approving…" : "Approve"}
           </button>
@@ -226,7 +226,7 @@ function AuthorizeContent() {
             type="button"
             onClick={handleDeny}
             disabled={status === "approving" || status === "denying"}
-            className="flex-1 h-12 bg-background text-foreground border-2 border-border font-medium transition-all hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 h-11 bg-background text-foreground border-2 border-border font-medium transition-all hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed sm:h-12"
           >
             {status === "denying" ? "Denying…" : "Deny"}
           </button>
@@ -242,7 +242,7 @@ function AuthorizeContent() {
         {status === "denied" && "Device access denied"}
         {status === "error" && errorMessage}
       </output>
-      <div className="w-full max-w-md px-6 py-16">
+      <div className="w-full max-w-md px-4 py-10 sm:px-6 sm:py-16">
         <div className="flex flex-col gap-8">
           <Link href="/" className="flex items-center">
             <Image
@@ -286,7 +286,7 @@ function ErrorFallback({ error }: { error: Error }) {
 
   return (
     <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
-      <div className="w-full max-w-md px-6 py-16">
+      <div className="w-full max-w-md px-4 py-10 sm:px-6 sm:py-16">
         <div className="flex flex-col gap-8">
           <Link href="/" className="flex items-center">
             <Image
@@ -322,7 +322,7 @@ export default function AuthorizePage() {
     <Suspense
       fallback={
         <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
-          <div className="w-full max-w-md px-6 py-16">
+          <div className="w-full max-w-md px-4 py-10 sm:px-6 sm:py-16">
             <div className="flex flex-col gap-8">
               <Link href="/" className="flex items-center">
                 <Image

@@ -163,17 +163,17 @@ export function ActivityLogsCard({
   }
 
   return (
-    <div className="border-2 border-border bg-card p-5">
+    <div className="border-2 border-border bg-card p-4 sm:p-5">
       <div className="space-y-3">
         <h3 className="text-sm font-medium text-foreground/60">Recent Activity</h3>
-        <div className="relative max-h-[400px] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-border/20 [&::-webkit-scrollbar-thumb]:bg-foreground/20 [&::-webkit-scrollbar-thumb]:hover:bg-foreground/30">
+        <div className="relative max-h-[300px] overflow-y-auto sm:max-h-[400px] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-border/20 [&::-webkit-scrollbar-thumb]:bg-foreground/20 [&::-webkit-scrollbar-thumb]:hover:bg-foreground/30">
           <ul className="space-y-0 divide-y divide-border/50">
             {logs.map((log) => {
               const ActionIcon = getActionIcon(log.action);
               return (
-                <li key={log._id} className="py-2.5 first:pt-0">
-                  <div className="flex items-start gap-3">
-                    <span className="text-foreground/40 select-none shrink-0 text-xs font-mono mt-0.5">
+                <li key={log._id} className="py-2 first:pt-0 sm:py-2.5">
+                  <div className="flex items-start gap-2 sm:gap-3">
+                    <span className="text-foreground/40 select-none shrink-0 text-[11px] font-mono mt-0.5 sm:text-xs">
                       {formatTimeAgo(log.timestamp)}
                     </span>
                     <div className="flex-1 min-w-0">

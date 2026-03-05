@@ -4,11 +4,11 @@ import Link from "next/link";
 export function Footer() {
   return (
     <footer className="relative overflow-hidden border-t border-border">
-      <div className="mx-auto max-w-6xl px-6 lg:px-12 py-6">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm">
-          <div className="flex items-center gap-6">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-12">
+        <div className="flex flex-col items-center justify-between gap-4 text-sm md:flex-row">
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 md:justify-start">
             <p className="text-muted-foreground">© {new Date().getFullYear()}</p>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 md:justify-start">
               <Link
                 href="https://github.com/heycupola/relic"
                 target="_blank"

@@ -73,7 +73,7 @@ export function InstallSection({ showWrapper = true }: InstallSectionProps) {
   const installContent = (
     <div className="overflow-hidden border-2 border-border bg-card">
       <div
-        className="flex border-b-2 border-border"
+        className="grid grid-cols-4 border-b-2 border-border sm:flex"
         role="tablist"
         aria-label="Installation methods"
       >
@@ -89,7 +89,7 @@ export function InstallSection({ showWrapper = true }: InstallSectionProps) {
             aria-controls={`install-panel-${method.name}`}
             tabIndex={activeMethod.name === method.name ? 0 : -1}
             className={cn(
-              "px-6 py-3 font-mono text-xs uppercase transition-all focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring border-r-2 border-border",
+              "py-3 font-mono text-xs uppercase transition-all focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring border-r-2 border-border last:border-r-0 sm:px-6 sm:py-3 sm:last:border-r-2",
               activeMethod.name === method.name
                 ? "bg-foreground text-background font-bold"
                 : "text-foreground/60 hover:text-foreground hover:bg-muted",
@@ -100,7 +100,7 @@ export function InstallSection({ showWrapper = true }: InstallSectionProps) {
         ))}
       </div>
       <div
-        className="bg-muted/20 px-6 py-4 overflow-x-auto"
+        className="bg-muted/20 px-4 py-4 overflow-x-auto sm:px-6"
         role="tabpanel"
         id={`install-panel-${activeMethod.name}`}
         aria-labelledby={`install-tab-${activeMethod.name}`}
@@ -113,7 +113,7 @@ export function InstallSection({ showWrapper = true }: InstallSectionProps) {
             type="button"
             onClick={copyToClipboard}
             aria-label={copied ? "Copied to clipboard" : "Copy installation command"}
-            className="inline-flex shrink-0 items-center p-1.5 text-foreground/70 transition-all hover:bg-foreground hover:text-background focus-visible:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded"
+            className="inline-flex shrink-0 items-center p-2 text-foreground/70 transition-all hover:bg-foreground hover:text-background focus-visible:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded sm:p-1.5"
           >
             {copied ? (
               <Check className="h-4 w-4" aria-hidden="true" />
@@ -135,7 +135,7 @@ export function InstallSection({ showWrapper = true }: InstallSectionProps) {
 
   return (
     <SectionWrapper label="Install" showStripes>
-      <div className="mx-auto max-w-6xl px-6 py-16 lg:px-12">{installContent}</div>
+      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-12">{installContent}</div>
     </SectionWrapper>
   );
 }

@@ -39,11 +39,11 @@ export function RevokeApiKeyDialog({
 
   return (
     <Dialog open={open} onClose={onClose}>
-      <div className="p-4 border-b-2 border-border">
+      <div className="p-3 border-b-2 border-border sm:p-4">
         <h2 className="text-sm font-semibold text-foreground">Revoke API Key</h2>
       </div>
 
-      <div className="p-4 space-y-3">
+      <div className="p-3 space-y-3 sm:p-4">
         <p className="text-sm text-foreground/70 leading-relaxed">
           Are you sure you want to revoke{" "}
           <span className="font-medium text-foreground">&ldquo;{apiKeyName}&rdquo;</span>?
@@ -55,7 +55,7 @@ export function RevokeApiKeyDialog({
         {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
       </div>
 
-      <div className="flex items-center justify-end gap-2 p-4 border-t-2 border-border">
+      <div className="flex flex-col-reverse gap-2 p-3 border-t-2 border-border sm:flex-row sm:items-center sm:justify-end sm:p-4">
         <button
           type="button"
           onClick={onClose}

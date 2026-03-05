@@ -14,7 +14,7 @@ export default function SubscriptionSuccessPage() {
 
   return (
     <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
-      <div className="w-full max-w-md px-6 py-16">
+      <div className="w-full max-w-md px-4 py-10 sm:px-6 sm:py-16">
         <div className="flex flex-col gap-8">
           <Link href="/" className="flex items-center">
             <Image
@@ -57,7 +57,7 @@ export default function SubscriptionSuccessPage() {
             </li>
           </ul>
 
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <Link
               href="/dashboard"
               className="flex-1 p-3 text-sm font-medium text-center border-2 border-border bg-foreground text-background hover:bg-foreground/90 transition-colors"

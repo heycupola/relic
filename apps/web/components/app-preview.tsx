@@ -3,7 +3,7 @@ import { SectionWrapper } from "./section-wrapper";
 export function AppPreview() {
   return (
     <SectionWrapper label="Preview">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-6xl px-4 sm:px-0">
         <div className="aspect-video w-full bg-muted">
           <iframe
             src="https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=0&mute=1&loop=1&playlist=dQw4w9WgXcQ"
