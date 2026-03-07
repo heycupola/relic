@@ -4,6 +4,7 @@
   "types": "index.d.ts",
   "type": "module",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "dev": "bunx convex dev",
     "lint": "biome check --write .",
