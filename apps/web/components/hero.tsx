@@ -4,6 +4,7 @@ import { Button } from "@repo/ui/components/button";
 import { ArrowRight, Star } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { SITE_DESCRIPTION, SITE_SLOGAN } from "@/lib/site-copy";
 import { SectionWrapper } from "./section-wrapper";
 
 function formatStars(count: number): string {
@@ -33,11 +34,10 @@ export function Hero() {
           {"Closed beta now open!"}
         </p>
         <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl md:text-5xl lg:text-6xl">
-          The secrets layer developers actually trust
+          {SITE_SLOGAN}
         </h1>
         <p className="mt-5 max-w-2xl text-base text-foreground/60 text-pretty sm:mt-6 sm:text-lg">
-          Manage and share secrets. Encrypted on your device, never exposed to anyone else. Not even
-          us.
+          {SITE_DESCRIPTION}
         </p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
           <Button

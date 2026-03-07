@@ -1,7 +1,21 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
+import { Agentation } from "agentation";
 import Script from "next/script";
+import {
+  BLOG_FEED_PATH,
+  CHANGELOG_FEED_PATH,
+  getAbsoluteUrl,
+  SITE_AUTHOR,
+  SITE_AUTHOR_URL,
+  SITE_DESCRIPTION,
+  SITE_KEYWORDS,
+  SITE_NAME,
+  SITE_TITLE,
+  SITE_TWITTER_HANDLE,
+  SITE_URL,
+} from "@/lib/site";
 
 import { ConvexClientProvider, PostHogProvider, ThemeProvider } from "./providers";
 
@@ -10,26 +24,52 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] });
 const _spaceGrotesk = Space_Grotesk({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "relic - Encrypted Secrets, Fully Under Your Control",
-  description:
-    "Zero-knowledge secrets management with complete control. Works as CLI, TUI, and through our SDK.",
-  generator: "v0.app",
-  icons: {
-    icon: [
+  metadataBase: new URL(SITE_URL),
+  applicationName: SITE_NAME,
+  title: {
+    default: SITE_TITLE,
+    template: "%s - relic",
+  },
+  description: SITE_DESCRIPTION,
+  alternates: {
+    canonical: "/",
+  },
+  keywords: [...SITE_KEYWORDS],
+  authors: [{ name: SITE_AUTHOR, url: SITE_AUTHOR_URL }],
+  creator: SITE_AUTHOR,
+  category: "DeveloperApplication",
+  referrer: "origin-when-cross-origin",
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: SITE_URL,
+    siteName: SITE_NAME,
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: [
       {
-        url: "/icon-light-32x32.png",
-        media: "(prefers-color-scheme: light)",
-      },
-      {
-        url: "/icon-dark-32x32.png",
-        media: "(prefers-color-scheme: dark)",
-      },
-      {
-        url: "/icon.svg",
-        type: "image/svg+xml",
+        url: getAbsoluteUrl("/og?type=home"),
+        width: 1200,
+        height: 630,
+        alt: SITE_TITLE,
       },
     ],
-    apple: "/apple-icon.png",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    creator: SITE_TWITTER_HANDLE,
+    site: SITE_TWITTER_HANDLE,
+    images: [getAbsoluteUrl("/og?type=home")],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+    },
   },
 };
 
@@ -88,12 +128,42 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <link
+          rel="alternate"
+          type="application/rss+xml"
+          title="relic Blog RSS Feed"
+          href={BLOG_FEED_PATH}
+        />
+        <link
+          rel="alternate"
+          type="application/rss+xml"
+          title="relic Changelog RSS Feed"
+          href={CHANGELOG_FEED_PATH}
+        />
+        <link rel="icon" href="/icon.svg" sizes="any" type="image/svg+xml" />
+        <link rel="shortcut icon" href="/icon.svg" />
+        <link
+          rel="icon"
+          href="/icon-light-32x32.png"
+          sizes="32x32"
+          type="image/png"
+          media="(prefers-color-scheme: light)"
+        />
+        <link
+          rel="icon"
+          href="/icon-dark-32x32.png"
+          sizes="32x32"
+          type="image/png"
+          media="(prefers-color-scheme: dark)"
+        />
+        <link rel="apple-touch-icon" href="/apple-icon.png" sizes="180x180" />
         <Script id="relic-hydration-lockdown" strategy="beforeInteractive">
           {hydrationLockdownScript}
         </Script>
       </head>
       <body className={`font-sans antialiased`}>
+        {process.env.NODE_ENV === "development" && <Agentation />}
         <PostHogProvider>
           <ConvexClientProvider>
             <ThemeProvider>{children}</ThemeProvider>

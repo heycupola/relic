@@ -4,45 +4,8 @@ import { cn } from "@repo/ui/lib/utils";
 import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { SITE_FAQS } from "@/lib/site";
 import { SectionWrapper } from "./section-wrapper";
-
-const faqs = [
-  {
-    question: "Can you see my secrets?",
-    answer:
-      "No. Your secrets are encrypted on your device before anything is sent to us. We literally cannot read them. Only you hold the keys.",
-  },
-  {
-    question: "Where does my data go?",
-    answer:
-      "Your secrets are encrypted on your machine, then stored safely on our servers. We only ever see encrypted data, never the real values.",
-  },
-  {
-    question: "How secure is Relic?",
-    answer:
-      "Very. We use the same encryption standards trusted by banks and governments (AES-256 + Argon2id). Everything is encrypted before it leaves your device.",
-  },
-  {
-    question: "Can I share secrets with my team?",
-    answer:
-      "Yes, invite teammates by email and they get access to the project. Each person's secrets are encrypted with their own keys, so sharing stays fully secure.",
-  },
-  {
-    question: "Can I use Relic in CI/CD pipelines?",
-    answer:
-      "Absolutely. The CLI is designed for automation. You can easily integrate Relic into GitHub Actions, GitLab CI, Jenkins, or any other CI/CD system.",
-  },
-  {
-    question: "Do my secrets sync across devices?",
-    answer:
-      "Yes, automatically. Your encrypted secrets sync through our servers, but since everything is encrypted on your device first, we never see the actual values.",
-  },
-  {
-    question: "Which programming languages are supported?",
-    answer:
-      "All of them. Relic is completely language agnostic. Any language, any framework. Just use relic run to inject secrets as environment variables into any process.",
-  },
-];
 
 export function FAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
@@ -56,7 +19,7 @@ export function FAQ() {
         </p>
 
         <div className="mt-6 border-2 border-border divide-y-2 divide-border sm:mt-8">
-          {faqs.map((faq, index) => (
+          {SITE_FAQS.map((faq, index) => (
             <button
               key={faq.question}
               type="button"

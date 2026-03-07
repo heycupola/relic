@@ -58,8 +58,8 @@ export const WelcomeEmail = ({
           <Text style={paragraph}>Hi {userName},</Text>
           <Text style={paragraph}>Welcome to Relic. We're excited to have you on board.</Text>
           <Text style={paragraph}>
-            Relic is a zero-knowledge secret management platform that keeps your sensitive data
-            secure with end-to-end encryption. Your secrets never leave your machine unencrypted.
+            Relic is the secrets layer developers actually trust. Your secrets are encrypted on your
+            device and never exposed to anyone else. Not even us.
           </Text>
           <Text style={listHeading}>Get started:</Text>
           <Section style={stepsBlock}>

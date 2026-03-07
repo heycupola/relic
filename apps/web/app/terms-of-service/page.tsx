@@ -3,11 +3,32 @@ import Link from "next/link";
 import { ContainerLines } from "@/components/container-lines";
 import { Footer } from "@/components/footer";
 import { Header } from "@/components/header";
+import { SITE_NAME, SITE_TWITTER_HANDLE } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Terms of Service - Relic",
+  title: "Terms of Service",
   description:
     "Terms of Service for Relic, a zero-knowledge secrets management platform by Cupola Labs, LLC.",
+  alternates: {
+    canonical: "/terms-of-service",
+  },
+  openGraph: {
+    type: "article",
+    locale: "en_US",
+    url: "/terms-of-service",
+    siteName: SITE_NAME,
+    title: "Terms of Service - relic",
+    description:
+      "Terms of Service for Relic, a zero-knowledge secrets management platform by Cupola Labs, LLC.",
+  },
+  twitter: {
+    card: "summary",
+    title: "Terms of Service - relic",
+    description:
+      "Terms of Service for Relic, a zero-knowledge secrets management platform by Cupola Labs, LLC.",
+    creator: SITE_TWITTER_HANDLE,
+    site: SITE_TWITTER_HANDLE,
+  },
 };
 
 export default function TermsOfServicePage() {

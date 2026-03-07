@@ -3,11 +3,32 @@ import Link from "next/link";
 import { ContainerLines } from "@/components/container-lines";
 import { Footer } from "@/components/footer";
 import { Header } from "@/components/header";
+import { SITE_NAME, SITE_TWITTER_HANDLE } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy - Relic",
+  title: "Privacy Policy",
   description:
     "Privacy Policy for Relic, a zero-knowledge secrets management platform by Cupola Labs, LLC.",
+  alternates: {
+    canonical: "/privacy-policy",
+  },
+  openGraph: {
+    type: "article",
+    locale: "en_US",
+    url: "/privacy-policy",
+    siteName: SITE_NAME,
+    title: "Privacy Policy - relic",
+    description:
+      "Privacy Policy for Relic, a zero-knowledge secrets management platform by Cupola Labs, LLC.",
+  },
+  twitter: {
+    card: "summary",
+    title: "Privacy Policy - relic",
+    description:
+      "Privacy Policy for Relic, a zero-knowledge secrets management platform by Cupola Labs, LLC.",
+    creator: SITE_TWITTER_HANDLE,
+    site: SITE_TWITTER_HANDLE,
+  },
 };
 
 export default function PrivacyPolicyPage() {
@@ -150,7 +171,7 @@ export default function PrivacyPolicyPage() {
                 You have the right to:
               </p>
               <ul className="mt-4 space-y-2 text-sm text-foreground/70 list-disc pl-5 leading-relaxed">
-                <li>Access your data through the CLI, TUI, SDK, or web dashboard</li>
+                <li>Access your data through the CLI, TUI, or web dashboard</li>
                 <li>Export your secrets in multiple formats</li>
                 <li>Delete your account and request removal of your associated data</li>
                 <li>
