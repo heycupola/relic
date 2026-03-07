@@ -1,10 +1,13 @@
+"use client";
+
+import { useRef } from "react";
 import { SectionWrapper } from "./section-wrapper";
 
 interface VideoFeature {
   title: string;
   badge: "Free" | "Pro";
   description: string;
-  youtubeId: string;
+  videoSrc: string;
 }
 
 interface CompactFeature {
@@ -18,21 +21,21 @@ const videoFeatures: VideoFeature[] = [
     title: "Built-in Secret Editor",
     badge: "Free",
     description: "Paste your .env file or edit secrets directly in the TUI. No context switching.",
-    youtubeId: "dQw4w9WgXcQ",
+    videoSrc: "/videos/demo.mp4",
   },
   {
     title: "Collaboration",
     badge: "Pro",
     description:
       "Share projects with your team via email. Each person gets their own encryption keys.",
-    youtubeId: "dQw4w9WgXcQ",
+    videoSrc: "/videos/demo.mp4",
   },
   {
     title: "Run Anywhere",
     badge: "Free",
     description:
       "Inject secrets into any process with API keys. Works in GitHub Actions, GitLab CI, and more.",
-    youtubeId: "dQw4w9WgXcQ",
+    videoSrc: "/videos/demo.mp4",
   },
 ];
 
@@ -63,6 +66,27 @@ const compactFeatures: CompactFeature[] = [
 ];
 
 function VideoCard({ feature }: { feature: VideoFeature }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const playVideo = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    try {
+      await video.play();
+    } catch {
+      // Ignore autoplay blocking edge cases on unsupported browsers.
+    }
+  };
+
+  const resetVideo = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.pause();
+    video.currentTime = 0;
+  };
+
   return (
     <div className="border-2 border-border bg-card flex flex-col hover:border-foreground/30 transition-colors">
       <div className="p-4 flex-1 sm:p-5">
@@ -80,15 +104,28 @@ function VideoCard({ feature }: { feature: VideoFeature }) {
         </div>
         <p className="mt-2 text-sm text-foreground/60 text-pretty">{feature.description}</p>
       </div>
-      <div className="border-t-2 border-border bg-muted/20">
-        <iframe
-          src={`https://www.youtube.com/embed/${feature.youtubeId}?mute=1&loop=1&playlist=${feature.youtubeId}`}
+      <button
+        type="button"
+        className="group relative w-full border-t-2 border-border bg-muted/20"
+        aria-label={`${feature.title} preview. Hover or focus to play.`}
+        onMouseEnter={playVideo}
+        onMouseLeave={resetVideo}
+        onFocus={playVideo}
+        onBlur={resetVideo}
+      >
+        <video
+          ref={videoRef}
+          src={feature.videoSrc}
           title={feature.title}
-          allow="autoplay; encrypted-media"
-          allowFullScreen
-          className="w-full aspect-video"
+          muted
+          playsInline
+          preload="metadata"
+          className="w-full aspect-video object-cover"
         />
-      </div>
+        <span className="pointer-events-none absolute bottom-3 right-3 border border-white/15 bg-black/75 px-2 py-1 text-[11px] font-medium text-white/80 backdrop-blur-sm transition-colors group-hover:border-white/25 group-hover:text-white">
+          Hover to play
+        </span>
+      </button>
     </div>
   );
 }

@@ -53,6 +53,7 @@ export function Pricing() {
   const getProButtonText = () => {
     if (isLoading || isUpgrading) return "Loading…";
     if (hasPro) return "Current Plan";
+    if (!isAuthenticated) return "Get started with Pro";
     return "Upgrade to Pro";
   };
 
@@ -107,16 +108,18 @@ export function Pricing() {
               </ul>
             </div>
 
-            <div className="border-t-2 border-border p-4 sm:p-6">
-              <button
-                type="button"
-                onClick={handleFreeClick}
-                disabled={isLoading}
-                className="block w-full text-center p-3 border-2 border-border bg-background text-foreground font-medium hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {getFreeButtonText()}
-              </button>
-            </div>
+            {!hasPro && (
+              <div className="border-t-2 border-border p-4 sm:p-6">
+                <button
+                  type="button"
+                  onClick={handleFreeClick}
+                  disabled={isLoading}
+                  className="block w-full text-center p-3 border-2 border-border bg-background text-foreground font-medium hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {getFreeButtonText()}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Pro Plan */}
