@@ -20,6 +20,7 @@
     "href": "https://relic.so"
   },
   "favicon": "/assets/favicon.svg",
+  "css": "/assets/custom.css",
   "appearance": {
     "default": "system"
   },
@@ -75,7 +76,7 @@
       },
       {
         "group": "Development",
-        "pages": ["development/sdk", "development/runner"]
+        "pages": ["development/runner"]
       }
     ]
   }
