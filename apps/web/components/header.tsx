@@ -8,13 +8,18 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/lib/auth";
 import { trackWebEvent } from "@/lib/posthog";
+import { BLOG_PATH, ENTERPRISE_URL, SITE_DOCS_URL } from "@/lib/site";
 import { LogoContextMenu } from "./logo-context-menu";
 
 interface HeaderProps {
   showLogout?: boolean;
 }
 
-const DOCS_URL = "https://docs.relic.so";
+interface PublicNavLink {
+  href: string;
+  label: string;
+  external?: boolean;
+}
 
 export function Header({ showLogout = false }: HeaderProps) {
   const router = useRouter();
@@ -38,6 +43,23 @@ export function Header({ showLogout = false }: HeaderProps) {
       y: e.clientY,
     });
   };
+
+  const publicNavLinks: PublicNavLink[] = [
+    {
+      href: BLOG_PATH,
+      label: "Blog",
+    },
+    {
+      href: ENTERPRISE_URL,
+      label: "Enterprise",
+      external: true,
+    },
+    {
+      href: SITE_DOCS_URL,
+      label: "Docs",
+      external: true,
+    },
+  ] as const;
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background">
@@ -77,14 +99,17 @@ export function Header({ showLogout = false }: HeaderProps) {
         ) : (
           <>
             <nav className="hidden items-center gap-8 font-[family-name:var(--font-heading)] text-md text-muted-foreground md:flex">
-              <Link
-                href={DOCS_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm px-1"
-              >
-                Docs
-              </Link>
+              {publicNavLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  target={(link.external ?? false) ? "_blank" : undefined}
+                  rel={(link.external ?? false) ? "noopener noreferrer" : undefined}
+                  className="transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm px-1"
+                >
+                  {link.label}
+                </Link>
+              ))}
               {!isLoading && isAuthenticated && (
                 <Link
                   href="/dashboard"
@@ -115,15 +140,18 @@ export function Header({ showLogout = false }: HeaderProps) {
       {!showLogout && mobileMenuOpen && (
         <div id="mobile-menu" className="md:hidden border-t border-border bg-background">
           <nav className="flex flex-col px-4 py-4 gap-4 font-[family-name:var(--font-heading)] text-md sm:px-6">
-            <Link
-              href={DOCS_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm px-1 py-2"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Docs
-            </Link>
+            {publicNavLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                target={(link.external ?? false) ? "_blank" : undefined}
+                rel={(link.external ?? false) ? "noopener noreferrer" : undefined}
+                className="text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm px-1 py-2"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {link.label}
+              </Link>
+            ))}
             {!isLoading && isAuthenticated && (
               <Link
                 href="/dashboard"
