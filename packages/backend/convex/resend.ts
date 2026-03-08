@@ -9,6 +9,7 @@ const log = createLogger("resend");
 
 import {
   AccessRestrictedEmail,
+  AccountDeletedEmail,
   CollaboratorAddedEmail,
   GracePeriodStartedEmail,
   PlanUpgradedEmail,
@@ -34,6 +35,12 @@ type EmailData =
       userName: string;
       ownedProjectCount: number;
       sharedProjectCount: number;
+    }
+  | {
+      kind: EmailKind.AccountDeleted;
+      userName: string;
+      projectsDeleted: number;
+      sharesRevoked: number;
     }
   | {
       kind: EmailKind.CollaboratorAdded;
@@ -64,6 +71,14 @@ async function renderEmailTemplate(data: EmailData): Promise<string> {
           ownedProjectCount: data.ownedProjectCount,
           sharedProjectCount: data.sharedProjectCount,
           upgradeUrl: getUpgradeUrl(),
+        }),
+      );
+    case EmailKind.AccountDeleted:
+      return await render(
+        AccountDeletedEmail({
+          userName: data.userName,
+          projectsDeleted: data.projectsDeleted,
+          sharesRevoked: data.sharesRevoked,
         }),
       );
     case EmailKind.CollaboratorAdded:
@@ -104,6 +119,8 @@ function getEmailSubject(kind: EmailKind): string {
   switch (kind) {
     case EmailKind.AccessRestricted:
       return "Your Relic access has been restricted";
+    case EmailKind.AccountDeleted:
+      return "Your Relic account has been deleted";
     case EmailKind.CollaboratorAdded:
       return "You've been added to a project";
     case EmailKind.GracePeriodStarted:
@@ -164,4 +181,32 @@ export const sendEmail = async (
   log.info("Email sent", { kind: data.kind, to, emailId });
 
   return { emailId };
+};
+
+export const sendEmailDirect = async (
+  to: string,
+  data: EmailData,
+): Promise<{ emailId: string }> => {
+  if (!process.env.RESEND_API_KEY) {
+    return { emailId: "skipped" };
+  }
+
+  const subject = getEmailSubject(data.kind);
+  const html = await renderEmailTemplate(data);
+
+  const { data: resendData, error } = await resendSdk.emails.send({
+    from: FROM_EMAIL_ADDRESS,
+    to,
+    subject,
+    html,
+    tags: [{ name: "kind", value: data.kind }],
+  });
+
+  if (error) {
+    log.error("Direct email send error", { kind: data.kind, to, error: error.message });
+    return { emailId: "failed" };
+  }
+
+  log.info("Direct email sent", { kind: data.kind, to, emailId: resendData?.id });
+  return { emailId: resendData?.id || "unknown" };
 };

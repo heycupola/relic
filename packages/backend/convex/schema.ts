@@ -184,4 +184,12 @@ export default defineSchema({
     ),
     createdAt: v.number(),
   }).index("by_user", ["userId"]),
+  deletedAccount: defineTable({
+    anonymousId: v.string(),
+    deletedAt: v.number(),
+    reason: v.union(v.literal("user_request"), v.literal("gdpr"), v.literal("admin")),
+    hadProPlan: v.boolean(),
+    projectsDeleted: v.number(),
+    sharesRevoked: v.number(),
+  }).index("by_anonymousId", ["anonymousId"]),
 });
