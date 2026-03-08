@@ -13,7 +13,7 @@
     "check-types": "tsc --noEmit --project tsconfig.check.json",
     "check": "vinext check",
     "sync:changelog": "bun run scripts/sync-changelog.ts",
-    "predeploy": "printf 'import handler from \"./server/index.js\";\\nexport default {\\n  async fetch(request) {\\n    return handler(request);\\n  },\\n};\\n' > dist/worker-entry.js",
+    "predeploy": "cp worker-entry.ts dist/worker-entry.js",
     "deploy": "bunx vinext build && bun run predeploy && bunx wrangler deploy"
   },
   "dependencies": {
