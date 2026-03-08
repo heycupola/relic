@@ -3,7 +3,7 @@ import { PostHog } from "posthog-node";
 import type { LoggerConfig } from "../config";
 
 let client: PostHog | null = null;
-let distinctId = `relic-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const distinctId = `relic-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 function getClient(config: LoggerConfig): PostHog | null {
   if (!config.telemetryEnabled || !config.posthogApiKey) return null;
@@ -17,10 +17,6 @@ function getClient(config: LoggerConfig): PostHog | null {
   }
 
   return client;
-}
-
-export function setDistinctId(id: string): void {
-  distinctId = id;
 }
 
 export function captureEvent(

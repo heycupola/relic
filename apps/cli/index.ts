@@ -1,6 +1,7 @@
-import { initLogger } from "@repo/logger";
+import { initLogger, isFirstRun, saveTelemetryPreference } from "@repo/logger";
 import { Command } from "commander";
 import type { SecretScope } from "lib/types";
+import pc from "picocolors";
 import init from "./commands/init";
 import login from "./commands/login";
 import logout from "./commands/logout";
@@ -10,6 +11,15 @@ import { telemetryDisable, telemetryEnable, telemetryStatus } from "./commands/t
 import whoami from "./commands/whoami";
 
 await initLogger();
+
+if (isFirstRun()) {
+  console.log(
+    pc.dim(
+      "Relic collects anonymous usage data to improve the product. Run `relic telemetry disable` to opt out.",
+    ),
+  );
+  saveTelemetryPreference(true);
+}
 
 const program = new Command()
   .name("relic")
