@@ -24,8 +24,8 @@ const legalLinks = [
 
 const socialLinks = [
   { href: SITE_GITHUB_URL, label: "GitHub", external: true },
-  { href: SITE_X_URL, label: "X", external: true },
   { href: "https://discord.gg/relic", label: "Discord", external: true },
+  { href: SITE_X_URL, label: "𝕏", external: true },
 ] as const;
 
 function CcpaBadge() {

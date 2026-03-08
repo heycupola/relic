@@ -2,7 +2,6 @@
 
 import { cn } from "@repo/ui/lib/utils";
 import { ChevronDown } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 import { SITE_FAQS } from "@/lib/site";
 import { SectionWrapper } from "./section-wrapper";
@@ -59,7 +58,7 @@ export function FAQ() {
 
         <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-foreground/60 sm:mt-8 sm:text-base">
           <span>Have more questions?</span>
-          <Link
+          <a
             href="https://x.com/heycupola"
             target="_blank"
             rel="noopener noreferrer"
@@ -67,7 +66,7 @@ export function FAQ() {
           >
             <span>DMs open</span>
             <span className="text-lg">𝕏</span>
-          </Link>
+          </a>
         </div>
       </div>
     </SectionWrapper>
