@@ -10,7 +10,7 @@ export function initPostHog(): void {
 
   posthog.init(POSTHOG_KEY, {
     api_host: POSTHOG_HOST,
-    person_profiles: "identified_only",
+    person_profiles: "anonymous",
     capture_pageview: true,
     capture_pageleave: true,
     autocapture: true,
@@ -22,11 +22,6 @@ export function initPostHog(): void {
 export function trackWebEvent(event: string, properties?: Record<string, unknown>): void {
   if (!POSTHOG_KEY) return;
   posthog.capture(event, properties);
-}
-
-export function identifyWebUser(userId: string, properties?: Record<string, unknown>): void {
-  if (!POSTHOG_KEY) return;
-  posthog.identify(userId, properties);
 }
 
 export { posthog };
