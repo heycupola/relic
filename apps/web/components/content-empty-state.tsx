@@ -53,14 +53,14 @@ export function ContentEmptyState({
           )}
         </div>
 
-        <div className="border-t-2 border-border bg-[#050505] p-5 sm:p-8 lg:border-l-2 lg:border-t-0">
+        <div className="border-t-2 border-border bg-muted/40 p-5 sm:p-8 lg:border-l-2 lg:border-t-0">
           <div className="flex min-h-36 flex-col justify-between">
-            <div className="font-mono text-[11px] uppercase tracking-[0.24em] text-white/45">
+            <div className="font-mono text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
               Status
             </div>
             <div className="space-y-3">
-              <div className="text-4xl font-semibold tracking-tight text-white">00</div>
-              <p className="max-w-[16rem] text-sm leading-relaxed text-white/60">{hint}</p>
+              <div className="text-4xl font-semibold tracking-tight text-foreground">00</div>
+              <p className="max-w-[16rem] text-sm leading-relaxed text-foreground/60">{hint}</p>
             </div>
           </div>
         </div>

@@ -13,7 +13,7 @@ export const SITE_RELEASES_URL = `${SITE_GITHUB_URL}/releases`;
 export const SITE_DOCS_URL = "https://docs.relic.so";
 export const SITE_X_URL = "https://x.com/heycupola";
 export const ENTERPRISE_URL =
-  process.env.NEXT_PUBLIC_ENTERPRISE_URL || `${SITE_DOCS_URL}/enterprise`;
+  process.env.NEXT_PUBLIC_ENTERPRISE_URL || "https://form.typeform.com/to/JJ4KTKd7";
 export const BLOG_PATH = "/blog";
 export const CHANGELOG_PATH = "/changelog";
 export const BLOG_TITLE = "Blog";

@@ -105,6 +105,10 @@ export function Pricing() {
                   <X className="h-4 w-4 text-foreground/30 shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground/50">No project sharing</span>
                 </li>
+                <li className="flex items-start gap-2">
+                  <X className="h-4 w-4 text-foreground/30 shrink-0 mt-0.5" aria-hidden="true" />
+                  <span className="text-foreground/50">No API keys or CI/CD integration</span>
+                </li>
               </ul>
             </div>
 
@@ -152,6 +156,12 @@ export function Pricing() {
                   <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground">
                     <strong>5 free projects</strong> included
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
+                  <span className="text-foreground">
+                    <strong>API keys</strong> for CI/CD integration
                   </span>
                 </li>
                 <li className="flex items-start gap-2">

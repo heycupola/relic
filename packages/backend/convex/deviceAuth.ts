@@ -71,6 +71,12 @@ export const getDeviceCodeInfo = query({
       user_code: args.user_code,
     });
 
+    // NOTE: This throws instead of returning null. The component's getDeviceCodeInfo
+    // already returns null for not-found/expired cases, so ideally this wrapper should
+    // pass null through. The web authorize page (oauth/authorize) has a `=== null` check
+    // that is currently dead code because of this throw — the ErrorBoundary catches it
+    // instead. Changing this to return null would require updating 3 tests in
+    // device-auth-flow.test.ts (expectConvexError → toBeNull). Low priority.
     if (!deviceCodeEntry) {
       throw deviceAuthError("not_found");
     }

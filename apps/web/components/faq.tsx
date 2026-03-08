@@ -43,13 +43,15 @@ export function FAQ() {
               </div>
               <div
                 className={cn(
-                  "overflow-hidden transition-all duration-200",
-                  openIndex === index ? "mt-3 max-h-40" : "max-h-0",
+                  "grid transition-[grid-template-rows] duration-200",
+                  openIndex === index ? "grid-rows-[1fr] mt-3" : "grid-rows-[0fr]",
                 )}
               >
-                <p className="text-foreground/60 text-sm leading-relaxed text-pretty sm:pr-8">
-                  {faq.answer}
-                </p>
+                <div className="overflow-hidden">
+                  <p className="text-foreground/60 text-sm leading-relaxed text-pretty sm:pr-8">
+                    {faq.answer}
+                  </p>
+                </div>
               </div>
             </button>
           ))}

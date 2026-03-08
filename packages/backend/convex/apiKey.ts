@@ -27,6 +27,17 @@ export const createApiKey = protectedMutation({
   ): Promise<{ apiKey: string; prefix: string }> => {
     await checkRateLimit(ctx, "write");
 
+    const currentUser = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: ctx.userId,
+    });
+    if (!currentUser?.hasPro) {
+      throw createError({
+        code: ErrorCode.PRO_PLAN_REQUIRED,
+        message: "API keys require a Pro plan. Upgrade to unlock CI/CD integration.",
+        severity: ErrorSeverity.Medium,
+      });
+    }
+
     if (!args.name || args.name.trim().length === 0) {
       throw createError({
         code: ErrorCode.INVALID_ARGUMENTS,
@@ -187,6 +198,20 @@ export const _validateApiKey = internalMutation({
         code: ErrorCode.INSUFFICIENT_PERMISSION,
         message: `API key missing required scope(s): ${missing.join(", ")}`,
         severity: ErrorSeverity.High,
+      });
+    }
+
+    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: keyDoc.userId as BetterAuthId<"user">,
+    });
+    if (!user?.hasPro) {
+      throw createError({
+        code: ErrorCode.PRO_PLAN_REQUIRED,
+        message: "API keys require a Pro plan. Upgrade to unlock CI/CD integration.",
+        severity: ErrorSeverity.Medium,
+        metadata: {
+          upgradeUrl: `${process.env.SITE_URL || "https://relic.so"}/dashboard?action=upgrade`,
+        },
       });
     }
 

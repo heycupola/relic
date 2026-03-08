@@ -210,7 +210,11 @@ export default function DashboardPage() {
               />
             </div>
 
-            <ApiKeysCard apiKeys={apiKeysData ?? []} isLoading={apiKeysData === undefined} />
+            <ApiKeysCard
+              apiKeys={apiKeysData ?? []}
+              isLoading={apiKeysData === undefined}
+              hasPro={userData?.hasPro || false}
+            />
           </div>
         </main>
         <Footer />

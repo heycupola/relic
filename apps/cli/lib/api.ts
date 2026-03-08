@@ -320,6 +320,15 @@ export function getApi(): ProtectedApi {
   return instance;
 }
 
+export class ProPlanRequiredError extends Error {
+  upgradeUrl: string;
+  constructor(message: string, upgradeUrl: string) {
+    super(message);
+    this.name = "ProPlanRequiredError";
+    this.upgradeUrl = upgradeUrl;
+  }
+}
+
 export interface ExportSecretsHttpResponse {
   secrets: {
     id: string;
@@ -362,16 +371,22 @@ export async function exportSecretsViaApiKey(
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => null);
-    const message = (errorBody as { error?: string })?.error ?? `HTTP ${response.status}`;
-    throw new Error(message);
+    const parsed = errorBody as { error?: string; code?: string; upgradeUrl?: string } | null;
+
+    if (response.status === 402 || parsed?.code === "PRO_PLAN_REQUIRED") {
+      throw new ProPlanRequiredError(
+        parsed?.error || "API keys require a Pro plan.",
+        parsed?.upgradeUrl || "https://relic.so/dashboard?action=upgrade",
+      );
+    }
+
+    throw new Error(parsed?.error ?? `HTTP ${response.status}`);
   }
 
   return (await response.json()) as ExportSecretsHttpResponse;
 }
 
-export async function fetchUserKeysViaApiKey(
-  apiKey: string,
-): Promise<UserCryptoKeysResponse> {
+export async function fetchUserKeysViaApiKey(apiKey: string): Promise<UserCryptoKeysResponse> {
   const url = `${CONVEX_SITE_URL}/api/user/keys`;
 
   const response = await fetch(url, {
@@ -383,8 +398,16 @@ export async function fetchUserKeysViaApiKey(
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => null);
-    const message = (errorBody as { error?: string })?.error ?? `HTTP ${response.status}`;
-    throw new Error(message);
+    const parsed = errorBody as { error?: string; code?: string; upgradeUrl?: string } | null;
+
+    if (response.status === 402 || parsed?.code === "PRO_PLAN_REQUIRED") {
+      throw new ProPlanRequiredError(
+        parsed?.error || "API keys require a Pro plan.",
+        parsed?.upgradeUrl || "https://relic.so/dashboard?action=upgrade",
+      );
+    }
+
+    throw new Error(parsed?.error ?? `HTTP ${response.status}`);
   }
 
   return (await response.json()) as UserCryptoKeysResponse;
