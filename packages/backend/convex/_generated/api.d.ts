@@ -20,6 +20,7 @@ import type * as http from "../http.js";
 import type * as lib_access from "../lib/access.js";
 import type * as lib_crypto from "../lib/crypto.js";
 import type * as lib_emails_access_restricted from "../lib/emails/access_restricted.js";
+import type * as lib_emails_account_deleted from "../lib/emails/account_deleted.js";
 import type * as lib_emails_collaborator_added from "../lib/emails/collaborator_added.js";
 import type * as lib_emails_grace_period_started from "../lib/emails/grace_period_started.js";
 import type * as lib_emails_index from "../lib/emails/index.js";
@@ -60,6 +61,7 @@ declare const fullApi: ApiFromModules<{
   "lib/access": typeof lib_access;
   "lib/crypto": typeof lib_crypto;
   "lib/emails/access_restricted": typeof lib_emails_access_restricted;
+  "lib/emails/account_deleted": typeof lib_emails_account_deleted;
   "lib/emails/collaborator_added": typeof lib_emails_collaborator_added;
   "lib/emails/grace_period_started": typeof lib_emails_grace_period_started;
   "lib/emails/index": typeof lib_emails_index;
@@ -1329,6 +1331,12 @@ export declare const components: {
       >;
     };
     user: {
+      deleteUserAndAuthRecords: FunctionReference<
+        "mutation",
+        "internal",
+        { userId: string },
+        { success: boolean }
+      >;
       downgradeToFree: FunctionReference<
         "mutation",
         "internal",

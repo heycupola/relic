@@ -1,28 +1,18 @@
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Hr,
-  Html,
-  Img,
-  Section,
-  Text,
-} from "@react-email/components";
+import { Body, Container, Head, Hr, Html, Img, Section, Text } from "@react-email/components";
 
-interface GracePeriodStartedEmailProps {
+interface AccountDeletedEmailProps {
   userName?: string;
-  daysRemaining?: number;
-  upgradeUrl?: string;
+  projectsDeleted?: number;
+  sharesRevoked?: number;
 }
 
 const SITE_URL = process.env.SITE_URL || "https://relic.so";
 
-export const GracePeriodStartedEmail = ({
+export const AccountDeletedEmail = ({
   userName = "there",
-  daysRemaining = 7,
-  upgradeUrl = `${SITE_URL}/dashboard?action=upgrade`,
-}: GracePeriodStartedEmailProps) => (
+  projectsDeleted = 0,
+  sharesRevoked = 0,
+}: AccountDeletedEmailProps) => (
   <Html>
     <Head />
     <Body style={main}>
@@ -36,25 +26,36 @@ export const GracePeriodStartedEmail = ({
             style={logoImg}
           />
           <Hr style={divider} />
-          <Text style={heading}>Your plan has changed</Text>
+          <Text style={heading}>Your account has been deleted</Text>
           <Text style={paragraph}>Hi {userName},</Text>
           <Text style={paragraph}>
-            You&apos;ve been moved to the Free plan. You have {daysRemaining} days to keep full
-            access to all your projects.
+            Your Relic account and all associated data have been permanently deleted as requested.
           </Text>
-          <Section style={cautionBlock}>
-            <Text style={cautionText}>
-              After the grace period, access will be limited to your 2 most recent projects.
+          {(projectsDeleted > 0 || sharesRevoked > 0) && (
+            <Section style={block}>
+              {projectsDeleted > 0 && (
+                <Text style={listItem}>
+                  {projectsDeleted} {projectsDeleted === 1 ? "project" : "projects"} deleted
+                </Text>
+              )}
+              {sharesRevoked > 0 && (
+                <Text style={sharesRevoked > 0 && projectsDeleted > 0 ? listItemLast : listItem}>
+                  {sharesRevoked} {sharesRevoked === 1 ? "share" : "shares"} revoked
+                </Text>
+              )}
+            </Section>
+          )}
+          <Section style={infoBlock}>
+            <Text style={infoText}>
+              This action is irreversible. Your encrypted secrets, projects, API keys, and all
+              personal data have been removed from our systems. If you had an active subscription,
+              it has been cancelled.
             </Text>
           </Section>
-          <Text style={subheading}>Your options</Text>
-          <Section style={block}>
-            <Text style={listItem}>Upgrade to Pro to keep everything</Text>
-            <Text style={listItemLast}>Archive old projects to fit within the Free limit</Text>
-          </Section>
-          <Button style={button} href={upgradeUrl}>
-            Upgrade to Pro
-          </Button>
+          <Text style={paragraph}>
+            Thank you for using Relic. If you ever want to come back, you can create a new account
+            at any time.
+          </Text>
         </Section>
         <Section style={footer}>
           <Img
@@ -73,7 +74,7 @@ export const GracePeriodStartedEmail = ({
   </Html>
 );
 
-export default GracePeriodStartedEmail;
+export default AccountDeletedEmail;
 
 const main = {
   backgroundColor: "#0E0E0E",
@@ -112,35 +113,11 @@ const heading = {
   letterSpacing: "-0.02em",
 };
 
-const subheading = {
-  fontSize: "15px",
-  lineHeight: "24px",
-  color: "#fafaf9",
-  margin: "24px 0 16px 0",
-  fontWeight: "600",
-};
-
 const paragraph = {
   fontSize: "15px",
   lineHeight: "26px",
   color: "#a3a3a3",
   margin: "0 0 16px 0",
-};
-
-const cautionBlock = {
-  backgroundColor: "#141414",
-  border: "1px solid #2e2e2e",
-  borderLeftColor: "#fbbf24",
-  borderLeftWidth: "3px",
-  padding: "20px",
-  marginBottom: "24px",
-};
-
-const cautionText = {
-  fontSize: "14px",
-  lineHeight: "22px",
-  color: "#a3a3a3",
-  margin: "0",
 };
 
 const block = {
@@ -162,17 +139,20 @@ const listItemLast = {
   margin: "0",
 };
 
-const button = {
-  backgroundColor: "#fafaf9",
-  border: "2px solid #fafaf9",
-  borderRadius: "0",
-  color: "#0E0E0E",
-  fontSize: "14px",
-  fontWeight: "600",
-  textDecoration: "none",
-  textAlign: "center" as const,
-  display: "inline-block",
-  padding: "14px 28px",
+const infoBlock = {
+  backgroundColor: "#141414",
+  border: "1px solid #2e2e2e",
+  borderLeftColor: "#525252",
+  borderLeftWidth: "3px",
+  padding: "16px",
+  marginBottom: "24px",
+};
+
+const infoText = {
+  fontSize: "13px",
+  lineHeight: "22px",
+  color: "#737373",
+  margin: "0",
 };
 
 const footer = {

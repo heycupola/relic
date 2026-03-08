@@ -78,14 +78,14 @@ export function QuickActionsCard() {
                     assistance, please email:
                   </p>
                   <a
-                    href="mailto:can@relic.so"
+                    href="mailto:support@relic.so"
                     className="flex items-center gap-2 text-sm text-foreground hover:text-foreground/80 transition-colors group"
                   >
                     <Mail
                       className="h-4 w-4 text-foreground/40 group-hover:text-foreground transition-colors"
                       aria-hidden="true"
                     />
-                    <span className="font-mono">can@relic.so</span>
+                    <span className="font-mono">support@relic.so</span>
                   </a>
                 </div>
               </div>

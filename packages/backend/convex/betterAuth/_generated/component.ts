@@ -1254,6 +1254,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     user: {
+      deleteUserAndAuthRecords: FunctionReference<
+        "mutation",
+        "internal",
+        { userId: string },
+        { success: boolean },
+        Name
+      >;
       downgradeToFree: FunctionReference<
         "mutation",
         "internal",

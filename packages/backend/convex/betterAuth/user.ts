@@ -191,3 +191,52 @@ export const _loadUserById = internalQuery({
     return await ctx.db.get(args.userId);
   },
 });
+
+export const deleteUserAndAuthRecords = mutation({
+  args: {
+    userId: v.id("user"),
+  },
+  returns: v.object({ success: v.boolean() }),
+  handler: async (ctx: MutationCtx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw notFoundError("user");
+    }
+
+    const sessions = await ctx.db
+      .query("session")
+      .withIndex("userId", (q) => q.eq("userId", args.userId))
+      .collect();
+    for (const session of sessions) {
+      await ctx.db.delete(session._id);
+    }
+
+    const accounts = await ctx.db
+      .query("account")
+      .withIndex("userId", (q) => q.eq("userId", args.userId))
+      .collect();
+    for (const account of accounts) {
+      await ctx.db.delete(account._id);
+    }
+
+    const verifications = await ctx.db
+      .query("verification")
+      .withIndex("identifier", (q) => q.eq("identifier", user.email))
+      .collect();
+    for (const verification of verifications) {
+      await ctx.db.delete(verification._id);
+    }
+
+    const deviceCodes = await ctx.db
+      .query("deviceCode")
+      .filter((q) => q.eq(q.field("userId"), args.userId))
+      .collect();
+    for (const deviceCode of deviceCodes) {
+      await ctx.db.delete(deviceCode._id);
+    }
+
+    await ctx.db.delete(args.userId);
+
+    return { success: true };
+  },
+});

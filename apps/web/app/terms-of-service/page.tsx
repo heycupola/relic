@@ -43,7 +43,7 @@ export default function TermsOfServicePage() {
               Terms of Service
             </h1>
             <p className="mt-2 text-sm text-muted-foreground sm:mt-3">
-              Last updated: February 25, 2026
+              Last updated: March 8, 2026
             </p>
           </div>
         </div>
@@ -380,8 +380,8 @@ export default function TermsOfServicePage() {
               <ul className="mt-4 space-y-2 text-sm text-foreground/70 list-disc pl-5 leading-relaxed">
                 <li>
                   <span className="font-medium text-foreground">Entire Agreement:</span> These
-                  Terms, together with the Privacy Policy, constitute the entire agreement between
-                  you and Cupola Labs, LLC regarding the Service
+                  Terms, together with the Privacy Policy and Data Processing Agreement, constitute
+                  the entire agreement between you and Cupola Labs, LLC regarding the Service
                 </li>
                 <li>
                   <span className="font-medium text-foreground">Severability:</span> If any
@@ -413,8 +413,8 @@ export default function TermsOfServicePage() {
               <h2 className="text-lg font-semibold">Contact</h2>
               <p className="mt-4 text-sm text-foreground/70 leading-relaxed">
                 For questions about these Terms, please contact us at{" "}
-                <a href="mailto:can@relic.so" className="text-foreground underline">
-                  can@relic.so
+                <a href="mailto:support@relic.so" className="text-foreground underline">
+                  support@relic.so
                 </a>
                 .
               </p>
@@ -422,6 +422,10 @@ export default function TermsOfServicePage() {
                 See also our{" "}
                 <Link href="/privacy-policy" className="text-foreground underline">
                   Privacy Policy
+                </Link>{" "}
+                and{" "}
+                <Link href="/dpa" className="text-foreground underline">
+                  Data Processing Agreement
                 </Link>
                 .
               </p>
