@@ -42,6 +42,7 @@ export const PUBLIC_SITE_ROUTES = [
   CHANGELOG_PATH,
   "/privacy-policy",
   "/terms-of-service",
+  "/dpa",
 ] as const;
 export const SITE_FAQS = [
   {
