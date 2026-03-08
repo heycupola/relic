@@ -192,9 +192,11 @@ export const rotateUserKeys = protectedMutation({
       }
 
       const shareDoc = share as Doc<"projectShare">;
+      const shareProject = await ctx.db.get(shareDoc.projectId);
 
       await ctx.runMutation(internal.actionLog._insertActionLog, {
         projectId: shareDoc.projectId,
+        projectName: (shareProject as Doc<"project"> | null)?.name,
         userId: ctx.userId,
         action: "share.key_updated",
         metadata: {
@@ -212,8 +214,11 @@ export const rotateUserKeys = protectedMutation({
         updatedAt: now,
       });
 
+      const ownedProject = await ctx.db.get(rewrapped.projectId);
+
       await ctx.runMutation(internal.actionLog._insertActionLog, {
         projectId: rewrapped.projectId,
+        projectName: (ownedProject as Doc<"project"> | null)?.name,
         userId: ctx.userId,
         action: "project.key_rotated",
         metadata: {

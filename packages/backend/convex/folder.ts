@@ -58,6 +58,19 @@ export const createFolder = protectedMutation({
       },
     );
 
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      projectId: project._id,
+      projectName: project.name,
+      userId: ctx.userId,
+      action: "folder.created",
+      environmentId: environment._id,
+      environmentName: environment.name,
+      metadata: {
+        folderId,
+        folderName: args.name,
+      },
+    });
+
     return { id: folderId, path };
   },
 });
@@ -102,6 +115,18 @@ export const updateFolder = protectedMutation({
       },
     });
 
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      projectId: project._id,
+      projectName: project.name,
+      userId: ctx.userId,
+      action: "folder.updated",
+      environmentId: folder.environmentId,
+      metadata: {
+        folderId: args.folderId,
+        folderName: args.name ?? folder.name,
+      },
+    });
+
     return { success: true };
   },
 });
@@ -137,6 +162,17 @@ export const deleteFolder = protectedMutation({
 
     await ctx.runMutation(internal.folder._deleteFolder, {
       folderId: args.folderId,
+    });
+
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      projectId: project._id,
+      projectName: project.name,
+      userId: ctx.userId,
+      action: "folder.deleted",
+      environmentId: folder.environmentId,
+      metadata: {
+        folderName: folder.name,
+      },
     });
 
     return { success: true };

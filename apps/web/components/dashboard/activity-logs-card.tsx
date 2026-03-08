@@ -1,6 +1,19 @@
 "use client";
 
-import { Check, Key, Trash2, Upload, Users, X } from "lucide-react";
+import {
+  Archive,
+  Check,
+  FolderPlus,
+  Key,
+  LogOut,
+  Pencil,
+  Plus,
+  Trash2,
+  Upload,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 import { useEffect, useRef } from "react";
 
 interface ActionLog {
@@ -11,10 +24,17 @@ interface ActionLog {
   timestamp: number;
   metadata?: {
     key?: string;
+    newKey?: string;
+    folderName?: string;
+    environmentName?: string;
     sharedUserEmail?: string;
     deleteCount?: number;
     exportCount?: number;
     affectedValueCount?: number;
+    keyRotated?: boolean;
+    exportFormat?: string;
+    reason?: string;
+    apiKeyPrefix?: string;
   };
 }
 
@@ -41,21 +61,32 @@ function formatTimeAgo(timestamp: number): string {
 }
 
 function getActionColor(action: string): string {
-  if (action.includes("created")) return "text-green-600 dark:text-green-400";
-  if (action.includes("updated")) return "text-yellow-600 dark:text-yellow-400";
-  if (action.includes("deleted") || action.includes("revoked"))
+  if (action.includes("deleted") || action.includes("revoked") || action === "account.deleted")
     return "text-red-600 dark:text-red-400";
+  if (action.includes("archived")) return "text-orange-600 dark:text-orange-400";
+  if (action.includes("created") || action.includes("unarchived"))
+    return "text-green-600 dark:text-green-400";
+  if (action.includes("updated") || action.includes("rotated") || action.includes("changed"))
+    return "text-yellow-600 dark:text-yellow-400";
   if (action.includes("added")) return "text-blue-600 dark:text-blue-400";
+  if (action.includes("exported")) return "text-purple-600 dark:text-purple-400";
   return "text-foreground";
 }
 
 function getActionIcon(action: string) {
-  if (action.includes("created")) return Check;
-  if (action.includes("updated")) return Key;
+  if (action === "account.deleted") return LogOut;
+  if (action.includes("folder.created")) return FolderPlus;
+  if (action.includes("archived")) return Archive;
+  if (action.includes("created") || action.includes("unarchived")) return Plus;
+  if (action.includes("updated") || action.includes("changed")) return Pencil;
   if (action.includes("deleted")) return Trash2;
   if (action.includes("revoked")) return X;
-  if (action.includes("added")) return Users;
+  if (action.includes("added")) return UserPlus;
   if (action.includes("exported")) return Upload;
+  if (action.includes("rotated")) return Key;
+  if (action === "share.key_updated") return Key;
+  if (action === "onboarding.completed") return Check;
+  if (action === "user.keys_created") return Key;
   return null;
 }
 
@@ -66,14 +97,17 @@ function formatActionDescription(log: ActionLog): string {
     case "secret.created":
       parts.push("secret created");
       if (log.metadata?.key) parts.push(`(${log.metadata.key})`);
+      if (log.metadata?.folderName) parts.push(`in ${log.metadata.folderName}/`);
       break;
     case "secret.updated":
       parts.push("secret updated");
       if (log.metadata?.key) parts.push(`(${log.metadata.key})`);
+      if (log.metadata?.folderName) parts.push(`in ${log.metadata.folderName}/`);
       break;
     case "secret.deleted":
       parts.push("secret deleted");
       if (log.metadata?.key) parts.push(`(${log.metadata.key})`);
+      if (log.metadata?.folderName) parts.push(`in ${log.metadata.folderName}/`);
       break;
     case "secret.exported":
       parts.push("secrets exported");
@@ -88,6 +122,10 @@ function formatActionDescription(log: ActionLog): string {
       parts.push("bulk delete");
       if (log.metadata?.deleteCount) parts.push(`(${log.metadata.deleteCount} secrets)`);
       break;
+    case "secrets.bulk_exported":
+      parts.push("bulk export");
+      if (log.metadata?.exportCount) parts.push(`(${log.metadata.exportCount} items)`);
+      break;
     case "share.added":
       parts.push("collaborator added");
       if (log.metadata?.sharedUserEmail) parts.push(`(${log.metadata.sharedUserEmail})`);
@@ -96,21 +134,81 @@ function formatActionDescription(log: ActionLog): string {
       parts.push("collaborator removed");
       if (log.metadata?.sharedUserEmail) parts.push(`(${log.metadata.sharedUserEmail})`);
       break;
+    case "share.key_updated":
+      parts.push("share key updated");
+      break;
     case "user.keys_created":
       parts.push("encryption keys created");
       break;
     case "user.password_changed":
       parts.push("password changed");
       break;
+    case "project.created":
+      parts.push("project created");
+      break;
+    case "project.updated":
+      parts.push("project updated");
+      break;
+    case "project.archived":
+      parts.push("project archived");
+      break;
+    case "project.unarchived":
+      parts.push("project unarchived");
+      break;
     case "project.key_rotated":
     case "keys.rotated":
       parts.push("keys rotated");
       break;
+    case "environment.created":
+      parts.push("environment created");
+      break;
+    case "environment.updated":
+      parts.push("environment updated");
+      break;
+    case "environment.deleted":
+      parts.push("environment deleted");
+      if (log.metadata?.environmentName) parts.push(`(${log.metadata.environmentName})`);
+      break;
+    case "folder.created":
+      parts.push("folder created");
+      if (log.metadata?.folderName) parts.push(`(${log.metadata.folderName}/)`);
+      break;
+    case "folder.updated":
+      parts.push("folder updated");
+      if (log.metadata?.folderName) parts.push(`(${log.metadata.folderName}/)`);
+      break;
+    case "folder.deleted":
+      parts.push("folder deleted");
+      if (log.metadata?.folderName) parts.push(`(${log.metadata.folderName}/)`);
+      break;
+    case "apikey.created":
+      parts.push("API key created");
+      if (log.metadata?.apiKeyPrefix) parts.push(`(${log.metadata.apiKeyPrefix}…)`);
+      break;
+    case "apikey.revoked":
+      parts.push("API key revoked");
+      if (log.metadata?.apiKeyPrefix) parts.push(`(${log.metadata.apiKeyPrefix}…)`);
+      break;
+    case "account.deleted":
+      parts.push("account deleted");
+      break;
+    case "onboarding.completed":
+      parts.push("onboarding completed");
+      break;
     default:
-      parts.push(log.action.replace(/_/g, " "));
+      parts.push(log.action.replace(/[._]/g, " "));
   }
 
   return parts.join(" ");
+}
+
+function formatContext(log: ActionLog): string | null {
+  const segments: string[] = [];
+
+  if (log.projectName) segments.push(log.projectName);
+  if (log.environmentName) segments.push(log.environmentName);
+
+  return segments.length > 0 ? segments.join(" / ") : null;
 }
 
 export function ActivityLogsCard({
@@ -170,6 +268,7 @@ export function ActivityLogsCard({
           <ul className="space-y-0 divide-y divide-border/50">
             {logs.map((log) => {
               const ActionIcon = getActionIcon(log.action);
+              const context = formatContext(log);
               return (
                 <li key={log._id} className="py-2 first:pt-0 sm:py-2.5">
                   <div className="flex items-start gap-2 sm:gap-3">
@@ -184,13 +283,10 @@ export function ActivityLogsCard({
                           )}
                           {formatActionDescription(log)}
                         </span>
-                        {log.projectName && (
+                        {context && (
                           <>
                             <span className="text-foreground/30">·</span>
-                            <span className="text-foreground/60">
-                              {log.projectName}
-                              {log.environmentName && ` / ${log.environmentName}`}
-                            </span>
+                            <span className="text-foreground/60">{context}</span>
                           </>
                         )}
                       </div>

@@ -500,6 +500,11 @@ export const deleteAccount = protectedAction({
       log.error("Failed to send account deletion email", { error: String(error) });
     }
 
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      userId: anonymousId,
+      action: "account.deleted",
+    });
+
     await ctx.runMutation(components.betterAuth.user.deleteUserAndAuthRecords, {
       userId: ctx.userId,
     });
