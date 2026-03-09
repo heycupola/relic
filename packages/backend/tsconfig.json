@@ -3,7 +3,7 @@
   "compilerOptions": {
     "skipLibCheck": true,
     "types": ["@types/bun"],
-    "jsx": "react",
+    "jsx": "react-jsx",
     "esModuleInterop": true,
     "moduleResolution": "bundler"
   },
