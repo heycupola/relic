@@ -491,9 +491,11 @@ export const deleteAccount = protectedAction({
 
     if (user.hasPro) {
       try {
-        await ctx.autumn.cancel(ctx, {
-          productId: "pro_plan",
-          cancelImmediately: true,
+        const { autumn: sdk } = await ctx.autumn.getAuthParams({ ctx });
+        await sdk.cancel({
+          product_id: "pro_plan",
+          customer_id: ctx.userId,
+          cancel_immediately: true,
         });
       } catch (error) {
         log.error("Failed to cancel subscription during account deletion", {
