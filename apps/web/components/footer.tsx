@@ -75,7 +75,7 @@ function GdprBadge() {
 export function Footer() {
   return (
     <footer className="relative mt-auto border-t border-border">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-12">
+      <div className="mx-auto max-w-6xl px-6 lg:px-12">
         <div className="grid grid-cols-2 gap-8 py-10 sm:grid-cols-4 sm:py-12">
           <div className="space-y-4">
             <h4 className="text-xs font-semibold tracking-[0.15em] uppercase text-foreground/60">
