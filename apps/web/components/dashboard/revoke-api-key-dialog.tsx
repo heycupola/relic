@@ -39,39 +39,37 @@ export function RevokeApiKeyDialog({
 
   return (
     <Dialog open={open} onClose={onClose}>
-      <div className="p-3 border-b-2 border-border sm:p-4">
-        <h2 className="text-sm font-semibold text-foreground">Revoke API Key</h2>
-      </div>
+      <div className="p-5 space-y-4">
+        <div className="space-y-2">
+          <h3 className="text-base font-semibold text-foreground">Revoke API Key</h3>
+          <p className="text-sm text-foreground/70 leading-relaxed">
+            Are you sure you want to revoke{" "}
+            <span className="font-medium text-foreground">&ldquo;{apiKeyName}&rdquo;</span>? Any
+            applications or CI/CD pipelines using this key will lose access immediately. This action
+            cannot be undone.
+          </p>
+        </div>
 
-      <div className="p-3 space-y-3 sm:p-4">
-        <p className="text-sm text-foreground/70 leading-relaxed">
-          Are you sure you want to revoke{" "}
-          <span className="font-medium text-foreground">&ldquo;{apiKeyName}&rdquo;</span>?
-        </p>
-        <p className="text-xs text-foreground/50 leading-relaxed">
-          Any applications or CI/CD pipelines using this key will lose access immediately. This
-          action cannot be undone.
-        </p>
-        {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
-      </div>
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-      <div className="flex flex-col-reverse gap-2 p-3 border-t-2 border-border sm:flex-row sm:items-center sm:justify-end sm:p-4">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={isRevoking}
-          className="px-4 py-2 text-sm text-foreground/60 hover:text-foreground transition-colors disabled:opacity-50"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={handleRevoke}
-          disabled={isRevoking}
-          className="px-4 py-2 text-sm font-medium border-2 border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-600/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isRevoking ? "Revoking…" : "Revoke"}
-        </button>
+        <div className="flex gap-3 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isRevoking}
+            className="flex-1 p-2.5 border border-border text-sm text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleRevoke}
+            disabled={isRevoking}
+            className="flex-1 p-2.5 border border-red-500/30 bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isRevoking ? "Revoking…" : "Revoke"}
+          </button>
+        </div>
       </div>
     </Dialog>
   );
