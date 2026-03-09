@@ -12,7 +12,7 @@ import {
   type ProtectedActionCtx,
   type ProtectedQueryCtx,
 } from "./lib/types";
-import { sendEmail } from "./resend";
+import { sendEmail, sendEmailDirect } from "./resend";
 
 const log = createLogger("user");
 
@@ -334,6 +334,204 @@ export const _sendWelcomeEmail = internalAction({
       kind: EmailKind.Welcome,
       userName: user.name,
     });
+
+    return { success: true };
+  },
+});
+
+export const _cascadeDeleteUserData = internalMutation({
+  args: {
+    userId: v.string(),
+    anonymousId: v.string(),
+    reason: v.union(v.literal("user_request"), v.literal("gdpr"), v.literal("admin")),
+    hadProPlan: v.boolean(),
+  },
+  returns: v.object({
+    success: v.boolean(),
+    projectsDeleted: v.number(),
+    sharesRevoked: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    let projectsDeleted = 0;
+    let sharesRevoked = 0;
+
+    const ownedProjects = await ctx.db
+      .query("project")
+      .withIndex("by_owner", (q) => q.eq("ownerId", args.userId))
+      .collect();
+
+    for (const project of ownedProjects) {
+      const secrets = await ctx.db
+        .query("secret")
+        .withIndex("by_project", (q) => q.eq("projectId", project._id))
+        .collect();
+      for (const secret of secrets) {
+        await ctx.db.delete(secret._id);
+      }
+
+      const environments = await ctx.db
+        .query("environment")
+        .withIndex("by_project", (q) => q.eq("projectId", project._id))
+        .collect();
+      for (const env of environments) {
+        await ctx.db.delete(env._id);
+      }
+
+      const folders = await ctx.db
+        .query("folder")
+        .withIndex("by_project", (q) => q.eq("projectId", project._id))
+        .collect();
+      for (const folder of folders) {
+        await ctx.db.delete(folder._id);
+      }
+
+      const keyRotations = await ctx.db
+        .query("keyRotation")
+        .withIndex("by_project", (q) => q.eq("projectId", project._id))
+        .collect();
+      for (const kr of keyRotations) {
+        await ctx.db.delete(kr._id);
+      }
+
+      const projectShares = await ctx.db
+        .query("projectShare")
+        .withIndex("by_project", (q) => q.eq("projectId", project._id))
+        .collect();
+      for (const share of projectShares) {
+        await ctx.db.delete(share._id);
+        sharesRevoked++;
+      }
+
+      await ctx.db.delete(project._id);
+      projectsDeleted++;
+    }
+
+    const sharedWithMe = await ctx.db
+      .query("projectShare")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    for (const share of sharedWithMe) {
+      await ctx.db.delete(share._id);
+      sharesRevoked++;
+    }
+
+    const onboarding = await ctx.db
+      .query("onboarding")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+    if (onboarding) {
+      await ctx.db.delete(onboarding._id);
+    }
+
+    const apiKeys = await ctx.db
+      .query("apiKey")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    for (const key of apiKeys) {
+      await ctx.db.delete(key._id);
+    }
+
+    const actionLogs = await ctx.db
+      .query("actionLog")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    for (const logEntry of actionLogs) {
+      await ctx.db.patch(logEntry._id, {
+        userId: args.anonymousId,
+        metadata: logEntry.metadata
+          ? { ...logEntry.metadata, sharedUserEmail: undefined }
+          : undefined,
+      });
+    }
+
+    const sharedProjectIds = [...new Set(sharedWithMe.map((s) => s.projectId))];
+    for (const projectId of sharedProjectIds) {
+      const projectLogs = await ctx.db
+        .query("actionLog")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect();
+
+      for (const logEntry of projectLogs) {
+        if (logEntry.metadata?.sharedUserId === args.userId) {
+          await ctx.db.patch(logEntry._id, {
+            metadata: {
+              ...logEntry.metadata,
+              sharedUserEmail: undefined,
+              sharedUserId: args.anonymousId,
+            },
+          });
+        }
+      }
+    }
+
+    await ctx.db.insert("deletedAccount", {
+      anonymousId: args.anonymousId,
+      deletedAt: Date.now(),
+      reason: args.reason,
+      hadProPlan: args.hadProPlan,
+      projectsDeleted,
+      sharesRevoked,
+    });
+
+    return { success: true, projectsDeleted, sharesRevoked };
+  },
+});
+
+export const deleteAccount = protectedAction({
+  args: {},
+  returns: v.object({ success: v.boolean() }),
+  handler: async (ctx: ProtectedActionCtx) => {
+    await checkRateLimit(ctx, "write");
+
+    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: ctx.userId,
+    });
+
+    const anonymousId = `deleted-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    if (user.hasPro) {
+      try {
+        const { autumn: sdk } = await ctx.autumn.getAuthParams({ ctx });
+        await sdk.cancel({
+          product_id: "pro_plan",
+          customer_id: ctx.userId,
+          cancel_immediately: true,
+        });
+      } catch (error) {
+        log.error("Failed to cancel subscription during account deletion", {
+          error: String(error),
+        });
+      }
+    }
+
+    const cascadeResult = await ctx.runMutation(internal.user._cascadeDeleteUserData, {
+      userId: ctx.userId,
+      anonymousId,
+      reason: "user_request",
+      hadProPlan: user.hasPro,
+    });
+
+    try {
+      await sendEmailDirect(user.email, {
+        kind: EmailKind.AccountDeleted,
+        userName: user.name || "there",
+        projectsDeleted: cascadeResult.projectsDeleted,
+        sharesRevoked: cascadeResult.sharesRevoked,
+      });
+    } catch (error) {
+      log.error("Failed to send account deletion email", { error: String(error) });
+    }
+
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      userId: anonymousId,
+      action: "account.deleted",
+    });
+
+    await ctx.runMutation(components.betterAuth.user.deleteUserAndAuthRecords, {
+      userId: ctx.userId,
+    });
+
+    log.info("Account deleted", { anonymousId });
 
     return { success: true };
   },

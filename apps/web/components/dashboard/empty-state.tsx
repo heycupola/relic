@@ -2,17 +2,17 @@
 
 export function EmptyState() {
   return (
-    <div className="border-2 border-border bg-card p-8">
+    <div className="border-2 border-border bg-card p-5 sm:p-8">
       <div className="space-y-6">
         <div className="text-center space-y-2">
-          <h2 className="text-2xl font-semibold text-foreground">Welcome to Relic</h2>
-          <p className="text-foreground/60 max-w-md mx-auto text-pretty">
+          <h2 className="text-xl font-semibold text-foreground sm:text-2xl">Welcome to Relic</h2>
+          <p className="text-sm text-foreground/60 max-w-md mx-auto text-pretty sm:text-base">
             Get started by installing the CLI and creating your first project.
           </p>
         </div>
 
         <div className="max-w-2xl mx-auto">
-          <div className="border-2 border-border p-6 space-y-4">
+          <div className="border-2 border-border p-4 space-y-4 sm:p-6">
             <p className="text-sm text-foreground/60">Quick start</p>
             <div className="space-y-3 text-sm">
               <div className="flex items-start gap-3">

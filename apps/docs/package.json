@@ -2,9 +2,10 @@
   "name": "docs",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "dev": "mint dev --port 3001",
-    "build": "mint build"
+    "build": "mint validate"
   },
   "devDependencies": {
     "mint": "^4"

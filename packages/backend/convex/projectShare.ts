@@ -240,6 +240,7 @@ export const shareProject = protectedAction({
 
     await ctx.runMutation(internal.actionLog._insertActionLog, {
       projectId: args.projectId,
+      projectName: project.name,
       userId: ctx.userId,
       action: "share.added",
       metadata: {
@@ -339,6 +340,7 @@ export const revokeShare = protectedAction({
 
     await ctx.runMutation(internal.actionLog._insertActionLog, {
       projectId: share.projectId,
+      projectName: project.name,
       userId: ctx.userId,
       action: "share.revoked",
       metadata: {
@@ -557,6 +559,7 @@ export const revokeShareWithRotation = protectedAction({
 
     await ctx.runMutation(internal.actionLog._insertActionLog, {
       projectId: share.projectId,
+      projectName: project.name,
       userId: ctx.userId,
       action: "share.revoked",
       metadata: {

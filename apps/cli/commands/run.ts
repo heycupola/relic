@@ -30,6 +30,7 @@ import {
   exportSecretsViaApiKey,
   fetchUserKeysViaApiKey,
   getApi,
+  ProPlanRequiredError,
   type ProtectedApi,
   type SecretData,
 } from "../lib/api";
@@ -499,6 +500,31 @@ export default async function run(command: string[], options: RunOptions) {
   } catch (err) {
     log.error("Run failed", err);
     trackEvent("cli_run_completed", { success: false, duration_ms: Date.now() - startTime });
+
+    if (err instanceof ProPlanRequiredError) {
+      const spinner = ora();
+      spinner.fail(pc.red(err.message));
+      console.log();
+      console.log(pc.dim("  Upgrade at: ") + pc.underline(err.upgradeUrl));
+      console.log();
+
+      if (process.stdin.isTTY) {
+        const readline = await import("node:readline");
+        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+        console.log(pc.dim("  Press Enter to open the upgrade page, or Ctrl+C to exit."));
+        await new Promise<void>((resolve) =>
+          rl.once("line", () => {
+            rl.close();
+            resolve();
+          }),
+        );
+        const openModule = await import("open");
+        await openModule.default(err.upgradeUrl);
+      }
+
+      process.exit(1);
+    }
+
     const spinner = ora();
     spinner.fail(pc.red(err instanceof Error ? err.message : String(err)));
     process.exit(1);

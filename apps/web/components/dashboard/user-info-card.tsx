@@ -3,7 +3,8 @@
 import { api } from "@repo/backend";
 import { Badge } from "@repo/ui/components/badge";
 import { useAction } from "convex/react";
-import { Check, ExternalLink } from "lucide-react";
+import { Check, ExternalLink, Settings } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 interface UserInfoCardProps {
@@ -58,11 +59,11 @@ export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardPro
 
   return (
     <div className="border-2 border-border bg-card">
-      <div className="p-5 space-y-3">
+      <div className="p-4 space-y-3 sm:p-5">
         <h3 className="text-sm font-medium text-foreground/60">Account</h3>
         <div className="space-y-1.5">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-lg font-semibold text-foreground">{name}</span>
+            <span className="text-base font-semibold text-foreground sm:text-lg">{name}</span>
             <Badge
               className={
                 hasPro
@@ -75,12 +76,22 @@ export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardPro
           </div>
           <p className="font-mono text-sm text-foreground/60">{email}</p>
         </div>
+        <Link
+          href="/dashboard/settings"
+          className="flex items-center justify-between gap-2 w-full p-3 border border-border hover:border-foreground hover:bg-muted/50 transition-all group"
+        >
+          <span className="text-sm text-foreground">Account settings</span>
+          <Settings
+            className="h-4 w-4 text-foreground/40 group-hover:text-foreground transition-colors"
+            aria-hidden="true"
+          />
+        </Link>
       </div>
 
       {hasPro ? (
         <>
           <div className="border-t-2 border-border" />
-          <div className="p-5 space-y-3">
+          <div className="p-4 space-y-3 sm:p-5">
             <h4 className="text-sm font-medium text-foreground/60">Subscription</h4>
             <button
               type="button"
@@ -101,7 +112,7 @@ export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardPro
       ) : (
         <>
           <div className="border-t-2 border-border" />
-          <div className="p-5 space-y-4 bg-muted/20">
+          <div className="p-4 space-y-4 bg-muted/20 sm:p-5">
             <div className="space-y-3">
               <h4 className="text-sm font-semibold text-foreground">Upgrade to Pro</h4>
               <ul className="space-y-2 text-sm">
@@ -115,6 +126,12 @@ export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardPro
                   <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground">
                     <strong>5 free projects</strong> included
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
+                  <span className="text-foreground">
+                    <strong>API keys</strong> for CI/CD integration
                   </span>
                 </li>
                 <li className="flex items-start gap-2">

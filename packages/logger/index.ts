@@ -10,7 +10,7 @@ import {
   saveTelemetryPreference,
 } from "./config";
 import { clearLogFile, createFileReporter } from "./transports/file";
-import { captureEvent, setDistinctId, shutdown } from "./transports/posthog";
+import { captureEvent, shutdown } from "./transports/posthog";
 
 const LEVEL_MAP: Record<LogLevel, number> = {
   debug: 4,
@@ -84,10 +84,6 @@ export function trackError(
   const message = error instanceof Error ? error.message : String(error);
   const stack = error instanceof Error ? error.stack : undefined;
   trackEvent("error_occurred", { source, message, stack, ...context });
-}
-
-export function identifyUser(userId: string): void {
-  setDistinctId(userId);
 }
 
 export async function flushTelemetry(): Promise<void> {

@@ -102,17 +102,19 @@ export const createSecret = protectedMutation({
     });
     const { secretId } = insertResult as { secretId: Id<"secret"> };
 
-    await ctx.runMutation(internal.actionLog._logSecretAction, {
-      environmentId: environment._id,
-      environmentName: environment.name,
-      key: args.key,
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
       projectId: project._id,
       projectName: project.name,
-      secretAction: "secret.created",
-      secretId,
       userId: ctx.userId,
-      folderId: args.folderId,
-      folderName: folder?.name,
+      action: "secret.created",
+      environmentId: environment._id,
+      environmentName: environment.name,
+      metadata: {
+        secretId,
+        key: args.key,
+        folderId: args.folderId,
+        folderName: folder?.name,
+      },
     });
 
     return { id: secretId };
@@ -139,8 +141,6 @@ export const getSecret = protectedQuery({
     });
 
     await assertProjectAccess(ctx, project);
-
-    // TODO: add actionLog here
 
     return {
       id: secretInstance._id,
@@ -368,17 +368,19 @@ export const updateSecretBulk = protectedMutation({
             key: secretInput.key,
           });
 
-          await ctx.runMutation(internal.actionLog._logSecretAction, {
-            environmentId: environment._id,
-            environmentName: environment.name,
-            key: secretInput.key,
+          await ctx.runMutation(internal.actionLog._insertActionLog, {
             projectId: project._id,
             projectName: project.name,
-            secretAction: "secret.created",
-            secretId,
             userId: ctx.userId,
-            folderId: args.folderId,
-            folderName: folder?.name,
+            action: "secret.created",
+            environmentId: environment._id,
+            environmentName: environment.name,
+            metadata: {
+              secretId,
+              key: secretInput.key,
+              folderId: args.folderId,
+              folderName: folder?.name,
+            },
           });
 
           createdSecretIds.push(secretId);
@@ -432,18 +434,20 @@ export const updateSecretBulk = protectedMutation({
         },
       });
 
-      await ctx.runMutation(internal.actionLog._logSecretAction, {
-        environmentId: environment._id,
-        environmentName: environment.name,
-        key: secret.key,
-        newKey: secretInput.key !== secret.key ? secretInput.key : undefined,
+      await ctx.runMutation(internal.actionLog._insertActionLog, {
         projectId: project._id,
         projectName: project.name,
-        secretAction: "secret.updated",
-        secretId: secret._id,
         userId: ctx.userId,
-        folderId: args.folderId,
-        folderName: folder?.name,
+        action: "secret.updated",
+        environmentId: environment._id,
+        environmentName: environment.name,
+        metadata: {
+          secretId: secret._id,
+          key: secret.key,
+          newKey: secretInput.key !== secret.key ? secretInput.key : undefined,
+          folderId: args.folderId,
+          folderName: folder?.name,
+        },
       });
 
       updatedCount++;
@@ -537,18 +541,20 @@ export const updateSecret = protectedMutation({
       environmentId: secret.environmentId,
     });
 
-    await ctx.runMutation(internal.actionLog._logSecretAction, {
-      environmentId: environment._id,
-      environmentName: environment.name,
-      key: secret.key,
-      newKey: args.updates.key,
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
       projectId: project._id,
       projectName: project.name,
-      secretAction: "secret.updated",
-      secretId: args.secretId,
       userId: ctx.userId,
-      folderId: secret.folderId,
-      folderName: folder?.name,
+      action: "secret.updated",
+      environmentId: environment._id,
+      environmentName: environment.name,
+      metadata: {
+        secretId: args.secretId,
+        key: secret.key,
+        newKey: args.updates.key,
+        folderId: secret.folderId,
+        folderName: folder?.name,
+      },
     });
 
     return { success: true };
@@ -604,17 +610,19 @@ export const deleteSecret = protectedMutation({
       environmentId: secret.environmentId,
     });
 
-    await ctx.runMutation(internal.actionLog._logSecretAction, {
-      environmentId: secret.environmentId,
-      environmentName: environment.name,
-      key: secret.key,
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
       projectId: project._id,
       projectName: project.name,
-      secretAction: "secret.deleted",
-      secretId: args.secretId,
       userId: ctx.userId,
-      folderId: secret.folderId,
-      folderName: folder?.name,
+      action: "secret.deleted",
+      environmentId: secret.environmentId,
+      environmentName: environment.name,
+      metadata: {
+        secretId: args.secretId,
+        key: secret.key,
+        folderId: secret.folderId,
+        folderName: folder?.name,
+      },
     });
 
     return { success: true };
@@ -748,17 +756,19 @@ export const _exportSecretsCore = internalMutation({
       ? secrets.filter((secret) => secret.scope === args.scope)
       : secrets;
 
-    await ctx.runMutation(internal.actionLog._logSecretAction, {
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
       projectId: project._id,
       projectName: project.name,
+      userId: args.userId,
+      action: "secret.exported",
       environmentId: resolvedEnvironmentId,
       environmentName: environment.name,
-      folderId: resolvedFolderId,
-      folderName: folder?.name,
-      secretAction: "secret.exported",
-      userId: args.userId,
-      exportCount: filteredSecrets.length,
-      exportFormat: "env",
+      metadata: {
+        folderId: resolvedFolderId,
+        folderName: folder?.name,
+        exportCount: filteredSecrets.length,
+        exportFormat: "env",
+      },
     });
 
     return {

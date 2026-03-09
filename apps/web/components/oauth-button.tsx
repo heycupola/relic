@@ -35,7 +35,7 @@ export function OAuthButton({
       </span>
       {lastUsed && (
         <span className="col-start-1 row-start-1 flex items-center justify-end pr-3">
-          <span className="text-[10px] font-mono font-normal px-1.5 py-0.5 border border-border text-foreground/50">
+          <span className="text-[10px] font-mono font-normal px-1.5 py-0.5 border border-border bg-black text-white dark:bg-white dark:text-black">
             last used
           </span>
         </span>

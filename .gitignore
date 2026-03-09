@@ -37,4 +37,7 @@ debug.log
 .DS_Store
 *.pem
 
+# IDE
+.cursor/
+
 target

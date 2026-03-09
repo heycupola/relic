@@ -1,9 +1,10 @@
 [package]
 name = "relic-runner"
-description = "Secret injection and process runner for Relic CLI."
+description = "The Relic runner for injecting secrets into local processes. Encrypted on your device, never exposed to anyone else. Not even us."
 authors = ["Can Vardar <https://github.com/heycupola/relic>"]
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 
 [dependencies]
 libc = "0.2.182"

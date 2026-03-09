@@ -8,7 +8,7 @@ import { hashKey } from "./lib/crypto";
 import { toHttpErrorResponse } from "./lib/errors";
 import { createLogger } from "./lib/logger";
 import { verifyResendSignature } from "./lib/resend";
-import type { EmailKind } from "./lib/types";
+import { EmailKind } from "./lib/types";
 import { handleWebhookEvent, type StripeEvent, verifyStripeSignature } from "./stripe";
 
 const stripeLog = createLogger("stripeWebhook");
@@ -176,7 +176,7 @@ http.route({
         const emailKind = tags.kind as EmailKind;
         const emailId = tags.emailId;
 
-        if (userId && emailKind) {
+        if (userId && emailKind && emailKind !== EmailKind.AccountDeleted) {
           await ctx.runMutation(internal.user._handleEmailDelivered, {
             userId: userId as BetterAuthId<"user">,
             emailKind,

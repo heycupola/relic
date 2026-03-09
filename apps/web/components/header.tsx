@@ -8,10 +8,17 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/lib/auth";
 import { trackWebEvent } from "@/lib/posthog";
+import { BLOG_PATH, ENTERPRISE_URL, SITE_DOCS_URL } from "@/lib/site";
 import { LogoContextMenu } from "./logo-context-menu";
 
 interface HeaderProps {
   showLogout?: boolean;
+}
+
+interface PublicNavLink {
+  href: string;
+  label: string;
+  external?: boolean;
 }
 
 export function Header({ showLogout = false }: HeaderProps) {
@@ -37,9 +44,26 @@ export function Header({ showLogout = false }: HeaderProps) {
     });
   };
 
+  const publicNavLinks: PublicNavLink[] = [
+    {
+      href: BLOG_PATH,
+      label: "Blog",
+    },
+    {
+      href: ENTERPRISE_URL,
+      label: "Enterprise",
+      external: true,
+    },
+    {
+      href: SITE_DOCS_URL,
+      label: "Docs",
+      external: true,
+    },
+  ] as const;
+
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6 lg:px-12">
+      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:h-16 sm:px-6 lg:px-12">
         <Link
           href="/"
           className="flex items-center gap-2 -mx-3 px-3 py-2 rounded-md transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -75,12 +99,17 @@ export function Header({ showLogout = false }: HeaderProps) {
         ) : (
           <>
             <nav className="hidden items-center gap-8 font-[family-name:var(--font-heading)] text-md text-muted-foreground md:flex">
-              <Link
-                href="/docs"
-                className="transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm px-1"
-              >
-                Docs
-              </Link>
+              {publicNavLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  target={(link.external ?? false) ? "_blank" : undefined}
+                  rel={(link.external ?? false) ? "noopener noreferrer" : undefined}
+                  className="transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm px-1"
+                >
+                  {link.label}
+                </Link>
+              ))}
               {!isLoading && isAuthenticated && (
                 <Link
                   href="/dashboard"
@@ -110,14 +139,19 @@ export function Header({ showLogout = false }: HeaderProps) {
       {/* Mobile menu */}
       {!showLogout && mobileMenuOpen && (
         <div id="mobile-menu" className="md:hidden border-t border-border bg-background">
-          <nav className="flex flex-col px-6 py-4 gap-4 font-[family-name:var(--font-heading)] text-md">
-            <Link
-              href="/docs"
-              className="text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm px-1 py-2"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Docs
-            </Link>
+          <nav className="flex flex-col px-4 py-4 gap-4 font-[family-name:var(--font-heading)] text-md sm:px-6">
+            {publicNavLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                target={(link.external ?? false) ? "_blank" : undefined}
+                rel={(link.external ?? false) ? "noopener noreferrer" : undefined}
+                className="text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm px-1 py-2"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {link.label}
+              </Link>
+            ))}
             {!isLoading && isAuthenticated && (
               <Link
                 href="/dashboard"

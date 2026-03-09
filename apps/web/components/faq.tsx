@@ -2,72 +2,36 @@
 
 import { cn } from "@repo/ui/lib/utils";
 import { ChevronDown } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
+import { SITE_FAQS } from "@/lib/site";
 import { SectionWrapper } from "./section-wrapper";
-
-const faqs = [
-  {
-    question: "Can you see my secrets?",
-    answer:
-      "No. Your secrets are encrypted on your device before anything is sent to us. We literally cannot read them. Only you hold the keys.",
-  },
-  {
-    question: "Where does my data go?",
-    answer:
-      "Your secrets are encrypted on your machine, then stored safely on our servers. We only ever see encrypted data, never the real values.",
-  },
-  {
-    question: "How secure is Relic?",
-    answer:
-      "Very. We use the same encryption standards trusted by banks and governments (AES-256 + Argon2id). Everything is encrypted before it leaves your device.",
-  },
-  {
-    question: "Can I share secrets with my team?",
-    answer:
-      "Yes, invite teammates by email and they get access to the project. Each person's secrets are encrypted with their own keys, so sharing stays fully secure.",
-  },
-  {
-    question: "Can I use Relic in CI/CD pipelines?",
-    answer:
-      "Absolutely. The CLI is designed for automation. You can easily integrate Relic into GitHub Actions, GitLab CI, Jenkins, or any other CI/CD system.",
-  },
-  {
-    question: "Do my secrets sync across devices?",
-    answer:
-      "Yes, automatically. Your encrypted secrets sync through our servers, but since everything is encrypted on your device first, we never see the actual values.",
-  },
-  {
-    question: "Which programming languages are supported?",
-    answer:
-      "All of them. Relic is completely language agnostic. Any language, any framework. Just use relic run to inject secrets as environment variables into any process.",
-  },
-];
 
 export function FAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
     <SectionWrapper label="FAQ" id="faq">
-      <div className="mx-auto max-w-6xl px-6 py-16 lg:px-12">
-        <h2 className="text-2xl font-semibold text-foreground">FAQ</h2>
-        <p className="mt-2 text-foreground/60 text-pretty">
+      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-12">
+        <h2 className="text-xl font-semibold text-foreground sm:text-2xl">FAQ</h2>
+        <p className="mt-2 text-sm text-foreground/60 text-pretty sm:text-base">
           Everything you need to know about Relic.
         </p>
 
-        <div className="mt-8 border-2 border-border divide-y-2 divide-border">
-          {faqs.map((faq, index) => (
+        <div className="mt-6 border-2 border-border divide-y-2 divide-border sm:mt-8">
+          {SITE_FAQS.map((faq, index) => (
             <button
               key={faq.question}
               type="button"
               onClick={() => setOpenIndex(openIndex === index ? null : index)}
               className={cn(
-                "w-full text-left px-6 py-5 transition-colors",
+                "w-full text-left px-4 py-4 transition-colors sm:px-6 sm:py-5",
                 openIndex === index ? "bg-foreground/5" : "hover:bg-muted/50",
               )}
             >
-              <div className="flex items-center justify-between gap-4">
-                <span className="font-medium text-foreground">{faq.question}</span>
+              <div className="flex items-center justify-between gap-3 sm:gap-4">
+                <span className="font-medium text-foreground text-sm sm:text-base">
+                  {faq.question}
+                </span>
                 <ChevronDown
                   className={cn(
                     "h-5 w-5 shrink-0 text-foreground/50 transition-transform duration-200",
@@ -78,21 +42,23 @@ export function FAQ() {
               </div>
               <div
                 className={cn(
-                  "overflow-hidden transition-all duration-200",
-                  openIndex === index ? "mt-3 max-h-40" : "max-h-0",
+                  "grid transition-[grid-template-rows] duration-200",
+                  openIndex === index ? "grid-rows-[1fr] mt-3" : "grid-rows-[0fr]",
                 )}
               >
-                <p className="text-foreground/60 text-sm leading-relaxed pr-8 text-pretty">
-                  {faq.answer}
-                </p>
+                <div className="overflow-hidden">
+                  <p className="text-foreground/60 text-sm leading-relaxed text-pretty sm:pr-8">
+                    {faq.answer}
+                  </p>
+                </div>
               </div>
             </button>
           ))}
         </div>
 
-        <div className="mt-8 flex items-center gap-3 text-foreground/60">
+        <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-foreground/60 sm:mt-8 sm:text-base">
           <span>Have more questions?</span>
-          <Link
+          <a
             href="https://x.com/heycupola"
             target="_blank"
             rel="noopener noreferrer"
@@ -100,7 +66,7 @@ export function FAQ() {
           >
             <span>DMs open</span>
             <span className="text-lg">𝕏</span>
-          </Link>
+          </a>
         </div>
       </div>
     </SectionWrapper>

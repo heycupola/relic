@@ -6,6 +6,7 @@ import { KeyRound, Plus } from "lucide-react";
 import { useState } from "react";
 import { CreateApiKeyDialog } from "./create-api-key-dialog";
 import { RevokeApiKeyDialog } from "./revoke-api-key-dialog";
+import { UpgradeToProDialog } from "./upgrade-pro-dialog";
 
 export interface ApiKeyItem {
   id: Id<"apiKey">;
@@ -21,6 +22,7 @@ export interface ApiKeyItem {
 interface ApiKeysCardProps {
   apiKeys: ApiKeyItem[];
   isLoading?: boolean;
+  hasPro: boolean;
 }
 
 const MAX_KEYS = 5;
@@ -56,8 +58,9 @@ function formatTimeAgo(timestamp: number): string {
   return "just now";
 }
 
-export function ApiKeysCard({ apiKeys, isLoading }: ApiKeysCardProps) {
+export function ApiKeysCard({ apiKeys, isLoading, hasPro }: ApiKeysCardProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
   const [keyToRevoke, setKeyToRevoke] = useState<ApiKeyItem | null>(null);
 
   const activeKeyCount = apiKeys.filter((k) => getKeyStatus(k) === "active").length;
@@ -79,14 +82,14 @@ export function ApiKeysCard({ apiKeys, isLoading }: ApiKeysCardProps) {
 
   return (
     <>
-      <div className="border-2 border-border bg-card p-5">
+      <div className="border-2 border-border bg-card p-4 sm:p-5">
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <h3 className="text-sm font-medium text-foreground/60">API Keys</h3>
             <button
               type="button"
-              onClick={() => setShowCreateDialog(true)}
-              disabled={activeKeyCount >= MAX_KEYS}
+              onClick={() => (hasPro ? setShowCreateDialog(true) : setShowUpgradeDialog(true))}
+              disabled={hasPro && activeKeyCount >= MAX_KEYS}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-border hover:border-foreground hover:bg-muted/50 transition-all text-foreground disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:bg-transparent"
             >
               <Plus className="h-3 w-3" aria-hidden="true" />
@@ -99,19 +102,21 @@ export function ApiKeysCard({ apiKeys, isLoading }: ApiKeysCardProps) {
               <KeyRound className="h-5 w-5 text-foreground/20 mx-auto mb-2" aria-hidden="true" />
               <p className="text-sm text-foreground/50">No API keys yet</p>
               <p className="text-xs text-foreground/40 mt-1">
-                Create a key to access secrets programmatically
+                {hasPro
+                  ? "Create a key to access secrets programmatically"
+                  : "Upgrade to Pro to create API keys"}
               </p>
             </div>
           ) : (
-            <div className="space-y-0 divide-y divide-border/50">
+            <div className={`space-y-0 divide-y divide-border/50 ${!hasPro ? "opacity-50" : ""}`}>
               {visibleKeys.map((key) => {
                 const status = getKeyStatus(key);
                 const statusColor = getStatusColor(status);
                 const isActive = status === "active";
 
                 return (
-                  <div key={key.id} className="py-3 first:pt-0 last:pb-0">
-                    <div className="flex items-center justify-between gap-3">
+                  <div key={key.id} className="py-2.5 first:pt-0 last:pb-0 sm:py-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-foreground truncate">
@@ -158,7 +163,7 @@ export function ApiKeysCard({ apiKeys, isLoading }: ApiKeysCardProps) {
                         <button
                           type="button"
                           onClick={() => setKeyToRevoke(key)}
-                          className="px-3 py-1.5 text-xs font-medium border border-border text-foreground/60 hover:border-red-600 hover:text-red-600 dark:hover:border-red-400 dark:hover:text-red-400 transition-all shrink-0"
+                          className="self-start px-3 py-1.5 text-xs font-medium border border-border text-foreground/60 hover:border-red-600 hover:text-red-600 dark:hover:border-red-400 dark:hover:text-red-400 transition-all shrink-0 sm:self-auto"
                         >
                           Revoke
                         </button>
@@ -192,6 +197,8 @@ export function ApiKeysCard({ apiKeys, isLoading }: ApiKeysCardProps) {
           apiKeyName={keyToRevoke.name}
         />
       )}
+
+      <UpgradeToProDialog open={showUpgradeDialog} onClose={() => setShowUpgradeDialog(false)} />
     </>
   );
 }

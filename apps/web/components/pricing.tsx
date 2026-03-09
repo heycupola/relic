@@ -53,6 +53,7 @@ export function Pricing() {
   const getProButtonText = () => {
     if (isLoading || isUpgrading) return "Loading…";
     if (hasPro) return "Current Plan";
+    if (!isAuthenticated) return "Get started with Pro";
     return "Upgrade to Pro";
   };
 
@@ -63,19 +64,23 @@ export function Pricing() {
 
   return (
     <SectionWrapper label="Pricing" id="pricing">
-      <div className="mx-auto max-w-6xl px-6 py-16 lg:px-12">
-        <h2 className="text-2xl font-semibold text-foreground">Pricing</h2>
-        <p className="mt-2 text-foreground/60 text-pretty">Simple pricing. No surprises.</p>
+      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-12">
+        <h2 className="text-xl font-semibold text-foreground sm:text-2xl">Pricing</h2>
+        <p className="mt-2 text-sm text-foreground/60 text-pretty sm:text-base">
+          Simple pricing. No surprises.
+        </p>
 
-        <div className="mt-12 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="mt-8 grid grid-cols-1 gap-5 sm:mt-12 sm:gap-6 lg:grid-cols-2">
           {/* Free Plan */}
           <div className="border-2 border-border bg-card flex flex-col">
-            <div className="p-6 space-y-4 flex-1">
-              <div className="space-y-2">
-                <h3 className="text-xl font-semibold text-foreground">Free</h3>
+            <div className="p-4 space-y-4 flex-1 sm:p-6">
+              <div className="space-y-1 sm:space-y-2">
+                <h3 className="text-lg font-semibold text-foreground sm:text-xl">Free</h3>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold text-foreground tabular-nums">$0</span>
-                  <span className="text-foreground/60">/month</span>
+                  <span className="text-3xl font-bold text-foreground tabular-nums sm:text-4xl">
+                    $0
+                  </span>
+                  <span className="text-foreground/60 text-sm sm:text-base">/month</span>
                 </div>
               </div>
 
@@ -100,19 +105,25 @@ export function Pricing() {
                   <X className="h-4 w-4 text-foreground/30 shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground/50">No project sharing</span>
                 </li>
+                <li className="flex items-start gap-2">
+                  <X className="h-4 w-4 text-foreground/30 shrink-0 mt-0.5" aria-hidden="true" />
+                  <span className="text-foreground/50">No API keys or CI/CD integration</span>
+                </li>
               </ul>
             </div>
 
-            <div className="border-t-2 border-border p-6">
-              <button
-                type="button"
-                onClick={handleFreeClick}
-                disabled={isLoading}
-                className="block w-full text-center p-3 border-2 border-border bg-background text-foreground font-medium hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {getFreeButtonText()}
-              </button>
-            </div>
+            {!hasPro && (
+              <div className="border-t-2 border-border p-4 sm:p-6">
+                <button
+                  type="button"
+                  onClick={handleFreeClick}
+                  disabled={isLoading}
+                  className="block w-full text-center p-3 border-2 border-border bg-background text-foreground font-medium hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {getFreeButtonText()}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Pro Plan */}
@@ -123,12 +134,14 @@ export function Pricing() {
               </span>
             </div>
 
-            <div className="p-6 space-y-4 flex-1">
-              <div className="space-y-2">
-                <h3 className="text-xl font-semibold text-foreground">Pro</h3>
+            <div className="p-4 space-y-4 flex-1 sm:p-6">
+              <div className="space-y-1 sm:space-y-2">
+                <h3 className="text-lg font-semibold text-foreground sm:text-xl">Pro</h3>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold text-foreground tabular-nums">$20</span>
-                  <span className="text-foreground/60">/month</span>
+                  <span className="text-3xl font-bold text-foreground tabular-nums sm:text-4xl">
+                    $20
+                  </span>
+                  <span className="text-foreground/60 text-sm sm:text-base">/month</span>
                 </div>
               </div>
 
@@ -143,6 +156,12 @@ export function Pricing() {
                   <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground">
                     <strong>5 free projects</strong> included
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
+                  <span className="text-foreground">
+                    <strong>API keys</strong> for CI/CD integration
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
@@ -170,7 +189,7 @@ export function Pricing() {
               </div>
             </div>
 
-            <div className="border-t-2 border-border p-6">
+            <div className="border-t-2 border-border p-4 sm:p-6">
               <button
                 type="button"
                 onClick={handleProClick}

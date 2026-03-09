@@ -1,0 +1,7 @@
+:root {
+  --text-primary: #252525;
+}
+
+[data-theme="dark"] {
+  --text-primary: #fafafa;
+}

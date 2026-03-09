@@ -1,6 +1,7 @@
 {
   "name": "relic",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
@@ -8,7 +9,7 @@
     "format": "turbo run format",
     "check-types": "turbo run check-types",
     "test": "turbo run test",
-    "prepare": "husky"
+    "prepare": "lefthook install"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.5",
@@ -16,8 +17,7 @@
     "@emnapi/wasi-threads": "^1.1.0",
     "@napi-rs/wasm-runtime": "^1.0.5",
     "@tybys/wasm-util": "^0.10.1",
-    "husky": "^9.1.7",
-    "lint-staged": "^16.2.3",
+    "lefthook": "^1.11.13",
     "turbo": "^2.5.8",
     "typescript": "5.9.2"
   },
@@ -47,10 +47,5 @@
       "react": "^19.2.4",
       "react-dom": "^19.2.4"
     }
-  },
-  "lint-staged": {
-    "*.{js,jsx,ts,tsx,json}": [
-      "biome check --write --no-errors-on-unmatched"
-    ]
   }
 }

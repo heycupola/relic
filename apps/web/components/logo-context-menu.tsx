@@ -1,7 +1,6 @@
 "use client";
 
 import { Copy, Download, FileText, Image } from "lucide-react";
-import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 
 interface LogoContextMenuProps {
@@ -11,9 +10,9 @@ interface LogoContextMenuProps {
 }
 
 export function LogoContextMenu({ x, y, onClose }: LogoContextMenuProps) {
-  const { resolvedTheme } = useTheme();
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x, y });
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
 
   useEffect(() => {
     // Adjust position if menu would go off screen
@@ -59,9 +58,20 @@ export function LogoContextMenu({ x, y, onClose }: LogoContextMenuProps) {
     };
   }, [onClose]);
 
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const updateTheme = () => {
+      setIsDarkTheme(mediaQuery.matches);
+    };
+
+    updateTheme();
+    mediaQuery.addEventListener("change", updateTheme);
+    return () => mediaQuery.removeEventListener("change", updateTheme);
+  }, []);
+
   const copyLogoAsSVG = async () => {
     try {
-      const logoFile = resolvedTheme === "dark" ? "relic-logo-light.svg" : "relic-logo-dark.svg";
+      const logoFile = isDarkTheme ? "relic-logo-light.svg" : "relic-logo-dark.svg";
       const response = await fetch(`/${logoFile}`);
       const svgContent = await response.text();
       await navigator.clipboard.writeText(svgContent);
@@ -73,8 +83,9 @@ export function LogoContextMenu({ x, y, onClose }: LogoContextMenuProps) {
 
   const copyLogoAsWordmark = async () => {
     try {
-      const wordmarkFile =
-        resolvedTheme === "dark" ? "relic-logo-wordmark-light.svg" : "relic-logo-wordmark-dark.svg";
+      const wordmarkFile = isDarkTheme
+        ? "relic-logo-wordmark-light.svg"
+        : "relic-logo-wordmark-dark.svg";
       const response = await fetch(`/${wordmarkFile}`);
       const svgContent = await response.text();
       await navigator.clipboard.writeText(svgContent);
@@ -85,7 +96,7 @@ export function LogoContextMenu({ x, y, onClose }: LogoContextMenuProps) {
   };
 
   const downloadLogoPNG = () => {
-    const pngFile = resolvedTheme === "dark" ? "relic-logo-light.png" : "relic-logo-dark.png";
+    const pngFile = isDarkTheme ? "relic-logo-light.png" : "relic-logo-dark.png";
     const link = document.createElement("a");
     link.href = `/${pngFile}`;
     link.download = pngFile;

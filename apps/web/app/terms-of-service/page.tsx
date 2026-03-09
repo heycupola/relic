@@ -3,11 +3,32 @@ import Link from "next/link";
 import { ContainerLines } from "@/components/container-lines";
 import { Footer } from "@/components/footer";
 import { Header } from "@/components/header";
+import { SITE_NAME, SITE_TWITTER_HANDLE } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Terms of Service - Relic",
+  title: "Terms of Service",
   description:
     "Terms of Service for Relic, a zero-knowledge secrets management platform by Cupola Labs, LLC.",
+  alternates: {
+    canonical: "/terms-of-service",
+  },
+  openGraph: {
+    type: "article",
+    locale: "en_US",
+    url: "/terms-of-service",
+    siteName: SITE_NAME,
+    title: "Terms of Service - relic",
+    description:
+      "Terms of Service for Relic, a zero-knowledge secrets management platform by Cupola Labs, LLC.",
+  },
+  twitter: {
+    card: "summary",
+    title: "Terms of Service - relic",
+    description:
+      "Terms of Service for Relic, a zero-knowledge secrets management platform by Cupola Labs, LLC.",
+    creator: SITE_TWITTER_HANDLE,
+    site: SITE_TWITTER_HANDLE,
+  },
 };
 
 export default function TermsOfServicePage() {
@@ -17,15 +38,17 @@ export default function TermsOfServicePage() {
       <Header />
       <main className="flex-1">
         <div className="border-b border-border">
-          <div className="mx-auto max-w-6xl px-6 lg:px-12 py-16 md:py-20">
-            <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
+          <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-16 md:py-20 lg:px-12">
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
               Terms of Service
             </h1>
-            <p className="mt-3 text-sm text-muted-foreground">Last updated: February 25, 2026</p>
+            <p className="mt-2 text-sm text-muted-foreground sm:mt-3">
+              Last updated: March 8, 2026
+            </p>
           </div>
         </div>
 
-        <div className="mx-auto max-w-6xl px-6 lg:px-12">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-12">
           <div className="divide-y divide-border">
             <section className="py-10">
               <h2 className="text-lg font-semibold">Acceptance of Terms</h2>
@@ -97,9 +120,7 @@ export default function TermsOfServicePage() {
                     You are solely responsible for maintaining the security of your encryption keys
                     and master password
                   </li>
-                  <li>
-                    You must notify us immediately of any unauthorized access to your account
-                  </li>
+                  <li>You must notify us immediately of any unauthorized access to your account</li>
                   <li>
                     We are not liable for any loss arising from your failure to secure your account,
                     encryption keys, or master password
@@ -115,19 +136,19 @@ export default function TermsOfServicePage() {
 
             <section className="py-10">
               <h2 className="text-lg font-semibold">Acceptable Use</h2>
-              <p className="mt-4 text-sm text-foreground/70 leading-relaxed">
-                You agree not to:
-              </p>
+              <p className="mt-4 text-sm text-foreground/70 leading-relaxed">You agree not to:</p>
               <ul className="mt-4 space-y-2 text-sm text-foreground/70 list-disc pl-5 leading-relaxed">
                 <li>Use the Service for any illegal or unauthorized purpose</li>
                 <li>Violate any applicable laws or regulations</li>
                 <li>
-                  Attempt to gain unauthorized access to the Service or its underlying infrastructure
+                  Attempt to gain unauthorized access to the Service or its underlying
+                  infrastructure
                 </li>
                 <li>Interfere with or disrupt the integrity or performance of the Service</li>
                 <li>Reverse engineer, decompile, or disassemble any portion of the Service</li>
                 <li>
-                  Use the Service to store, transmit, or manage content that violates applicable laws
+                  Use the Service to store, transmit, or manage content that violates applicable
+                  laws
                 </li>
                 <li>Circumvent usage limits, access controls, or security mechanisms</li>
                 <li>
@@ -176,7 +197,8 @@ export default function TermsOfServicePage() {
                 <ul className="mt-2 space-y-2 text-sm text-foreground/70 list-disc pl-5 leading-relaxed">
                   <li>You may cancel your subscription at any time</li>
                   <li>
-                    Upon cancellation, you retain access until the end of your current billing period
+                    Upon cancellation, you retain access until the end of your current billing
+                    period
                   </li>
                   <li>
                     No partial refunds or credits are issued for unused time within a billing period
@@ -227,13 +249,11 @@ export default function TermsOfServicePage() {
                 <li>The Service will be uninterrupted, secure, or error-free</li>
                 <li>Defects will be corrected within any particular timeframe</li>
                 <li>The Service will meet your specific requirements</li>
-                <li>
-                  Your encrypted data will be recoverable if you lose your encryption keys
-                </li>
+                <li>Your encrypted data will be recoverable if you lose your encryption keys</li>
               </ul>
               <p className="mt-4 text-sm text-foreground/70 leading-relaxed font-medium uppercase">
-                You are solely responsible for maintaining backups of your encryption keys and master
-                password. We cannot recover encrypted data on your behalf.
+                You are solely responsible for maintaining backups of your encryption keys and
+                master password. We cannot recover encrypted data on your behalf.
               </p>
             </section>
 
@@ -261,8 +281,8 @@ export default function TermsOfServicePage() {
                 <li>Any other matter related to the Service</li>
               </ul>
               <p className="mt-4 text-sm text-foreground/70 leading-relaxed">
-                Some jurisdictions do not permit the exclusion of certain warranties or limitation of
-                liability. In such jurisdictions, our liability is limited to the fullest extent
+                Some jurisdictions do not permit the exclusion of certain warranties or limitation
+                of liability. In such jurisdictions, our liability is limited to the fullest extent
                 permitted by law.
               </p>
             </section>
@@ -300,9 +320,7 @@ export default function TermsOfServicePage() {
               <div className="mt-6">
                 <h3 className="text-sm font-medium">Termination by Us</h3>
                 <ul className="mt-2 space-y-2 text-sm text-foreground/70 list-disc pl-5 leading-relaxed">
-                  <li>
-                    We may suspend or terminate your account for violation of these Terms
-                  </li>
+                  <li>We may suspend or terminate your account for violation of these Terms</li>
                   <li>We may discontinue the Service with reasonable advance notice</li>
                 </ul>
               </div>
@@ -316,9 +334,9 @@ export default function TermsOfServicePage() {
                   </li>
                   <li>You lose access to the Service and your stored encrypted data</li>
                   <li>
-                    Provisions that by their nature should survive termination will survive, including
-                    intellectual property rights, disclaimers, limitation of liability, and
-                    indemnification
+                    Provisions that by their nature should survive termination will survive,
+                    including intellectual property rights, disclaimers, limitation of liability,
+                    and indemnification
                   </li>
                 </ul>
               </div>
@@ -338,8 +356,8 @@ export default function TermsOfServicePage() {
             <section className="py-10">
               <h2 className="text-lg font-semibold">Governing Law</h2>
               <p className="mt-4 text-sm text-foreground/70 leading-relaxed">
-                These Terms are governed by and construed in accordance with the laws of the State of
-                Delaware, United States, without regard to its conflict of law provisions.
+                These Terms are governed by and construed in accordance with the laws of the State
+                of Delaware, United States, without regard to its conflict of law provisions.
               </p>
             </section>
 
@@ -362,8 +380,8 @@ export default function TermsOfServicePage() {
               <ul className="mt-4 space-y-2 text-sm text-foreground/70 list-disc pl-5 leading-relaxed">
                 <li>
                   <span className="font-medium text-foreground">Entire Agreement:</span> These
-                  Terms, together with the Privacy Policy, constitute the entire agreement between
-                  you and Cupola Labs, LLC regarding the Service
+                  Terms, together with the Privacy Policy and Data Processing Agreement, constitute
+                  the entire agreement between you and Cupola Labs, LLC regarding the Service
                 </li>
                 <li>
                   <span className="font-medium text-foreground">Severability:</span> If any
@@ -376,12 +394,13 @@ export default function TermsOfServicePage() {
                 </li>
                 <li>
                   <span className="font-medium text-foreground">Assignment:</span> You may not
-                  assign or transfer your rights under these Terms without our prior written consent.
-                  We may assign our rights without restriction
+                  assign or transfer your rights under these Terms without our prior written
+                  consent. We may assign our rights without restriction
                 </li>
                 <li>
                   <span className="font-medium text-foreground">Force Majeure:</span> We are not
-                  liable for failures or delays caused by circumstances beyond our reasonable control
+                  liable for failures or delays caused by circumstances beyond our reasonable
+                  control
                 </li>
                 <li>
                   <span className="font-medium text-foreground">Notices:</span> We may send notices
@@ -394,8 +413,8 @@ export default function TermsOfServicePage() {
               <h2 className="text-lg font-semibold">Contact</h2>
               <p className="mt-4 text-sm text-foreground/70 leading-relaxed">
                 For questions about these Terms, please contact us at{" "}
-                <a href="mailto:can@relic.so" className="text-foreground underline">
-                  can@relic.so
+                <a href="mailto:support@relic.so" className="text-foreground underline">
+                  support@relic.so
                 </a>
                 .
               </p>
@@ -403,6 +422,10 @@ export default function TermsOfServicePage() {
                 See also our{" "}
                 <Link href="/privacy-policy" className="text-foreground underline">
                   Privacy Policy
+                </Link>{" "}
+                and{" "}
+                <Link href="/dpa" className="text-foreground underline">
+                  Data Processing Agreement
                 </Link>
                 .
               </p>

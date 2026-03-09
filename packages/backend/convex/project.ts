@@ -286,6 +286,13 @@ export const createProject = protectedAction({
       }
     }
 
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      projectId: pId,
+      projectName: args.name,
+      userId: ctx.userId,
+      action: "project.created",
+    });
+
     log.info("Project created", { projectId: pId, userId: ctx.userId, isPaidProject });
 
     return { status: "success" as const, projectId: pId };
@@ -397,6 +404,13 @@ export const updateProject = protectedMutation({
       },
     });
 
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      projectId: args.projectId,
+      projectName: args.name ?? project.name,
+      userId: ctx.userId,
+      action: "project.updated",
+    });
+
     return { success: true };
   },
 });
@@ -442,6 +456,13 @@ export const archiveProject = protectedAction({
     await ctx.autumn.track(ctx, {
       featureId: "projects",
       value: -1,
+    });
+
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      projectId: args.projectId,
+      projectName: project.name,
+      userId: ctx.userId,
+      action: "project.archived",
     });
 
     log.info("Project archived", { projectId: args.projectId, userId: ctx.userId });
@@ -495,6 +516,13 @@ export const unarchiveProject = protectedAction({
     await ctx.autumn.track(ctx, {
       featureId: "projects",
       value: 1,
+    });
+
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      projectId: args.projectId,
+      projectName: project.name,
+      userId: ctx.userId,
+      action: "project.unarchived",
     });
 
     log.info("Project unarchived", { projectId: args.projectId, userId: ctx.userId });

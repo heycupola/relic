@@ -12,10 +12,15 @@ import type { ProtectedActionCtx, ProtectedQueryCtx } from "./lib/types";
 export const _insertActionLog = internalMutation({
   args: {
     projectId: v.optional(v.id("project")),
+    projectName: v.optional(v.string()),
     userId: v.string(),
     action: v.union(
       v.literal("user.keys_created"),
       v.literal("user.password_changed"),
+      v.literal("project.created"),
+      v.literal("project.updated"),
+      v.literal("project.archived"),
+      v.literal("project.unarchived"),
       v.literal("project.key_rotated"),
       v.literal("secret.created"),
       v.literal("secret.updated"),
@@ -24,10 +29,19 @@ export const _insertActionLog = internalMutation({
       v.literal("secrets.bulk.updated"),
       v.literal("secrets.bulk_deleted"),
       v.literal("secrets.bulk_exported"),
+      v.literal("environment.created"),
+      v.literal("environment.updated"),
+      v.literal("environment.deleted"),
+      v.literal("folder.created"),
+      v.literal("folder.updated"),
+      v.literal("folder.deleted"),
       v.literal("share.added"),
       v.literal("share.revoked"),
       v.literal("share.key_updated"),
       v.literal("keys.rotated"),
+      v.literal("apikey.created"),
+      v.literal("apikey.revoked"),
+      v.literal("account.deleted"),
       v.literal("onboarding.completed"),
     ),
     environmentId: v.optional(v.id("environment")),
@@ -36,6 +50,7 @@ export const _insertActionLog = internalMutation({
       v.object({
         folderId: v.optional(v.id("folder")),
         folderName: v.optional(v.string()),
+        environmentName: v.optional(v.string()),
         secretId: v.optional(v.id("secret")),
         key: v.optional(v.string()),
         newKey: v.optional(v.string()),
@@ -52,78 +67,21 @@ export const _insertActionLog = internalMutation({
         keyRotated: v.optional(v.boolean()),
         secretsReEncrypted: v.optional(v.number()),
         sharesUpdated: v.optional(v.number()),
+        apiKeyPrefix: v.optional(v.string()),
       }),
     ),
   },
   returns: v.object({ success: v.boolean() }),
   handler: async (ctx, args) => {
-    let project: Doc<"project"> | null | undefined;
-    if (args.projectId) {
-      project = await ctx.db.get(args.projectId);
-    }
-
     await ctx.db.insert("actionLog", {
       action: args.action,
-      projectId: args.projectId,
-      projectName: project?.name,
-      environmentId: args.environmentId,
-      environmentName: args.environmentName,
-      timestamp: Date.now(),
-      userId: args.userId,
-      metadata: args.metadata,
-    });
-
-    return { success: true };
-  },
-});
-
-export const _logSecretAction = internalMutation({
-  args: {
-    projectId: v.id("project"),
-    projectName: v.string(),
-    environmentId: v.id("environment"),
-    environmentName: v.string(),
-    folderId: v.optional(v.id("folder")),
-    folderName: v.optional(v.string()),
-    secretId: v.optional(v.id("secret")),
-    key: v.optional(v.string()),
-    newKey: v.optional(v.string()),
-    userId: v.string(),
-    secretAction: v.union(
-      v.literal("secret.created"),
-      v.literal("secret.updated"),
-      v.literal("secret.deleted"),
-      v.literal("secret.exported"),
-      v.literal("secrets.bulk.updated"),
-      v.literal("secrets.bulk_deleted"),
-      v.literal("secrets.bulk_exported"),
-    ),
-    exportFormat: v.optional(v.union(v.literal("relic"), v.literal("env"), v.literal("json"))),
-    exportCount: v.optional(v.number()),
-    affectedValueCount: v.optional(v.number()),
-    deleteCount: v.optional(v.number()),
-  },
-  returns: v.object({ success: v.boolean() }),
-  handler: async (ctx, args) => {
-    await ctx.db.insert("actionLog", {
-      action: args.secretAction,
       projectId: args.projectId,
       projectName: args.projectName,
       environmentId: args.environmentId,
       environmentName: args.environmentName,
       timestamp: Date.now(),
       userId: args.userId,
-      metadata: {
-        folderId: args.folderId,
-        folderName: args.folderName,
-        secretId: args.secretId,
-        key: args.key,
-        newKey: args.newKey,
-        exportFormat: args.exportFormat,
-        exportCount: args.exportCount,
-        affectedValueCount: args.affectedValueCount,
-        deleteCount: args.deleteCount,
-      },
+      metadata: args.metadata,
     });
 
     return { success: true };

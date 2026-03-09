@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { components } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
@@ -26,6 +26,17 @@ export const createApiKey = protectedMutation({
     args: { name: string; scopes: string[]; expiresAt?: number },
   ): Promise<{ apiKey: string; prefix: string }> => {
     await checkRateLimit(ctx, "write");
+
+    const currentUser = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: ctx.userId,
+    });
+    if (!currentUser?.hasPro) {
+      throw createError({
+        code: ErrorCode.PRO_PLAN_REQUIRED,
+        message: "API keys require a Pro plan. Upgrade to unlock CI/CD integration.",
+        severity: ErrorSeverity.Medium,
+      });
+    }
 
     if (!args.name || args.name.trim().length === 0) {
       throw createError({
@@ -71,6 +82,14 @@ export const createApiKey = protectedMutation({
       scopes: args.scopes,
       expiresAt: args.expiresAt,
       createdAt: Date.now(),
+    });
+
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      userId: ctx.userId,
+      action: "apikey.created",
+      metadata: {
+        apiKeyPrefix: prefix,
+      },
     });
 
     log.info("API key created", { userId: ctx.userId, prefix });
@@ -126,6 +145,14 @@ export const revokeApiKey = protectedMutation({
     }
 
     await ctx.db.patch(key._id, { revokedAt: Date.now() });
+
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      userId: ctx.userId,
+      action: "apikey.revoked",
+      metadata: {
+        apiKeyPrefix: key.prefix,
+      },
+    });
 
     log.info("API key revoked", { userId: ctx.userId, prefix: key.prefix });
 
@@ -187,6 +214,20 @@ export const _validateApiKey = internalMutation({
         code: ErrorCode.INSUFFICIENT_PERMISSION,
         message: `API key missing required scope(s): ${missing.join(", ")}`,
         severity: ErrorSeverity.High,
+      });
+    }
+
+    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: keyDoc.userId as BetterAuthId<"user">,
+    });
+    if (!user?.hasPro) {
+      throw createError({
+        code: ErrorCode.PRO_PLAN_REQUIRED,
+        message: "API keys require a Pro plan. Upgrade to unlock CI/CD integration.",
+        severity: ErrorSeverity.Medium,
+        metadata: {
+          upgradeUrl: `${process.env.SITE_URL || "https://relic.so"}/dashboard?action=upgrade`,
+        },
       });
     }
 

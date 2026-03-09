@@ -1,2 +1,99 @@
 @import "@repo/ui/globals.css";
 @source "../**/*.{ts,tsx}";
+
+@utility scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.content-prose {
+  color: color-mix(in oklab, var(--foreground) 82%, transparent);
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+.content-prose > :first-child {
+  margin-top: 0 !important;
+}
+
+.content-prose > * + * {
+  margin-top: 1.25rem;
+}
+
+.content-prose h2,
+.content-prose h3,
+.content-prose h4 {
+  color: var(--foreground);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.content-prose h2 {
+  margin-top: 2.5rem;
+  font-size: 1.875rem;
+}
+
+.content-prose h3 {
+  margin-top: 2rem;
+  font-size: 1.35rem;
+}
+
+.content-prose h4 {
+  margin-top: 1.75rem;
+  font-size: 1.1rem;
+}
+
+.content-prose p,
+.content-prose li {
+  max-width: 68ch;
+}
+
+.content-prose ul,
+.content-prose ol {
+  padding-left: 1.25rem;
+}
+
+.content-prose ul {
+  list-style: square;
+}
+
+.content-prose ol {
+  list-style: decimal;
+}
+
+.content-prose li + li {
+  margin-top: 0.5rem;
+}
+
+.content-prose strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.content-prose img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 2rem;
+}
+
+.content-prose figure {
+  margin-top: 2rem;
+}
+
+.content-prose figcaption {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: color-mix(in oklab, var(--foreground) 56%, transparent);
+}
+
+.content-prose hr {
+  margin-top: 2.5rem;
+  margin-bottom: 2.5rem;
+}

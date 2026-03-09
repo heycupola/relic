@@ -89,10 +89,10 @@ export function ProjectsOverviewCard({
   }
 
   return (
-    <div className="border-2 border-border bg-card p-5">
+    <div className="border-2 border-border bg-card p-4 sm:p-5">
       <div className="space-y-4">
         <h3 className="text-sm font-medium text-foreground/60">Projects</h3>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-2 font-mono text-sm">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-xs sm:text-sm sm:gap-x-6">
           <div>
             <span className="text-foreground/50">active:</span>{" "}
             <span className="text-green-600 dark:text-green-400 tabular-nums">{ownedCount}</span>

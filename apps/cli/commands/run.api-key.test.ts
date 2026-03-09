@@ -47,10 +47,20 @@ mock.module("@repo/auth", () => ({
   validateSession: mock(() => Promise.resolve({ isValid: true, isExpired: false })),
 }));
 
+class ProPlanRequiredError extends Error {
+  upgradeUrl: string;
+  constructor(message: string, upgradeUrl: string) {
+    super(message);
+    this.name = "ProPlanRequiredError";
+    this.upgradeUrl = upgradeUrl;
+  }
+}
+
 mock.module("../lib/api", () => ({
   exportSecretsViaApiKey: mockExportSecretsViaApiKey,
   fetchUserKeysViaApiKey: mockFetchUserKeysViaApiKey,
   getApi: mock(() => ({})),
+  ProPlanRequiredError,
 }));
 
 mock.module("../lib/crypto", () => ({
@@ -200,5 +210,38 @@ describe("prepareSecretsWithApiKey", () => {
     expect(mockClearCachedUserKeys).toHaveBeenCalledTimes(1);
     expect(mockFetchUserKeysViaApiKey).toHaveBeenCalledTimes(1);
     expect(mockUnwrapProjectKey).toHaveBeenCalledTimes(2);
+  });
+
+  test("propagates ProPlanRequiredError from export", async () => {
+    mockExportSecretsViaApiKey.mockImplementation(() =>
+      Promise.reject(
+        new ProPlanRequiredError(
+          "API keys require a Pro plan.",
+          "https://relic.so/dashboard?action=upgrade",
+        ),
+      ),
+    );
+
+    const err = await prepareSecretsWithApiKey("project_123", DEFAULT_OPTIONS).catch((e) => e);
+
+    expect(err).toBeInstanceOf(ProPlanRequiredError);
+    expect(err.message).toBe("API keys require a Pro plan.");
+    expect(err.upgradeUrl).toBe("https://relic.so/dashboard?action=upgrade");
+  });
+
+  test("propagates ProPlanRequiredError from user keys fetch", async () => {
+    mockFetchUserKeysViaApiKey.mockImplementation(() =>
+      Promise.reject(
+        new ProPlanRequiredError(
+          "API keys require a Pro plan.",
+          "https://relic.so/dashboard?action=upgrade",
+        ),
+      ),
+    );
+
+    const err = await prepareSecretsWithApiKey("project_123", DEFAULT_OPTIONS).catch((e) => e);
+
+    expect(err).toBeInstanceOf(ProPlanRequiredError);
+    expect(err.upgradeUrl).toBe("https://relic.so/dashboard?action=upgrade");
   });
 });

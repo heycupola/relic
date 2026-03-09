@@ -122,6 +122,15 @@ export const createEnvironment = protectedMutation({
       projectId: project._id,
     });
 
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      projectId: project._id,
+      projectName: project.name,
+      userId: ctx.userId,
+      action: "environment.created",
+      environmentId,
+      environmentName: args.name,
+    });
+
     return { id: environmentId };
   },
 });
@@ -162,6 +171,15 @@ export const updateEnvironment = protectedMutation({
         name: args.name,
         // sortOrder: args.sortOrder,
       },
+    });
+
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      projectId: project._id,
+      projectName: project.name,
+      userId: ctx.userId,
+      action: "environment.updated",
+      environmentId: args.environmentId,
+      environmentName: args.name ?? environment.name,
     });
 
     return { success: true };
@@ -211,6 +229,15 @@ export const deleteEnvironment = protectedMutation({
 
     await ctx.runMutation(internal.environment._deleteEnvironmentById, {
       environmentId: args.environmentId,
+    });
+
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      projectId: project._id,
+      projectName: project.name,
+      userId: ctx.userId,
+      action: "environment.deleted",
+      environmentId: args.environmentId,
+      environmentName: environment.name,
     });
 
     return { success: true };

@@ -4,6 +4,7 @@ import { Button } from "@repo/ui/components/button";
 import { ArrowRight, Star } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { SITE_DESCRIPTION, SITE_SLOGAN } from "@/lib/site-copy";
 import { SectionWrapper } from "./section-wrapper";
 
 function formatStars(count: number): string {
@@ -27,22 +28,21 @@ export function Hero() {
 
   return (
     <SectionWrapper label="Introduction">
-      <div className="mx-auto max-w-6xl px-6 py-16 md:py-20 lg:px-12">
+      <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16 md:py-20 lg:px-12">
         {/* <p className="mb-4 font-mono text-sm text-foreground/50">{"What's new in v1.0.0"}</p> */}
-        <p className="mb-4 font-mono text-sm text-foreground/50">{"Closed beta now open!"}</p>
-        <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-balance text-foreground md:text-5xl lg:text-6xl">
-          The secrets layer developers actually trust
+        <p className="mb-4 font-mono text-xs text-foreground/50 sm:text-sm">{"v1.0 is out"}</p>
+        <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl md:text-5xl lg:text-6xl">
+          {SITE_SLOGAN}
         </h1>
-        <p className="mt-6 max-w-2xl text-lg text-foreground/60 text-pretty">
-          Manage and share secrets. Encrypted on your device, never exposed to anyone else. Not even
-          us.
+        <p className="mt-5 max-w-2xl text-base text-foreground/60 text-pretty sm:mt-6 sm:text-lg">
+          {SITE_DESCRIPTION}
         </p>
-        <div className="mt-8 flex flex-wrap items-center gap-4">
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
           <Button
             asChild
-            className="gap-2 rounded-none border-2 border-border bg-foreground text-background hover:bg-foreground/90 px-6 py-2.5 h-auto font-medium"
+            className="gap-2 rounded-none border-2 border-border bg-foreground text-background hover:bg-foreground/90 h-12 px-6 font-medium justify-center sm:h-auto sm:py-2.5 sm:w-auto"
           >
-            <Link href="/docs">
+            <Link href="https://docs.relic.so" target="_blank" rel="noopener noreferrer">
               Get Started <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
           </Button>
@@ -50,7 +50,7 @@ export function Hero() {
           <Button
             asChild
             variant="ghost"
-            className="group gap-2 rounded-none border-2 border-border bg-background text-foreground hover:bg-muted/50 px-6 py-2.5 h-auto font-medium"
+            className="group gap-2 rounded-none border-2 border-border bg-background text-foreground hover:bg-muted/50 h-12 px-6 font-medium justify-center sm:h-auto sm:py-2.5 sm:w-auto"
           >
             <Link
               href="https://github.com/heycupola/relic"

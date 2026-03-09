@@ -1,7 +1,7 @@
 {
   "name": "@repo/cli",
-  "version": "0.1.0",
-  "description": "Manage project secrets the way you want with Relic – securely store and share them with your team.",
+  "version": "1.0.0",
+  "description": "The Relic CLI for managing and sharing secrets. Encrypted on your device, never exposed to anyone else. Not even us.",
   "keywords": [
     "cli",
     "tui"

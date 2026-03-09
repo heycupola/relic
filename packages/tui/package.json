@@ -3,6 +3,7 @@
   "module": "index.tsx",
   "type": "module",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "start": "bun --hot ./index.tsx",
     "dev:tui": "DEV=true bun --hot ./index.tsx",

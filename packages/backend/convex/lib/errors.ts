@@ -83,7 +83,7 @@ const ERROR_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCode.PROJECTS_LIMIT_REACHED]: "Project limit reached",
   [ErrorCode.ENVIRONMENT_LIMIT_REACHED]: "Environment limit reached",
   [ErrorCode.PROJECT_SHARES_LIMIT_REACHED]: "Project share limit reached",
-  [ErrorCode.PRO_PLAN_REQUIRED]: "To perform this act, please get pro plan.",
+  [ErrorCode.PRO_PLAN_REQUIRED]: "API keys and CI/CD integration require a Pro plan.",
 
   // Duplicates
   [ErrorCode.RESOURCE_ALREADY_EXISTS]: "Resource already exists",
@@ -265,6 +265,8 @@ export function toHttpErrorResponse(error: unknown): Response {
   let code = ErrorCode.SERVER_ERROR;
   let message = "Internal server error";
 
+  let upgradeUrl: string | undefined;
+
   if (error instanceof ConvexError) {
     let errorData = error.data;
     while (typeof errorData === "string") {
@@ -278,6 +280,7 @@ export function toHttpErrorResponse(error: unknown): Response {
     if (typeof errorData === "object" && errorData !== null) {
       code = (errorData as { code?: ErrorCode }).code ?? ErrorCode.SERVER_ERROR;
       message = (errorData as { message?: string }).message ?? message;
+      upgradeUrl = (errorData as { upgradeUrl?: string }).upgradeUrl;
     }
   } else if (error instanceof Error) {
     message = error.message;
@@ -285,7 +288,12 @@ export function toHttpErrorResponse(error: unknown): Response {
 
   const status = HTTP_STATUS_MAP[code] ?? 500;
 
-  return new Response(JSON.stringify({ error: message, code }), {
+  const body: Record<string, string> = { error: message, code };
+  if (upgradeUrl) {
+    body.upgradeUrl = upgradeUrl;
+  }
+
+  return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json" },
   });

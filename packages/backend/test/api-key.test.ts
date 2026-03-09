@@ -1,7 +1,7 @@
 import { createProjectKey } from "@repo/crypto";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { api } from "../convex/_generated/api";
+import { api, components } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { API_KEY_PREFIX } from "../convex/lib/crypto";
 import { ErrorCode } from "../convex/lib/errors.ts";
@@ -42,6 +42,13 @@ describe("API Key Management", () => {
     testUsers = await getTestUsers(t);
     owner = testUsers[0]!;
     otherUser = testUsers[1]!;
+
+    await owner.asUser.mutation(components.betterAuth.user.upgradeToPro, {
+      userId: owner.userId,
+    });
+    await otherUser.asUser.mutation(components.betterAuth.user.upgradeToPro, {
+      userId: otherUser.userId,
+    });
   });
 
   afterEach(() => {
@@ -76,6 +83,19 @@ describe("API Key Management", () => {
       const keys = await owner.asUser.query(api.apiKey.listApiKeys, {});
       const createdKey = keys.find((k) => k.prefix === result.prefix);
       expect(createdKey?.expiresAt).toBe(expiresAt);
+    });
+
+    test("should reject API key creation for free users", async () => {
+      const freeUser = testUsers[2]!;
+
+      await expectConvexError(
+        () =>
+          freeUser.asUser.mutation(api.apiKey.createApiKey, {
+            name: "Should Fail",
+            scopes: ["secrets.read"],
+          }),
+        ErrorCode.PRO_PLAN_REQUIRED,
+      );
     });
 
     test("should reject empty name", async () => {
@@ -248,10 +268,7 @@ describe("API Key Management", () => {
       mockAutumn.setFeature(owner.userId, "projects", 2);
     });
 
-    async function exportViaHttp(
-      apiKey: string,
-      body: Record<string, unknown>,
-    ): Promise<Response> {
+    async function exportViaHttp(apiKey: string, body: Record<string, unknown>): Promise<Response> {
       return await t.fetch("/api/secrets/export", {
         method: "POST",
         headers: {
@@ -271,13 +288,10 @@ describe("API Key Management", () => {
       });
       const projectId = assertProjectCreated(projectResult);
 
-      const { id: environmentId } = await owner.asUser.mutation(
-        api.environment.createEnvironment,
-        {
-          name: "production",
-          projectId,
-        },
-      );
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "production",
+        projectId,
+      });
 
       for (let i = 0; i < 3; i++) {
         await owner.asUser.mutation(api.secret.createSecret, {
@@ -402,13 +416,10 @@ describe("API Key Management", () => {
       });
       const projectId = assertProjectCreated(projectResult);
 
-      const { id: environmentId } = await owner.asUser.mutation(
-        api.environment.createEnvironment,
-        {
-          name: "production",
-          projectId,
-        },
-      );
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "production",
+        projectId,
+      });
 
       await owner.asUser.mutation(api.secret.createSecret, {
         encryptedValue: "value",
@@ -435,6 +446,48 @@ describe("API Key Management", () => {
 
       const keysAfter = await owner.asUser.query(api.apiKey.listApiKeys, {});
       expect(keysAfter[0].lastUsedAt).toBeDefined();
+    });
+
+    test("should reject API key usage after downgrade to free plan", async () => {
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const projectResult = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+      const projectId = assertProjectCreated(projectResult);
+
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "production",
+        projectId,
+      });
+
+      await owner.asUser.mutation(api.secret.createSecret, {
+        encryptedValue: "value",
+        environmentId,
+        key: "KEY",
+        valueType: "string",
+        folderId: undefined,
+      });
+
+      const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
+        name: "Pre-downgrade Key",
+        scopes: ["secrets.read"],
+      });
+
+      await owner.asUser.mutation(components.betterAuth.user.downgradeToFree, {
+        userId: owner.userId,
+      });
+
+      const response = await exportViaHttp(apiKey, {
+        projectId,
+        environmentName: "production",
+      });
+
+      expect(response.status).toBe(402);
+      const result = await response.json();
+      expect(result.code).toBe("PRO_PLAN_REQUIRED");
+      expect(result.upgradeUrl).toBeDefined();
     });
 
     test("should not access another user's project with API key", async () => {
@@ -490,6 +543,24 @@ describe("API Key Management", () => {
       expect(result.encryptedPrivateKey).toBeDefined();
       expect(result.salt).toBeDefined();
       expect(result.publicKey).toBeDefined();
+    });
+
+    test("should reject user keys request after downgrade to free plan", async () => {
+      const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
+        name: "Pre-downgrade Keys Reader",
+        scopes: ["user.keys.read"],
+      });
+
+      await owner.asUser.mutation(components.betterAuth.user.downgradeToFree, {
+        userId: owner.userId,
+      });
+
+      const response = await fetchKeysViaHttp(apiKey);
+
+      expect(response.status).toBe(402);
+      const result = await response.json();
+      expect(result.code).toBe("PRO_PLAN_REQUIRED");
+      expect(result.upgradeUrl).toBeDefined();
     });
 
     test("should reject API key without user.keys.read scope", async () => {

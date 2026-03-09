@@ -58,6 +58,19 @@ export const createFolder = protectedMutation({
       },
     );
 
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      projectId: project._id,
+      projectName: project.name,
+      userId: ctx.userId,
+      action: "folder.created",
+      environmentId: environment._id,
+      environmentName: environment.name,
+      metadata: {
+        folderId,
+        folderName: args.name,
+      },
+    });
+
     return { id: folderId, path };
   },
 });
@@ -95,10 +108,27 @@ export const updateFolder = protectedMutation({
 
     await checkRateLimit(ctx, "write");
 
+    const environment = await ctx.runQuery(internal.environment._loadEnvironmentById, {
+      environmentId: folder.environmentId,
+    });
+
     await ctx.runMutation(internal.folder._updateFolder, {
       folderId: args.folderId,
       updates: {
         name: args.name,
+      },
+    });
+
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      projectId: project._id,
+      projectName: project.name,
+      userId: ctx.userId,
+      action: "folder.updated",
+      environmentId: folder.environmentId,
+      environmentName: environment.name,
+      metadata: {
+        folderId: args.folderId,
+        folderName: args.name ?? folder.name,
       },
     });
 
@@ -123,6 +153,10 @@ export const deleteFolder = protectedMutation({
 
     await checkRateLimit(ctx, "delete");
 
+    const environment = await ctx.runQuery(internal.environment._loadEnvironmentById, {
+      environmentId: folder.environmentId,
+    });
+
     const secrets = await ctx.runQuery(internal.secret._loadSecretsByFolderId, {
       folderId: args.folderId,
     });
@@ -137,6 +171,18 @@ export const deleteFolder = protectedMutation({
 
     await ctx.runMutation(internal.folder._deleteFolder, {
       folderId: args.folderId,
+    });
+
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      projectId: project._id,
+      projectName: project.name,
+      userId: ctx.userId,
+      action: "folder.deleted",
+      environmentId: folder.environmentId,
+      environmentName: environment.name,
+      metadata: {
+        folderName: folder.name,
+      },
     });
 
     return { success: true };

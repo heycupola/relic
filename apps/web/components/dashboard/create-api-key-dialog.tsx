@@ -3,9 +3,10 @@
 import { ApiKeyScope, api } from "@repo/backend";
 import { cn } from "@repo/ui/lib/utils";
 import { useMutation } from "convex/react";
-import { Check, Copy, X } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import { Dialog } from "@/components/dialog";
+import { Select } from "@/components/select";
 
 interface CreateApiKeyDialogProps {
   open: boolean;
@@ -14,6 +15,14 @@ interface CreateApiKeyDialogProps {
 }
 
 const MAX_KEYS = 5;
+
+const EXPIRATION_OPTIONS = [
+  { value: "", label: "No expiration" },
+  { value: "30", label: "30 days" },
+  { value: "60", label: "60 days" },
+  { value: "90", label: "90 days" },
+  { value: "365", label: "1 year" },
+];
 
 const AVAILABLE_SCOPES = [
   {
@@ -118,161 +127,136 @@ export function CreateApiKeyDialog({ open, onClose, activeKeyCount }: CreateApiK
       closeOnBackdrop={step !== "reveal"}
     >
       {step === "form" ? (
-        <>
-          <div className="flex items-center justify-between p-4 border-b-2 border-border">
-            <h2 className="text-sm font-semibold text-foreground">Create API Key</h2>
-            <button
-              type="button"
-              onClick={handleClose}
-              className="text-foreground/40 hover:text-foreground transition-colors"
-              aria-label="Close"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleCreate();
-            }}
-          >
-            <div className="p-4 space-y-4">
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="api-key-name"
-                  className="text-xs font-medium text-foreground/60 block"
-                >
-                  Name
-                </label>
-                <input
-                  id="api-key-name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. GitHub Actions"
-                  autoFocus
-                  className="w-full p-2.5 border border-border bg-transparent text-sm text-foreground placeholder:text-foreground/30 focus:border-foreground focus:outline-none transition-colors"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <p className="text-xs font-medium text-foreground/60">Permissions</p>
-                <div className="border border-border divide-y divide-border">
-                  {AVAILABLE_SCOPES.map((scope) => {
-                    const checked = selectedScopes.has(scope.id);
-                    return (
-                      <button
-                        key={scope.id}
-                        type="button"
-                        onClick={() => toggleScope(scope.id)}
-                        className="flex items-center gap-3 w-full p-3 text-left hover:bg-muted/50 transition-colors"
-                      >
-                        <div
-                          className={cn(
-                            "h-4 w-4 shrink-0 border-2 flex items-center justify-center transition-colors",
-                            checked
-                              ? "bg-foreground border-foreground"
-                              : "bg-transparent border-border",
-                          )}
-                        >
-                          {checked && <Check className="h-3 w-3 text-background" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <span className="text-sm text-foreground font-mono">{scope.label}</span>
-                          <p className="text-xs text-foreground/50 mt-0.5">{scope.description}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="api-key-expiration"
-                  className="text-xs font-medium text-foreground/60 block"
-                >
-                  Expiration
-                </label>
-                <select
-                  id="api-key-expiration"
-                  value={expiration}
-                  onChange={(e) => setExpiration(e.target.value)}
-                  className="w-full p-2.5 border border-border bg-background text-sm text-foreground focus:border-foreground focus:outline-none transition-colors cursor-pointer"
-                >
-                  <option value="">No expiration</option>
-                  <option value="30">30 days</option>
-                  <option value="60">60 days</option>
-                  <option value="90">90 days</option>
-                  <option value="365">1 year</option>
-                </select>
-              </div>
-
-              {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleCreate();
+          }}
+        >
+          <div className="p-5 space-y-4">
+            <div className="space-y-2">
+              <h3 className="text-base font-semibold text-foreground">Create API Key</h3>
+              <p className="text-sm text-foreground/70 leading-relaxed">
+                Generate a key to access your secrets programmatically via the API.
+              </p>
             </div>
 
-            <div className="flex items-center justify-end gap-2 p-4 border-t-2 border-border">
+            <div className="space-y-1.5">
+              <label htmlFor="api-key-name" className="text-sm text-foreground/70">
+                Name
+              </label>
+              <input
+                id="api-key-name"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. GitHub Actions"
+                autoFocus
+                autoComplete="off"
+                className="w-full p-2.5 border border-border bg-background text-sm text-foreground placeholder:text-foreground/30 focus:outline-none focus:border-foreground"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-sm text-foreground/70">Permissions</p>
+              <div className="border border-border divide-y divide-border">
+                {AVAILABLE_SCOPES.map((scope) => {
+                  const checked = selectedScopes.has(scope.id);
+                  return (
+                    <button
+                      key={scope.id}
+                      type="button"
+                      onClick={() => toggleScope(scope.id)}
+                      className="flex items-center gap-3 w-full p-3 text-left hover:bg-muted/50 transition-colors"
+                    >
+                      <div
+                        className={cn(
+                          "h-4 w-4 shrink-0 border-2 flex items-center justify-center transition-colors",
+                          checked
+                            ? "bg-foreground border-foreground"
+                            : "bg-transparent border-border",
+                        )}
+                      >
+                        {checked && <Check className="h-3 w-3 text-background" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-foreground font-mono">{scope.label}</span>
+                        <p className="text-xs text-foreground/50 mt-0.5">{scope.description}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-sm text-foreground/70">Expiration</p>
+              <Select
+                id="api-key-expiration"
+                value={expiration}
+                onChange={setExpiration}
+                options={EXPIRATION_OPTIONS}
+              />
+            </div>
+
+            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+
+            <div className="flex gap-3 pt-1">
               <button
                 type="button"
                 onClick={handleClose}
-                className="px-4 py-2 text-sm text-foreground/60 hover:text-foreground transition-colors"
+                disabled={isCreating}
+                className="flex-1 p-2.5 border border-border text-sm text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={!canCreate || isCreating}
-                className="px-4 py-2 text-sm font-medium border-2 border-foreground bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 p-2.5 border border-border bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isCreating ? "Creating…" : "Create Key"}
+                {isCreating ? "Creating…" : "Create key"}
               </button>
             </div>
-          </form>
-        </>
+          </div>
+        </form>
       ) : (
-        <>
-          <div className="p-4 border-b-2 border-border">
-            <h2 className="text-sm font-semibold text-foreground">API Key Created</h2>
+        <div className="p-5 space-y-4">
+          <div className="space-y-2">
+            <h3 className="text-base font-semibold text-foreground">API Key Created</h3>
+            <p className="text-sm text-foreground/70 leading-relaxed">
+              Copy this key now. It will only be shown once and cannot be retrieved later.
+            </p>
           </div>
 
-          <div className="p-4 space-y-4">
-            <div className="flex items-start gap-2 p-3 border border-yellow-600/30 bg-yellow-600/5">
-              <span className="text-yellow-600 dark:text-yellow-400 text-xs shrink-0">⚠</span>
-              <p className="text-xs text-yellow-600 dark:text-yellow-400 leading-relaxed">
-                Copy this key now. It will only be shown once and cannot be retrieved later.
-              </p>
+          <div className="relative">
+            <div className="p-3 border border-border bg-muted/30 font-mono text-xs text-foreground break-all pr-10 leading-relaxed select-all">
+              {createdKey}
             </div>
-
-            <div className="relative">
-              <div className="p-3 border border-border bg-muted/30 font-mono text-xs text-foreground break-all pr-10 leading-relaxed select-all">
-                {createdKey}
-              </div>
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="absolute top-2.5 right-2.5 p-1 text-foreground/40 hover:text-foreground transition-colors"
-                aria-label={copied ? "Copied" : "Copy to clipboard"}
-              >
-                {copied ? (
-                  <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="absolute top-2.5 right-2.5 p-1 text-foreground/40 hover:text-foreground transition-colors"
+              aria-label={copied ? "Copied" : "Copy to clipboard"}
+            >
+              {copied ? (
+                <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+            </button>
           </div>
 
-          <div className="flex items-center justify-end p-4 border-t-2 border-border">
+          <div className="flex gap-3 pt-1">
             <button
               type="button"
               onClick={handleClose}
-              className="px-4 py-2 text-sm font-medium border-2 border-foreground bg-foreground text-background hover:bg-foreground/90 transition-colors"
+              className="flex-1 p-2.5 border border-border bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors"
             >
               Done
             </button>
           </div>
-        </>
+        </div>
       )}
     </Dialog>
   );

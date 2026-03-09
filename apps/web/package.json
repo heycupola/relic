@@ -3,37 +3,50 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
+  "license": "MIT",
   "scripts": {
-    "dev": "next dev --turbopack --port 3000",
-    "build": "next build",
-    "start": "next start",
+    "dev": "NODE_ENV=development && vinext dev --port 3000",
+    "build": "vinext build",
+    "start": "vinext start",
     "lint": "biome check --write .",
     "format": "biome format --write .",
-    "check-types": "tsc --noEmit --project tsconfig.check.json"
+    "check-types": "tsc --noEmit --project tsconfig.check.json",
+    "check": "vinext check",
+    "sync:changelog": "bun run scripts/sync-changelog.ts",
+    "predeploy": "cp worker-entry.ts dist/worker-entry.js",
+    "deploy": "bunx vinext build && bun run predeploy && bunx wrangler deploy"
   },
   "dependencies": {
     "@convex-dev/better-auth": "catalog:",
+    "@mdx-js/mdx": "^3.1.1",
     "@repo/backend": "*",
     "@repo/ui": "*",
     "@tailwindcss/postcss": "catalog:",
     "autumn-js": "catalog:",
     "better-auth": "catalog:",
     "convex": "catalog:",
+    "gray-matter": "^4.0.3",
     "lucide-react": "^0.546.0",
-    "next": "^15.5.7",
-    "next-themes": "^0.4.6",
     "postcss": "catalog:",
     "posthog-js": "^1.352.0",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "remark-gfm": "^4.0.1",
     "tailwindcss": "catalog:"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.26.0",
     "@repo/typescript-config": "*",
     "@types/node": "^22.15.3",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-rsc": "^0.5.21",
+    "agentation": "^2.2.1",
+    "react-server-dom-webpack": "^19.2.4",
     "tw-animate-css": "catalog:",
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "vinext": "^0.0.19",
+    "vite": "^7.3.1",
+    "wrangler": "^4.70.0"
   }
 }

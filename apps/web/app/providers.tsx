@@ -5,10 +5,13 @@ import { api } from "@repo/backend";
 import { AutumnProvider } from "autumn-js/react";
 import { ConvexReactClient, useQuery } from "convex/react";
 import { usePathname, useRouter } from "next/navigation";
-import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from "next-themes";
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { CookieConsentBanner } from "@/components/cookie-consent-banner";
 import { authClient } from "@/lib/auth";
+import { getCookieValue } from "@/lib/cookies";
 import { initPostHog } from "@/lib/posthog";
+
+const CONSENT_KEY = "relic-cookie-consent";
 
 const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
 
@@ -21,10 +24,35 @@ const convex = new ConvexReactClient(convexUrl, {
 });
 
 export function PostHogProvider({ children }: { children: ReactNode }) {
+  const [ready, setReady] = useState(false);
+
   useEffect(() => {
+    const geo = getCookieValue("relic-geo");
+    const requiresConsent = geo === "eu" || geo == null;
+
+    if (!requiresConsent) {
+      initPostHog();
+      setReady(true);
+      return;
+    }
+
+    const consent = localStorage.getItem(CONSENT_KEY);
+    if (consent === "accepted") {
+      initPostHog();
+    }
+    setReady(true);
+  }, []);
+
+  const handleAccept = useCallback(() => {
     initPostHog();
   }, []);
-  return <>{children}</>;
+
+  return (
+    <>
+      {children}
+      {ready && <CookieConsentBanner onAccept={handleAccept} />}
+    </>
+  );
 }
 
 const ONBOARDING_GATED_PATHS = ["/dashboard", "/terms-of-service", "/privacy-policy"];
@@ -69,6 +97,25 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  return <NextThemesProvider {...props}>{children}</NextThemesProvider>;
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    const applyTheme = (isDark: boolean) => {
+      document.documentElement.classList.toggle("dark", isDark);
+    };
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    applyTheme(mediaQuery.matches);
+
+    const handleThemeChange = (event: MediaQueryListEvent) => {
+      applyTheme(event.matches);
+    };
+
+    mediaQuery.addEventListener("change", handleThemeChange);
+
+    return () => {
+      mediaQuery.removeEventListener("change", handleThemeChange);
+    };
+  }, []);
+
+  return <>{children}</>;
 }

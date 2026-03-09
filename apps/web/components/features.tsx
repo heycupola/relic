@@ -7,7 +7,7 @@ interface VideoFeature {
   title: string;
   badge: "Free" | "Pro";
   description: string;
-  video: string;
+  videoSrc: string;
 }
 
 interface CompactFeature {
@@ -21,21 +21,21 @@ const videoFeatures: VideoFeature[] = [
     title: "Built-in Secret Editor",
     badge: "Free",
     description: "Paste your .env file or edit secrets directly in the TUI. No context switching.",
-    video: "/videos/feature-secret-editor.mp4",
+    videoSrc: "/videos/demo.mp4",
   },
   {
     title: "Collaboration",
     badge: "Pro",
     description:
       "Share projects with your team via email. Each person gets their own encryption keys.",
-    video: "/videos/feature-collaboration.mp4",
+    videoSrc: "/videos/demo.mp4",
   },
   {
     title: "Run Anywhere",
     badge: "Free",
     description:
       "Inject secrets into any process with API keys. Works in GitHub Actions, GitLab CI, and more.",
-    video: "/videos/feature-cicd.mp4",
+    videoSrc: "/videos/demo.mp4",
   },
 ];
 
@@ -68,20 +68,28 @@ const compactFeatures: CompactFeature[] = [
 function VideoCard({ feature }: { feature: VideoFeature }) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  const handleMouseEnter = () => {
-    videoRef.current?.play();
+  const playVideo = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    try {
+      await video.play();
+    } catch {
+      // Ignore autoplay blocking edge cases on unsupported browsers.
+    }
   };
 
-  const handleMouseLeave = () => {
-    if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.currentTime = 0;
-    }
+  const resetVideo = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.pause();
+    video.currentTime = 0;
   };
 
   return (
     <div className="border-2 border-border bg-card flex flex-col hover:border-foreground/30 transition-colors">
-      <div className="p-5 flex-1">
+      <div className="p-4 flex-1 sm:p-5">
         <div className="flex items-center justify-between gap-2">
           <h3 className="font-semibold text-foreground">{feature.title}</h3>
           <span
@@ -96,26 +104,35 @@ function VideoCard({ feature }: { feature: VideoFeature }) {
         </div>
         <p className="mt-2 text-sm text-foreground/60 text-pretty">{feature.description}</p>
       </div>
-      <div className="border-t-2 border-border bg-muted/20">
+      <button
+        type="button"
+        className="group relative w-full border-t-2 border-border bg-muted/20"
+        aria-label={`${feature.title} preview. Hover or focus to play.`}
+        onMouseEnter={playVideo}
+        onMouseLeave={resetVideo}
+        onFocus={playVideo}
+        onBlur={resetVideo}
+      >
         <video
           ref={videoRef}
-          src={feature.video}
+          src={feature.videoSrc}
+          title={feature.title}
           muted
-          loop
           playsInline
           preload="metadata"
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
           className="w-full aspect-video object-cover"
         />
-      </div>
+        <span className="pointer-events-none absolute bottom-3 right-3 border border-white/15 bg-black/75 px-2 py-1 text-[11px] font-medium text-white/80 backdrop-blur-sm transition-colors group-hover:border-white/25 group-hover:text-white">
+          Hover to play
+        </span>
+      </button>
     </div>
   );
 }
 
 function CompactCard({ feature }: { feature: CompactFeature }) {
   return (
-    <div className="border-2 border-border bg-card p-5 hover:border-foreground/30 transition-colors">
+    <div className="border-2 border-border bg-card p-4 hover:border-foreground/30 transition-colors sm:p-5">
       <span className="font-mono text-xs text-electric-ink">{feature.keyword}</span>
       <h3 className="mt-1.5 font-semibold text-foreground text-sm">{feature.title}</h3>
       <p className="mt-2 text-sm text-foreground/60 text-pretty">{feature.description}</p>
@@ -126,19 +143,19 @@ function CompactCard({ feature }: { feature: CompactFeature }) {
 export function Features() {
   return (
     <SectionWrapper label="Features" id="features">
-      <div className="mx-auto max-w-6xl px-6 py-16 lg:px-12">
-        <h2 className="text-2xl font-semibold text-foreground">Features</h2>
-        <p className="mt-2 max-w-2xl text-foreground/60 text-pretty">
+      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-12">
+        <h2 className="text-xl font-semibold text-foreground sm:text-2xl">Features</h2>
+        <p className="mt-2 max-w-2xl text-sm text-foreground/60 text-pretty sm:text-base">
           Everything you need to manage secrets, from editing to sharing to deployment.
         </p>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-6 grid grid-cols-1 gap-3 sm:mt-8 sm:gap-4 md:grid-cols-2 lg:grid-cols-3">
           {videoFeatures.map((feature) => (
             <VideoCard key={feature.title} feature={feature} />
           ))}
         </div>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:mt-4 sm:gap-4 lg:grid-cols-4">
           {compactFeatures.map((feature) => (
             <CompactCard key={feature.keyword} feature={feature} />
           ))}

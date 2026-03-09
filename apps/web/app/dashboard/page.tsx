@@ -166,11 +166,11 @@ export default function DashboardPage() {
       </Suspense>
       <div className="flex flex-col min-h-dvh">
         <Header showLogout />
-        <main className="mx-auto max-w-6xl px-6 py-8 lg:px-12 flex-1 w-full">
+        <main className="mx-auto max-w-6xl px-4 py-6 flex-1 w-full sm:px-6 sm:py-8 lg:px-12">
           <div className="sr-only" role="alert" aria-live="assertive" aria-atomic="true">
             {upgradeError}
           </div>
-          <div className="space-y-5">
+          <div className="space-y-4 sm:space-y-5">
             {isOverProjectLimit && (
               <StatusBox variant="warning">
                 <h3 className="font-medium text-foreground text-sm">Usage limit exceeded</h3>
@@ -183,7 +183,7 @@ export default function DashboardPage() {
             )}
 
             {/* Top row - User Info and Projects */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-2">
               <UserInfoCard
                 name={userData?.name || "User"}
                 email={userData?.email || ""}
@@ -199,7 +199,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Bottom row - Quick Actions and Activity Logs */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-2">
               <QuickActionsCard />
               <ActivityLogsCard
                 logs={actionLogs}
@@ -210,7 +210,11 @@ export default function DashboardPage() {
               />
             </div>
 
-            <ApiKeysCard apiKeys={apiKeysData ?? []} isLoading={apiKeysData === undefined} />
+            <ApiKeysCard
+              apiKeys={apiKeysData ?? []}
+              isLoading={apiKeysData === undefined}
+              hasPro={userData?.hasPro || false}
+            />
           </div>
         </main>
         <Footer />

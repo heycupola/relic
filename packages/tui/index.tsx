@@ -1,6 +1,13 @@
-import { initLogger, trackEvent } from "@repo/logger";
+import { initLogger, isFirstRun, saveTelemetryPreference, trackEvent } from "@repo/logger";
 
 await initLogger();
+
+if (isFirstRun()) {
+  console.log(
+    "Relic collects anonymous usage data to improve the product. Run `relic telemetry disable` to opt out.",
+  );
+  saveTelemetryPreference(true);
+}
 
 if (process.env.DEV === "true") {
   try {
