@@ -8,6 +8,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { CookieConsentBanner } from "@/components/cookie-consent-banner";
 import { authClient } from "@/lib/auth";
+import { getCookieValue } from "@/lib/cookies";
 import { initPostHog } from "@/lib/posthog";
 
 const CONSENT_KEY = "relic-cookie-consent";
@@ -21,12 +22,6 @@ if (!convexUrl) {
 const convex = new ConvexReactClient(convexUrl, {
   expectAuth: true,
 });
-
-function getCookieValue(name: string): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : null;
-}
 
 export function PostHogProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
