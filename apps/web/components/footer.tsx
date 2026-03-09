@@ -1,3 +1,4 @@
+import { ShieldCheck } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -32,25 +33,15 @@ function CcpaBadge() {
   return (
     <Link
       href="/privacy-policy#ccpa"
-      className="group inline-flex items-center gap-2 border-2 border-border px-3 py-1.5 transition-colors hover:border-foreground/30"
+      className="group inline-flex items-center gap-1.5 transition-colors"
       title="CCPA Compliant"
     >
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="square"
-        strokeLinejoin="miter"
-        className="text-muted-foreground/40 group-hover:text-foreground/60 transition-colors"
+      <ShieldCheck
+        size={18}
+        className="shrink-0 text-muted-foreground/60 group-hover:text-foreground/80 transition-colors"
         aria-hidden="true"
-      >
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-        <path d="m9 12 2 2 4-4" />
-      </svg>
-      <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-muted-foreground/40 group-hover:text-foreground/60 transition-colors">
+      />
+      <span className="text-[13px] leading-none font-medium text-muted-foreground/60 group-hover:text-foreground/80 transition-colors">
         CCPA
       </span>
     </Link>
@@ -61,35 +52,20 @@ function GdprBadge() {
   return (
     <Link
       href="/privacy-policy#gdpr"
-      className="group inline-flex items-center gap-2 border-2 border-border px-3 py-1.5 transition-colors hover:border-foreground/30"
+      className="group inline-flex items-center gap-1.5 transition-colors"
       title="GDPR Compliant"
     >
       <svg
-        width="14"
-        height="14"
+        width="18"
+        height="18"
         viewBox="0 0 24 24"
-        fill="none"
-        className="text-muted-foreground/40 group-hover:text-foreground/60 transition-colors"
+        fill="currentColor"
+        className="shrink-0 text-muted-foreground/60 group-hover:text-foreground/80 transition-colors"
         aria-hidden="true"
       >
-        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
-        {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((angle) => {
-          const rad = (angle * Math.PI) / 180;
-          const x = 12 + 7 * Math.cos(rad);
-          const y = 12 + 7 * Math.sin(rad);
-          return (
-            <circle
-              key={angle}
-              cx={x.toFixed(1)}
-              cy={y.toFixed(1)}
-              r="1.2"
-              fill="currentColor"
-              stroke="none"
-            />
-          );
-        })}
+        <path d="M11.373 1.94 10.36 1.2h1.253L12 0l.387 1.2h1.253l-1.013.74.386 1.207L12 2.4l-1.013.747Zm1.254 20.86.386 1.2L12 23.26l-1.013.74.386-1.2-1.013-.74h1.253L12 20.853l.387 1.207h1.253ZM1.64 12.8l-1.013.747.386-1.2L0 11.627h1.253l.387-1.2.387 1.2h1.26l-1.02.746.386 1.2-1.013-.746Zm5.807-9.467.386 1.2L6.82 3.8l-1.013.74.386-1.2L5.18 2.6h1.253l.387-1.2.387 1.2H8.46Zm-4.78 3.08.386-1.2.394 1.2h1.22l-1.014.747.387 1.2-1.02-.747L2 8.36l.387-1.2-1.014-.747ZM1.387 16.84h1.28l.386-1.2.394 1.2h1.22l-1.014.747.387 1.2-1.02-.74-1.02.74.387-1.2-1.014-.747Zm4.806 4.56-1.013-.733h1.253l.387-1.2.387 1.2H8.46l-1.013.733.386 1.2-1.013-.74-1.013.74Zm16.794-9.027.386 1.2-1.013-.746-1.027.746.387-1.2-1.02-.746H22l.387-1.2.386 1.2H24Zm-6.434-9.04L15.54 2.6h1.253l.387-1.2.387 1.2h1.253l-1.013.733.386 1.2L17.18 3.8l-1.013.74.386-1.2Zm4 3.074.394-1.2.386 1.2h1.254l-.987.753.387 1.2-1.014-.747-1.02.747.387-1.2-1.007-.747Zm.78 10.433h1.254l-.987.747.387 1.2-1.014-.74-1.02.74.387-1.2-1.007-.747h1.254l.393-1.2.387 1.2zm-2.513 3.827-1.013.733.386 1.2-1.013-.74-1.013.74.386-1.2-1.013-.733h1.253l.387-1.2.387 1.2z" />
       </svg>
-      <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-muted-foreground/40 group-hover:text-foreground/60 transition-colors">
+      <span className="text-[13px] leading-none font-medium text-muted-foreground/60 group-hover:text-foreground/80 transition-colors">
         GDPR
       </span>
     </Link>
@@ -102,7 +78,7 @@ export function Footer() {
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-12">
         <div className="grid grid-cols-2 gap-8 py-10 sm:grid-cols-4 sm:py-12">
           <div className="space-y-4">
-            <h4 className="text-xs font-semibold tracking-[0.15em] uppercase text-foreground/40">
+            <h4 className="text-xs font-semibold tracking-[0.15em] uppercase text-foreground/60">
               Product
             </h4>
             <nav className="flex flex-col gap-2.5">
@@ -121,7 +97,7 @@ export function Footer() {
           </div>
 
           <div className="space-y-4">
-            <h4 className="text-xs font-semibold tracking-[0.15em] uppercase text-foreground/40">
+            <h4 className="text-xs font-semibold tracking-[0.15em] uppercase text-foreground/60">
               Legal
             </h4>
             <nav className="flex flex-col gap-2.5">
@@ -138,7 +114,7 @@ export function Footer() {
           </div>
 
           <div className="space-y-4">
-            <h4 className="text-xs font-semibold tracking-[0.15em] uppercase text-foreground/40">
+            <h4 className="text-xs font-semibold tracking-[0.15em] uppercase text-foreground/60">
               Community
             </h4>
             <nav className="flex flex-col gap-2.5">
@@ -157,7 +133,7 @@ export function Footer() {
           </div>
 
           <div className="space-y-4">
-            <h4 className="text-xs font-semibold tracking-[0.15em] uppercase text-foreground/40">
+            <h4 className="text-xs font-semibold tracking-[0.15em] uppercase text-foreground/60">
               Support
             </h4>
             <nav className="flex flex-col gap-2.5">
@@ -174,14 +150,14 @@ export function Footer() {
         <div className="py-6 sm:py-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
-              <span className="text-[13px] text-muted-foreground/50">
+              <span className="text-[13px] text-muted-foreground/70">
                 © {new Date().getFullYear()} relic
               </span>
               <a
                 href="https://cupo.la"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group inline-flex items-center gap-2 text-[13px] text-muted-foreground/50 transition-colors hover:text-foreground"
+                className="group inline-flex items-center gap-2 text-[13px] text-muted-foreground/70 transition-colors hover:text-foreground"
               >
                 <span>Built by</span>
                 <Image
@@ -201,7 +177,7 @@ export function Footer() {
               </a>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-5">
               <CcpaBadge />
               <GdprBadge />
             </div>
