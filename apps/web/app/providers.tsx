@@ -104,31 +104,15 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
-    const themeStorageKey = "relic-theme";
-    const getTheme = () => {
-      const storedTheme = localStorage.getItem(themeStorageKey);
-      if (storedTheme === "dark" || storedTheme === "light") {
-        return storedTheme;
-      }
-
-      if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-        return "dark";
-      }
-
-      return "light";
-    };
-
-    const applyTheme = (nextTheme: string) => {
-      const isDark = nextTheme === "dark";
+    const applyTheme = (isDark: boolean) => {
       document.documentElement.classList.toggle("dark", isDark);
     };
 
-    const theme = getTheme();
-    applyTheme(theme);
-
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    applyTheme(mediaQuery.matches);
+
     const handleThemeChange = (event: MediaQueryListEvent) => {
-      applyTheme(event.matches ? "dark" : "light");
+      applyTheme(event.matches);
     };
 
     mediaQuery.addEventListener("change", handleThemeChange);
