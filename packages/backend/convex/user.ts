@@ -444,6 +444,26 @@ export const _cascadeDeleteUserData = internalMutation({
       });
     }
 
+    const sharedProjectIds = [...new Set(sharedWithMe.map((s) => s.projectId))];
+    for (const projectId of sharedProjectIds) {
+      const projectLogs = await ctx.db
+        .query("actionLog")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect();
+
+      for (const logEntry of projectLogs) {
+        if (logEntry.metadata?.sharedUserId === args.userId) {
+          await ctx.db.patch(logEntry._id, {
+            metadata: {
+              ...logEntry.metadata,
+              sharedUserEmail: undefined,
+              sharedUserId: args.anonymousId,
+            },
+          });
+        }
+      }
+    }
+
     await ctx.db.insert("deletedAccount", {
       anonymousId: args.anonymousId,
       deletedAt: Date.now(),

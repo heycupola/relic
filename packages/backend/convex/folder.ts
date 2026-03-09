@@ -108,6 +108,10 @@ export const updateFolder = protectedMutation({
 
     await checkRateLimit(ctx, "write");
 
+    const environment = await ctx.runQuery(internal.environment._loadEnvironmentById, {
+      environmentId: folder.environmentId,
+    });
+
     await ctx.runMutation(internal.folder._updateFolder, {
       folderId: args.folderId,
       updates: {
@@ -121,6 +125,7 @@ export const updateFolder = protectedMutation({
       userId: ctx.userId,
       action: "folder.updated",
       environmentId: folder.environmentId,
+      environmentName: environment.name,
       metadata: {
         folderId: args.folderId,
         folderName: args.name ?? folder.name,
@@ -148,6 +153,10 @@ export const deleteFolder = protectedMutation({
 
     await checkRateLimit(ctx, "delete");
 
+    const environment = await ctx.runQuery(internal.environment._loadEnvironmentById, {
+      environmentId: folder.environmentId,
+    });
+
     const secrets = await ctx.runQuery(internal.secret._loadSecretsByFolderId, {
       folderId: args.folderId,
     });
@@ -170,6 +179,7 @@ export const deleteFolder = protectedMutation({
       userId: ctx.userId,
       action: "folder.deleted",
       environmentId: folder.environmentId,
+      environmentName: environment.name,
       metadata: {
         folderName: folder.name,
       },

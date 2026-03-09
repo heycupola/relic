@@ -236,9 +236,7 @@ export const deleteEnvironment = protectedMutation({
       projectName: project.name,
       userId: ctx.userId,
       action: "environment.deleted",
-      metadata: {
-        environmentName: environment.name,
-      },
+      environmentName: environment.name,
     });
 
     return { success: true };

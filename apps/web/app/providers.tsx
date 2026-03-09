@@ -28,9 +28,9 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const geo = getCookieValue("relic-geo");
-    const isEU = geo === "eu";
+    const requiresConsent = geo === "eu" || geo == null;
 
-    if (!isEU) {
+    if (!requiresConsent) {
       initPostHog();
       setReady(true);
       return;
