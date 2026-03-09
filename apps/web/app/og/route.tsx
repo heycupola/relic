@@ -18,36 +18,33 @@ export async function GET(request: NextRequest) {
 
   switch (type) {
     case "home":
-      return createOgImage({
+      return await createOgImage({
         eyebrow: "relic",
         title: SITE_SLOGAN,
         description: SITE_DESCRIPTION,
-        footer: "CLI  •  TUI  •  Encrypted on your device",
       });
     case "blog-index":
-      return createOgImage({
+      return await createOgImage({
         eyebrow: "Blog",
         title: BLOG_TITLE,
         description: BLOG_DESCRIPTION,
-        footer: "Product notes, design, and technical writing",
       });
     case "changelog-index":
-      return createOgImage({
+      return await createOgImage({
         eyebrow: "Changelog",
         title: CHANGELOG_TITLE,
         description: CHANGELOG_DESCRIPTION,
-        footer: "Shipping notes and release history",
       });
     case "blog-entry": {
       if (!slug) notFound();
       const post = await getBlogPostBySlug(slug);
       if (!post) notFound();
 
-      return createOgImage({
+      return await createOgImage({
         eyebrow: "Blog",
         title: post.title,
         description: post.description,
-        footer: `${post.formattedDate}  •  ${post.readingTimeText}`,
+        footer: `${post.formattedDate}  ·  ${post.readingTimeText}`,
       });
     }
     case "changelog-entry": {
@@ -55,11 +52,10 @@ export async function GET(request: NextRequest) {
       const entry = await getChangelogEntryBySlug(slug);
       if (!entry) notFound();
 
-      return createOgImage({
-        eyebrow: "Changelog",
-        title: entry.version,
-        description: entry.description,
-        footer: entry.formattedDate,
+      return await createOgImage({
+        eyebrow: `Changelog · ${entry.version}`,
+        title: entry.description,
+        description: entry.formattedDate,
       });
     }
     default:
