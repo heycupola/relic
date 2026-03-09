@@ -236,6 +236,7 @@ export const deleteEnvironment = protectedMutation({
       projectName: project.name,
       userId: ctx.userId,
       action: "environment.deleted",
+      environmentId: args.environmentId,
       environmentName: environment.name,
     });
 

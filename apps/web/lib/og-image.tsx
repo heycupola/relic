@@ -1,3 +1,5 @@
+import { ImageResponse } from "next/og";
+
 export const OG_IMAGE_SIZE = {
   width: 1200,
   height: 630,
@@ -10,45 +12,8 @@ interface OgImageOptions {
   footer?: string;
 }
 
-function escapeXml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
-}
-
-function wrapText(text: string, maxCharsPerLine: number): string[] {
-  const words = text.trim().split(/\s+/);
-  const lines: string[] = [];
-  let currentLine = "";
-
-  for (const word of words) {
-    const candidate = currentLine ? `${currentLine} ${word}` : word;
-    if (candidate.length > maxCharsPerLine && currentLine) {
-      lines.push(currentLine);
-      currentLine = word;
-    } else {
-      currentLine = candidate;
-    }
-  }
-
-  if (currentLine) {
-    lines.push(currentLine);
-  }
-
-  return lines;
-}
-
-function renderTextLines(lines: string[], x: number, lineHeight: number) {
-  return lines
-    .map(
-      (line, index) =>
-        `<tspan x="${x}" dy="${index === 0 ? 0 : lineHeight}">${escapeXml(line)}</tspan>`,
-    )
-    .join("");
-}
+const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="103 96 28 32" width="28" height="32"><path d="M103.125 128V96.1293H116.375V99.8788H118.474C119.523 98.5427 120.727 97.5732 122.086 96.9702C123.497 96.3232 125.221 96 127.256 96H130.875V102.012H126.751C124.606 102.012 122.89 102.617 121.605 103.829C120.32 105.001 119.678 106.846 119.678 109.364V128H103.125Z" fill="#0E0E0E"/></svg>`;
+const LOGO_DATA_URI = `data:image/svg+xml,${encodeURIComponent(LOGO_SVG)}`;
 
 export function createOgImage({
   eyebrow,
@@ -56,37 +21,115 @@ export function createOgImage({
   description,
   footer = "Encrypted on your device",
 }: OgImageOptions) {
-  const titleLines = wrapText(title, 24).slice(0, 4);
-  const titleBlockHeight = Math.max(1, titleLines.length) * 76;
-  const descriptionY = 210 + titleBlockHeight + 28;
-  const descriptionLines = wrapText(description, 52).slice(0, 3);
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${OG_IMAGE_SIZE.width}" height="${OG_IMAGE_SIZE.height}" viewBox="0 0 ${OG_IMAGE_SIZE.width} ${OG_IMAGE_SIZE.height}" fill="none">
-      <rect width="${OG_IMAGE_SIZE.width}" height="${OG_IMAGE_SIZE.height}" fill="#050505" />
-      <rect x="44" y="44" width="1112" height="542" fill="#050505" stroke="rgba(250,250,249,0.09)" />
-      <rect x="80" y="80" width="64" height="64" fill="#FAFAF9" />
-      <path d="M103.125 128V96.1293H116.375V99.8788H118.474C119.523 98.5427 120.727 97.5732 122.086 96.9702C123.497 96.3232 125.221 96 127.256 96H130.875V102.012H126.751C124.606 102.012 122.89 102.617 121.605 103.829C120.32 105.001 119.678 106.846 119.678 109.364V128H103.125Z" fill="#0E0E0E"/>
-      <text x="170" y="121" fill="rgba(250,250,249,0.52)" font-family="Inter, Arial, sans-serif" font-size="14" letter-spacing="4.8">${escapeXml(
-        eyebrow.toUpperCase(),
-      )}</text>
-      <text x="80" y="210" fill="#FAFAF9" font-family="Inter, Arial, sans-serif" font-size="68" font-weight="600" letter-spacing="-2.72">
-        ${renderTextLines(titleLines, 80, 76)}
-      </text>
-      <text x="80" y="${descriptionY}" fill="rgba(250,250,249,0.64)" font-family="Inter, Arial, sans-serif" font-size="28">
-        ${renderTextLines(descriptionLines, 80, 38)}
-      </text>
-      <line x1="80" y1="534" x2="1120" y2="534" stroke="rgba(250,250,249,0.09)" />
-      <text x="80" y="568" fill="rgba(250,250,249,0.42)" font-family="Inter, Arial, sans-serif" font-size="18" letter-spacing="4.2">relic</text>
-      <text x="1120" y="568" text-anchor="end" fill="rgba(250,250,249,0.42)" font-family="Inter, Arial, sans-serif" font-size="18">${escapeXml(
-        footer,
-      )}</text>
-    </svg>
-  `;
+  return new ImageResponse(
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        width: "100%",
+        height: "100%",
+        backgroundColor: "#050505",
+        padding: "44px",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          width: "100%",
+          height: "100%",
+          border: "1px solid rgba(250,250,249,0.09)",
+          padding: "36px",
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "64px",
+              height: "64px",
+              backgroundColor: "#FAFAF9",
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={LOGO_DATA_URI} width={28} height={32} alt="" />
+          </div>
+          <span
+            style={{
+              marginLeft: "26px",
+              color: "rgba(250,250,249,0.52)",
+              fontSize: "14px",
+              letterSpacing: "4.8px",
+              textTransform: "uppercase" as const,
+            }}
+          >
+            {eyebrow}
+          </span>
+        </div>
 
-  return new Response(svg, {
-    headers: {
-      "Content-Type": "image/svg+xml",
-      "Cache-Control": "public, max-age=0, must-revalidate",
-    },
-  });
+        <div
+          style={{
+            display: "flex",
+            color: "#FAFAF9",
+            fontSize: "68px",
+            fontWeight: 600,
+            letterSpacing: "-2.72px",
+            marginTop: "50px",
+            lineHeight: 1.12,
+            overflow: "hidden",
+            maxHeight: "310px",
+          }}
+        >
+          {title}
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            color: "rgba(250,250,249,0.64)",
+            fontSize: "28px",
+            marginTop: "28px",
+            lineHeight: 1.4,
+            overflow: "hidden",
+            maxHeight: "120px",
+          }}
+        >
+          {description}
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            marginTop: "auto",
+            borderTop: "1px solid rgba(250,250,249,0.09)",
+            paddingTop: "16px",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <span
+            style={{
+              color: "rgba(250,250,249,0.42)",
+              fontSize: "18px",
+              letterSpacing: "4.2px",
+            }}
+          >
+            relic
+          </span>
+          <span
+            style={{
+              color: "rgba(250,250,249,0.42)",
+              fontSize: "18px",
+            }}
+          >
+            {footer}
+          </span>
+        </div>
+      </div>
+    </div>,
+    { ...OG_IMAGE_SIZE },
+  );
 }
