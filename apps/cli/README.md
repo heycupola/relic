@@ -1,6 +1,6 @@
 # Relic CLI
 
-Zero-knowledge secret management for your projects.
+Zero-knowledge secret management CLI. Fetches encrypted secrets from the server, decrypts them locally, and injects them into the process environment.
 
 ## Installation
 
@@ -8,36 +8,74 @@ Zero-knowledge secret management for your projects.
 bun install
 ```
 
-## Usage
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `relic` | Launch the TUI (default) |
+| `relic login` | Authenticate via device code flow |
+| `relic logout` | Clear session, cached keys, and password |
+| `relic whoami` | Show current user (name, email, plan) |
+| `relic projects` | List projects with environments and folders |
+| `relic init` | Create `relic.toml` and `.relic/` directory |
+| `relic run` | Run a command with secrets injected |
+| `relic telemetry status` | Show telemetry status |
+| `relic telemetry enable` | Enable telemetry |
+| `relic telemetry disable` | Disable telemetry |
+
+### `relic run`
 
 ```bash
-# Authenticate
-relic login
-relic logout
-relic whoami
-
-# Projects
-relic projects
-relic init
-
-# Run with secrets
-relic run -e production -- npm run deploy
-relic run -e staging -f database -- ./migrate.sh
-
-# Filter by scope (client includes shared, server includes shared)
-relic run -e production -s client -- npm run build    # Client + shared secrets
-relic run -e production -s server -- npm start        # Server + shared secrets
-relic run -e production -f web -s client -- npm run build  # Folder + scope filter
-
-# Specify project ID explicitly
-relic run -e production -p <project_id> -- npm run deploy
+relic run -e <environment> [options] -- <command>
 ```
 
-## CI/CD Usage
+| Flag | Description |
+|------|-------------|
+| `-e, --environment` | Environment name (required) |
+| `-f, --folder` | Folder name |
+| `-s, --scope` | `client`, `server`, or `shared` |
+| `-p, --project` | Project ID (overrides `relic.toml`) |
 
-For CI/CD environments, use API keys instead of interactive login:
+```bash
+relic run -e production -- npm run deploy
+relic run -e staging -f database -- ./migrate.sh
+relic run -e production -s client -- npm run build
+```
 
-### Environment Variables
+## Configuration
+
+`relic.toml` in project root:
+
+```toml
+project_id = "<uuid>"
+```
+
+Created by `relic init`. The CLI walks up from the current directory to find it.
+
+## Runner (FFI)
+
+Secret injection uses a Rust binary (`packages/runner`) loaded via Bun FFI (`dlopen`). The runner:
+
+- Spawns the child process with a clean environment (`env_clear()`)
+- Injects only the decrypted secrets
+- Forwards signals (SIGTERM, SIGINT)
+- Uses `Zeroizing` for secret memory and disables core dumps
+
+Prebuilt binaries in `prebuilds/` for: `darwin-arm64`, `darwin-x64`, `linux-x64`, `win32-x64`.
+
+## Caching
+
+Local SQLite cache at `.relic/cache.db` (relative to `relic.toml` location). Used in session mode only; API key mode always fetches fresh data.
+
+**Cached data:** environment/folder ID mappings, encrypted secrets, encrypted project key.
+
+**Invalidation:** on each `relic run`, the CLI compares local `lastCachedAt` against the backend `updatedAt`. Stale cache triggers a fresh fetch. Key rotation invalidates all caches.
+
+Scope filtering (`--scope`) is applied locally against cached data.
+
+## CI/CD
+
+Use API keys instead of interactive login:
 
 | Variable | Description |
 |----------|-------------|
@@ -46,109 +84,43 @@ For CI/CD environments, use API keys instead of interactive login:
 | `RELIC_PROJECT_ID` | Project ID (optional if `relic.toml` exists) |
 | `CONVEX_SITE_URL` | Convex HTTP actions URL |
 
-### Creating an API Key
-
-```bash
-# Login locally first
-relic login
-
-# Create an API key (via TUI or future CLI command)
-# The key is shown once — store it in your CI secrets
-```
-
 ### GitHub Actions
 
 ```yaml
-name: Deploy
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Deploy with secrets
-        env:
-          RELIC_API_KEY: ${{ secrets.RELIC_API_KEY }}
-          RELIC_PASSWORD: ${{ secrets.RELIC_PASSWORD }}
-          RELIC_PROJECT_ID: ${{ secrets.RELIC_PROJECT_ID }}
-          CONVEX_URL: ${{ secrets.CONVEX_URL }}
-          CONVEX_SITE_URL: ${{ secrets.CONVEX_SITE_URL }}
-        run: bunx relic run -e production -- npm run deploy
+- name: Deploy with secrets
+  env:
+    RELIC_API_KEY: ${{ secrets.RELIC_API_KEY }}
+    RELIC_PASSWORD: ${{ secrets.RELIC_PASSWORD }}
+    RELIC_PROJECT_ID: ${{ secrets.RELIC_PROJECT_ID }}
+    CONVEX_URL: ${{ secrets.CONVEX_URL }}
+    CONVEX_SITE_URL: ${{ secrets.CONVEX_SITE_URL }}
+  run: bunx relic run -e production -- npm run deploy
 ```
 
-### GitLab CI
+## Structure
 
-```yaml
-deploy:
-  stage: deploy
-  script:
-    - bunx relic run -e production -- npm run deploy
-  variables:
-    RELIC_API_KEY: $RELIC_API_KEY
-    RELIC_PASSWORD: $RELIC_PASSWORD
-    RELIC_PROJECT_ID: $RELIC_PROJECT_ID
-    CONVEX_URL: $CONVEX_URL
-    CONVEX_SITE_URL: $CONVEX_SITE_URL
 ```
-
-### CircleCI
-
-```yaml
-version: 2.1
-
-jobs:
-  deploy:
-    docker:
-      - image: oven/bun:latest
-    steps:
-      - checkout
-      - run:
-          name: Deploy with secrets
-          command: bunx relic run -e production -- npm run deploy
-          environment:
-            RELIC_API_KEY: ${RELIC_API_KEY}
-            RELIC_PASSWORD: ${RELIC_PASSWORD}
-            RELIC_PROJECT_ID: ${RELIC_PROJECT_ID}
-            CONVEX_URL: ${CONVEX_URL}
-            CONVEX_SITE_URL: ${CONVEX_SITE_URL}
+├── index.ts            # Entry point (commander setup)
+├── commands/
+│   ├── init.ts         # relic init
+│   ├── login.ts        # relic login
+│   ├── logout.ts       # relic logout
+│   ├── whoami.ts       # relic whoami
+│   ├── projects.ts     # relic projects
+│   ├── run.ts          # relic run
+│   └── telemetry.ts    # relic telemetry
+├── lib/
+│   ├── api.ts          # Convex API client, secret export
+│   ├── config.ts       # relic.toml loading/saving
+│   ├── crypto.ts       # Secret decryption helpers
+│   └── types.ts        # SecretScope type
+├── ffi/
+│   ├── bridge.ts       # RunnerBridge FFI wrapper
+│   ├── helper.ts       # Library loading (dlopen)
+│   └── constants.ts    # URLs
+└── helpers/
+    └── cache.ts        # SQLite cache
 ```
-
-## Caching
-
-The CLI uses a local SQLite cache to avoid redundant API calls on repeated runs. The cache is stored at `~/.config/relic/relic.db`.
-
-Caching is only used in session mode (interactive login). API key mode always fetches fresh secrets from the server.
-
-### What is cached
-
-- **Environment/folder ID mappings** — resolves environment and folder names to their IDs locally.
-- **Encrypted secrets** — stores the encrypted secret payloads per environment/folder.
-- **Encrypted project key** — stores the project's encrypted key for decryption.
-- **User keys** — stores the user's encrypted private key and salt (separate DB).
-
-### How cache invalidation works
-
-1. On each `relic run`, the CLI checks if a cached environment ID exists for the given environment name.
-2. If found, it calls `getSecretsCacheValidation` on the backend, which returns the latest `updatedAt` timestamp for the environment/folder.
-3. If the local `lastCachedAt` is older than the backend's `updatedAt`, the cache is stale — the CLI fetches fresh secrets from the API and updates the cache.
-4. If the cache is valid, secrets are served locally with no API call.
-
-Key rotation (e.g., after revoking a collaborator's share) bumps `updatedAt` on all environments and folders via `_invalidateProjectCache`, which forces the CLI to re-fetch on the next run.
-
-### Scope filtering
-
-The cache always stores the **full** (unscoped) set of secrets. When `--scope` is provided, filtering happens locally against the cached data. This means a scoped run can still be served from cache without an extra API call.
 
 ## Development
 
