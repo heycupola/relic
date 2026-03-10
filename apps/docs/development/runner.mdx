@@ -1,6 +1,81 @@
 ---
 title: Runner
-description: Inject secrets as environment variables and run commands.
+description: How the Rust runner securely injects secrets into your processes.
 ---
 
-Use the Relic runner to inject secrets as environment variables into your commands.
+The runner is a Rust dynamic library that handles the final step of secret injection. When you run `relic run`, the CLI decrypts your secrets and passes them to the runner, which spawns your command in an isolated environment with those secrets as environment variables.
+
+The runner is written in Rust (compiled as a C-compatible dynamic library) because secret injection requires low-level control over process environments, memory, and signals that JavaScript runtimes do not provide.
+
+## How It Works
+
+<Steps>
+  <Step title="CLI prepares the data">
+    The CLI decrypts secrets and serializes them as JSON along with the command to run.
+  </Step>
+  <Step title="FFI call">
+    The CLI calls the runner's `run_with_secrets` function via Bun's `dlopen` FFI. Two null-terminated C strings are passed: the command and the secrets.
+  </Step>
+  <Step title="Environment setup">
+    On Unix, the runner clears the child process environment entirely, then re-adds only essential system variables (`PATH`, `HOME`, `USER`, `SHELL`, `TERM`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR`, `TZ`). Secrets are injected on top.
+  </Step>
+  <Step title="Process spawn">
+    The child process is spawned with the clean environment. The runner forwards SIGTERM and SIGINT so your process can shut down gracefully.
+  </Step>
+  <Step title="Cleanup">
+    After the child exits, secret values are zeroed in memory (via `Zeroizing`). The TypeScript side also zeroes its buffers.
+  </Step>
+</Steps>
+
+## Security Measures
+
+| Protection | How |
+|------------|-----|
+| Memory zeroing | Secret values wrapped in `Zeroizing<String>`, wiped on drop |
+| Core dump prevention | `RLIMIT_CORE` set to zero on Unix |
+| Environment isolation | `env_clear()` with system variable allowlist (Unix) |
+| Signal forwarding | SIGTERM/SIGINT relayed to child via `AtomicU32` PID |
+| Key validation | Rejects empty keys, null bytes, and `=` in key names |
+| Buffer clearing | TypeScript buffers zeroed in `finally` block after FFI call |
+
+## Platform Support
+
+| Feature | Unix | Windows |
+|---------|------|---------|
+| Environment clearing | Yes (allowlist) | No (full inherit) |
+| Core dump prevention | Yes | No |
+| Signal forwarding | Yes | No |
+| Secret injection | Yes | Yes |
+| Memory zeroing | Yes | Yes |
+
+<Note>
+  Windows support is limited. The child process inherits the full parent environment instead of starting clean. Full Windows support with an environment allowlist is planned.
+</Note>
+
+## Prebuilt Binaries
+
+The runner is compiled as a C-compatible dynamic library (`cdylib`):
+
+| Platform | Binary |
+|----------|--------|
+| macOS (Apple Silicon) | `librelic_runner.dylib` |
+| macOS (Intel) | `librelic_runner.dylib` |
+| Linux (x64) | `librelic_runner.so` |
+| Windows (x64) | `relic_runner.dll` |
+
+Prebuilt binaries ship in `apps/cli/prebuilds/<platform>/`. In development, the CLI loads from `packages/runner/target/release/`.
+
+## Building from Source
+
+```bash
+cd packages/runner
+cargo build --release
+```
+
+The compiled library will be at `target/release/librelic_runner.dylib` (macOS) or `target/release/librelic_runner.so` (Linux).
+
+```bash
+cargo test           # Run tests
+cargo clippy         # Lint
+cargo fmt --check    # Format check
+```

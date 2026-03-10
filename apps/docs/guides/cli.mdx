@@ -1,6 +1,143 @@
 ---
 title: CLI
-description: Getting started with the Relic command-line interface.
+description: Command reference and usage for the Relic CLI.
 ---
 
-The Relic CLI lets you manage secrets directly from your terminal.
+The Relic CLI handles authentication, project initialization, and secret injection. For interactive secret management, use the [TUI](/guides/tui).
+
+## Commands
+
+### `relic`
+
+Opens the TUI. This is the default command when no arguments are provided.
+
+```bash
+relic
+```
+
+### `relic login`
+
+Authenticate via device authorization. A browser window opens for you to sign in with Google or GitHub.
+
+```bash
+relic login
+```
+
+### `relic logout`
+
+Clear your session, cached encryption keys, and stored password.
+
+```bash
+relic logout
+```
+
+### `relic whoami`
+
+Show the currently authenticated user.
+
+```bash
+relic whoami
+```
+
+### `relic projects`
+
+List all projects you own or have been shared with, including their environments and folders.
+
+```bash
+relic projects
+```
+
+### `relic init`
+
+Initialize Relic in the current project. Creates `relic.toml` and `.relic/` directory.
+
+```bash
+relic init
+```
+
+Run this at the root of the project where you want to inject secrets.
+
+<Info>
+  Add `.relic/` to your `.gitignore`. See [Introduction](/introduction#initialize-your-project) for details.
+</Info>
+
+### `relic run`
+
+Run a command with secrets injected as environment variables.
+
+```bash
+relic run -e <environment> [options] -- <command>
+```
+
+| Flag | Description |
+|------|-------------|
+| `-e, --environment` | Environment name (required) |
+| `-f, --folder` | Folder name |
+| `-s, --scope` | Scope filter: `client`, `server`, or `shared` |
+| `-p, --project` | Project ID (overrides `relic.toml`) |
+
+**Examples:**
+
+```bash
+relic run -e development -- bun run dev
+relic run -e production -- npm run deploy
+relic run -e staging -f database -- ./migrate.sh
+relic run -e production -s client -- npm run build
+```
+
+### `relic telemetry`
+
+Manage anonymous usage telemetry.
+
+```bash
+relic telemetry status     # Show current status
+relic telemetry enable     # Enable telemetry
+relic telemetry disable    # Disable telemetry
+```
+
+See [Telemetry](/configuration/telemetry) for details on what is collected.
+
+## Configuration File
+
+`relic.toml` is created by `relic init` at your project root:
+
+```toml
+project_id = "your-project-id"
+```
+
+The CLI walks up from the current directory to find `relic.toml`. You can override the project ID with `--project` or `RELIC_PROJECT_ID`.
+
+## Caching
+
+The CLI caches data locally at `.relic/cache.db` (relative to `relic.toml`) to reduce API calls.
+
+- **Session mode**: Cache is used. Validated against the server's `updatedAt` timestamp on each run.
+- **API key mode**: Cache is not used. Secrets are always fetched fresh.
+- **Scope filtering** (`--scope`): Applied locally against cached data. No extra API call needed.
+
+To clear the cache, delete `.relic/cache.db`. The next run will fetch fresh data.
+
+## CI/CD
+
+For non-interactive environments, use API keys instead of `relic login`.
+
+```bash
+RELIC_API_KEY=relic_...
+RELIC_PASSWORD=...
+RELIC_PROJECT_ID=...          # optional if relic.toml exists
+
+relic run -e production -- npm run deploy
+```
+
+### GitHub Actions
+
+```yaml
+- name: Deploy with secrets
+  env:
+    RELIC_API_KEY: ${{ secrets.RELIC_API_KEY }}
+    RELIC_PASSWORD: ${{ secrets.RELIC_PASSWORD }}
+    RELIC_PROJECT_ID: ${{ secrets.RELIC_PROJECT_ID }}
+  run: relic run -e production -- npm run deploy
+```
+
+See [Environment Variables](/reference/environment-variables) for the full list.

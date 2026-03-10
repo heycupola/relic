@@ -1,6 +1,126 @@
 ---
 title: Telemetry
-description: Manage anonymous telemetry settings.
+description: What Relic collects, where it sends data, and how to opt out.
 ---
 
-Configure anonymous telemetry collection in Relic.
+Relic collects anonymous usage telemetry to help us understand how the product is used and where to improve it. Telemetry is entirely optional and can be disabled at any time.
+
+<Note>
+  No secrets, project names, environment names, or personal data are ever collected.
+</Note>
+
+## What Is Collected
+
+### CLI & TUI (Server-Side)
+
+The CLI and TUI send anonymous events through a first-party telemetry proxy (`telemetry.relic.so`) to PostHog.
+
+**Events collected:**
+
+| Event | When |
+|-------|------|
+| `cli_login_started` / `cli_login_completed` | User logs in via CLI |
+| `cli_logout` | User logs out |
+| `cli_run_started` / `cli_run_completed` | Secret injection run (success/failure, duration) |
+| `cli_project_initialized` | `relic init` is run |
+| `cli_command_executed` | `whoami` or `projects` command used |
+| `tui_launched` | TUI is opened |
+| `tui_page_viewed` | A page is viewed in the TUI |
+| `project_created` / `project_renamed` / `project_archived` | Project actions |
+| `environment_created` / `environment_deleted` | Environment actions |
+| `folder_created` / `folder_deleted` | Folder actions |
+| `secret_deleted` | Secret deleted |
+| `bulk_import_completed` | Bulk import action |
+| `collaborator_added` / `collaborator_revoked` | Sharing actions |
+| `password_setup_started` / `password_setup_completed` | Password setup |
+| `password_changed` | Password changed |
+| `error_occurred` | An error happens (error message and stack, no secret data) |
+
+**Metadata attached to each event:**
+
+- `platform` (e.g. `darwin`, `linux`)
+- `arch` (e.g. `arm64`, `x64`)
+- `node_version`
+
+**Not collected:** secret values, secret keys, project names, environment names, email addresses, passwords, or any encrypted data.
+
+### Web (Client-Side)
+
+The website (`relic.so`) uses PostHog client-side analytics for page views, navigation patterns, and feature usage (login, onboarding, dashboard interactions, upgrade flow).
+
+Web telemetry uses `person_profiles: "anonymous"`, meaning no personally identifiable information is tied to events.
+
+## Privacy & Compliance
+
+### GDPR (EU/EEA)
+
+For visitors from EU/EEA countries, web analytics are **not loaded until the user gives explicit consent** through a cookie banner. This is enforced at the edge:
+
+1. The Cloudflare Worker detects the visitor's country via `CF-IPCountry`
+2. A `relic-geo` cookie is set (`eu` or `other`)
+3. If `eu`, PostHog is only initialized after the user clicks "Accept"
+4. If the user clicks "Reject", no analytics are loaded
+
+EU/EEA countries include all EU member states plus Iceland, Liechtenstein, Norway, Switzerland, and the UK.
+
+### CCPA (California)
+
+Web analytics use anonymous profiles only. No personal information is sold or shared with third parties. See the [Privacy Policy](https://relic.so/privacy-policy) for details.
+
+### CLI & TUI
+
+CLI and TUI telemetry does not use cookies or track personal information. The `distinctId` is a random value generated per process and is not tied to any user account.
+
+Telemetry is automatically disabled in CI environments and dev mode.
+
+## Telemetry Proxy
+
+CLI and TUI events are routed through a first-party proxy at `telemetry.relic.so` (a Cloudflare Worker) before reaching PostHog. This prevents ad blockers from interfering and keeps the data flow under our control.
+
+The proxy:
+
+- Forwards events to PostHog (`us.i.posthog.com`)
+- Strips cookies from forwarded requests
+- Passes `X-Forwarded-For` for geo-IP (PostHog does not store raw IPs)
+- Caches static PostHog assets at the edge
+
+## How to Disable
+
+### CLI & TUI
+
+```bash
+relic telemetry disable
+```
+
+To re-enable:
+
+```bash
+relic telemetry enable
+```
+
+Check the current status:
+
+```bash
+relic telemetry status
+```
+
+The preference is stored in `~/.config/relic/telemetry.json`.
+
+<Tip>
+  You can also set the `RELIC_TELEMETRY=false` environment variable to disable telemetry without modifying the config file. This is useful for CI or automation scripts.
+</Tip>
+
+### Web
+
+For EU/EEA visitors, click "Reject" on the cookie consent banner. For all other visitors, telemetry can be blocked with any standard ad blocker or by disabling JavaScript.
+
+## When Telemetry Is Automatically Off
+
+Telemetry is disabled automatically when any of these conditions are true:
+
+| Condition | How it's detected |
+|-----------|-------------------|
+| CI environment | `CI` environment variable is set |
+| Development mode | `DEV=true` environment variable |
+| User opted out | `relic telemetry disable` or `RELIC_TELEMETRY=false` |
+| No API key configured | `RELIC_POSTHOG_KEY` is empty |

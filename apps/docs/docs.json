@@ -62,21 +62,26 @@
           "guides/cli",
           "guides/tui",
           "guides/project-collaboration",
-          "guides/github-integration"
+          "guides/ci-cd-integration"
         ]
       },
       {
         "group": "Configuration",
         "pages": [
-          "configuration/telemetry",
+          "configuration/security",
           "configuration/session",
-          "configuration/keybindings",
-          "configuration/themes"
+          "configuration/telemetry",
+          "configuration/audit-logs",
+          "configuration/keybindings"
         ]
       },
       {
         "group": "Development",
         "pages": ["development/runner"]
+      },
+      {
+        "group": "Reference",
+        "pages": ["reference/environment-variables"]
       }
     ]
   }
