@@ -1,8 +1,8 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/heycupola/relic/canary/apps/web/public/relic-logo-light.svg">
-    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/heycupola/relic/canary/apps/web/public/relic-logo-dark.svg">
-    <img alt="relic" src="https://raw.githubusercontent.com/heycupola/relic/canary/apps/web/public/relic-logo-dark.svg" width="48">
+    <source media="(prefers-color-scheme: dark)" srcset="./apps/web/public/relic-logo-light.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./apps/web/public/relic-logo-dark.svg">
+    <img alt="relic" src="./apps/web/public/relic-logo-dark.svg" width="48">
   </picture>
 </p>
 
@@ -27,7 +27,7 @@
 
 ### What is Relic?
 
-Relic is a CLI-first secret manager built for developers and small teams.
+Relic is a CLI-first secret manager built for developers and teams.
 
 - Secrets are encrypted on your machine before they leave. The server never sees plaintext.
 - A Rust-based runner injects secrets at runtime. Nothing is written to disk.
@@ -38,14 +38,9 @@ Relic is a CLI-first secret manager built for developers and small teams.
 
 ```bash
 curl -fsSL https://relic.so/install | bash
-```
-
-```bash
 brew install heycupola/tap/relic
-```
-
-```bash
-npm install -g relic          # or: bun add -g relic
+npm install -g relic
+bun add -g relic
 ```
 
 Or download a prebuilt binary from the [releases page](https://github.com/heycupola/relic/releases).
@@ -55,6 +50,7 @@ Or download a prebuilt binary from the [releases page](https://github.com/heycup
 ```bash
 relic login                                    # Authenticate via browser
 relic init                                     # Initialize your project
+relic                                          # Open the TUI and start managing secrets
 relic run -e production -- npm run deploy      # Run with secrets injected
 ```
 
