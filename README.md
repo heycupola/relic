@@ -9,7 +9,7 @@
 <h3 align="center">relic</h3>
 
 <p align="center">
-  Manage and share secrets.<br>
+  Zero-knowledge secret management for developers.<br>
   Encrypted on your device, never exposed to anyone else. Not even us.
 </p>
 
@@ -19,45 +19,63 @@
   <a href="https://docs.relic.so"><img src="https://img.shields.io/badge/docs-relic.so-blue" alt="Docs"></a>
 </p>
 
+<!-- <p align="center">
+  <a href="https://relic.so"><img src="" alt="Relic Terminal UI"></a>
+</p> -->
+
 ---
 
-## Install
+### What is Relic?
+
+Relic is a CLI-first secret manager built for developers and small teams.
+
+- Secrets are encrypted on your machine before they leave. The server never sees plaintext.
+- A Rust-based runner injects secrets at runtime. Nothing is written to disk.
+- Share projects with teammates. Each person's secrets are encrypted with their own keys.
+- Works in CI/CD. Use API keys to pull secrets in GitHub Actions, GitLab CI, or any pipeline.
+
+### Install
 
 ```bash
-bun install -g relic
+curl -fsSL https://relic.so/install | bash
 ```
-
-Or download a prebuilt binary from [GitHub Releases](https://github.com/heycupola/relic/releases).
-
-## Quick Start
 
 ```bash
-relic login
-relic init
-relic run -e development -- npm start
+brew install heycupola/tap/relic
 ```
 
-Full CLI reference and guides are available in the [documentation](https://docs.relic.so).
+```bash
+npm install -g relic          # or: bun add -g relic
+```
 
-## Documentation
+Or download a prebuilt binary from the [releases page](https://github.com/heycupola/relic/releases).
 
-- [Getting started](https://docs.relic.so)
-- [CLI reference](https://docs.relic.so)
-- [CI/CD integration](https://docs.relic.so)
+### Quick Start
 
-## Contributing
+```bash
+relic login                                    # Authenticate via browser
+relic init                                     # Initialize your project
+relic run -e production -- npm run deploy      # Run with secrets injected
+```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions and guidelines.
+### How It Works
+
+Relic encrypts and decrypts secrets entirely on your device using AES-256 and Argon2id. The server only ever sees encrypted data.
+
+When you run `relic run`, the CLI fetches your encrypted secrets, decrypts them locally, and injects them into your process through a Rust runner that clears its own memory after use. Secrets are never written to disk.
+
+Learn more in the [documentation](https://docs.relic.so).
+
+### Documentation
+
+For configuration, CI/CD setup, and more, [**head over to our docs**](https://docs.relic.so).
+
+### Contributing
+
+If you're interested in contributing to Relic, please read our [contributing guide](./CONTRIBUTING.md) before submitting a pull request.
 
 For security issues, email [can@relic.so](mailto:can@relic.so) directly. Do not open public issues.
 
-## Community
+---
 
-- [Website](https://relic.so)
-- [Documentation](https://docs.relic.so)
-- [Changelog](https://relic.so/changelog)
-- [X](https://x.com/icanvardar)
-
-## License
-
-[MIT](LICENSE) &copy; [Cupola Labs](https://cupo.la)
+[Website](https://relic.so) | [Documentation](https://docs.relic.so) | [Changelog](https://relic.so/changelog) | [X](https://x.com/icanvardar)
