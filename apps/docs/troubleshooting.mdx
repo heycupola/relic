@@ -4,3 +4,151 @@ description: Common issues and how to resolve them.
 ---
 
 Solutions for common issues you may encounter while using Relic.
+
+## Session & Authentication
+
+<AccordionGroup>
+  <Accordion title="Session expired">
+    Your session token has a limited lifetime. When it expires, re-authenticate:
+
+    ```bash
+    relic login
+    ```
+
+    <Tip>
+      Session data is stored at `~/.config/relic/session.json`. If the file is corrupted, delete it and log in again.
+    </Tip>
+  </Accordion>
+
+  <Accordion title="Invalid JWT error">
+    JWT tokens refresh automatically. If the error persists, clear your session and re-authenticate:
+
+    ```bash
+    relic logout
+    relic login
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Secret Injection
+
+<AccordionGroup>
+  <Accordion title="relic run returns no secrets">
+    Check the following:
+
+    1. Verify the environment name matches exactly: `relic run -e development -- ...`
+    2. Make sure `relic.toml` exists in your project root (run `relic init` if not)
+    3. Clear stale cache:
+
+    ```bash
+    rm .relic/cache.db
+    ```
+
+    The next `relic run` will fetch fresh data from the server.
+  </Accordion>
+
+  <Accordion title="Secrets have outdated values">
+    Cache invalidation happens automatically when secrets are updated. If you still see old values, delete the local cache:
+
+    ```bash
+    rm .relic/cache.db
+    ```
+
+    <Note>
+      When using API keys (CI/CD mode), caching is disabled and secrets are always fetched fresh.
+    </Note>
+  </Accordion>
+</AccordionGroup>
+
+## TUI
+
+<AccordionGroup>
+  <Accordion title="Colors or UI elements look broken">
+    Relic's TUI requires a terminal with true color support. Use one of these:
+
+    - [Ghostty](https://ghostty.org)
+    - [Alacritty](https://alacritty.org)
+    - [Kitty](https://sw.kovidgoyal.net/kitty)
+    - [WezTerm](https://wezfurlong.org/wezterm)
+
+    You can verify your terminal supports true color:
+
+    ```bash
+    echo $TERM
+    ```
+
+    <Tip>
+      If you see `xterm` or `screen`, your terminal may not support the full color range the TUI needs.
+    </Tip>
+  </Accordion>
+
+  <Accordion title="TUI won't start or crashes">
+    Run with debug logging enabled to see what's happening:
+
+    ```bash
+    RELIC_LOG=debug relic
+    ```
+
+    Then check the log file:
+
+    ```bash
+    cat ~/.config/relic/logs/debug.log
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Debugging
+
+When something isn't working, enable debug logs to get more information.
+
+<Steps>
+  <Step title="Enable debug logging">
+    Set the `RELIC_LOG` environment variable:
+
+    ```bash
+    RELIC_LOG=debug relic run -e development -- npm start
+    ```
+  </Step>
+  <Step title="Check the log file">
+    Logs are written to `~/.config/relic/logs/`:
+
+    | Mode | File |
+    |------|------|
+    | Development | `debug.log` |
+    | Production | `relic.log` |
+
+    Override the log path with `RELIC_LOG_FILE` if needed.
+  </Step>
+  <Step title="Watch logs in real time">
+    Tail the log file while running Relic in another terminal:
+
+    ```bash
+    tail -f ~/.config/relic/logs/debug.log
+    ```
+  </Step>
+</Steps>
+
+## Cache
+
+Relic caches data locally to reduce API calls. If you need to reset it:
+
+| What to clear | How |
+|---------------|-----|
+| Project cache | Delete `.relic/cache.db` in your project directory |
+| User key cache | Delete `~/.config/relic/relic.db` |
+| Session and auth | Run `relic logout` |
+
+<Warning>
+  Clearing the user key cache does not delete your encryption keys from the server. You will not lose access to your secrets.
+</Warning>
+
+## Still stuck?
+
+<CardGroup cols={2}>
+  <Card title="Open an issue" icon="github" href="https://github.com/heycupola/relic/issues/new">
+    Report bugs or request features on GitHub.
+  </Card>
+  <Card title="Security issues" icon="shield" href="mailto:can@relic.so">
+    For security vulnerabilities, email us directly. Do not open public issues.
+  </Card>
+</CardGroup>

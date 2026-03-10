@@ -1,22 +1,76 @@
 # @repo/tui
 
-Terminal UI application for Relic built with React and Bun. Provides an interactive command-line interface for managing secrets and projects.
+Terminal UI for Relic. Built with OpenTUI and React. Provides interactive secret and project management from the terminal.
 
-## Usage
+## Tech Stack
 
-```bash
-bun start
+- **OpenTUI** (`@opentui/core`, `@opentui/react`) -- Terminal UI framework
+- **React** -- Component model
+- **Convex** -- Real-time backend
+- **@repo/auth** -- Authentication and session management
+
+## Screens
+
+| Screen | Description |
+|--------|-------------|
+| Login | Device code OAuth (Google, GitHub) |
+| Password Setup | Master password creation and key generation |
+| Password Unlock | Master password verification on return |
+| Home | Project list with create, rename, archive |
+| Project | Environment, folder, and secret management |
+
+## Features
+
+- Project management (create, rename, archive)
+- Environment management (create, rename, delete)
+- Folder management (create, rename, delete)
+- Secret management (view, create, update, delete)
+- Bulk import (`.env` and JSON formats)
+- Collaborator management (add, revoke with key rotation)
+- Pro plan upgrade and billing portal
+- Password change
+
+## Navigation
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` or arrows | Move up / down |
+| `Enter` | Select |
+| `Esc` | Go back |
+| `g` | Go to dashboard |
+| `?` | Command palette |
+
+## Structure
+
+```
+├── index.tsx           # Entry point
+├── router.tsx          # Client-side routing
+├── context.tsx         # AppProvider (user, auth, Pro status)
+├── api.ts              # Convex HTTP client
+├── pages/
+│   ├── LoginPage.tsx
+│   ├── PasswordSetupPage.tsx
+│   ├── HomePage.tsx
+│   └── ProjectPage.tsx
+├── components/
+│   ├── shared/         # TaskBar, GuideBar, Modal, DeleteConfirmation
+│   ├── modals/         # CommandPalette, ManageCollaborators, BulkImport
+│   └── forms/          # TextInput, InlineInput
+├── hooks/              # useProjects, useProjectPage, useSecrets, useSharing
+├── convex/             # ConvexAuthProvider, useUserKeys, useDeviceAuth
+├── types/              # API types, models, keyboard
+└── utils/              # Constants, paths, bulk import parsing
 ```
 
 ## Caching
 
-The TUI shares a local SQLite cache with the CLI, stored at `~/.config/relic/relic.db`. When a user manages secrets through the TUI (create, update, delete), the backend bumps `updatedAt` on the affected environment/folder. This ensures the CLI's cache is invalidated on the next `relic run` and fresh data is fetched.
+The TUI shares a local SQLite cache with the CLI at `~/.config/relic/relic.db`. When secrets are modified through the TUI, the backend bumps `updatedAt` on the affected environment/folder, invalidating the CLI cache on next run.
 
-User encryption keys (encrypted private key and salt) are cached separately in a user key database. These are cleared on explicit logout but persist across session expiry so the user doesn't need to re-enter their password after re-authenticating.
+User encryption keys are cached separately and persist across session expiry. They are cleared only on explicit logout.
 
 ## Development
 
 ```bash
-bun start        # Start with hot reload
-bun run debug    # Start with debug logging
+bun start          # Start with hot reload
+bun run debug      # Start with debug logging
 ```

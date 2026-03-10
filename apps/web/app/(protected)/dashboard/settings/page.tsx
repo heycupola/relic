@@ -4,7 +4,6 @@ import { api } from "@repo/backend";
 import { useAction, useQuery } from "convex/react";
 import { AlertTriangle } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { ContainerLines } from "@/components/container-lines";
 import { Dialog } from "@/components/dialog";
@@ -18,8 +17,7 @@ export default function SettingsPage() {
     trackWebEvent("web_page_viewed", { page: "settings" });
   }, []);
 
-  const router = useRouter();
-  const { data: session, isPending: sessionPending } = authClient.useSession();
+  const { data: session } = authClient.useSession();
   const userData = useQuery(api.user.getCurrentUser, session?.user ? {} : "skip");
   const deleteAccountAction = useAction(api.user.deleteAccount);
 
@@ -55,17 +53,6 @@ export default function SettingsPage() {
     setDeleteConfirmEmail("");
     setDeleteError("");
   };
-
-  useEffect(() => {
-    if (sessionPending) return;
-    if (!session?.user) {
-      router.replace("/login?returnUrl=/dashboard/settings");
-    }
-  }, [session, sessionPending, router]);
-
-  if (sessionPending || !session?.user) {
-    return null;
-  }
 
   const isLoading = userData === undefined;
 

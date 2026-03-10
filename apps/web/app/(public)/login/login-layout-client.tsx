@@ -1,23 +1,16 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect } from "react";
 import { authClient } from "@/lib/auth";
 import { isValidReturnUrl } from "@/lib/url";
 
-interface LayoutContentProps {
-  children: React.ReactNode;
-}
-
-function LayoutContent({ children }: LayoutContentProps) {
+function LayoutContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const returnUrl = searchParams.get("returnUrl");
 
   useEffect(() => {
-    if (pathname !== "/login") return;
-
     authClient.getSession().then((session) => {
       if (session?.data?.user.id) {
         const redirectTo = isValidReturnUrl(returnUrl) ? returnUrl : "/";
@@ -26,16 +19,16 @@ function LayoutContent({ children }: LayoutContentProps) {
         }
       }
     });
-  }, [router, returnUrl, pathname]);
+  }, [router, returnUrl]);
 
   return <>{children}</>;
 }
 
-interface AuthLayoutClientProps {
+interface LoginLayoutClientProps {
   children: React.ReactNode;
 }
 
-export function AuthLayoutClient({ children }: AuthLayoutClientProps) {
+export function LoginLayoutClient({ children }: LoginLayoutClientProps) {
   return (
     <Suspense fallback={null}>
       <LayoutContent>{children}</LayoutContent>

@@ -1,0 +1,121 @@
+---
+title: CI/CD Integration
+description: Use Relic in GitHub Actions, GitLab CI, and other CI/CD pipelines.
+---
+
+Relic works in CI/CD environments using API keys. Instead of interactive login, the CLI authenticates with an API key and decrypts secrets using the master password provided as an environment variable.
+
+## Setup
+
+<Steps>
+  <Step title="Create an API key">
+    Open the web dashboard and create an API key. The key is shown once. Store it in your CI provider's secret storage.
+
+    {/* TODO: Add API key creation screenshot */}
+  </Step>
+  <Step title="Set environment variables">
+    Add the following secrets to your CI/CD provider:
+
+    | Variable | Required | Description |
+    |----------|----------|-------------|
+    | `RELIC_API_KEY` | Yes | The API key you just created |
+    | `RELIC_PASSWORD` | Yes | Your master password |
+    | `RELIC_PROJECT_ID` | No | Your project ID (not needed if `relic.toml` is committed) |
+  </Step>
+  <Step title="Run with secrets">
+    Use `relic run` in your pipeline:
+
+    ```bash
+    relic run -e production -- npm run deploy
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  In API key mode, caching is disabled. Secrets are always fetched fresh from the server.
+</Note>
+
+## GitHub Actions
+
+```yaml
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Relic
+        run: bun add -g relic
+
+      - name: Deploy with secrets
+        env:
+          RELIC_API_KEY: ${{ secrets.RELIC_API_KEY }}
+          RELIC_PASSWORD: ${{ secrets.RELIC_PASSWORD }}
+          RELIC_PROJECT_ID: ${{ secrets.RELIC_PROJECT_ID }}
+        run: relic run -e production -- npm run deploy
+```
+
+## GitLab CI
+
+```yaml
+deploy:
+  stage: deploy
+  image: oven/bun:latest
+  script:
+    - bun add -g relic
+    - relic run -e production -- npm run deploy
+  variables:
+    RELIC_API_KEY: $RELIC_API_KEY
+    RELIC_PASSWORD: $RELIC_PASSWORD
+    RELIC_PROJECT_ID: $RELIC_PROJECT_ID
+```
+
+## Other Providers
+
+Relic works with any CI/CD provider that supports environment variables. The pattern is always the same:
+
+1. Install Relic (`bun add -g relic` or `npm install -g relic`)
+2. Set the required environment variables
+3. Run `relic run -e <environment> -- <your command>`
+
+## Scope Filtering
+
+Use `--scope` to inject only a subset of secrets:
+
+```bash
+relic run -e production -s client -- npm run build    # Client + shared secrets
+relic run -e production -s server -- npm start         # Server + shared secrets
+```
+
+This is useful when your build step only needs client-side variables and shouldn't have access to server secrets.
+
+## Folder Filtering
+
+Use `--folder` to inject secrets from a specific folder:
+
+```bash
+relic run -e production -f api -- npm start
+relic run -e production -f web -- npm run build
+```
+
+Useful in monorepos where different services need different secrets from the same environment.
+
+## Security Considerations
+
+<Warning>
+  Store `RELIC_API_KEY` and `RELIC_PASSWORD` in your CI provider's secret storage. Never hardcode them in pipeline files or commit them to your repository.
+</Warning>
+
+- API keys can be revoked from the web dashboard at any time
+- Each API key has scoped permissions (`secrets.read`, `user.keys.read`)
+- API key usage is logged in the [audit trail](/configuration/audit-logs)
+- The master password is used only for decryption and is never sent to the Relic server

@@ -1,6 +1,62 @@
 ---
-title: Session
-description: Session management and authentication settings.
+title: Session & Authentication
+description: How Relic authenticates you and manages sessions locally.
 ---
 
-Configure how Relic manages your authentication sessions.
+## Device Authorization
+
+Relic uses the [OAuth 2.0 Device Authorization Grant](https://datatracker.ietf.org/doc/html/rfc8628) to authenticate. This is the same flow used by GitHub CLI, Stripe CLI, and similar tools.
+
+<Steps>
+  <Step title="Request a device code">
+    When you run `relic login` or `relic`, the CLI requests a one-time device code from the server.
+  </Step>
+  <Step title="Approve in browser">
+    A browser window opens with the verification URL. You sign in with your Google or GitHub account and approve the device code shown on screen.
+  </Step>
+  <Step title="Session created">
+    Once approved, a session token is returned and stored locally. You are now authenticated.
+  </Step>
+</Steps>
+
+No passwords are sent to the server during login. The server issues a session token after OAuth approval.
+
+## Session
+
+A session represents your authenticated state on a device. It contains:
+
+| Field | Description |
+|-------|-------------|
+| `sessionToken` | Token used to authenticate API requests |
+| `tokenType` | Token type (e.g. `bearer`) |
+| `expiresAt` | When the session expires (Unix timestamp) |
+| `jwtToken` | Short-lived JWT for Convex queries (auto-refreshed) |
+| `jwtExpiresAt` | When the JWT expires |
+
+### Storage
+
+The session is stored as a JSON file:
+
+| Platform | Path |
+|----------|------|
+| macOS / Linux | `~/.config/relic/session.json` |
+| Windows | `%APPDATA%\relic\session.json` |
+
+The config directory is created with `0700` permissions (owner-only access).
+
+### Lifecycle
+
+- **Created** after a successful device authorization
+- **Refreshed** automatically: the JWT token is refreshed when it expires (15-minute lifetime, 60-second buffer)
+- **Cleared** on `relic logout`, which also removes cached keys and the stored password
+- **Expired** sessions are automatically deleted when detected
+
+### JWT Refresh
+
+The JWT token is short-lived (15 minutes) and refreshes automatically using the session token. The refresh mechanism includes:
+
+- Exponential backoff on failures (1s, 2s, 4s... up to 30s)
+- Circuit breaker after 3 consecutive failures (resets after 60s)
+- 5-second cooldown between refresh attempts
+
+You do not need to manage JWT tokens manually.

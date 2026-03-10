@@ -1,29 +1,54 @@
-# Web App
+# Relic Web
 
-## Convex Integration
+Marketing site and dashboard for Relic. Built with Vinext (Vite + React Server Components) and deployed to Cloudflare Workers.
 
-This app uses `@repo/backend` package for Convex API access. All Convex functions are defined in `packages/backend/convex/` and exported via the `@repo/backend` package.
+## Tech Stack
 
-```typescript
-import { api } from "@repo/backend";
-import { useQuery } from "convex/react";
+- **Vinext** -- Vite-based React framework with RSC
+- **React 19** -- UI
+- **Tailwind CSS** -- Styling
+- **Convex** -- Backend (via `@repo/backend`)
+- **Better Auth** -- Authentication (Google, GitHub OAuth)
+- **PostHog** -- Analytics
+- **Cloudflare Workers** -- Deployment target
 
-// Use the generated API for type-safe queries
-const data = useQuery(api.project.getProject, { projectId });
-```
+## Routes
 
-## Getting Started
+Pages are organized into `(protected)` and `(public)` route groups. Protected pages require authentication and share a centralized auth guard layout.
 
-```bash
-bun install
-bun run dev
-```
+**Protected** (require auth):
+
+| Route | Description |
+|-------|-------------|
+| `/dashboard` | Projects, API keys, activity |
+| `/dashboard/settings` | Account settings |
+| `/onboarding` | Post-signup flow |
+| `/oauth/authorize` | CLI device code authorization |
+
+**Public** (no auth required):
+
+| Route | Description |
+|-------|-------------|
+| `/` | Landing page |
+| `/login` | Sign in (Google, GitHub) |
+| `/blog` | Blog index |
+| `/blog/[slug]` | Blog post |
+| `/changelog` | Changelog index |
+| `/changelog/[slug]` | Changelog entry |
+| `/subscription/success` | Stripe checkout success |
+| `/subscription/cancel` | Stripe checkout cancel |
+| `/privacy-policy` | Privacy policy |
+| `/terms-of-service` | Terms of service |
+| `/dpa` | Data processing agreement |
+| `/og` | OG image generation |
+
+RSS feeds available at `/blog/rss.xml` and `/changelog/rss.xml`.
 
 ## Content
 
-Blog posts are hand-written MDX files in `content/blog/*.mdx`.
+Blog posts are MDX files in `content/blog/*.mdx`:
 
-```mdx
+```yaml
 ---
 title: Post title
 description: Short summary
@@ -36,10 +61,40 @@ published: true
 ---
 ```
 
-Changelog entries are read from `content/changelog/**/*.mdx`. In normal use they are generated from GitHub Releases into `content/changelog/generated` with:
+Changelog entries are in `content/changelog/**/*.mdx`. Generated from GitHub Releases with:
 
 ```bash
 bun run sync:changelog
 ```
 
-Markdown images are content-friendly by default: they render full-width, preserve aspect ratio, lazy-load, and support `figure` / `figcaption` when needed.
+## Structure
+
+```
+├── app/
+│   ├── (protected)/    # Auth guard layout, dashboard, onboarding, oauth
+│   ├── (public)/       # Landing, login, blog, changelog, legal, subscription
+│   ├── api/            # Auth API, GitHub stars
+│   ├── og/             # OG image generation
+│   ├── layout.tsx      # Root layout
+│   └── providers.tsx   # Convex, PostHog, theme providers
+├── components/         # UI components
+├── content/            # MDX content (blog, changelog)
+├── lib/                # Utilities (content parsing, auth, site config)
+├── scripts/            # Changelog sync
+└── worker-entry.ts     # Cloudflare Worker entry
+```
+
+## Development
+
+```bash
+bun install
+bun run dev
+```
+
+## Deployment
+
+```bash
+bun run deploy
+```
+
+Build pipeline: `vinext build` -> copy `worker-entry.ts` -> `wrangler deploy`.

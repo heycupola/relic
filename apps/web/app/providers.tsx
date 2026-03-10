@@ -99,15 +99,10 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
-    const applyTheme = (isDark: boolean) => {
-      document.documentElement.classList.toggle("dark", isDark);
-    };
-
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    applyTheme(mediaQuery.matches);
 
     const handleThemeChange = (event: MediaQueryListEvent) => {
-      applyTheme(event.matches);
+      document.documentElement.classList.toggle("dark", event.matches);
     };
 
     mediaQuery.addEventListener("change", handleThemeChange);

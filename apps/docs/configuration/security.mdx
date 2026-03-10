@@ -1,0 +1,249 @@
+---
+title: Security & Encryption
+description: How Relic encrypts secrets, manages keys, and keeps your data safe.
+---
+
+Relic is built on a zero-knowledge architecture. All encryption and decryption happens on your device. The server only stores encrypted data and can never read your secrets.
+
+## Master Password
+
+The master password is the most critical credential in Relic. It protects your private key, which in turn protects every secret you store.
+
+<Warning>
+  Your master password is never sent to the server. If you lose it, there is no way to recover your secrets. There is no reset, no recovery email, no backdoor. Store it somewhere safe.
+</Warning>
+
+### What it does
+
+When you set your master password for the first time:
+
+1. An RSA-2048 key pair is generated on your device
+2. A key is derived from your password using Argon2id (64 MB memory, 3 iterations)
+3. Your private key is encrypted with that derived key using AES-256-GCM
+4. The encrypted private key, public key, and salt are uploaded to the server
+5. The password itself is stored only on your device
+
+The server never sees your password or your unencrypted private key.
+
+### Password requirements
+
+- At least 8 characters
+- One uppercase letter
+- One lowercase letter
+- One number
+- One special character
+
+### Where it is stored
+
+The password is read in this order:
+
+| Priority | Source | Use case |
+|----------|--------|----------|
+| 1 | `RELIC_PASSWORD` environment variable | CI/CD pipelines |
+| 2 | System keychain (`com.relic.tui`) | macOS, Linux with keychain |
+| 3 | `~/.config/relic/password` file | Fallback when keychain is unavailable |
+
+When saving, Relic tries the system keychain first. If that succeeds, the file fallback is removed. If the keychain is unavailable, the password is written to the config file.
+
+<Tip>
+  On macOS, Relic uses the system keychain via `bun:secrets`, which means your master password is protected by your login password and biometrics (Touch ID).
+</Tip>
+
+### Future integrations
+
+We plan to support platform-native credential stores for the master password:
+
+- Apple Passwords (macOS/iOS)
+- GNOME Keyring (Linux)
+- KWallet (Linux/KDE)
+
+Until then, back up your master password in a password manager you trust.
+
+## User Keys
+
+Every Relic user has an RSA-2048 key pair. This key pair is the foundation of the entire encryption model.
+
+| Key | Where | Encrypted? |
+|-----|-------|------------|
+| Public key | Server (plaintext) | No. Used by others to share projects with you. |
+| Private key | Server (encrypted) | Yes. Encrypted with your master password. |
+| Salt | Server | Used for Argon2id key derivation. |
+
+The private key is encrypted on your device before upload. The server stores only the encrypted form.
+
+### Key derivation
+
+```
+Master Password + Salt
+        │
+        ▼
+  Argon2id (64 MB, 3 iterations, 4 parallelism)
+        │
+        ▼
+  AES-256-GCM Derived Key
+        │
+        ▼
+  Encrypt / Decrypt RSA Private Key
+```
+
+### Local key cache
+
+Your encrypted private key and salt are cached locally at `~/.config/relic/relic.db` (SQLite). This avoids fetching keys from the server on every operation.
+
+The cache:
+
+- Persists across session expiry (no need to re-enter your password after re-authenticating)
+- Is cleared on explicit `relic logout`
+- Contains only the encrypted private key and salt, not the password
+
+### Password change
+
+When you change your master password:
+
+<Steps>
+  <Step title="Decrypt">
+    Your private key is decrypted using the old password.
+  </Step>
+  <Step title="Re-encrypt">
+    A new salt is generated. The private key is re-encrypted with the new password using a fresh Argon2id derivation.
+  </Step>
+  <Step title="Upload">
+    The new encrypted private key and salt are uploaded to the server.
+  </Step>
+  <Step title="Update local cache">
+    The local key cache is updated with the new encrypted values.
+  </Step>
+</Steps>
+
+<Note>
+  Changing your password does not affect project keys or secrets. They are encrypted with the project key, not directly with your password.
+</Note>
+
+## How Secrets Are Encrypted
+
+Every project has its own AES-256 key (the "project key"). This key encrypts and decrypts all secrets within that project.
+
+### Creating a project
+
+<Steps>
+  <Step title="Generate project key">
+    A random AES-256 key is generated on your device.
+  </Step>
+  <Step title="Wrap with your public key">
+    The project key is encrypted (wrapped) using your RSA public key.
+  </Step>
+  <Step title="Store on server">
+    Only the wrapped (encrypted) project key is sent to the server.
+  </Step>
+</Steps>
+
+### Writing a secret
+
+<Steps>
+  <Step title="Unwrap project key">
+    Your RSA private key (decrypted with your master password) unwraps the project's AES key.
+  </Step>
+  <Step title="Encrypt the value">
+    The secret value is encrypted with AES-256-GCM using the project key.
+  </Step>
+  <Step title="Store on server">
+    The encrypted value is sent to the server. The plaintext never leaves your device.
+  </Step>
+</Steps>
+
+### Reading a secret
+
+<Steps>
+  <Step title="Unwrap project key">
+    Same as above: your private key unwraps the project key.
+  </Step>
+  <Step title="Decrypt the value">
+    The encrypted value is decrypted locally with AES-256-GCM.
+  </Step>
+  <Step title="Inject into process">
+    The plaintext value is passed as an environment variable to your process via the Rust runner.
+  </Step>
+</Steps>
+
+### What the server sees
+
+| Data | Server sees |
+|------|-------------|
+| Secret values | Encrypted (AES-256-GCM ciphertext) |
+| Secret keys (names) | Plaintext |
+| Project key | Encrypted (RSA-wrapped) |
+| User private key | Encrypted (AES-256-GCM + Argon2id) |
+| User public key | Plaintext |
+| Master password | Never |
+
+<Note>
+  Secret names (keys like `DATABASE_URL`) are stored in plaintext so you can search and organize them. Only the values are encrypted.
+</Note>
+
+## Collaboration
+
+When you share a project with a teammate, the project key is re-encrypted for their public key. Each collaborator gets their own copy of the project key, encrypted with their own RSA public key.
+
+### Sharing flow
+
+<Steps>
+  <Step title="Owner decrypts project key">
+    The project owner unwraps the project's AES key using their own private key.
+  </Step>
+  <Step title="Re-encrypt for collaborator">
+    The project key is wrapped (encrypted) with the collaborator's RSA public key.
+  </Step>
+  <Step title="Store on server">
+    The re-encrypted project key is stored in the `projectShare` record. The collaborator can now decrypt it with their own private key.
+  </Step>
+</Steps>
+
+The collaborator never sees the owner's private key. The owner never sees the collaborator's private key. The server never sees the plaintext project key.
+
+### Revoking access
+
+When a collaborator is revoked, their share record is marked as revoked. However, they previously had access to the project key, so Relic supports **key rotation with revocation**:
+
+<Steps>
+  <Step title="Revoke the share">
+    The collaborator's share is marked as revoked. They can no longer fetch secrets.
+  </Step>
+  <Step title="Generate new project key">
+    A new AES-256 project key is generated on the owner's device.
+  </Step>
+  <Step title="Re-encrypt all secrets">
+    Every secret in the project is decrypted with the old key and re-encrypted with the new key. This happens entirely on the owner's device.
+  </Step>
+  <Step title="Re-wrap for remaining collaborators">
+    The new project key is wrapped with each remaining collaborator's public key and updated on the server.
+  </Step>
+  <Step title="Bump key version">
+    The project's key version is incremented. All caches are invalidated so the CLI fetches fresh data on the next run.
+  </Step>
+</Steps>
+
+<Warning>
+  Key rotation is optional when revoking. If you trust that the revoked collaborator did not extract secrets, you can revoke without rotation. If you want to ensure they cannot decrypt anything going forward, use revoke with rotation.
+</Warning>
+
+## Algorithms
+
+| Purpose | Algorithm | Parameters |
+|---------|-----------|------------|
+| Key derivation | Argon2id | 64 MB memory, 3 iterations, 4 parallelism, 32-byte output |
+| Symmetric encryption | AES-256-GCM | 12-byte IV, prepended to ciphertext |
+| Asymmetric encryption | RSA-OAEP | 2048-bit, SHA-256 |
+| Key wrapping | RSA-OAEP | Wrap AES key with RSA public key |
+| Hashing | SHA-256 | API key hashing |
+
+## Runtime Security
+
+When `relic run` injects secrets into a process, the [Rust runner](/development/runner) provides additional protections:
+
+- **Memory zeroing**: Secret values use `Zeroizing<String>` and are wiped on drop
+- **Core dump prevention**: `RLIMIT_CORE` set to zero on Unix
+- **Environment isolation**: Child process starts with a cleared environment, only system variables are inherited
+- **Signal forwarding**: SIGTERM/SIGINT are forwarded to the child for graceful shutdown
+- **Buffer clearing**: TypeScript-side buffers are zeroed after the FFI call
+
+Secrets are never written to disk during injection.

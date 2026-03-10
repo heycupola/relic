@@ -1,6 +1,103 @@
 ---
-title: Keybindings
-description: Customize keyboard shortcuts in the TUI.
+title: Keybindings & Themes
+description: Keyboard shortcuts and visual appearance of the Relic TUI.
 ---
 
-Configure keyboard shortcuts for the Relic terminal user interface.
+## Keybindings
+
+Keybinding customization is not available yet. The shortcuts below are built into the TUI.
+
+<Note>
+  `⌥` is the Option key on macOS (Alt on Linux). Full Vim bindings for the secret editor are planned for a future release.
+</Note>
+
+## Global
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` or `↑` / `↓` | Move up / down |
+| `Enter` | Select |
+| `Esc` / `Backspace` | Go back |
+| `g` | Open web dashboard |
+| `?` | Command palette |
+| `q` | Quit |
+
+## Home
+
+| Key | Action |
+|-----|--------|
+| `n` | Create project |
+| `u` | Rename project |
+| `d` | Archive project |
+| `p` | Change password |
+| `Ctrl+L` | Logout |
+
+## Environments
+
+| Key | Action |
+|-----|--------|
+| `Enter` / `l` / `→` | Open environment |
+| `n` | Create environment |
+| `u` | Rename environment |
+| `d` | Delete environment |
+| `c` | Manage collaborators |
+| `v` | Toggle secret visibility |
+
+## Folders
+
+| Key | Action |
+|-----|--------|
+| `Enter` / `l` / `→` | Open folder |
+| `n` | Create folder |
+| `u` | Rename folder |
+| `d` | Delete folder |
+| `⌥i` | Bulk import secrets |
+| `v` | Toggle secret visibility |
+
+## Secrets
+
+| Key | Action |
+|-----|--------|
+| `d` | Delete secret |
+| `v` | Toggle show / hide values |
+| `⌥i` | Bulk import secrets |
+
+## Bulk Import Editor
+
+| Key | Action |
+|-----|--------|
+| `⌥j` | Toggle format (env / JSON) |
+| `⌥s` | Save |
+| `Esc` | Cancel |
+
+## Collaborator Modal
+
+| Key | Action |
+|-----|--------|
+| `n` | Add collaborator |
+| `j` / `k` | Navigate list |
+| `d` | Revoke collaborator |
+| `Esc` | Close |
+
+### Revoke Confirmation
+
+| Key | Action |
+|-----|--------|
+| `y` | Revoke only |
+| `r` | Revoke with key rotation |
+| `n` / `Esc` | Cancel |
+
+## Delete Confirmation
+
+| Key | Action |
+|-----|--------|
+| `y` | Confirm delete |
+| `n` / `Esc` | Cancel |
+
+## Theme
+
+The TUI uses a single built-in dark theme inspired by Tokyo Night. Theme customization is not available yet.
+
+<Note>
+  Custom themes, additional color schemes, and light mode are planned for a future release.
+</Note>

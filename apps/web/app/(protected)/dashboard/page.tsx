@@ -2,7 +2,7 @@
 
 import { api } from "@repo/backend";
 import { useAction, useQuery } from "convex/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { ContainerLines } from "@/components/container-lines";
 import { ActivityLogsCard } from "@/components/dashboard/activity-logs-card";
@@ -65,8 +65,7 @@ export default function DashboardPage() {
   useEffect(() => {
     trackWebEvent("web_page_viewed", { page: "dashboard" });
   }, []);
-  const router = useRouter();
-  const { data: session, isPending: sessionPending } = authClient.useSession();
+  const { data: session } = authClient.useSession();
 
   // Fetch user data
   const userData = useQuery(api.user.getCurrentUser, session?.user ? {} : "skip");
@@ -114,20 +113,7 @@ export default function DashboardPage() {
       });
   }, [session?.user, getLimitsAction, getProjectLimitsAction]);
 
-  // Check auth and redirect if needed
-  useEffect(() => {
-    if (sessionPending) return;
-    if (!session?.user) {
-      router.replace("/login?returnUrl=/dashboard");
-    }
-  }, [session, sessionPending, router]);
-
   const [upgradeError, setUpgradeError] = useState<string>("");
-
-  // Show nothing while checking auth or redirecting
-  if (sessionPending || !session?.user) {
-    return null;
-  }
 
   const isLoading =
     userData === undefined ||
