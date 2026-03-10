@@ -69,7 +69,7 @@ function StepBar({ currentStep }: { currentStep: number }) {
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { data: session, isPending: sessionPending } = authClient.useSession();
+  const { data: session } = authClient.useSession();
   const userData = useQuery(api.user.getCurrentUser, session?.user ? {} : "skip");
   const completeOnboardingMutation = useMutation(api.user.completeOnboarding);
 
@@ -78,13 +78,6 @@ export default function OnboardingPage() {
   const [sourceOther, setSourceOther] = useState("");
   const [selectedTeamSize, setSelectedTeamSize] = useState<TeamSize | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (sessionPending) return;
-    if (!session?.user) {
-      router.replace("/login?returnUrl=/onboarding");
-    }
-  }, [session, sessionPending, router]);
 
   useEffect(() => {
     if (userData === undefined) return;
@@ -129,7 +122,7 @@ export default function OnboardingPage() {
     }
   };
 
-  if (sessionPending || !session?.user || userData === undefined) {
+  if (userData === undefined) {
     return null;
   }
 

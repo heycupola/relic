@@ -4,7 +4,7 @@ import { api } from "@repo/backend";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Component, type ReactNode, Suspense, useEffect, useState } from "react";
 import { StatusBox } from "@/components/status-box";
 import { authClient } from "@/lib/auth";
@@ -43,11 +43,10 @@ class ConvexErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySta
 }
 
 function AuthorizeContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const userCode = searchParams.get("user_code") || "";
   const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
-  const { data: session, isPending: sessionPending } = authClient.useSession();
+  const { isPending: sessionPending } = authClient.useSession();
 
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [errorMessage, setErrorMessage] = useState<string>("");
@@ -61,18 +60,7 @@ function AuthorizeContent() {
   const approveDevice = useMutation(api.deviceAuth.approveDeviceCode);
   const denyDevice = useMutation(api.deviceAuth.denyDeviceCode);
 
-  const hasSession = !!session?.user?.id;
   const sessionChecked = !sessionPending;
-
-  useEffect(() => {
-    if (!sessionChecked) return;
-    if (hasSession) return;
-    if (!authLoading && isAuthenticated) return;
-    if (!userCode) return;
-
-    const returnUrl = `/oauth/authorize?user_code=${userCode}`;
-    router.replace(`/login?returnUrl=${encodeURIComponent(returnUrl)}`);
-  }, [sessionChecked, hasSession, isAuthenticated, authLoading, router, userCode]);
 
   useEffect(() => {
     if (status === "approved" || status === "denied" || status === "error") return;
