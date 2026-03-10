@@ -41,3 +41,6 @@ debug.log
 .cursor/
 
 target
+
+# Lefthook
+.husky
