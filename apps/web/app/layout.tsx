@@ -126,7 +126,7 @@ export default function RootLayout({
   `;
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="manifest" href="/manifest.webmanifest" />
         <link
@@ -158,6 +158,11 @@ export default function RootLayout({
           media="(prefers-color-scheme: dark)"
         />
         <link rel="apple-touch-icon" href="/apple-icon.png" sizes="180x180" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{if(window.matchMedia("(prefers-color-scheme:dark)").matches){document.documentElement.classList.add("dark")}else{document.documentElement.classList.remove("dark")}}catch(e){}})()`,
+          }}
+        />
         <Script id="relic-hydration-lockdown" strategy="beforeInteractive">
           {hydrationLockdownScript}
         </Script>
