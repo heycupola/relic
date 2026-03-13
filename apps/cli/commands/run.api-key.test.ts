@@ -137,20 +137,13 @@ describe("prepareSecretsWithApiKey", () => {
     };
 
     let unwrapCalls = 0;
-    mockUnwrapProjectKey.mockImplementation(
-      (
-        _encryptedProjectKey: string,
-        _encryptedPrivateKey: string,
-        _password: string,
-        _salt: string,
-      ) => {
-        unwrapCalls++;
-        if (unwrapCalls === 1) {
-          return Promise.reject(new Error("Failed to unwrap project key"));
-        }
-        return Promise.resolve("mock_project_key" as unknown as CryptoKey);
-      },
-    );
+    mockUnwrapProjectKey.mockImplementation(() => {
+      unwrapCalls++;
+      if (unwrapCalls === 1) {
+        return Promise.reject(new Error("Failed to unwrap project key"));
+      }
+      return Promise.resolve("mock_project_key" as unknown as CryptoKey);
+    });
 
     const result = await prepareSecretsWithApiKey("project_123", DEFAULT_OPTIONS);
 

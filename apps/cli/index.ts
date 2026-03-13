@@ -1,5 +1,5 @@
 import { initLogger, isFirstRun, saveTelemetryPreference } from "@repo/logger";
-import { Command } from "commander";
+import { Command, CommanderError } from "commander";
 import type { SecretScope } from "lib/types";
 import pc from "picocolors";
 import init from "./commands/init";
@@ -21,10 +21,27 @@ if (isFirstRun()) {
   saveTelemetryPreference(true);
 }
 
+function printAvailableCommands() {
+  console.error(pc.dim("  Available commands:\n"));
+  for (const cmd of program.commands) {
+    console.error(`    ${pc.cyan(cmd.name().padEnd(14))} ${pc.dim(cmd.description())}`);
+  }
+}
+
+function printHelpHint() {
+  console.error(`\n  ${pc.dim(`Run ${pc.white("relic --help")} for more information.`)}\n`);
+}
+
 const program = new Command()
   .name("relic")
   .description("Zero-knowledge secret management for your projects")
   .version("0.1.0")
+  .exitOverride()
+  .configureOutput({
+    outputError: () => {
+      /* suppressed */
+    },
+  })
   .action(async () => {
     process.env._RELIC_FROM_CLI = "true";
     await import("@repo/tui");
@@ -60,4 +77,39 @@ program
     },
   );
 
-program.parse();
+try {
+  program.parse();
+} catch (err) {
+  if (err instanceof CommanderError) {
+    if (err.code === "commander.helpDisplayed" || err.code === "commander.version") {
+      process.exit(0);
+    }
+
+    const cleanMessage = err.message.replace(/^error:\s*/i, "");
+    console.error();
+
+    if (err.code === "commander.unknownCommand" || err.code === "commander.excessArguments") {
+      const unknown =
+        err.message.match(/'(.+?)'/)?.[1] ??
+        process.argv.find(
+          (arg) => !arg.startsWith("-") && arg !== process.argv[0] && arg !== process.argv[1],
+        );
+      console.error(`  ${pc.red(pc.bold("Unknown command:"))} ${pc.white(unknown ?? "unknown")}`);
+      console.error();
+      printAvailableCommands();
+    } else if (err.code === "commander.missingArgument") {
+      console.error(`  ${pc.red(pc.bold("Missing argument:"))} ${pc.dim(cleanMessage)}`);
+    } else if (err.code === "commander.missingMandatoryOptionValue") {
+      console.error(`  ${pc.red(pc.bold("Missing required option:"))} ${pc.dim(cleanMessage)}`);
+    } else if (err.code === "commander.optionMissingArgument") {
+      console.error(`  ${pc.red(pc.bold("Option missing argument:"))} ${pc.dim(cleanMessage)}`);
+    } else {
+      console.error(`  ${pc.red(pc.bold("Error:"))} ${pc.dim(cleanMessage)}`);
+    }
+
+    printHelpHint();
+    process.exit(1);
+  }
+
+  throw err;
+}
