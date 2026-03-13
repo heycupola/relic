@@ -44,9 +44,12 @@ export const getLimits = protectedAction({
       };
     }
 
+    const usage = result.data.usage ?? 0;
+    const includedUsage = result.data.included_usage ?? 0;
+    const balance = result.data.balance ?? 0;
     return {
-      usage: result.data.usage ?? 0,
-      includedUsage: result.data.included_usage ?? 0,
+      usage,
+      includedUsage: Math.max(includedUsage, usage) + balance,
     };
   },
 });
@@ -92,13 +95,15 @@ export const getProjectLimits = protectedAction({
     const purchasedProjectsCount = Math.max(0, usage - freeLimit);
     const unusedProjects = balance;
 
+    const effectiveLimit = Math.max(includedUsage, usage) + (balance ?? 0);
+
     return {
       hasPro,
       freeLimit,
       totalProjectsCount: usage,
       purchasedProjectsCount,
       unusedProjects,
-      includedUsage,
+      includedUsage: effectiveLimit,
     };
   },
 });

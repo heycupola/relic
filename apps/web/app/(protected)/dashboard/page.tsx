@@ -90,6 +90,8 @@ export default function DashboardPage() {
   const [projectLimitsData, setProjectLimitsData] = useState<{
     totalProjectsCount: number;
     includedUsage: number;
+    hasPro: boolean;
+    freeLimit: number;
   } | null>(null);
   const [limitsLoading, setLimitsLoading] = useState(true);
 
@@ -159,9 +161,11 @@ export default function DashboardPage() {
   }, [projectsData?.projects, sharedProjectsData?.shares]);
 
   const isOverProjectLimit =
-    projectLimitsData && projectLimitsData.totalProjectsCount > projectLimitsData.includedUsage;
+    projectLimitsData &&
+    !projectLimitsData.hasPro &&
+    projectLimitsData.totalProjectsCount > projectLimitsData.freeLimit;
   const excessProjects = isOverProjectLimit
-    ? projectLimitsData.totalProjectsCount - projectLimitsData.includedUsage
+    ? projectLimitsData.totalProjectsCount - projectLimitsData.freeLimit
     : 0;
 
   return (
@@ -178,9 +182,9 @@ export default function DashboardPage() {
             <StatusBox variant="warning">
               <h3 className="font-medium text-foreground text-sm">Usage limit exceeded</h3>
               <p className="text-sm text-foreground/70 mt-1 text-pretty">
-                You're using {projectLimitsData.totalProjectsCount} projects but only have{" "}
-                {projectLimitsData.includedUsage} included. Please archive {excessProjects}{" "}
-                project(s) or upgrade your plan.
+                You're using {projectLimitsData.totalProjectsCount} projects but your plan only
+                includes {projectLimitsData.freeLimit}. Please archive {excessProjects} project(s)
+                or upgrade your plan.
               </p>
             </StatusBox>
           )}
