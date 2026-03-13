@@ -7,8 +7,8 @@
 </p>
 
 <p align="center">
-  Zero-knowledge secret management for developers.<br>
-  Encrypted on your device, never exposed to anyone else. Not even us.
+  End-to-end encrypted secret management for developers.<br>
+  Secrets are encrypted on-device before reaching the server.
 </p>
 
 <p align="center">
@@ -27,8 +27,8 @@
 
 Relic is a CLI-first secret manager built for developers and teams.
 
-- Secrets are encrypted on your machine before they leave. The server never sees plaintext.
-- A Rust-based runner injects secrets at runtime. Nothing is written to disk.
+- Secrets are encrypted on the client before leaving the device. The server stores only ciphertext.
+- A Rust-based runner injects secrets at runtime without writing to disk.
 - Share projects with teammates. Each person's secrets are encrypted with their own keys.
 - Works in CI/CD. Use API keys to pull secrets in GitHub Actions, GitLab CI, or any pipeline.
 
@@ -54,15 +54,15 @@ relic run -e production -- npm run deploy      # Run with secrets injected
 
 ### How It Works
 
-Relic encrypts and decrypts secrets entirely on your device using AES-256 and Argon2id. The server only ever sees encrypted data.
+Relic encrypts and decrypts secrets on the client using AES-256 and Argon2id. The server only stores encrypted data.
 
-When you run `relic run`, the CLI fetches your encrypted secrets, decrypts them locally, and injects them into your process through a Rust runner that clears its own memory after use. Secrets are never written to disk.
+When you run `relic run`, the CLI fetches encrypted secrets, decrypts them locally, and injects them into the target process through a Rust runner that clears memory after use. No secrets are written to disk.
 
 Learn more in the [documentation](https://docs.relic.so).
 
 ### Documentation
 
-For configuration, CI/CD setup, and more, [**head over to our docs**](https://docs.relic.so).
+For configuration, CI/CD setup, and more, see the [documentation](https://docs.relic.so).
 
 ### Contributing
 
