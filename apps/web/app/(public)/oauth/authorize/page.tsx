@@ -4,7 +4,7 @@ import { api } from "@repo/backend";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import Image from "next/image";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Component, type ReactNode, Suspense, useEffect, useState } from "react";
 import { StatusBox } from "@/components/status-box";
 import { authClient } from "@/lib/auth";
@@ -43,10 +43,11 @@ class ConvexErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySta
 }
 
 function AuthorizeContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const userCode = searchParams.get("user_code") || "";
   const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
-  const { isPending: sessionPending } = authClient.useSession();
+  const { data: session, isPending: sessionPending } = authClient.useSession();
 
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [errorMessage, setErrorMessage] = useState<string>("");
@@ -63,7 +64,17 @@ function AuthorizeContent() {
   const sessionChecked = !sessionPending;
 
   useEffect(() => {
-    if (status === "approved" || status === "denied" || status === "error") return;
+    if (status === "approved" || status === "denied") return;
+    if (status === "error" && userCode) {
+      setStatus("loading");
+      setErrorMessage("");
+    }
+    if (status === "error" && !userCode) return;
+
+    if (!sessionChecked || authLoading) {
+      setStatus("loading");
+      return;
+    }
 
     if (!userCode) {
       setStatus("error");
@@ -71,8 +82,9 @@ function AuthorizeContent() {
       return;
     }
 
-    if (!sessionChecked || authLoading) {
-      setStatus("loading");
+    if (!session?.user) {
+      const returnUrl = `/oauth/authorize?user_code=${userCode}`;
+      router.replace(`/login?returnUrl=${encodeURIComponent(returnUrl)}`);
       return;
     }
 
@@ -87,10 +99,21 @@ function AuthorizeContent() {
       setStatus("denied");
     } else if (isAuthenticated) {
       setStatus("ready");
+    } else if (!session?.user) {
+      setStatus("unauthenticated" as AuthStatus);
     } else {
       setStatus("loading");
     }
-  }, [deviceCodeInfo, userCode, status, sessionChecked, isAuthenticated, authLoading]);
+  }, [
+    deviceCodeInfo,
+    userCode,
+    status,
+    sessionChecked,
+    isAuthenticated,
+    authLoading,
+    session,
+    router,
+  ]);
 
   const handleApprove = async () => {
     setStatus("approving");

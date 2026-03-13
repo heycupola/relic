@@ -1,3 +1,5 @@
+import { SITE_URL } from "@repo/auth";
+
 export const CHAR_LIMITS = {
   envName: 30,
   folderName: 30,
@@ -48,4 +50,4 @@ export const PRICING = {
 export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 export const SPINNER_INTERVAL = 80;
 
-export const DASHBOARD_URL = `${process.env.SITE_URL ?? "http://localhost:3000"}/dashboard`;
+export const DASHBOARD_URL = `${SITE_URL}/dashboard`;

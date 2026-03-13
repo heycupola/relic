@@ -1,11 +1,9 @@
-import { ensureValidJwt } from "@repo/auth";
+import { CONVEX_URL, ensureValidJwt } from "@repo/auth";
 import { createLogger, trackError } from "@repo/logger";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { type ComponentProps, type ReactNode, useEffect, useRef, useState } from "react";
 
 const logger = createLogger("tui");
-
-const CONVEX_URL = process.env.CONVEX_URL ?? "http://localhost:3210";
 const convexClient = new ConvexReactClient(CONVEX_URL);
 
 interface ConvexAuthProviderProps {

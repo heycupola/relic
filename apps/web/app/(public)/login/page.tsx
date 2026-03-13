@@ -22,7 +22,7 @@ export default function LoginPage() {
     setLastMethod(authClient.getLastUsedLoginMethod());
   }, []);
 
-  const safeReturnUrl = isValidReturnUrl(returnUrl) ? returnUrl : "/";
+  const safeReturnUrl = isValidReturnUrl(returnUrl) ? returnUrl : "/dashboard";
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
