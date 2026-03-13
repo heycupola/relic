@@ -38,15 +38,14 @@ export default function SubscriptionCancelPage() {
           </h1>
 
           <StatusBox variant="info">
-            Your payment was cancelled and no charges were made. You can upgrade to Pro anytime from
-            the CLI.
+            Your payment was cancelled and no charges were made. You can upgrade to Pro anytime.
           </StatusBox>
 
           <Link
-            href="/"
+            href="/dashboard"
             className="w-full p-3 text-sm font-medium text-center border-2 border-border bg-foreground text-background hover:bg-foreground/90 transition-colors"
           >
-            Back to home
+            Go to Dashboard
           </Link>
         </div>
       </div>

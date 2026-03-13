@@ -1,6 +1,5 @@
 "use client";
 
-import { cn } from "@repo/ui/lib/utils";
 import { Archive, Check, Lock, Users } from "lucide-react";
 import { StatusBox } from "@/components/status-box";
 
@@ -73,8 +72,8 @@ export function ProjectsOverviewCard({
   const sharedCount = projects.filter((p) => p.status === "shared").length;
   const restrictedCount = projects.filter((p) => p.status === "restricted").length;
   const archivedCount = projects.filter((p) => p.status === "archived").length;
+  const visibleProjects = projects.filter((p) => p.status !== "archived");
 
-  const recentProjects = projects.slice(0, 8);
   const _percentage = projectsLimit > 0 ? Math.min((projectsUsed / projectsLimit) * 100, 100) : 0;
 
   if (isLoading) {
@@ -113,26 +112,26 @@ export function ProjectsOverviewCard({
           </div>
         </div>
 
-        {recentProjects.length === 0 ? (
-          <StatusBox variant="info">
-            No projects yet. Run <code className="font-mono text-foreground/50">relic</code> to
-            create one.
-          </StatusBox>
+        {visibleProjects.length === 0 ? (
+          projects.length === 0 ? (
+            <StatusBox variant="info">
+              No projects yet. Run <code className="font-mono text-foreground/50">relic</code> to
+              create one.
+            </StatusBox>
+          ) : (
+            <StatusBox variant="info">
+              All projects are archived. Archived projects are counted above and hidden from this
+              list.
+            </StatusBox>
+          )
         ) : (
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-foreground/50">Recent projects</p>
+          <div>
             <div className="relative">
               <ul className="space-y-1 max-h-[280px] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-border/20 [&::-webkit-scrollbar-thumb]:bg-foreground/20 [&::-webkit-scrollbar-thumb]:hover:bg-foreground/30">
-                {recentProjects.map((project, index) => {
+                {visibleProjects.map((project) => {
                   const StatusIcon = getStatusIcon(project.status);
                   return (
-                    <li
-                      key={project.id}
-                      className={cn(
-                        "py-2 px-3 border border-border/50 hover:bg-muted/50 transition-colors",
-                        index < 5 ? "opacity-100" : "opacity-100",
-                      )}
-                    >
+                    <li key={project.id} className="border border-border/50 px-3 py-2">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <span className="font-medium text-foreground text-sm truncate block">

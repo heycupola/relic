@@ -7,6 +7,7 @@ import {
   ENTERPRISE_URL,
   SITE_DOCS_URL,
   SITE_GITHUB_URL,
+  SITE_STATUS_URL,
   SITE_X_URL,
 } from "@/lib/site";
 
@@ -142,6 +143,14 @@ export function Footer() {
                 className="text-sm text-muted-foreground transition-colors hover:text-foreground w-fit"
               >
                 support@relic.so
+              </a>
+              <a
+                href={SITE_STATUS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-muted-foreground transition-colors hover:text-foreground w-fit"
+              >
+                Status Page
               </a>
             </nav>
           </div>
