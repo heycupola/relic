@@ -59,7 +59,7 @@ export function ManageCollaboratorsModal({
   }, [pendingEmail]);
 
   useKeyboard((key) => {
-    if (isRunning) return;
+    if (!visible || isRunning) return;
 
     if (confirmingDelete) {
       if (key.name === "y") {
@@ -199,7 +199,7 @@ export function ManageCollaboratorsModal({
                           <span fg={THEME_COLORS.success}>y</span>
                           <span fg={THEME_COLORS.textDim}>] yes [</span>
                           <span fg={THEME_COLORS.accent}>r</span>
-                          <span fg={THEME_COLORS.textDim}>] yes+rotate [</span>
+                          <span fg={THEME_COLORS.textDim}>] yes + rotate [</span>
                           <span fg={THEME_COLORS.error}>n</span>
                           <span fg={THEME_COLORS.textDim}>] no</span>
                         </text>

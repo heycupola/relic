@@ -22,11 +22,7 @@ export function useSharing(
       const api = getProtectedApi();
       await api.ensureAuth();
 
-      const isPaidShare =
-        (shareLimits?.totalSharesCount ?? 0) >= (shareLimits?.freeShareLimit ?? 5);
-      const willReturnEarlyWithoutInsert = !shareLimits?.hasPro || (isPaidShare && !confirmPayment);
-
-      if (willReturnEarlyWithoutInsert) {
+      if (!shareLimits?.hasPro) {
         return await api.shareProject({
           projectId,
           userEmail: email,
@@ -120,11 +116,12 @@ export function useSharing(
           return;
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
-          if (
-            i === MAX_RETRIES - 1 ||
-            errorMessage.includes("not found") ||
-            errorMessage.includes("Invalid")
-          ) {
+          const errorLower = errorMessage.toLowerCase();
+          const isTerminal =
+            errorLower.includes("not found") ||
+            errorLower.includes("invalid") ||
+            errorLower.includes("already revoked");
+          if (i === MAX_RETRIES - 1 || isTerminal) {
             throw error;
           }
           await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** i));

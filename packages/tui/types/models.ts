@@ -25,6 +25,7 @@ export interface Secret {
   value?: string;
   encryptedValue?: string;
   type?: SecretValueType;
+  scope?: SecretScope;
   folderId?: string;
   environmentId: string;
 }

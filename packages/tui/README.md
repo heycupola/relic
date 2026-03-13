@@ -37,7 +37,7 @@ Terminal UI for Relic. Built with OpenTUI and React. Provides interactive secret
 | `j` / `k` or arrows | Move up / down |
 | `Enter` | Select |
 | `Esc` | Go back |
-| `g` | Go to dashboard |
+| `g` | Open dashboard |
 | `?` | Command palette |
 
 ## Structure

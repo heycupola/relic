@@ -8,7 +8,7 @@ import {
 } from "@repo/crypto";
 import { createLogger, trackEvent } from "@repo/logger";
 import open from "open";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getProtectedApi } from "../api";
 import { InlineInput } from "../components/forms/InlineInput";
 import { CommandPaletteModal } from "../components/modals/CommandPaletteModal";
@@ -60,6 +60,7 @@ export function HomePage() {
   const { hasPro, isLoading: isLoadingPlan } = useUser();
 
   const {
+    archivedCount,
     projects,
     isLoading: isLoadingProjects,
     limits,
@@ -94,6 +95,18 @@ export function HomePage() {
   const payment = usePaymentFlow();
   const loading = useLoadingState(["creating", "renaming", "archiving"] as const);
 
+  const [showProSuccess, setShowProSuccess] = useState(false);
+  const prevHasProRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (isLoadingPlan) return;
+    if (prevHasProRef.current !== null && hasPro && !prevHasProRef.current) {
+      payment.closeAll();
+      refetchProjects();
+      setShowProSuccess(true);
+    }
+    prevHasProRef.current = hasPro;
+  }, [hasPro, isLoadingPlan, payment, refetchProjects]);
+
   const [activeModal, setActiveModal] = useState<ModalType>("none");
   const [creatingProject, setCreatingProject] = useState(false);
   const [pendingProjectName, setPendingProjectName] = useState<string | null>(null);
@@ -103,9 +116,7 @@ export function HomePage() {
     null,
   );
   const [removalSelectedIndex, setRemovalSelectedIndex] = useState(0);
-  const [passwordChangeStatus, setPasswordChangeStatus] = useState<
-    null | "verifying" | "rewrapping" | "updating"
-  >(null);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -267,7 +278,7 @@ export function HomePage() {
     }
 
     setPasswordChangeError(null);
-    setPasswordChangeStatus("verifying");
+    setIsChangingPassword(true);
 
     // Step 1: Verify current password by decrypting the private key
     let privateKey: CryptoKey;
@@ -275,13 +286,12 @@ export function HomePage() {
       privateKey = await decryptPrivateKeyWithPassword(encryptedPrivateKey, currentPassword, salt);
     } catch (error) {
       logger.error("Failed to verify current password:", error);
-      setPasswordChangeStatus(null);
-      setPasswordChangeError("Incorrect current password");
+      setIsChangingPassword(false);
+      setPasswordChangeError("Incorrect password");
       return;
     }
 
     // Step 2: Generate new salt and re-encrypt private key with new password
-    setPasswordChangeStatus("rewrapping");
     let newEncryptedPrivateKey: string;
     let newSalt: string;
     try {
@@ -293,13 +303,12 @@ export function HomePage() {
       );
     } catch (error) {
       logger.error("Failed to rewrap private key:", error);
-      setPasswordChangeStatus(null);
+      setIsChangingPassword(false);
       setPasswordChangeError("Failed to encrypt with new password");
       return;
     }
 
     // Step 3: Update backend with new encrypted private key and salt
-    setPasswordChangeStatus("updating");
     try {
       await updatePassword({
         encryptedPrivateKey: newEncryptedPrivateKey,
@@ -307,7 +316,7 @@ export function HomePage() {
       });
     } catch (error) {
       logger.error("Failed to update password on backend:", error);
-      setPasswordChangeStatus(null);
+      setIsChangingPassword(false);
       setPasswordChangeError("Failed to save new password");
       return;
     }
@@ -319,7 +328,7 @@ export function HomePage() {
     }
 
     trackEvent("password_changed", { success: true });
-    setPasswordChangeStatus(null);
+    setIsChangingPassword(false);
     setActiveModal("none");
     showSuccess("Password changed successfully");
   };
@@ -366,6 +375,13 @@ export function HomePage() {
   };
 
   useKeyboard((key) => {
+    if (showProSuccess) {
+      if (key.name === "escape" || key.name === "return") {
+        setShowProSuccess(false);
+      }
+      return;
+    }
+
     if (creatingProject || editingProject) return;
     if (
       payment.confirmationModal.visible ||
@@ -399,7 +415,7 @@ export function HomePage() {
     }
 
     if (activeModal === "password") {
-      if (key.name === "escape" && !passwordChangeStatus) {
+      if (key.name === "escape" && !isChangingPassword) {
         setActiveModal("none");
         setPasswordChangeError(null);
       }
@@ -489,7 +505,7 @@ export function HomePage() {
         {
           shortcuts: [
             { key: "n", description: "create project", disabled: isDisabled },
-            { key: "g", description: "dashboard", disabled: isDisabled },
+            { key: "g", description: "open dashboard", disabled: isDisabled },
           ],
         },
       ],
@@ -532,7 +548,7 @@ export function HomePage() {
           </box>
           <box height={1} marginBottom={1} justifyContent="center" alignItems="center">
             <text>
-              <span fg={THEME_COLORS.textMuted}>Zero-knowledge secret management</span>
+              <span fg={THEME_COLORS.textMuted}>The secrets layer</span>
               <span fg={THEME_COLORS.textDim}> · </span>
               {isLoadingPlan ? (
                 <span fg={THEME_COLORS.textDim}>...</span>
@@ -615,7 +631,11 @@ export function HomePage() {
             {isLoadingProjects ? (
               <text fg={THEME_COLORS.textDim}>Loading projects...</text>
             ) : projects.length === 0 && !creatingProject && !showPendingProject ? (
-              <text fg={THEME_COLORS.textDim}>No projects created. Press 'n' to create one.</text>
+              <text fg={THEME_COLORS.textDim}>
+                {archivedCount > 0
+                  ? "No active projects. Archived projects are hidden."
+                  : "No projects created. Press 'n' to create one."}
+              </text>
             ) : (
               <>
                 {navigation.hasMore.above && (
@@ -757,34 +777,25 @@ export function HomePage() {
         height={18}
         shortcuts={[]}
       >
-        <box flexDirection="column" gap={1}>
-          {passwordChangeStatus && (
-            <text fg={THEME_COLORS.accent}>
-              {passwordChangeStatus === "verifying" && "Verifying current password..."}
-              {passwordChangeStatus === "rewrapping" && "Re-encrypting private key..."}
-              {passwordChangeStatus === "updating" && "Updating password..."}
-            </text>
-          )}
-          <PasswordInput
-            mode="change"
-            onSubmit={(currentPass, newPass) => {
-              if (currentPass && newPass) {
-                handlePasswordChange(currentPass, newPass);
-              }
-            }}
-            onCancel={() => {
-              setActiveModal("none");
-              setPasswordChangeError(null);
-              setPasswordChangeStatus(null);
-            }}
-            additionalShortcuts={[
-              { key: "esc", description: "cancel", disabled: !!passwordChangeStatus },
-            ]}
-            width={51}
-            disabled={!!passwordChangeStatus}
-            error={passwordChangeError}
-          />
-        </box>
+        <PasswordInput
+          mode="change"
+          onSubmit={(currentPass, newPass) => {
+            if (currentPass && newPass) {
+              handlePasswordChange(currentPass, newPass);
+            }
+          }}
+          onCancel={() => {
+            setActiveModal("none");
+            setPasswordChangeError(null);
+            setIsChangingPassword(false);
+          }}
+          additionalShortcuts={[
+            { key: "esc", description: "cancel", disabled: isChangingPassword },
+          ]}
+          width={51}
+          disabled={isChangingPassword}
+          error={passwordChangeError}
+        />
       </Modal>
 
       <CommandPaletteModal
@@ -800,6 +811,18 @@ export function HomePage() {
         reason={payment.checkoutModal.reason}
         onClose={payment.closeCheckout}
       />
+
+      <Modal
+        visible={showProSuccess}
+        title="Welcome to Pro!"
+        width={50}
+        shortcuts={[{ key: "esc", description: "close" }]}
+      >
+        <box flexDirection="column" gap={1}>
+          <text fg={THEME_COLORS.success}>You're now a PRO member!</text>
+          <text fg={THEME_COLORS.text}>Unlimited projects and sharing unlocked.</text>
+        </box>
+      </Modal>
 
       <ConfirmPaymentModal
         visible={payment.confirmationModal.visible}
@@ -827,7 +850,7 @@ export function HomePage() {
         shortcuts={[
           { key: "j/k", description: "navigate", disabled: loading.isLoading("archiving") },
           { key: "d", description: "archive", disabled: loading.isLoading("archiving") },
-          { key: "g", description: "dashboard", disabled: false },
+          { key: "g", description: "open dashboard", disabled: false },
           { key: "esc", description: "close", disabled: loading.isLoading("archiving") },
         ]}
       >

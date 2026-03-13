@@ -88,12 +88,12 @@ export function isEnvFormat(content: string): boolean {
   return false;
 }
 
-export function envToJson(envContent: string): string {
+export function envToJson(envContent: string, scopeMap?: Map<string, string>): string {
   const secrets = parseEnvContent(envContent).map((s) => ({
     key: s.key,
     value: s.value,
     type: s.type,
-    scope: "shared",
+    scope: scopeMap?.get(s.key) || "shared",
   }));
   return JSON.stringify(secrets, null, 2);
 }
@@ -190,21 +190,25 @@ export function validateBulkImportJson(data: unknown): ValidationResult {
   const seenKeys = new Set<string>();
   const duplicateKeys: string[] = [];
 
-  let arrayData: unknown[];
   if (!Array.isArray(data)) {
-    if (typeof data === "object" && data !== null && "key" in data) {
-      arrayData = [data];
-    } else {
-      return {
-        valid: false,
-        secrets: [],
-        errors: [{ message: "Expected an array of secrets" }],
-        duplicateKeys: [],
-      };
-    }
-  } else {
-    arrayData = data;
+    return {
+      valid: false,
+      secrets: [],
+      errors: [{ message: "Expected an array of secrets" }],
+      duplicateKeys: [],
+    };
   }
+
+  if (data.length === 0) {
+    return {
+      valid: false,
+      secrets: [],
+      errors: [{ message: "No secrets to import" }],
+      duplicateKeys: [],
+    };
+  }
+
+  const arrayData = data;
 
   for (let i = 0; i < arrayData.length; i++) {
     const item = arrayData[i];
@@ -214,11 +218,29 @@ export function validateBulkImportJson(data: unknown): ValidationResult {
       continue;
     }
 
-    if (!("key" in item) || !isValidKey(item.key)) {
+    if (!("key" in item) || typeof item.key !== "string") {
       errors.push({
         index: i,
         field: "key",
-        message: `Invalid key: must be 1-${MAX_KEY_LENGTH} alphanumeric/underscore chars, start with letter/underscore`,
+        message: "Missing or invalid key",
+      });
+      continue;
+    }
+
+    if (item.key.trim() === "") {
+      errors.push({
+        index: i,
+        field: "key",
+        message: "Key cannot be empty",
+      });
+      continue;
+    }
+
+    if (!isValidKey(item.key)) {
+      errors.push({
+        index: i,
+        field: "key",
+        message: `Invalid key: must contain only letters, numbers, and underscores (1-${MAX_KEY_LENGTH} chars)`,
       });
       continue;
     }
@@ -246,6 +268,15 @@ export function validateBulkImportJson(data: unknown): ValidationResult {
       continue;
     }
     seenKeys.add(key);
+
+    if ("type" in item && !isValidType(item.type)) {
+      errors.push({
+        index: i,
+        field: "type",
+        message: "Invalid type: must be string, number, or boolean",
+      });
+      continue;
+    }
 
     let type: "string" | "number" | "boolean";
     if ("type" in item && isValidType(item.type)) {
