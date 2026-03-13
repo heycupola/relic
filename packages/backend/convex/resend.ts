@@ -21,7 +21,9 @@ export const resendSdk = new Resend(process.env.RESEND_API_KEY);
 
 export const resend: ResendComponent = new ResendComponent(components.resend, {});
 
-const FROM_EMAIL_ADDRESS = process.env.FROM_EMAIL_ADDRESS || "Can Vardar <can@relic.so>";
+const FROM_EMAIL_ADDRESS = process.env.FROM_EMAIL_ADDRESS || "Relic <notifications@relic.so>";
+const FROM_EMAIL_ADDRESS_PERSONAL =
+  process.env.FROM_EMAIL_ADDRESS_PERSONAL || "Can from Relic <can@relic.so>";
 const SITE_URL =
   process.env.SITE_URL ||
   (process.env.ENVIRONMENT === "development" ? "http://localhost:3000" : "https://relic.so");
@@ -115,6 +117,10 @@ async function renderEmailTemplate(data: EmailData): Promise<string> {
   }
 }
 
+function getFromAddress(kind: EmailKind): string {
+  return kind === EmailKind.Welcome ? FROM_EMAIL_ADDRESS_PERSONAL : FROM_EMAIL_ADDRESS;
+}
+
 function getEmailSubject(kind: EmailKind): string {
   switch (kind) {
     case EmailKind.AccessRestricted:
@@ -142,15 +148,16 @@ export const sendEmail = async (
     return { emailId: "skipped" };
   }
 
+  const from = getFromAddress(data.kind);
   const subject = getEmailSubject(data.kind);
   const html = await renderEmailTemplate(data);
 
   const emailId = await resend.sendEmailManually(
     ctx,
-    { from: FROM_EMAIL_ADDRESS, to, subject },
+    { from, to, subject },
     async (idempotencyKey: string) => {
       const { data: resendData, error } = await resendSdk.emails.send({
-        from: FROM_EMAIL_ADDRESS,
+        from,
         to,
         subject,
         html,
@@ -191,11 +198,12 @@ export const sendEmailDirect = async (
     return { emailId: "skipped" };
   }
 
+  const from = getFromAddress(data.kind);
   const subject = getEmailSubject(data.kind);
   const html = await renderEmailTemplate(data);
 
   const { data: resendData, error } = await resendSdk.emails.send({
-    from: FROM_EMAIL_ADDRESS,
+    from,
     to,
     subject,
     html,

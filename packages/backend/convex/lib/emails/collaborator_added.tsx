@@ -31,7 +31,7 @@ export const CollaboratorAddedEmail = ({
       <Container style={container}>
         <Section style={section}>
           <Img
-            src={`${SITE_URL}/relic-logo-dark.svg`}
+            src={`${SITE_URL}/relic-logo-dark.png`}
             alt="Relic"
             width="40"
             height="40"
@@ -65,7 +65,7 @@ export const CollaboratorAddedEmail = ({
         </Section>
         <Section style={footer}>
           <Img
-            src={`${SITE_URL}/cupola-light.svg`}
+            src={`${SITE_URL}/cupola-light.png`}
             alt="Cupola"
             width="80"
             height="16"

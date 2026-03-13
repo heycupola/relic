@@ -210,20 +210,7 @@ export const createProject = protectedAction({
         }
       }
 
-      const usage = data.usage;
-      const includedUsage = data.included_usage;
       const balance = data.balance;
-
-      if (usage > includedUsage) {
-        const excessCount = usage - includedUsage;
-        return {
-          status: "requiresRemoval" as const,
-          currentUsage: usage,
-          includedUsage: includedUsage,
-          excessCount: excessCount,
-          message: `You're using ${usage} projects but only have ${includedUsage} included. Please archive ${excessCount} project(s) or upgrade.`,
-        };
-      }
 
       if (!args.confirmPayment) {
         if (!balance || balance <= 0) {

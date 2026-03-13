@@ -110,7 +110,7 @@ describe("Project Sharing", () => {
       expect(shareResult.requiresProPlan).toBe(true);
     });
 
-    test("returns paymentFailed when share exceeds limit", async () => {
+    test("returns paymentFailed and revokes share when payment fails", async () => {
       mockAutumn.setFeature(owner.userId, "additional_shares", 0);
 
       const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
@@ -156,7 +156,7 @@ describe("Project Sharing", () => {
         confirmPayment: true,
       });
 
-      expect(shareResult2.success).toBe(true);
+      expect(shareResult2.success).toBe(false);
       expect(shareResult2.paymentFailed).toBe(true);
       expect(shareResult2.billingPortalUrl).toBeDefined();
     });
@@ -208,7 +208,7 @@ describe("Project Sharing", () => {
         confirmPayment: true,
       });
 
-      expect(shareResult2.success).toBe(true);
+      expect(shareResult2.success).toBe(false);
       expect(shareResult2.paymentFailed).toBe(true);
       expect(shareResult2.billingPortalUrl).toBeDefined();
       expect(shareResult2.billingPortalUrl).toContain("billing.relic.so");
