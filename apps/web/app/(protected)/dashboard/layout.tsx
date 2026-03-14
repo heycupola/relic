@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { ContainerLines } from "@/components/container-lines";
-import { DashboardFooter } from "@/components/dashboard-footer";
 import { Header } from "@/components/header";
+import { MinifiedFooter } from "@/components/minified-footer";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -14,7 +14,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <ContainerLines />
       <Header showLogout />
       <main className="flex-1">{children}</main>
-      <DashboardFooter />
+      <MinifiedFooter />
     </div>
   );
 }

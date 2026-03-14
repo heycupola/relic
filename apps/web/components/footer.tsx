@@ -24,10 +24,15 @@ const legalLinks = [
   { href: "/dpa", label: "DPA" },
 ] as const;
 
-const socialLinks = [
+const communityLinks = [
   { href: SITE_GITHUB_URL, label: "GitHub", external: true },
   { href: "https://discord.gg/relic", label: "Discord", external: true },
   { href: SITE_X_URL, label: "𝕏", external: true },
+] as const;
+
+const supportLinks = [
+  { href: SITE_STATUS_URL, label: "System Status", external: true },
+  { href: "mailto:support@relic.so", label: "Contact Us" },
 ] as const;
 
 function CcpaBadge() {
@@ -119,7 +124,7 @@ export function Footer() {
               Community
             </h4>
             <nav className="flex flex-col gap-2.5">
-              {socialLinks.map((link) => (
+              {communityLinks.map((link) => (
                 <a
                   key={link.href}
                   href={link.href}
@@ -138,20 +143,17 @@ export function Footer() {
               Support
             </h4>
             <nav className="flex flex-col gap-2.5">
-              <a
-                href="mailto:support@relic.so"
-                className="text-sm text-muted-foreground transition-colors hover:text-foreground w-fit"
-              >
-                support@relic.so
-              </a>
-              <a
-                href={SITE_STATUS_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-muted-foreground transition-colors hover:text-foreground w-fit"
-              >
-                Status Page
-              </a>
+              {supportLinks.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  target={"external" in link ? "_blank" : undefined}
+                  rel={"external" in link ? "noopener noreferrer" : undefined}
+                  className="text-sm text-muted-foreground transition-colors hover:text-foreground w-fit"
+                >
+                  {link.label}
+                </a>
+              ))}
             </nav>
           </div>
         </div>
