@@ -1,5 +1,21 @@
 import handler from "./server/index.js";
 
+const SECURITY_HEADERS: Record<string, string> = {
+  "X-Frame-Options": "DENY",
+  "X-Content-Type-Options": "nosniff",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Content-Security-Policy": [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.i.posthog.com",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https:",
+    "font-src 'self' data:",
+    "connect-src 'self' https:",
+    "frame-ancestors 'none'",
+  ].join("; "),
+};
+
 const EU_EEA_COUNTRIES = new Set([
   "AT",
   "BE",
@@ -41,6 +57,9 @@ export default {
     const isEU = EU_EEA_COUNTRIES.has(country.toUpperCase());
     const response = await handler(request);
     const newResponse = new Response(response.body, response);
+    for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+      newResponse.headers.set(name, value);
+    }
     newResponse.headers.append(
       "Set-Cookie",
       `relic-geo=${isEU ? "eu" : "other"}; Path=/; SameSite=Lax; Max-Age=86400`,
