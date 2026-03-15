@@ -585,6 +585,7 @@ export function HomePage() {
                 const totalProjects = limits.usage;
                 const freeLimit = limits.includedUsage;
                 const remainingFree = Math.max(0, freeLimit - totalProjects);
+                // #endregion
 
                 if (remainingFree === 0) {
                   return (
