@@ -1,6 +1,7 @@
 "use client";
 
-import { Archive, Check, Lock, Users } from "lucide-react";
+import { Archive, Check, Copy, Lock, Users } from "lucide-react";
+import { useState } from "react";
 import { StatusBox } from "@/components/status-box";
 
 interface Project {
@@ -60,6 +61,30 @@ function getStatusIcon(status: Project["status"]) {
     default:
       return null;
   }
+}
+
+function CopyableProjectId({ id }: { id: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(id);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const truncated = id.length > 12 ? `${id.slice(0, 12)}…` : id;
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="group/copy flex items-center gap-1 text-xs font-mono text-foreground/30 hover:text-foreground/60 transition-colors cursor-pointer"
+      title="Copy project ID"
+    >
+      <span>{truncated}</span>
+      {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+    </button>
+  );
 }
 
 export function ProjectsOverviewCard({
@@ -157,6 +182,8 @@ export function ProjectsOverviewCard({
                                   </span>
                                 </>
                               )}
+                            <span className="text-foreground/30">·</span>
+                            <CopyableProjectId id={project.id} />
                           </div>
                         </div>
                       </div>
