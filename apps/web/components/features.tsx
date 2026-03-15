@@ -21,21 +21,21 @@ const videoFeatures: VideoFeature[] = [
     title: "Built-in Secret Editor",
     badge: "Free",
     description: "Paste your .env file or edit secrets directly in the TUI. No context switching.",
-    videoSrc: "/videos/demo.mp4",
+    videoSrc: "/videos/editor-demo.mp4",
   },
   {
     title: "Collaboration",
     badge: "Pro",
     description:
       "Share projects with your team via email. Each person gets their own encryption keys.",
-    videoSrc: "/videos/demo.mp4",
+    videoSrc: "/videos/collaboration-demo.mp4",
   },
   {
     title: "Run Anywhere",
-    badge: "Free",
+    badge: "Pro",
     description:
       "Inject secrets into any process with API keys. Works in GitHub Actions, GitLab CI, and more.",
-    videoSrc: "/videos/demo.mp4",
+    videoSrc: "/videos/cicd-demo.mp4",
   },
 ];
 
@@ -65,13 +65,65 @@ const compactFeatures: CompactFeature[] = [
   },
 ];
 
-function VideoCard({ feature }: { feature: VideoFeature }) {
+function Badge({ badge }: { badge: "Free" | "Pro" }) {
+  return (
+    <span
+      className={
+        badge === "Pro"
+          ? "px-2 py-0.5 text-[10px] font-bold uppercase bg-foreground text-background"
+          : "px-2 py-0.5 text-[10px] font-bold uppercase border border-border text-foreground/50"
+      }
+    >
+      {badge}
+    </span>
+  );
+}
+
+function VideoButton({
+  feature,
+  videoRef,
+  playVideo,
+  resetVideo,
+  className,
+}: {
+  feature: VideoFeature;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  playVideo: () => void;
+  resetVideo: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={`group relative bg-muted/20 ${className ?? ""}`}
+      aria-label={`${feature.title} preview. Hover or focus to play.`}
+      onMouseEnter={playVideo}
+      onMouseLeave={resetVideo}
+      onFocus={playVideo}
+      onBlur={resetVideo}
+    >
+      <video
+        ref={videoRef}
+        src={feature.videoSrc}
+        title={feature.title}
+        muted
+        playsInline
+        preload="metadata"
+        className="w-full h-auto"
+      />
+      <span className="pointer-events-none absolute bottom-3 right-3 border border-white/15 bg-black/75 px-2 py-1 text-[11px] font-medium text-white/80 backdrop-blur-sm transition-colors group-hover:border-white/25 group-hover:text-white">
+        Hover to play
+      </span>
+    </button>
+  );
+}
+
+function useVideoControls() {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const playVideo = async () => {
     const video = videoRef.current;
     if (!video) return;
-
     try {
       await video.play();
     } catch {
@@ -82,50 +134,57 @@ function VideoCard({ feature }: { feature: VideoFeature }) {
   const resetVideo = () => {
     const video = videoRef.current;
     if (!video) return;
-
     video.pause();
     video.currentTime = 0;
   };
+
+  return { videoRef, playVideo, resetVideo };
+}
+
+function FeaturedVideoCard({ feature }: { feature: VideoFeature }) {
+  const { videoRef, playVideo, resetVideo } = useVideoControls();
+
+  return (
+    <div className="border-2 border-border bg-card flex flex-col md:flex-row hover:border-foreground/30 transition-colors">
+      <div className="p-4 sm:p-5 md:p-6 lg:p-8 md:w-2/5 flex flex-col justify-center">
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-foreground text-lg">{feature.title}</h3>
+          <Badge badge={feature.badge} />
+        </div>
+        <p className="mt-2 text-sm text-foreground/60 text-pretty sm:text-base">
+          {feature.description}
+        </p>
+      </div>
+      <VideoButton
+        feature={feature}
+        videoRef={videoRef}
+        playVideo={playVideo}
+        resetVideo={resetVideo}
+        className="w-full md:w-3/5 border-t-2 md:border-t-0 md:border-l-2 border-border"
+      />
+    </div>
+  );
+}
+
+function VideoCard({ feature }: { feature: VideoFeature }) {
+  const { videoRef, playVideo, resetVideo } = useVideoControls();
 
   return (
     <div className="border-2 border-border bg-card flex flex-col hover:border-foreground/30 transition-colors">
       <div className="p-4 flex-1 sm:p-5">
         <div className="flex items-center justify-between gap-2">
           <h3 className="font-semibold text-foreground">{feature.title}</h3>
-          <span
-            className={
-              feature.badge === "Pro"
-                ? "px-2 py-0.5 text-[10px] font-bold uppercase bg-foreground text-background"
-                : "px-2 py-0.5 text-[10px] font-bold uppercase border border-border text-foreground/50"
-            }
-          >
-            {feature.badge}
-          </span>
+          <Badge badge={feature.badge} />
         </div>
         <p className="mt-2 text-sm text-foreground/60 text-pretty">{feature.description}</p>
       </div>
-      <button
-        type="button"
-        className="group relative w-full border-t-2 border-border bg-muted/20"
-        aria-label={`${feature.title} preview. Hover or focus to play.`}
-        onMouseEnter={playVideo}
-        onMouseLeave={resetVideo}
-        onFocus={playVideo}
-        onBlur={resetVideo}
-      >
-        <video
-          ref={videoRef}
-          src={feature.videoSrc}
-          title={feature.title}
-          muted
-          playsInline
-          preload="metadata"
-          className="w-full aspect-video object-cover"
-        />
-        <span className="pointer-events-none absolute bottom-3 right-3 border border-white/15 bg-black/75 px-2 py-1 text-[11px] font-medium text-white/80 backdrop-blur-sm transition-colors group-hover:border-white/25 group-hover:text-white">
-          Hover to play
-        </span>
-      </button>
+      <VideoButton
+        feature={feature}
+        videoRef={videoRef}
+        playVideo={playVideo}
+        resetVideo={resetVideo}
+        className="w-full border-t-2 border-border"
+      />
     </div>
   );
 }
@@ -149,10 +208,13 @@ export function Features() {
           Everything you need to manage secrets, from editing to sharing to deployment.
         </p>
 
-        <div className="mt-6 grid grid-cols-1 gap-3 sm:mt-8 sm:gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {videoFeatures.map((feature) => (
-            <VideoCard key={feature.title} feature={feature} />
-          ))}
+        <div className="mt-6 space-y-3 sm:mt-8 sm:space-y-4">
+          <FeaturedVideoCard feature={videoFeatures[0]!} />
+          <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
+            {videoFeatures.slice(1).map((feature) => (
+              <VideoCard key={feature.title} feature={feature} />
+            ))}
+          </div>
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-3 sm:mt-4 sm:gap-4 lg:grid-cols-4">
