@@ -1,6 +1,6 @@
 #!/bin/bash
 ACTION="${1:-enable}"
-ALIAS_NAME="relic-dev"
+ALIAS_NAME="relic"
 ALIAS_CMD="alias $ALIAS_NAME=\"bun $(cd "$(dirname "$0")/.." && pwd)/index.ts\""
 SHELL_RC="$HOME/.zshrc"
 if [ "$ACTION" = "enable" ]; then
