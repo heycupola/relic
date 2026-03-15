@@ -41,6 +41,7 @@ import type * as secret from "../secret.js";
 import type * as stripe from "../stripe.js";
 import type * as user from "../user.js";
 import type * as userKey from "../userKey.js";
+import type * as webhook from "../webhook.js";
 
 import type {
   ApiFromModules,
@@ -82,6 +83,7 @@ declare const fullApi: ApiFromModules<{
   stripe: typeof stripe;
   user: typeof user;
   userKey: typeof userKey;
+  webhook: typeof webhook;
 }>;
 
 /**
