@@ -60,10 +60,6 @@ When you run `relic run`, the CLI fetches encrypted secrets, decrypts them local
 
 Learn more in the [documentation](https://docs.relic.so).
 
-### Documentation
-
-For configuration, CI/CD setup, and more, see the [documentation](https://docs.relic.so).
-
 ### Contributing
 
 If you're interested in contributing to Relic, please read our [contributing guide](./CONTRIBUTING.md) before submitting a pull request.
