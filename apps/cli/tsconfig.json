@@ -8,7 +8,9 @@
       "@repo/backend": ["../../packages/backend/index.ts"],
       "@repo/backend/*": ["../../packages/backend/*"],
       "@repo/crypto": ["../../packages/crypto/index.ts"],
-      "@repo/crypto/*": ["../../packages/crypto/*"]
+      "@repo/crypto/*": ["../../packages/crypto/*"],
+      "@repo/tui": ["./tui.d.ts"]
     }
-  }
+  },
+  "exclude": ["node_modules", "../../packages/tui/**"]
 }
