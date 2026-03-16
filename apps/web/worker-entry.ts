@@ -1,6 +1,6 @@
 import handler from "./server/index.js";
 
-const SECURITY_HEADERS: Record<string, string> = {
+const SECURITY_HEADERS = {
   "X-Frame-Options": "DENY",
   "X-Content-Type-Options": "nosniff",
   "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
