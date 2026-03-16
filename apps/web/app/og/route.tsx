@@ -1,5 +1,3 @@
-import { notFound } from "next/navigation";
-import type { NextRequest } from "next/server";
 import { getBlogPostBySlug, getChangelogEntryBySlug } from "@/lib/content";
 import { createOgImage } from "@/lib/og-image";
 import {
@@ -11,7 +9,7 @@ import {
   SITE_SLOGAN,
 } from "@/lib/site";
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type");
   const slug = searchParams.get("slug");
@@ -36,9 +34,9 @@ export async function GET(request: NextRequest) {
         description: CHANGELOG_DESCRIPTION,
       });
     case "blog-entry": {
-      if (!slug) notFound();
+      if (!slug) return new Response("Not found", { status: 404 });
       const post = await getBlogPostBySlug(slug);
-      if (!post) notFound();
+      if (!post) return new Response("Not found", { status: 404 });
 
       return await createOgImage({
         eyebrow: "Blog",
@@ -48,9 +46,9 @@ export async function GET(request: NextRequest) {
       });
     }
     case "changelog-entry": {
-      if (!slug) notFound();
+      if (!slug) return new Response("Not found", { status: 404 });
       const entry = await getChangelogEntryBySlug(slug);
-      if (!entry) notFound();
+      if (!entry) return new Response("Not found", { status: 404 });
 
       return await createOgImage({
         eyebrow: `Changelog · ${entry.version}`,
@@ -59,6 +57,6 @@ export async function GET(request: NextRequest) {
       });
     }
     default:
-      notFound();
+      return new Response("Not found", { status: 404 });
   }
 }
