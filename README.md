@@ -17,9 +17,9 @@
   <a href="https://docs.relic.so"><img src="https://img.shields.io/badge/docs-relic.so-blue" alt="Docs"></a>
 </p>
 
-<!-- <p align="center">
-  <a href="https://relic.so"><img src="" alt="Relic Terminal UI"></a>
-</p> -->
+<p align="center">
+  <a href="https://relic.so"><img src="./apps/docs/assets/tui-overview.png" alt="Relic Terminal UI" width="800"></a>
+</p>
 
 ---
 
