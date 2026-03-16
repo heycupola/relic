@@ -223,7 +223,7 @@ export async function createOgImage({
   });
   const png = resvg.render().asPng();
 
-  return new Response(png, {
+  return new Response(png.buffer as ArrayBuffer, {
     headers: {
       "Content-Type": "image/png",
       "Cache-Control": "public, max-age=86400, s-maxage=86400",
