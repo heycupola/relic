@@ -94,8 +94,6 @@ function AuthorizeContent() {
       setStatus("denied");
     } else if (isAuthenticated) {
       setStatus("ready");
-    } else if (!session?.user) {
-      setStatus("unauthenticated" as AuthStatus);
     } else {
       setStatus("loading");
     }
