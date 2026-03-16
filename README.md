@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  End-to-end encrypted secret management for developers.<br>
+  End-to-end encrypted secret layer for developers.<br>
   Secrets are encrypted on-device before reaching the server.
 </p>
 
@@ -25,7 +25,7 @@
 
 ### What is Relic?
 
-Relic is a CLI-first secret manager built for developers and teams.
+Relic is a CLI-first secret layer built for developers and teams.
 
 - Secrets are encrypted on the client before leaving the device. The server stores only ciphertext.
 - A Rust-based runner injects secrets at runtime without writing to disk.

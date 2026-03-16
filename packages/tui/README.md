@@ -1,6 +1,6 @@
 # @repo/tui
 
-Terminal UI for Relic. Built with OpenTUI and React. Provides interactive secret and project management from the terminal.
+Terminal UI for Relic. Built with OpenTUI and React. Provides interactive secret and project operations from the terminal.
 
 ## Tech Stack
 
@@ -17,14 +17,14 @@ Terminal UI for Relic. Built with OpenTUI and React. Provides interactive secret
 | Password Setup | Master password creation and key generation |
 | Password Unlock | Master password verification on return |
 | Home | Project list with create, rename, archive |
-| Project | Environment, folder, and secret management |
+| Project | Environment, folder, and secret operations |
 
 ## Features
 
 - Project management (create, rename, archive)
 - Environment management (create, rename, delete)
 - Folder management (create, rename, delete)
-- Secret management (view, create, update, delete)
+- Secret operations (view, create, update, delete)
 - Bulk import (`.env` and JSON formats)
 - Collaborator management (add, revoke with key rotation)
 - Pro plan upgrade and billing portal

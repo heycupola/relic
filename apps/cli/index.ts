@@ -34,7 +34,7 @@ function printHelpHint() {
 
 const program = new Command()
   .name("relic")
-  .description("Zero-knowledge secret management for your projects")
+  .description("Zero-knowledge secret layer for your projects")
   .version("0.1.0")
   .exitOverride()
   .configureOutput({

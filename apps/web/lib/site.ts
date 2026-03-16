@@ -24,6 +24,7 @@ export const CHANGELOG_DESCRIPTION =
 export const BLOG_FEED_PATH = "/blog/rss.xml";
 export const CHANGELOG_FEED_PATH = "/changelog/rss.xml";
 export const SITE_KEYWORDS = [
+  "secret layer",
   "secrets management",
   "zero-knowledge",
   "encryption",
