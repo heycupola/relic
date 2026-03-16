@@ -35,6 +35,7 @@ export function mapApiSecret(apiSecret: ApiSecret): Secret {
           : apiSecret.valueType === "boolean"
             ? "boolean"
             : "string",
+    scope: apiSecret.scope,
     folderId: apiSecret.folderId,
     environmentId: apiSecret.environmentId,
   };

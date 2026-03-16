@@ -1,4 +1,4 @@
-import { ensureValidJwt } from "@repo/auth";
+import { CONVEX_URL, ensureValidJwt } from "@repo/auth";
 import {
   api,
   SecretValueType as BackendSecretValueType,
@@ -26,8 +26,6 @@ import type {
 } from "./types/api";
 
 const logger = createLogger("tui");
-
-const CONVEX_URL = process.env.CONVEX_URL ?? "http://localhost:3210";
 
 function createClient(): ConvexHttpClient {
   return new ConvexHttpClient(CONVEX_URL);

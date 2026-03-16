@@ -57,20 +57,12 @@ export default function SubscriptionSuccessPage() {
             </li>
           </ul>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Link
-              href="/dashboard"
-              className="flex-1 p-3 text-sm font-medium text-center border-2 border-border bg-foreground text-background hover:bg-foreground/90 transition-colors"
-            >
-              Go to Dashboard
-            </Link>
-            <Link
-              href="/"
-              className="flex-1 p-3 text-sm font-medium text-center border-2 border-border bg-background text-foreground hover:bg-muted/50 transition-colors"
-            >
-              Back to home
-            </Link>
-          </div>
+          <Link
+            href="/dashboard"
+            className="w-full p-3 text-sm font-medium text-center border-2 border-border bg-foreground text-background hover:bg-foreground/90 transition-colors"
+          >
+            Go to Dashboard
+          </Link>
         </div>
       </div>
     </div>

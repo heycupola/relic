@@ -238,6 +238,45 @@ export const shareProject = protectedAction({
 
     const sId: Id<"projectShare"> = shareId;
 
+    await ctx.runMutation(internal.projectShare._trackShareUsageCount, {
+      projectId: project._id,
+      value: 1,
+    });
+
+    if (isPaidShare) {
+      try {
+        await ctx.autumn.track(ctx, {
+          featureId: "additional_shares",
+          value: 1,
+        });
+      } catch (trackError) {
+        log.error("Payment tracking failed, compensating", { error: String(trackError) });
+
+        await ctx.runMutation(internal.projectShare._revokeProjectShare, {
+          shareId: sId,
+        });
+        await ctx.runMutation(internal.projectShare._trackShareUsageCount, {
+          projectId: project._id,
+          value: -1,
+        });
+
+        let billingPortalUrl: string | null = null;
+        try {
+          const portalResult = await ctx.autumn.customers.billingPortal(ctx, {});
+          billingPortalUrl = portalResult.data?.url || null;
+        } catch (portalError) {
+          log.error("Failed to get billing portal URL", { error: String(portalError) });
+        }
+
+        return {
+          success: false,
+          paymentFailed: true,
+          billingPortalUrl,
+          message: "Payment failed. Please update your billing settings.",
+        };
+      }
+    }
+
     await ctx.runMutation(internal.actionLog._insertActionLog, {
       projectId: args.projectId,
       projectName: project.name,
@@ -248,32 +287,6 @@ export const shareProject = protectedAction({
         sharedUserEmail: targetUser.email,
       },
     });
-
-    await ctx.runMutation(internal.projectShare._trackShareUsageCount, {
-      projectId: project._id,
-      value: 1,
-    });
-
-    let paymentFailed = false;
-    let billingPortalUrl: string | null = null;
-
-    if (isPaidShare) {
-      try {
-        await ctx.autumn.track(ctx, {
-          featureId: "additional_shares",
-          value: 1,
-        });
-      } catch (trackError) {
-        log.error("Payment tracking failed", { error: String(trackError) });
-        paymentFailed = true;
-        try {
-          const portalResult = await ctx.autumn.customers.billingPortal(ctx, {});
-          billingPortalUrl = portalResult.data?.url || null;
-        } catch (portalError) {
-          log.error("Failed to get billing portal URL", { error: String(portalError) });
-        }
-      }
-    }
 
     const owner = await ctx.runQuery(components.betterAuth.user.loadUserById, {
       userId: project.ownerId as BetterAuthId<"user">,
@@ -297,7 +310,7 @@ export const shareProject = protectedAction({
       isPaidShare,
     });
 
-    return { success: true, shareId: sId, paymentFailed, billingPortalUrl };
+    return { success: true, shareId: sId };
   },
 });
 
@@ -506,6 +519,41 @@ export const revokeShareWithRotation = protectedAction({
       shareId: args.shareId,
     });
 
+    await ctx.runMutation(internal.projectShare._trackShareUsageCount, {
+      projectId: share.projectId,
+      value: -1,
+    });
+
+    const projectAfterDecrement = await ctx.runQuery(internal.project._loadProjectById, {
+      projectId: share.projectId,
+    });
+    const newUsage = projectAfterDecrement.shareUsageCount ?? 0;
+
+    if (newUsage >= shareLimits.freeShareLimit) {
+      try {
+        await ctx.autumn.track(ctx, {
+          featureId: "additional_shares",
+          value: -1,
+        });
+      } catch (error: unknown) {
+        log.error("Failed to track usage decrease in Autumn", { error: String(error) });
+
+        await ctx.scheduler.runAfter(5 * 60 * 1000, internal.autumn._retryAutumnTracking, {
+          identity: {
+            customerId: ctx.userId,
+            customerData: {
+              name: ctx.name,
+              email: ctx.email,
+            },
+          },
+          attemptCount: 1,
+          featureId: "additional_shares",
+          projectId: project._id,
+          value: -1,
+        });
+      }
+    }
+
     const oldKeyVersion = project.keyVersion;
     await ctx.runMutation(internal.project._rotateProjectKey, {
       projectId: share.projectId,
@@ -572,45 +620,6 @@ export const revokeShareWithRotation = protectedAction({
         sharesUpdated: args.rewrappedShares.length,
       },
     });
-
-    // Decrement usage count first
-    await ctx.runMutation(internal.projectShare._trackShareUsageCount, {
-      projectId: share.projectId,
-      value: -1,
-    });
-
-    // Then check if we were using purchased shares (after decrement)
-    const updatedProject = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: share.projectId,
-    });
-    const newUsage = updatedProject.shareUsageCount ?? 0;
-
-    // Only track -1 if we were using more than free limit (meaning we freed up a purchased share)
-    // After decrement, if newUsage >= freeShareLimit, we were using purchased shares
-    if (newUsage >= shareLimits.freeShareLimit) {
-      try {
-        await ctx.autumn.track(ctx, {
-          featureId: "additional_shares",
-          value: -1,
-        });
-      } catch (error: unknown) {
-        log.error("Failed to track usage decrease in Autumn", { error: String(error) });
-
-        await ctx.scheduler.runAfter(5 * 60 * 1000, internal.autumn._retryAutumnTracking, {
-          identity: {
-            customerId: ctx.userId,
-            customerData: {
-              name: ctx.name,
-              email: ctx.email,
-            },
-          },
-          attemptCount: 1,
-          featureId: "additional_shares",
-          projectId: project._id,
-          value: -1,
-        });
-      }
-    }
 
     log.info("Share revoked with key rotation", {
       shareId: args.shareId,

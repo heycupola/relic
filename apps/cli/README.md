@@ -1,6 +1,6 @@
 # Relic CLI
 
-Zero-knowledge secret management CLI. Fetches encrypted secrets from the server, decrypts them locally, and injects them into the process environment.
+Zero-knowledge secret layer CLI. Fetches encrypted secrets from the server, decrypts them locally, and injects them into the process environment.
 
 ## Installation
 

@@ -20,12 +20,6 @@ authComponent.registerRoutes(http, createAuth);
 export const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 export const RESEND_WEBHOOK_SECRET = process.env.RESEND_WEBHOOK_SECRET;
 
-// In-memory cache for idempotency (resets on deployment)
-// For production, consider storing in database
-const processedEventIds = new Set<string>();
-const processedResendEventIds = new Set<string>();
-const MAX_CACHED_EVENTS = 1000;
-
 http.route({
   path: "/webhook/stripe",
   method: "POST",
@@ -61,8 +55,11 @@ http.route({
 
     stripeLog.info("Event received", { type: event.type, eventId: event.id });
 
-    // Idempotency check - skip if already processed
-    if (processedEventIds.has(event.id)) {
+    const alreadyProcessed = await ctx.runQuery(internal.webhook._isProcessed, {
+      eventId: event.id,
+      source: "stripe",
+    });
+    if (alreadyProcessed) {
       stripeLog.info("Event already processed, skipping", { eventId: event.id });
       return new Response("Already processed", { status: 200 });
     }
@@ -70,14 +67,10 @@ http.route({
     try {
       await handleWebhookEvent(ctx, event);
 
-      // Mark as processed after successful handling
-      processedEventIds.add(event.id);
-
-      // Prevent unbounded memory growth
-      if (processedEventIds.size > MAX_CACHED_EVENTS) {
-        const firstId = processedEventIds.values().next().value;
-        if (firstId) processedEventIds.delete(firstId);
-      }
+      await ctx.runMutation(internal.webhook._markProcessed, {
+        eventId: event.id,
+        source: "stripe",
+      });
     } catch (error) {
       stripeLog.error("Error handling event", { type: event.type, error: String(error) });
       return new Response("Error processing webhook", { status: 500 });
@@ -150,8 +143,11 @@ http.route({
       return new Response("Missing event ID", { status: 400 });
     }
 
-    // Idempotency check - skip if already processed
-    if (processedResendEventIds.has(svixId)) {
+    const alreadyProcessed = await ctx.runQuery(internal.webhook._isProcessed, {
+      eventId: svixId,
+      source: "resend",
+    });
+    if (alreadyProcessed) {
       resendLog.info("Event already processed, skipping", { svixId });
       return new Response("Already processed", { status: 200 });
     }
@@ -202,14 +198,10 @@ http.route({
         }
       }
 
-      // Mark as processed after successful handling
-      processedResendEventIds.add(svixId);
-
-      // Prevent unbounded memory growth
-      if (processedResendEventIds.size > MAX_CACHED_EVENTS) {
-        const firstId = processedResendEventIds.values().next().value;
-        if (firstId) processedResendEventIds.delete(firstId);
-      }
+      await ctx.runMutation(internal.webhook._markProcessed, {
+        eventId: svixId,
+        source: "resend",
+      });
 
       return new Response(null, { status: 200 });
     } catch (error) {

@@ -1,10 +1,7 @@
-import { ensureValidJwt } from "@repo/auth";
+import { CONVEX_SITE_URL, CONVEX_URL, ensureValidJwt } from "@repo/auth";
 import { api, type Id, type TableNames } from "@repo/backend";
 import { trackError } from "@repo/logger";
 import { ConvexHttpClient } from "convex/browser";
-
-const CONVEX_URL = process.env.CONVEX_URL ?? "http://localhost:3210";
-const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL ?? "http://localhost:3211";
 
 export interface User {
   id: string;

@@ -16,10 +16,8 @@ const getShortcutGroups = (isLoading: boolean) => ({
   primary: [
     { shortcuts: [{ key: KEY_SYMBOLS.enter, description: "sign in", disabled: isLoading }] },
   ],
-  secondary: [{ shortcuts: [{ key: "↑↓", description: "navigate", disabled: isLoading }] }],
+  secondary: [],
 });
-
-type Provider = "google" | "github";
 
 interface LoginPageProps {
   onLogin: () => void;
@@ -75,8 +73,6 @@ function getStatusColor(
 export function LoginPage({ onLogin }: LoginPageProps) {
   const { width, height } = useTerminalDimensions();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedProviderIndex, setSelectedProviderIndex] = useState(0);
-  const providers: Provider[] = ["google", "github"];
 
   const { status, userCode, verificationUri, isLoading, error, startAuth, cancel } = useDeviceAuth({
     onSuccess: () => {
@@ -114,13 +110,12 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const closeModal = () => {
     cancel();
     setIsModalOpen(false);
-    setSelectedProviderIndex(0);
   };
 
-  const handleLogin = async (provider?: Provider) => {
+  const handleLogin = async () => {
     if (isModalOpen) return;
     setIsModalOpen(true);
-    trackEvent("tui_login_started", { provider: provider || "unknown" });
+    trackEvent("tui_login_started");
     try {
       await startAuth();
     } catch (err) {
@@ -139,12 +134,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       return;
     }
 
-    if (key.name === "up" || key.name === "k") {
-      setSelectedProviderIndex((prev) => (prev > 0 ? prev - 1 : providers.length - 1));
-    } else if (key.name === "down" || key.name === "j") {
-      setSelectedProviderIndex((prev) => (prev < providers.length - 1 ? prev + 1 : 0));
-    } else if (key.name === "return") {
-      handleLogin(providers[selectedProviderIndex]);
+    if (key.name === "return") {
+      handleLogin();
     } else if (key.name === "q") {
       process.exit(0);
     }
@@ -157,10 +148,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         ? `${userCode.slice(0, 4)}-${userCode.slice(4)}`
         : userCode
     : "...";
-  const providerLabels: Record<Provider, string> = {
-    google: "Sign in with Google",
-    github: "Sign in with GitHub",
-  };
 
   return (
     <box
@@ -190,17 +177,11 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           </box>
 
           <box height={1} marginBottom={0} justifyContent="center" alignItems="center">
-            <text fg={THEME_COLORS.textMuted}>Zero-knowledge secret management</text>
+            <text fg={THEME_COLORS.textMuted}>The secrets layer</text>
           </box>
 
           <box flexDirection="column" width={52} marginTop={1} gap={0}>
-            {providers.map((provider, index) => (
-              <LoginButton
-                key={provider}
-                label={providerLabels[provider]}
-                selected={selectedProviderIndex === index}
-              />
-            ))}
+            <LoginButton label="Sign in" />
           </box>
 
           {!isModalOpen && (

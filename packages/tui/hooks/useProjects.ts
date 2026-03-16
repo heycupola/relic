@@ -38,7 +38,7 @@ export function useProjects() {
     fetchLimits();
   }, [fetchLimits]);
 
-  const projects = useMemo<Project[]>(() => {
+  const { archivedCount, projects } = useMemo(() => {
     const projectMap = new Map<string, Project>();
 
     if (ownedProjectsData?.projects) {
@@ -63,14 +63,20 @@ export function useProjects() {
       }
     }
 
-    const sorted = Array.from(projectMap.values()).sort((a, b) => {
-      const order = { owned: 1, shared: 1, restricted: 2, archived: 3 };
-      const diff =
-        (order[a.status as keyof typeof order] || 1) - (order[b.status as keyof typeof order] || 1);
-      return diff !== 0 ? diff : a.name.localeCompare(b.name);
-    });
+    const allProjects = Array.from(projectMap.values());
+    const archivedCount = allProjects.filter((p) => p.status === "archived").length;
 
-    return sorted;
+    const sorted = allProjects
+      .filter((p) => p.status !== "archived")
+      .sort((a, b) => {
+        const order = { owned: 1, shared: 1, restricted: 2 };
+        const diff =
+          (order[a.status as keyof typeof order] || 1) -
+          (order[b.status as keyof typeof order] || 1);
+        return diff !== 0 ? diff : a.name.localeCompare(b.name);
+      });
+
+    return { archivedCount, projects: sorted };
   }, [ownedProjectsData, sharedProjectsData]);
 
   const isLoading =
@@ -114,6 +120,7 @@ export function useProjects() {
   );
 
   return {
+    archivedCount,
     projects,
     limits,
     isLoading,

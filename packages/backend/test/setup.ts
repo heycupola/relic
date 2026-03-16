@@ -7,17 +7,9 @@ import { components } from "../convex/_generated/api";
 import type { Id as BetterAuthId } from "../convex/betterAuth/_generated/dataModel";
 import type { ErrorCode } from "../convex/lib/errors";
 
-export const modules = import.meta.glob([
-  "../convex/**/*.ts",
-  "!../convex/betterAuth/**",
-  "!../convex/rateLimiter.ts",
-  "!../convex/lib/rateLimit.ts",
-]);
-export const betterAuthModules = import.meta.glob("../convex/betterAuth/**/*.ts");
-
-// Get the mock autumn from globalThis (set by vitest.setup.ts)
-// biome-ignore lint/suspicious/noExplicitAny: Test mock accessed via globalThis
-export const mockAutumn = (globalThis as any).__mockAutumn;
+// Re-export from setup-modules to avoid circular import / TDZ.
+// setup-modules has ZERO convex imports so it initializes before any convex code runs.
+export { betterAuthModules, mockAutumn, modules } from "./setup-modules";
 
 export interface TestUser {
   userId: BetterAuthId<"user">;

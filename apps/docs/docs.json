@@ -16,8 +16,7 @@
   },
   "logo": {
     "light": "/assets/logo-light.svg",
-    "dark": "/assets/logo-dark.svg",
-    "href": "https://relic.so"
+    "dark": "/assets/logo-dark.svg"
   },
   "favicon": "/assets/favicon.svg",
   "css": "/assets/custom.css",

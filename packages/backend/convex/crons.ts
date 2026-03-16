@@ -10,4 +10,11 @@ crons.daily(
   {},
 );
 
+crons.daily(
+  "cleanup-old-webhook-events",
+  { hourUTC: 4, minuteUTC: 0 },
+  internal.webhook._cleanupOldEvents,
+  {},
+);
+
 export default crons;

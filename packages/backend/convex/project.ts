@@ -92,13 +92,15 @@ export const getProjectLimits = protectedAction({
     const purchasedProjectsCount = Math.max(0, usage - freeLimit);
     const unusedProjects = balance;
 
+    const effectiveLimit = Math.max(includedUsage, usage) + (balance ?? 0);
+
     return {
       hasPro,
       freeLimit,
       totalProjectsCount: usage,
       purchasedProjectsCount,
       unusedProjects,
-      includedUsage,
+      includedUsage: effectiveLimit,
     };
   },
 });
@@ -210,20 +212,18 @@ export const createProject = protectedAction({
         }
       }
 
-      const usage = data.usage;
-      const includedUsage = data.included_usage;
-      const balance = data.balance;
-
-      if (usage > includedUsage) {
-        const excessCount = usage - includedUsage;
+      if (currentUsage > freeLimit) {
+        const excessCount = currentUsage - freeLimit;
         return {
           status: "requiresRemoval" as const,
-          currentUsage: usage,
-          includedUsage: includedUsage,
-          excessCount: excessCount,
-          message: `You're using ${usage} projects but only have ${includedUsage} included. Please archive ${excessCount} project(s) or upgrade.`,
+          currentUsage,
+          includedUsage: freeLimit,
+          excessCount,
+          message: `You're using ${currentUsage} projects but only have ${freeLimit} included. Please archive ${excessCount} project(s) to continue.`,
         };
       }
+
+      const balance = data.balance;
 
       if (!args.confirmPayment) {
         if (!balance || balance <= 0) {

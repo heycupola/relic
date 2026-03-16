@@ -56,7 +56,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     showError,
     isProcessing,
   } = useTaskQueue();
-  const { hasPro } = useUser();
+  const { hasPro, isLoading: isLoadingPlan } = useUser();
 
   const {
     project,
@@ -80,16 +80,18 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     refetchProject: refetchProjectData,
   } = useProjectPage(projectId);
 
-  const prevHasProRef = useRef(hasPro);
+  const [showProSuccess, setShowProSuccess] = useState(false);
+  const prevHasProRef = useRef<boolean | null>(null);
   useEffect(() => {
-    if (hasPro && !prevHasProRef.current) {
+    if (isLoadingPlan) return;
+    if (prevHasProRef.current !== null && hasPro && !prevHasProRef.current) {
       refetchProjectData();
       setCheckoutModal({ visible: false, url: "", reason: "pro_required" });
       setBillingPortalModal({ visible: false, url: "" });
-      showSuccess("You're now a PRO! Unlimited sharing unlocked.", 5000);
+      setShowProSuccess(true);
     }
     prevHasProRef.current = hasPro;
-  }, [hasPro, refetchProjectData, showSuccess]);
+  }, [hasPro, isLoadingPlan, refetchProjectData]);
 
   const [viewLevel, setViewLevel] = useState<ViewLevel>("environments");
   const [selectedEnvId, setSelectedEnvId] = useState<string | null>(null);
@@ -114,6 +116,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
 
   const bulkImportInput = useMultiLineInput({ maxLines: 50 });
   const [bulkImportFormat, setBulkImportFormat] = useState<BulkImportFormat>("env");
+  const [bulkImportScopes, setBulkImportScopes] = useState<Map<string, string>>(new Map());
   const [bulkImportCollisions, setBulkImportCollisions] = useState<CollisionInfo[]>([]);
 
   const [pendingCollaboratorEmail, setPendingCollaboratorEmail] = useState<string | null>(null);
@@ -147,6 +150,8 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [isVerifyingPassword, setIsVerifyingPassword] = useState(false);
+  const [isSessionUnlocked, setIsSessionUnlocked] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"toggle" | "editor" | null>(null);
 
   const isRestricted = projectStatus === "restricted" || projectStatus === "archived";
 
@@ -168,6 +173,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
           name: s.key,
           value: s.value,
           secretType: s.type || "string",
+          secretScope: s.scope || "shared",
         })),
       ];
     }
@@ -180,6 +186,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
           name: s.key,
           value: s.value,
           secretType: s.type || "string",
+          secretScope: s.scope || "shared",
         }));
     }
     return [];
@@ -534,9 +541,10 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
       trackEvent("collaborator_revoked", { success: true, with_rotation: false });
       showSuccess(`${collab.email} revoked`);
       refetchProjectData();
-    } catch (_error) {
+    } catch (error) {
       trackEvent("collaborator_revoked", { success: false });
-      logger.debug("Revoke collaborator failed");
+      logger.debug("Revoke collaborator failed:", error);
+      showError(extractErrorMessage(error));
     } finally {
       setIsRevokingCollaborator(false);
     }
@@ -552,9 +560,10 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
       trackEvent("collaborator_revoked", { success: true, with_rotation: true });
       showSuccess(`${collab.email} revoked and keys rotated`);
       refetchProjectData();
-    } catch (_error) {
+    } catch (error) {
       trackEvent("collaborator_revoked", { success: false });
-      logger.debug("Revoke with rotation failed");
+      logger.debug("Revoke with rotation failed:", error);
+      showError(extractErrorMessage(error));
     } finally {
       setIsRevokingWithRotation(false);
     }
@@ -563,7 +572,10 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
   const handleToggleSecrets = () => {
     if (showSecrets) {
       setShowSecrets(false);
+    } else if (isSessionUnlocked) {
+      setShowSecrets(true);
     } else {
+      setPendingAction("toggle");
       setShowPasswordModal(true);
       setPasswordError(null);
     }
@@ -577,9 +589,16 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     try {
       const isValid = await verifyPassword(password);
       if (isValid) {
-        setShowSecrets(true);
+        setIsSessionUnlocked(true);
         setShowPasswordModal(false);
         setPasswordError(null);
+
+        if (pendingAction === "toggle") {
+          setShowSecrets(true);
+        } else if (pendingAction === "editor") {
+          openBulkImport();
+        }
+        setPendingAction(null);
       } else {
         setPasswordError("Incorrect password");
       }
@@ -594,6 +613,17 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
   const handlePasswordModalClose = () => {
     setShowPasswordModal(false);
     setPasswordError(null);
+    setPendingAction(null);
+  };
+
+  const handleOpenEditor = () => {
+    if (isSessionUnlocked) {
+      openBulkImport();
+    } else {
+      setPendingAction("editor");
+      setShowPasswordModal(true);
+      setPasswordError(null);
+    }
   };
 
   const getAllCommands = () => {
@@ -617,7 +647,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         category: "Manage",
         disabled: isRestricted,
       });
-      cmds.push({ key: "g", description: "Go to dashboard", category: "Navigate" });
+      cmds.push({ key: "g", description: "Open dashboard", category: "Navigate" });
       cmds.push({ key: "esc", description: "Back to home", category: "Navigate" });
     } else if (viewLevel === "environment") {
       cmds.push({
@@ -646,7 +676,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         category: "Manage",
         disabled: isRestricted,
       });
-      cmds.push({ key: "g", description: "Go to dashboard", category: "Navigate" });
+      cmds.push({ key: "g", description: "Open dashboard", category: "Navigate" });
       cmds.push({ key: "esc", description: "Go back", category: "Navigate" });
     } else {
       cmds.push({
@@ -661,7 +691,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         category: "Manage",
         disabled: isRestricted,
       });
-      cmds.push({ key: "g", description: "Go to dashboard", category: "Navigate" });
+      cmds.push({ key: "g", description: "Open dashboard", category: "Navigate" });
       cmds.push({ key: "esc", description: "Go back", category: "Navigate" });
     }
     cmds.push({
@@ -705,7 +735,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         break;
       case "⌥i":
       case "⌥u":
-        openBulkImport();
+        handleOpenEditor();
         break;
       case "c":
         setActiveModal("manageCollaborators");
@@ -725,20 +755,25 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
 
     if (secretItems.length === 0) {
       bulkImportInput.setValue("# Add your secrets here\nAPI_KEY=your_key_here");
+      setBulkImportScopes(new Map());
     } else {
+      const scopeMap = new Map<string, string>();
       const secretsJson = JSON.stringify(
         secretItems.map((i) => {
-          const secretItem = i as { value?: string; secretType?: string };
+          const secretItem = i as { value?: string; secretType?: string; secretScope?: string };
+          const scope = secretItem.secretScope || "shared";
+          scopeMap.set(i.name, scope);
           return {
             key: i.name,
             value: secretItem.value || "",
             type: secretItem.secretType || "string",
-            scope: "shared",
+            scope,
           };
         }),
         null,
         2,
       );
+      setBulkImportScopes(scopeMap);
       const envContent = jsonToEnv(secretsJson);
       bulkImportInput.setValue(envContent || "");
     }
@@ -748,6 +783,13 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
   };
 
   useKeyboard((key) => {
+    if (showProSuccess) {
+      if (key.name === "escape" || key.name === "return") {
+        setShowProSuccess(false);
+      }
+      return;
+    }
+
     if (creatingItem || editingItem) return;
 
     if (confirmationModal.visible || checkoutModal.visible || billingPortalModal.visible) return;
@@ -780,12 +822,26 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
       if (key.name === "j" && key.meta) {
         const content = bulkImportInput.value.trim();
         if (bulkImportFormat === "env" && content) {
-          const json = envToJson(content);
+          const json = envToJson(content, bulkImportScopes);
           if (json && json !== "[]") {
             bulkImportInput.setValue(json);
             setBulkImportFormat("json");
           }
         } else if (content) {
+          try {
+            const parsed = JSON.parse(content);
+            if (Array.isArray(parsed)) {
+              const updatedScopes = new Map(bulkImportScopes);
+              for (const item of parsed) {
+                if (item?.key && item?.scope) {
+                  updatedScopes.set(item.key, item.scope);
+                }
+              }
+              setBulkImportScopes(updatedScopes);
+            }
+          } catch {
+            // ignore parse errors
+          }
           const env = jsonToEnv(content);
           if (env) {
             bulkImportInput.setValue(env);
@@ -823,7 +879,10 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
                     key: s.key,
                     value: String(s.value),
                     valueType: s.type,
-                    scope: (s.scope as "client" | "server" | "shared") || "shared",
+                    scope: (s.scope || bulkImportScopes.get(s.key) || "shared") as
+                      | "client"
+                      | "server"
+                      | "shared",
                   })),
                   mode: "overwrite",
                 });
@@ -896,7 +955,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
       !isRestricted &&
       viewLevel !== "environments"
     )
-      openBulkImport();
+      handleOpenEditor();
     else if (key.name === "c" && !isRestricted) setActiveModal("manageCollaborators");
     else if (key.name === "v") handleToggleSecrets();
     else if (key.sequence === "?") setActiveModal("commandPalette");
@@ -934,15 +993,12 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
       shortcuts.push(
         { key: "n", description: "create environment", disabled: isDisabled || isRestricted },
         { key: "u", description: "rename environment", disabled: isDisabled || isRestricted },
-        { key: "g", description: "dashboard", disabled: isDisabled },
-        { key: "esc", description: "back", disabled: isDisabled },
       );
     } else if (viewLevel === "environment") {
-      shortcuts.push({
-        key: "n",
-        description: "create folder",
-        disabled: isDisabled || isRestricted,
-      });
+      shortcuts.push(
+        { key: "n", description: "create folder", disabled: isDisabled || isRestricted },
+        { key: "⌥i", description: "edit secrets", disabled: isDisabled || isRestricted },
+      );
       const item = items[selectedIndex];
       if (item?.type !== "secret")
         shortcuts.push({
@@ -950,17 +1006,12 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
           description: "rename folder",
           disabled: isDisabled || isRestricted,
         });
-      shortcuts.push(
-        { key: "⌥i", description: "edit secrets", disabled: isDisabled || isRestricted },
-        { key: "g", description: "dashboard", disabled: isDisabled },
-        { key: "esc", description: "back", disabled: isDisabled },
-      );
     } else {
-      shortcuts.push(
-        { key: "⌥i", description: "edit secrets", disabled: isDisabled || isRestricted },
-        { key: "g", description: "dashboard", disabled: isDisabled },
-        { key: "esc", description: "back", disabled: isDisabled },
-      );
+      shortcuts.push({
+        key: "⌥i",
+        description: "edit secrets",
+        disabled: isDisabled || isRestricted,
+      });
     }
     return { primary: [{ shortcuts }], secondary: [] };
   };
@@ -1191,6 +1242,18 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
           setCheckoutModal({ visible: false, url: "", reason: "pro_required" });
         }}
       />
+
+      <Modal
+        visible={showProSuccess}
+        title="Welcome to Pro!"
+        width={50}
+        shortcuts={[{ key: "esc", description: "close" }]}
+      >
+        <box flexDirection="column" gap={1}>
+          <text fg={THEME_COLORS.success}>You're now a PRO member!</text>
+          <text fg={THEME_COLORS.text}>Unlimited projects and sharing unlocked.</text>
+        </box>
+      </Modal>
 
       <ConfirmPaymentModal
         visible={confirmationModal.visible}

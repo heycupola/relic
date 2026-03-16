@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ContainerLines } from "@/components/container-lines";
-import { Footer } from "@/components/footer";
 import { Header } from "@/components/header";
+import { MinifiedFooter } from "@/components/minified-footer";
 
 export const metadata: Metadata = {
   title: "Page Not Found",
@@ -41,7 +41,7 @@ export default function NotFound() {
             </div>
           </div>
         </main>
-        <Footer />
+        <MinifiedFooter />
       </div>
     </div>
   );

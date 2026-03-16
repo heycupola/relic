@@ -13,7 +13,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     authClient.getSession().then((session) => {
       if (session?.data?.user.id) {
-        const redirectTo = isValidReturnUrl(returnUrl) ? returnUrl : "/";
+        const redirectTo = isValidReturnUrl(returnUrl) ? returnUrl : "/dashboard";
         if (redirectTo) {
           router.replace(redirectTo);
         }

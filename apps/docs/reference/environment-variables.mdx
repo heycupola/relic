@@ -19,9 +19,10 @@ Relic reads the following environment variables. None of them are required for n
 |----------|-------------|---------|
 | `CONVEX_URL` | Convex backend URL. Only needed for self-hosted or development. | Production URL (built-in) |
 | `CONVEX_SITE_URL` | Convex HTTP actions URL. Only needed for self-hosted or development. | Production URL (built-in) |
+| `SITE_URL` | Web dashboard URL. Only needed for self-hosted or development. | Production URL (built-in) |
 
 <Note>
-  You do not need to set `CONVEX_URL` or `CONVEX_SITE_URL` when using Relic's hosted service. These are only required for self-hosted or local development setups.
+  You do not need to set `CONVEX_URL`, `CONVEX_SITE_URL`, or `SITE_URL` when using Relic's hosted service. These are only required for self-hosted or local development setups.
 </Note>
 
 ## Logging
@@ -43,7 +44,7 @@ Relic reads the following environment variables. None of them are required for n
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DEV` | Set to `true` to enable development mode. Enables console logging, debug log file, and disables telemetry. | Not set |
+| `DEV` | Set to `true` to enable development mode. Switches server URLs to localhost, enables console logging, debug log file, and disables telemetry. | Not set |
 | `CI` | When set (any value), disables telemetry and console logging. Detected automatically by most CI providers. | Not set |
 
 ## CI/CD Quick Reference

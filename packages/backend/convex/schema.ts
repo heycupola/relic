@@ -199,6 +199,13 @@ export default defineSchema({
     ),
     createdAt: v.number(),
   }).index("by_user", ["userId"]),
+  processedWebhook: defineTable({
+    eventId: v.string(),
+    source: v.union(v.literal("stripe"), v.literal("resend")),
+    processedAt: v.number(),
+  })
+    .index("by_eventId_source", ["eventId", "source"])
+    .index("by_processedAt", ["processedAt"]),
   deletedAccount: defineTable({
     anonymousId: v.string(),
     deletedAt: v.number(),

@@ -338,7 +338,7 @@ export async function prepareSecrets(
   return { secrets: secretsObj, count: secrets.length };
 }
 
-function resolveProjectId(options: RunOptions): string | null {
+export function resolveProjectId(options: RunOptions): string | null {
   if (options.project) return options.project;
   if (process.env.RELIC_PROJECT_ID) return process.env.RELIC_PROJECT_ID;
   return null;

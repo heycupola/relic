@@ -5,7 +5,7 @@ import {
   type PasswordRequirement,
   validatePassword,
 } from "@repo/auth";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { KEY_SYMBOLS, THEME_COLORS } from "../utils/constants";
 import { InlineInput } from "./forms/InlineInput";
 import { GuideBar } from "./shared/GuideBar";
@@ -42,19 +42,11 @@ export function PasswordInput({
   const [currentValue, setCurrentValue] = useState("");
   const [passwordValue, setPasswordValue] = useState("");
   const [confirmValue, setConfirmValue] = useState("");
-  const [showValidationErrors, setShowValidationErrors] = useState(false);
 
   const requirements = checkPasswordRequirements(passwordValue);
   const validation = validatePassword(passwordValue);
   const passwordsMatch = confirmValue.length > 0 && confirmValue === passwordValue;
   const showStrength = mode !== "verify" && focusedField === "password";
-
-  // Clear validation errors when password becomes valid
-  useEffect(() => {
-    if (showValidationErrors && validation.isValid) {
-      setShowValidationErrors(false);
-    }
-  }, [showValidationErrors, validation.isValid]);
 
   const cycleFocus = (direction: "next" | "prev") => {
     type FieldName = "current" | "password" | "confirm";
@@ -80,10 +72,13 @@ export function PasswordInput({
 
     if (mode === "change" && currentValue.length === 0) return;
     if (!validation.isValid) {
-      setShowValidationErrors(true);
+      setFocusedField("password");
       return;
     }
-    if (!passwordsMatch) return;
+    if (!passwordsMatch) {
+      setFocusedField("confirm");
+      return;
+    }
 
     if (mode === "change") {
       onSubmit(currentValue, passwordValue);
@@ -138,7 +133,6 @@ export function PasswordInput({
         isFocused={focusedField === "password"}
         isPassword={true}
         showPassword={showPassword}
-        error={error}
         showIcon={false}
         showCount={false}
         width={width}
@@ -193,16 +187,9 @@ export function PasswordInput({
         />
       )}
 
-      {showValidationErrors && validation.errors.length > 0 && (
-        <box flexDirection="column">
-          <box height={1}>
-            <text fg={THEME_COLORS.error}>[!] Password requirements not met:</text>
-          </box>
-          {validation.errors.map((err) => (
-            <box key={err} height={1} paddingLeft={4}>
-              <text fg={THEME_COLORS.error}>• {err}</text>
-            </box>
-          ))}
+      {error && (
+        <box height={1}>
+          <text fg={THEME_COLORS.error}>{error}</text>
         </box>
       )}
 

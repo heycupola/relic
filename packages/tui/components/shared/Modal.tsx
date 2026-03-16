@@ -27,7 +27,7 @@ export function Modal({
   }
 
   const left = Math.floor((termWidth - width) / 2);
-  const top = Math.floor((termHeight - height) / 2);
+  const top = Math.floor((termHeight - 1 - height) / 2);
 
   return (
     <>

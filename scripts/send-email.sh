@@ -15,7 +15,7 @@ curl -X POST 'https://api.resend.com/emails' \
   -H "Authorization: Bearer $API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{
-      "from": "Can Vardar <can@relic.so>",
+      "from": "Relic <notifications@relic.so>",
       "to": "me@icanvardar.com",
       "subject": "Test",
       "html": "<p>Test email</p>"
