@@ -31,7 +31,7 @@ export default async function login() {
 
     let userCode: string | null = null;
     let verificationUri: string | null = null;
-    let currentStatus: DeviceAuthStatus | "starting" = "starting";
+    let currentStatus: DeviceAuthStatus | "starting" | "approved" = "starting";
 
     const result = await deviceAuth.startAuth({
       onCodeReceived: (code: DeviceCodeResponse) => {
@@ -67,9 +67,9 @@ export default async function login() {
       spinner.succeed(pc.green("Login successful!"));
     } else if (result.error) {
       trackEvent("cli_login_completed", { success: false, reason: currentStatus });
-      if (currentStatus === "denied") {
+      if ((currentStatus as string) === "denied") {
         spinner.fail(pc.red("Authorization denied"));
-      } else if (currentStatus === "expired") {
+      } else if ((currentStatus as string) === "expired") {
         spinner.fail(pc.red("Code expired. Please try again."));
       } else {
         spinner.fail(pc.red(`Error: ${result.error.message}`));

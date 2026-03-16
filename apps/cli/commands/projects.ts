@@ -27,7 +27,7 @@ function renderProjectTree(projects: ProjectWithDetails[]): void {
   console.log();
 
   for (let projectIndex = 0; projectIndex < projects.length; projectIndex++) {
-    const project = projects[projectIndex];
+    const project = projects[projectIndex]!;
     const isLastProject = projectIndex === projects.length - 1;
     const projectPrefix = isLastProject ? TREE.LAST_BRANCH : TREE.BRANCH;
     const childPrefix = isLastProject ? TREE.EMPTY : TREE.VERTICAL;
@@ -42,18 +42,20 @@ function renderProjectTree(projects: ProjectWithDetails[]): void {
     console.log(`${pc.dim(projectPrefix)}${projectName}${badgeText}`);
 
     for (let envIndex = 0; envIndex < project.environments.length; envIndex++) {
-      const env = project.environments[envIndex];
+      const env = project.environments[envIndex]!;
       const isLastEnv = envIndex === project.environments.length - 1;
       const envPrefix = isLastEnv ? TREE.LAST_BRANCH : TREE.BRANCH;
       const envChildPrefix = isLastEnv ? TREE.EMPTY : TREE.VERTICAL;
 
       const envColor = env.color || "white";
       const colorFn =
-        envColor in pc ? (pc as Record<string, (s: string) => string>)[envColor] : (s: string) => s;
+        envColor in pc
+          ? (pc as unknown as Record<string, (s: string) => string>)[envColor]!
+          : (s: string) => s;
       console.log(`${pc.dim(childPrefix)}${pc.dim(envPrefix)}${colorFn(env.name)}`);
 
       for (let folderIndex = 0; folderIndex < env.folders.length; folderIndex++) {
-        const folder = env.folders[folderIndex];
+        const folder = env.folders[folderIndex]!;
         const isLastFolder = folderIndex === env.folders.length - 1;
         const folderPrefix = isLastFolder ? TREE.LAST_BRANCH : TREE.BRANCH;
 
