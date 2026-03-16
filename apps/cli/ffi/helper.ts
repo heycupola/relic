@@ -58,10 +58,16 @@ async function findLibraryInProduction(
   targetPlatform: string,
   libName: string,
 ): Promise<string | null> {
-  const prebuildsPath = `${import.meta.dir}/../prebuilds/${targetPlatform}/${libName}`;
+  const searchPaths = [
+    `${import.meta.dir}/${libName}`,
+    `${import.meta.dir}/../lib/${libName}`,
+    `${import.meta.dir}/../prebuilds/${targetPlatform}/${libName}`,
+  ];
 
-  if (await Bun.file(prebuildsPath).exists()) {
-    return prebuildsPath;
+  for (const candidate of searchPaths) {
+    if (await Bun.file(candidate).exists()) {
+      return candidate;
+    }
   }
 
   return null;
