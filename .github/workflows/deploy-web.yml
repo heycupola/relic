@@ -45,7 +45,7 @@ jobs:
         run: bunx vinext build
         working-directory: apps/web
         env:
-          NEXT_PUBLIC_CONVEX_URL: https://placeholder.convex.cloud
+          NEXT_PUBLIC_CONVEX_URL: https://strong-viper-562.convex.cloud
 
       - name: Generate worker entry
         run: bun run predeploy
