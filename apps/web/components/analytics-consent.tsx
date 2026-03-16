@@ -50,11 +50,11 @@ export function useCookieConsent(): {
   return { consentState, isEU, accept, reject };
 }
 
-interface CookieConsentBannerProps {
+interface AnalyticsConsentBannerProps {
   onAccept?: () => void;
 }
 
-export function CookieConsentBanner({ onAccept }: CookieConsentBannerProps) {
+export function AnalyticsConsentBanner({ onAccept }: AnalyticsConsentBannerProps) {
   const { consentState, isEU, accept, reject } = useCookieConsent();
 
   if (!isEU || consentState !== null) return null;

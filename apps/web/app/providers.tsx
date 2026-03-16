@@ -6,7 +6,7 @@ import { AutumnProvider } from "autumn-js/react";
 import { ConvexReactClient, useQuery } from "convex/react";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
-import { CookieConsentBanner } from "@/components/cookie-consent-banner";
+import { AnalyticsConsentBanner } from "@/components/analytics-consent";
 import { authClient } from "@/lib/auth";
 import { getCookieValue } from "@/lib/cookies";
 import { initPostHog } from "@/lib/posthog";
@@ -50,7 +50,7 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
   return (
     <>
       {children}
-      {ready && <CookieConsentBanner onAccept={handleAccept} />}
+      {ready && <AnalyticsConsentBanner onAccept={handleAccept} />}
     </>
   );
 }
