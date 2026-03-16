@@ -2,7 +2,7 @@ name: Build Rust Libraries
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, canary]
     paths:
       - 'packages/runner/**'
   pull_request:
