@@ -1,4 +1,4 @@
-name: Release to npm
+name: Release
 
 on:
   push:
@@ -22,30 +22,22 @@ jobs:
       - name: Check if version changed
         id: check
         run: |
-          # Get current version
-          CURRENT_VERSION=$(node -p "require('./apps/cli/package.json').version")
-
-          # Get previous version (from parent commit)
-          git checkout HEAD~1 -- apps/cli/package.json 2>/dev/null || echo "First commit"
-          PREVIOUS_VERSION=$(node -p "require('./apps/cli/package.json').version" 2>/dev/null || echo "0.0.0")
-
-          # Restore current version
+          CURRENT=$(node -p "require('./apps/cli/package.json').version")
+          git checkout HEAD~1 -- apps/cli/package.json 2>/dev/null || true
+          PREVIOUS=$(node -p "require('./apps/cli/package.json').version" 2>/dev/null || echo "0.0.0")
           git checkout HEAD -- apps/cli/package.json
 
-          echo "Previous version: $PREVIOUS_VERSION"
-          echo "Current version: $CURRENT_VERSION"
+          echo "Previous: $PREVIOUS → Current: $CURRENT"
 
-          if [ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" ]; then
-            echo "Version changed!"
+          if [ "$CURRENT" != "$PREVIOUS" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+            echo "version=$CURRENT" >> $GITHUB_OUTPUT
           else
-            echo "Version unchanged"
             echo "changed=false" >> $GITHUB_OUTPUT
           fi
 
-  build:
-    name: Build ${{ matrix.platform }}
+  build-rust:
+    name: Build Rust (${{ matrix.platform }})
     needs: check-version
     if: needs.check-version.outputs.version-changed == 'true'
     strategy:
@@ -74,54 +66,47 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Cache cargo registry
+      - name: Cache cargo
         uses: actions/cache@v4
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: packages/runner/target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/runner/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build Rust library
         working-directory: packages/runner
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Prepare artifacts (Unix)
+      - name: Collect artifacts (Unix)
         if: runner.os != 'Windows'
-        working-directory: apps/cli
         run: |
-          mkdir -p prebuilds/${{ matrix.platform }}
-          cp ../../packages/runner/target/${{ matrix.target }}/release/librelic_runner.* prebuilds/${{ matrix.platform }}/ || true
+          mkdir -p artifacts
+          cp packages/runner/target/${{ matrix.target }}/release/librelic_runner.* artifacts/
 
-      - name: Prepare artifacts (Windows)
+      - name: Collect artifacts (Windows)
         if: runner.os == 'Windows'
-        working-directory: apps/cli
         shell: bash
         run: |
-          mkdir -p prebuilds/${{ matrix.platform }}
-          cp ../../packages/runner/target/${{ matrix.target }}/release/relic_runner.dll prebuilds/${{ matrix.platform }}/ || true
+          mkdir -p artifacts
+          cp packages/runner/target/${{ matrix.target }}/release/relic_runner.dll artifacts/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: rust-${{ matrix.platform }}
-          path: apps/cli/prebuilds/${{ matrix.platform }}
+          path: artifacts/
           if-no-files-found: error
 
-  publish:
-    name: Publish to npm
-    needs: [check-version, build]
+  release:
+    name: Publish & Release
+    needs: [check-version, build-rust]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.check-version.outputs.new-version }}
 
     steps:
       - uses: actions/checkout@v4
@@ -131,32 +116,78 @@ jobs:
         with:
           bun-version: 1.3.2
 
-      - name: Create prebuilt directories
-        working-directory: apps/cli
-        run: mkdir -p prebuilds/{darwin-arm64,darwin-x64,linux-x64,win32-x64}
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
-      - name: Download all artifacts
+      - name: Download Rust artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Copy artifacts to prebuilt directories
+      - name: Organize prebuilds
         run: |
-          cp -r artifacts/rust-darwin-arm64/* apps/cli/prebuilds/darwin-arm64/ || true
-          cp -r artifacts/rust-darwin-x64/* apps/cli/prebuilds/darwin-x64/ || true
-          cp -r artifacts/rust-linux-x64/* apps/cli/prebuilds/linux-x64/ || true
-          cp -r artifacts/rust-win32-x64/* apps/cli/prebuilds/win32-x64/ || true
+          mkdir -p apps/cli/prebuilds/{darwin-arm64,darwin-x64,linux-x64,win32-x64}
+          cp artifacts/rust-darwin-arm64/* apps/cli/prebuilds/darwin-arm64/
+          cp artifacts/rust-darwin-x64/* apps/cli/prebuilds/darwin-x64/
+          cp artifacts/rust-linux-x64/* apps/cli/prebuilds/linux-x64/
+          cp artifacts/rust-win32-x64/* apps/cli/prebuilds/win32-x64/
 
-      - name: Verify prebuilt files
+      - name: Build standalone binaries
         run: |
-          echo "Checking prebuilt files:"
-          find apps/cli/prebuilds -type f
+          mkdir -p dist
+          bun build --compile --target=bun-darwin-arm64 apps/cli/index.ts --outfile dist/relic-darwin-arm64
+          bun build --compile --target=bun-darwin-x64 apps/cli/index.ts --outfile dist/relic-darwin-x64
+          bun build --compile --target=bun-linux-x64 apps/cli/index.ts --outfile dist/relic-linux-x64
+          bun build --compile --target=bun-windows-x64 apps/cli/index.ts --outfile dist/relic-win32-x64.exe
 
-      - name: Update package name for npm
+      - name: Package archives
+        run: |
+          for platform in darwin-arm64 darwin-x64 linux-x64; do
+            mkdir -p staging/$platform
+            cp dist/relic-$platform staging/$platform/relic
+            cp apps/cli/prebuilds/$platform/librelic_runner.* staging/$platform/
+            tar -czf dist/relic-$platform.tar.gz -C staging/$platform .
+          done
+
+          mkdir -p staging/win32-x64
+          cp dist/relic-win32-x64.exe staging/win32-x64/relic.exe
+          cp apps/cli/prebuilds/win32-x64/relic_runner.dll staging/win32-x64/
+          (cd staging/win32-x64 && zip ../../dist/relic-win32-x64.zip *)
+
+      - name: Extract changelog for release body
+        id: changelog
+        run: |
+          BODY=""
+          if [ -f "apps/cli/CHANGELOG.md" ]; then
+            BODY=$(node -e "
+              const fs = require('fs');
+              const v = process.argv[1].replace(/\./g, '\\\\.');
+              const c = fs.readFileSync('apps/cli/CHANGELOG.md', 'utf8');
+              const m = c.match(new RegExp('## ' + v + '\\\\n([\\\\s\\\\S]*?)(?=\\\\n## |$)'));
+              process.stdout.write(m ? m[1].trim() : '');
+            " "$VERSION")
+          fi
+
+          if [ -z "$BODY" ]; then
+            BODY="Release v${VERSION}"
+          fi
+
+          {
+            echo "body<<CHANGELOG_EOF"
+            echo "$BODY"
+            echo "CHANGELOG_EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Prepare package for npm
         working-directory: apps/cli
         run: |
-          # Remove "private": true to allow publishing
-          bun run --bun "const pkg = require('./package.json'); delete pkg.private; require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));"
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.name = 'relic';
+            delete pkg.private;
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          "
 
       - name: Publish to npm
         working-directory: apps/cli
@@ -169,14 +200,37 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.check-version.outputs.new-version }}
-          name: Release v${{ needs.check-version.outputs.new-version }}
+          tag_name: v${{ env.VERSION }}
+          name: v${{ env.VERSION }}
+          body: ${{ steps.changelog.outputs.body }}
           draft: false
           prerelease: false
           files: |
-            apps/cli/prebuilds/darwin-arm64/*
-            apps/cli/prebuilds/darwin-x64/*
-            apps/cli/prebuilds/linux-x64/*
-            apps/cli/prebuilds/win32-x64/*
+            dist/relic-darwin-arm64.tar.gz
+            dist/relic-darwin-x64.tar.gz
+            dist/relic-linux-x64.tar.gz
+            dist/relic-win32-x64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Homebrew tap
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "HOMEBREW_TAP_TOKEN not set, skipping Homebrew update"
+            exit 0
+          fi
+
+          SHA_DARWIN_ARM64=$(sha256sum dist/relic-darwin-arm64.tar.gz | cut -d' ' -f1)
+          SHA_DARWIN_X64=$(sha256sum dist/relic-darwin-x64.tar.gz | cut -d' ' -f1)
+          SHA_LINUX_X64=$(sha256sum dist/relic-linux-x64.tar.gz | cut -d' ' -f1)
+
+          gh api repos/heycupola/homebrew-tap/dispatches \
+            --method POST \
+            -f event_type=formula-update \
+            -f "client_payload[version]=${VERSION}" \
+            -f "client_payload[sha_darwin_arm64]=${SHA_DARWIN_ARM64}" \
+            -f "client_payload[sha_darwin_x64]=${SHA_DARWIN_X64}" \
+            -f "client_payload[sha_linux_x64]=${SHA_LINUX_X64}"
