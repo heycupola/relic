@@ -5,11 +5,10 @@ import { Menu, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { authClient } from "@/lib/auth";
 import { trackWebEvent } from "@/lib/posthog";
 import { BLOG_PATH, ENTERPRISE_URL, SITE_DOCS_URL } from "@/lib/site";
-import { AnnouncementBar } from "./announcement-bar";
 import { LogoContextMenu } from "./logo-context-menu";
 
 interface HeaderProps {
@@ -26,15 +25,10 @@ export function Header({ showLogout = false }: HeaderProps) {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [announcementVisible, setAnnouncementVisible] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
   } | null>(null);
-
-  const handleAnnouncementVisibility = useCallback((visible: boolean) => {
-    setAnnouncementVisible(visible);
-  }, []);
 
   const handleLogout = async () => {
     trackWebEvent("web_logout");
@@ -69,16 +63,7 @@ export function Header({ showLogout = false }: HeaderProps) {
 
   return (
     <>
-      {!showLogout && (
-        <AnnouncementBar
-          text="Relic v1.0 is out now!"
-          href="/blog/relic-v1"
-          onVisibilityChange={handleAnnouncementVisibility}
-        />
-      )}
-      <header
-        className={`sticky ${announcementVisible ? "top-9" : "top-0"} z-50 border-b border-border bg-background`}
-      >
+      <header className="sticky top-0 z-50 border-b border-border bg-background">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:h-16 sm:px-6 lg:px-12">
           <Link
             href="/"
