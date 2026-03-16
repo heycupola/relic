@@ -15,7 +15,7 @@
     "components/**/*.tsx",
     "lib/**/*.ts",
     "lib/**/*.tsx",
-    "next-env.d.ts"
+    "types/**/*.d.ts"
   ],
   "exclude": ["node_modules", ".next"]
 }
