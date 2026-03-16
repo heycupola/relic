@@ -8,8 +8,8 @@ export function ContainerLines() {
 
   useEffect(() => {
     const calculatePositions = () => {
-      // max-w-6xl = 1152px, with px-6 (24px) or lg:px-12 (48px)
-      const maxWidth = 1152;
+      // max-w-5xl = 1024px, with px-6 (24px) or lg:px-12 (48px)
+      const maxWidth = 1024;
       const windowWidth = window.innerWidth;
 
       // Calculate actual container width (capped at maxWidth)

@@ -64,7 +64,7 @@ export function Pricing() {
 
   return (
     <SectionWrapper label="Pricing" id="pricing">
-      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-12">
+      <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16 lg:px-12">
         <h2 className="text-xl font-semibold text-foreground sm:text-2xl">Pricing</h2>
         <p className="mt-2 text-sm text-foreground/60 text-pretty sm:text-base">
           Simple pricing. No surprises.

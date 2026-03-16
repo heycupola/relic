@@ -61,7 +61,7 @@ export default async function ChangelogPage() {
       <JsonLd data={structuredData} />
 
       <section className="border-b border-border">
-        <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14 lg:px-12">
+        <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14 lg:px-12">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
             <div className="space-y-2">
               <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
@@ -93,7 +93,7 @@ export default async function ChangelogPage() {
       </section>
 
       <section className="border-b border-border">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-12">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-12">
           {entries.length === 0 ? (
             <div className="py-16 text-center">
               <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-muted-foreground">

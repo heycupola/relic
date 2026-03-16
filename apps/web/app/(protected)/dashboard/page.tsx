@@ -173,7 +173,7 @@ export default function DashboardPage() {
       <Suspense fallback={null}>
         <UpgradeHandler userData={userData} onError={setUpgradeError} />
       </Suspense>
-      <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-12">
+      <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-12">
         <div className="sr-only" role="alert" aria-live="assertive" aria-atomic="true">
           {upgradeError}
         </div>

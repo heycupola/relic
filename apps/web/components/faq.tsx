@@ -11,7 +11,7 @@ export function FAQ() {
 
   return (
     <SectionWrapper label="FAQ" id="faq">
-      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-12">
+      <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16 lg:px-12">
         <h2 className="text-xl font-semibold text-foreground sm:text-2xl">FAQ</h2>
         <p className="mt-2 text-sm text-foreground/60 text-pretty sm:text-base">
           Everything you need to know about Relic.

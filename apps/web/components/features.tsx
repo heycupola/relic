@@ -202,7 +202,7 @@ function CompactCard({ feature }: { feature: CompactFeature }) {
 export function Features() {
   return (
     <SectionWrapper label="Features" id="features">
-      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-12">
+      <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16 lg:px-12">
         <h2 className="text-xl font-semibold text-foreground sm:text-2xl">Features</h2>
         <p className="mt-2 max-w-2xl text-sm text-foreground/60 text-pretty sm:text-base">
           Everything you need to manage secrets, from editing to sharing to deployment.

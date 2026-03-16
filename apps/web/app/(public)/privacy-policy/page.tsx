@@ -38,7 +38,7 @@ export default function PrivacyPolicyPage() {
       <Header />
       <main className="flex-1">
         <div className="border-b border-border">
-          <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-16 md:py-20 lg:px-12">
+          <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-16 md:py-20 lg:px-12">
             <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
               Privacy Policy
             </h1>
@@ -48,7 +48,7 @@ export default function PrivacyPolicyPage() {
           </div>
         </div>
 
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-12">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-12">
           <div className="divide-y divide-border">
             <section className="py-8 sm:py-10">
               <p className="text-sm text-foreground/70 leading-relaxed">
