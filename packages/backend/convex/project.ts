@@ -212,6 +212,17 @@ export const createProject = protectedAction({
         }
       }
 
+      if (currentUsage > freeLimit) {
+        const excessCount = currentUsage - freeLimit;
+        return {
+          status: "requiresRemoval" as const,
+          currentUsage,
+          includedUsage: freeLimit,
+          excessCount,
+          message: `You're using ${currentUsage} projects but only have ${freeLimit} included. Please archive ${excessCount} project(s) to continue.`,
+        };
+      }
+
       const balance = data.balance;
 
       if (!args.confirmPayment) {
@@ -228,17 +239,6 @@ export const createProject = protectedAction({
           balance,
           freeLimit,
           message: `This will use 1 of your ${balance} purchased projects.`,
-        };
-      }
-
-      if (currentUsage > freeLimit) {
-        const excessCount = currentUsage - freeLimit;
-        return {
-          status: "requiresRemoval" as const,
-          currentUsage,
-          includedUsage: freeLimit,
-          excessCount,
-          message: `You're using ${currentUsage} projects but only have ${freeLimit} included. Please archive ${excessCount} project(s) to continue.`,
         };
       }
     }

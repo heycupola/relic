@@ -556,6 +556,36 @@ describe("Project Lifecycle", () => {
       }
     });
 
+    test("should return requiresRemoval without confirmPayment when over limit", async () => {
+      for (let i = 0; i < 10; i++) {
+        const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+        const result = await owner.asUser.action(api.project.createProject, {
+          encryptedProjectKey,
+          name: `project-${i}`,
+          confirmPayment: true,
+        });
+
+        if (result.status !== "success") {
+          throw new Error(`Project ${i} creation failed: ${result.message || "Unknown error"}`);
+        }
+      }
+
+      mockAutumn.setFeature(owner.userId, "projects", 7, 10);
+
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+      const result = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "new-project",
+      });
+
+      expect(result.status).toBe("requiresRemoval");
+      if (result.status === "requiresRemoval") {
+        expect(result.currentUsage).toBe(10);
+        expect(result.includedUsage).toBe(7);
+        expect(result.excessCount).toBe(3);
+      }
+    });
+
     test("should allow new project after archiving excess projects", async () => {
       for (let i = 0; i < 8; i++) {
         const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
