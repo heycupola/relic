@@ -1,4 +1,6 @@
-import { ImageResponse } from "next/og";
+import { initWasm, Resvg } from "@resvg/resvg-wasm";
+import type { ReactNode } from "react";
+import satori from "satori";
 
 export const OG_IMAGE_SIZE = {
   width: 1200,
@@ -37,169 +39,170 @@ async function loadFonts() {
   return fontCache;
 }
 
+let wasmInitialized = false;
+
+async function ensureResvg() {
+  if (wasmInitialized) return;
+  const wasmResponse = await fetch("https://unpkg.com/@resvg/resvg-wasm@2.6.2/index_bg.wasm");
+  await initWasm(wasmResponse);
+  wasmInitialized = true;
+}
+
 export async function createOgImage({
   eyebrow,
   title,
   description,
   footer = "relic.so",
 }: OgImageOptions) {
-  const fonts = await loadFonts();
+  const [fonts] = await Promise.all([loadFonts(), ensureResvg()]);
 
-  return new ImageResponse(
-    <div
-      style={{
-        display: "flex",
-        width: "100%",
-        height: "100%",
-        backgroundColor: BG,
-      }}
-    >
-      {/* Left stripe */}
-      <div style={{ display: "flex", width: "2px", height: "100%", backgroundColor: BORDER }} />
-
-      {/* Main content area */}
+  const svg = await satori(
+    (
       <div
         style={{
           display: "flex",
-          flexDirection: "column",
-          flexGrow: 1,
+          width: "100%",
           height: "100%",
+          backgroundColor: BG,
         }}
       >
-        {/* Top border */}
-        <div style={{ display: "flex", width: "100%", height: "2px", backgroundColor: BORDER }} />
+        <div style={{ display: "flex", width: "2px", height: "100%", backgroundColor: BORDER }} />
 
-        {/* Eyebrow bar */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "0 48px",
-            height: "56px",
-            borderBottom: `2px solid ${BORDER}`,
-          }}
-        >
-          <span
-            style={{
-              fontFamily: "Geist Mono",
-              fontSize: "13px",
-              letterSpacing: "0.22em",
-              color: MUTED,
-              textTransform: "uppercase" as const,
-            }}
-          >
-            {eyebrow}
-          </span>
-          <span
-            style={{
-              fontFamily: "Geist Mono",
-              fontSize: "13px",
-              letterSpacing: "0.22em",
-              color: MUTED,
-              textTransform: "uppercase" as const,
-            }}
-          >
-            {footer}
-          </span>
-        </div>
-
-        {/* Body */}
         <div
           style={{
             display: "flex",
             flexDirection: "column",
             flexGrow: 1,
-            padding: "48px 48px 0 48px",
-            overflow: "hidden",
+            height: "100%",
           }}
         >
-          {/* Title */}
-          <div
-            style={{
-              display: "flex",
-              fontFamily: "Geist Sans",
-              fontSize: "64px",
-              fontWeight: 600,
-              letterSpacing: "-0.03em",
-              lineHeight: 1.1,
-              color: FG,
-              maxHeight: "300px",
-              overflow: "hidden",
-            }}
-          >
-            {title}
-          </div>
+          <div style={{ display: "flex", width: "100%", height: "2px", backgroundColor: BORDER }} />
 
-          {/* Description */}
-          <div
-            style={{
-              display: "flex",
-              fontFamily: "Geist Sans",
-              fontSize: "24px",
-              lineHeight: 1.5,
-              color: MUTED,
-              marginTop: "24px",
-              maxHeight: "112px",
-              overflow: "hidden",
-            }}
-          >
-            {description}
-          </div>
-        </div>
-
-        {/* Footer bar */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            padding: "0 48px",
-            height: "56px",
-            borderTop: `2px solid ${BORDER}`,
-          }}
-        >
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              width: "28px",
-              height: "28px",
-              backgroundColor: FG,
+              justifyContent: "space-between",
+              padding: "0 48px",
+              height: "56px",
+              borderBottom: `2px solid ${BORDER}`,
             }}
           >
             <span
               style={{
-                fontFamily: "Geist Sans",
-                fontSize: "16px",
-                fontWeight: 600,
-                color: BG,
+                fontFamily: "Geist Mono",
+                fontSize: "13px",
+                letterSpacing: "0.22em",
+                color: MUTED,
+                textTransform: "uppercase" as const,
               }}
             >
-              r
+              {eyebrow}
+            </span>
+            <span
+              style={{
+                fontFamily: "Geist Mono",
+                fontSize: "13px",
+                letterSpacing: "0.22em",
+                color: MUTED,
+                textTransform: "uppercase" as const,
+              }}
+            >
+              {footer}
             </span>
           </div>
-          <span
+
+          <div
             style={{
-              fontFamily: "Geist Mono",
-              fontSize: "13px",
-              letterSpacing: "0.22em",
-              color: MUTED,
-              textTransform: "uppercase" as const,
-              marginLeft: "14px",
+              display: "flex",
+              flexDirection: "column",
+              flexGrow: 1,
+              padding: "48px 48px 0 48px",
+              overflow: "hidden",
             }}
           >
-            Encrypted on your device
-          </span>
+            <div
+              style={{
+                display: "flex",
+                fontFamily: "Geist Sans",
+                fontSize: "64px",
+                fontWeight: 600,
+                letterSpacing: "-0.03em",
+                lineHeight: 1.1,
+                color: FG,
+                maxHeight: "300px",
+                overflow: "hidden",
+              }}
+            >
+              {title}
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                fontFamily: "Geist Sans",
+                fontSize: "24px",
+                lineHeight: 1.5,
+                color: MUTED,
+                marginTop: "24px",
+                maxHeight: "112px",
+                overflow: "hidden",
+              }}
+            >
+              {description}
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              padding: "0 48px",
+              height: "56px",
+              borderTop: `2px solid ${BORDER}`,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "28px",
+                height: "28px",
+                backgroundColor: FG,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "Geist Sans",
+                  fontSize: "16px",
+                  fontWeight: 600,
+                  color: BG,
+                }}
+              >
+                r
+              </span>
+            </div>
+            <span
+              style={{
+                fontFamily: "Geist Mono",
+                fontSize: "13px",
+                letterSpacing: "0.22em",
+                color: MUTED,
+                textTransform: "uppercase" as const,
+                marginLeft: "14px",
+              }}
+            >
+              Encrypted on your device
+            </span>
+          </div>
+
+          <div style={{ display: "flex", width: "100%", height: "2px", backgroundColor: BORDER }} />
         </div>
 
-        {/* Bottom border */}
-        <div style={{ display: "flex", width: "100%", height: "2px", backgroundColor: BORDER }} />
+        <div style={{ display: "flex", width: "2px", height: "100%", backgroundColor: BORDER }} />
       </div>
-
-      {/* Right stripe */}
-      <div style={{ display: "flex", width: "2px", height: "100%", backgroundColor: BORDER }} />
-    </div>,
+    ) as ReactNode,
     {
       ...OG_IMAGE_SIZE,
       fonts: [
@@ -214,4 +217,16 @@ export async function createOgImage({
       ],
     },
   );
+
+  const resvg = new Resvg(svg, {
+    fitTo: { mode: "width", value: OG_IMAGE_SIZE.width },
+  });
+  const png = resvg.render().asPng();
+
+  return new Response(png, {
+    headers: {
+      "Content-Type": "image/png",
+      "Cache-Control": "public, max-age=86400, s-maxage=86400",
+    },
+  });
 }

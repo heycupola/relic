@@ -21,6 +21,7 @@
     "@mdx-js/mdx": "^3.1.1",
     "@repo/backend": "*",
     "@repo/ui": "*",
+    "@resvg/resvg-wasm": "^2.6.2",
     "@tailwindcss/postcss": "catalog:",
     "autumn-js": "catalog:",
     "better-auth": "catalog:",
@@ -32,6 +33,7 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "remark-gfm": "^4.0.1",
+    "satori": "^0.25.0",
     "tailwindcss": "catalog:"
   },
   "devDependencies": {
