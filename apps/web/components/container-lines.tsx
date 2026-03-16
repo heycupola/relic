@@ -8,8 +8,8 @@ export function ContainerLines() {
 
   useEffect(() => {
     const calculatePositions = () => {
-      // max-w-6xl = 1152px, with px-6 (24px) or lg:px-12 (48px)
-      const maxWidth = 1152;
+      // max-w-5xl = 1024px, with px-6 (24px) or lg:px-12 (48px)
+      const maxWidth = 1024;
       const windowWidth = window.innerWidth;
 
       // Calculate actual container width (capped at maxWidth)
@@ -28,7 +28,7 @@ export function ContainerLines() {
   }, []);
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[60]" aria-hidden="true">
+    <div className="pointer-events-none fixed inset-0 z-[60] hidden lg:block" aria-hidden="true">
       {/* Left vertical line */}
       <div className="absolute top-0 bottom-0 w-px bg-border" style={{ left: containerLeft }} />
       {/* Right vertical line */}

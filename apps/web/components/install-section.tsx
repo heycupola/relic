@@ -135,7 +135,7 @@ export function InstallSection({ showWrapper = true }: InstallSectionProps) {
 
   return (
     <SectionWrapper label="Install" showStripes>
-      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-12">{installContent}</div>
+      <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16 lg:px-12">{installContent}</div>
     </SectionWrapper>
   );
 }

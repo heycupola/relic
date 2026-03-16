@@ -30,7 +30,7 @@ export function ArticleLayout({
   return (
     <>
       <section className="border-b border-border">
-        <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-12">
+        <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10 lg:px-12">
           <div className="flex flex-col gap-5 border-2 border-border bg-card p-5 sm:p-8">
             <div className="flex flex-wrap items-center gap-3 font-mono text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
               <span>{entry.collection}</span>
@@ -64,7 +64,7 @@ export function ArticleLayout({
       </section>
 
       <section className="border-b border-border">
-        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-0 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_240px] lg:px-12">
+        <div className="mx-auto grid max-w-5xl grid-cols-1 gap-0 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_240px] lg:px-12">
           <article className="border-x border-border px-5 py-6 sm:px-8 sm:py-8">
             <div className="content-prose">{children}</div>
           </article>

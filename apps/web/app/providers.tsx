@@ -5,13 +5,10 @@ import { api } from "@repo/backend";
 import { AutumnProvider } from "autumn-js/react";
 import { ConvexReactClient, useQuery } from "convex/react";
 import { usePathname, useRouter } from "next/navigation";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
-import { AnalyticsConsentBanner } from "@/components/analytics-consent";
+import { type ReactNode, useEffect } from "react";
 import { authClient } from "@/lib/auth";
 import { getCookieValue } from "@/lib/cookies";
 import { initPostHog } from "@/lib/posthog";
-
-const CONSENT_KEY = "relic-cookie-consent";
 
 const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
 
@@ -24,35 +21,13 @@ const convex = new ConvexReactClient(convexUrl, {
 });
 
 export function PostHogProvider({ children }: { children: ReactNode }) {
-  const [ready, setReady] = useState(false);
-
   useEffect(() => {
     const geo = getCookieValue("relic-geo");
-    const requiresConsent = geo === "eu" || geo == null;
-
-    if (!requiresConsent) {
-      initPostHog();
-      setReady(true);
-      return;
-    }
-
-    const consent = localStorage.getItem(CONSENT_KEY);
-    if (consent === "accepted") {
-      initPostHog();
-    }
-    setReady(true);
+    const isEU = geo === "eu" || geo == null;
+    initPostHog(isEU);
   }, []);
 
-  const handleAccept = useCallback(() => {
-    initPostHog();
-  }, []);
-
-  return (
-    <>
-      {children}
-      {ready && <AnalyticsConsentBanner onAccept={handleAccept} />}
-    </>
-  );
+  return <>{children}</>;
 }
 
 const ONBOARDING_GATED_PATHS = ["/dashboard", "/terms-of-service", "/privacy-policy"];

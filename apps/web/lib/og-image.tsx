@@ -44,7 +44,8 @@ let wasmInitialized = false;
 async function ensureResvg() {
   if (wasmInitialized) return;
   const wasmResponse = await fetch("https://unpkg.com/@resvg/resvg-wasm@2.6.2/index_bg.wasm");
-  await initWasm(wasmResponse);
+  const wasmBuffer = await wasmResponse.arrayBuffer();
+  await initWasm(wasmBuffer);
   wasmInitialized = true;
 }
 

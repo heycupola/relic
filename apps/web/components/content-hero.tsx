@@ -19,7 +19,7 @@ interface ContentHeroProps {
 export function ContentHero({ eyebrow, title, description, actions = [], meta }: ContentHeroProps) {
   return (
     <section className="border-b border-border">
-      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14 lg:px-12">
+      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14 lg:px-12">
         <div className="border-2 border-border bg-muted/40 px-5 py-5 sm:px-8 sm:py-8">
           <div className="flex flex-col gap-8">
             <div className="space-y-5">

@@ -56,7 +56,7 @@ export default function SettingsPage() {
   return (
     <>
       <div className="border-b border-border">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-12">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-12">
           <nav className="flex items-center gap-2 py-3 text-sm">
             <Link
               href="/dashboard"
@@ -69,7 +69,7 @@ export default function SettingsPage() {
           </nav>
         </div>
       </div>
-      <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-12">
+      <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-12">
         <div className="space-y-6">
           {isLoading ? (
             <div className="border-2 border-border bg-card p-5">
