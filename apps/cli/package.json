@@ -1,6 +1,6 @@
 {
   "name": "@repo/cli",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "The Relic CLI for managing and sharing secrets. Encrypted on your device, never exposed to anyone else. Not even us.",
   "keywords": [
     "cli",
@@ -15,6 +15,9 @@
   "license": "MIT",
   "module": "index.ts",
   "type": "module",
+  "bin": {
+    "relic": "index.ts"
+  },
   "private": true,
   "scripts": {
     "build:runner": "cd ../../packages/runner && cargo build --release",

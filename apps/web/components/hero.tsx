@@ -29,8 +29,7 @@ export function Hero() {
   return (
     <SectionWrapper label="Introduction">
       <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16 md:py-20 lg:px-12">
-        {/* <p className="mb-4 font-mono text-sm text-foreground/50">{"What's new in v1.0.0"}</p> */}
-        <p className="mb-4 font-mono text-xs text-foreground/50 sm:text-sm">{"v1.0 is out"}</p>
+        <p className="mb-4 font-mono text-xs text-foreground/50 sm:text-sm">{"v0.1 is out"}</p>
         <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl md:text-5xl lg:text-6xl">
           {SITE_SLOGAN}
         </h1>

@@ -9,6 +9,7 @@ import projects from "./commands/projects";
 import run from "./commands/run";
 import { telemetryDisable, telemetryEnable, telemetryStatus } from "./commands/telemetry";
 import whoami from "./commands/whoami";
+import pkg from "./package.json";
 
 await initLogger();
 
@@ -35,7 +36,7 @@ function printHelpHint() {
 const program = new Command()
   .name("relic")
   .description("Zero-knowledge secret layer for your projects")
-  .version("0.1.0")
+  .version(pkg.version)
   .exitOverride()
   .configureOutput({
     outputError: () => {
