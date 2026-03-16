@@ -64,12 +64,7 @@ function AuthorizeContent() {
   const sessionChecked = !sessionPending;
 
   useEffect(() => {
-    if (status === "approved" || status === "denied") return;
-    if (status === "error" && userCode) {
-      setStatus("loading");
-      setErrorMessage("");
-    }
-    if (status === "error" && !userCode) return;
+    if (status === "approved" || status === "denied" || status === "error") return;
 
     if (!sessionChecked || authLoading) {
       setStatus("loading");
