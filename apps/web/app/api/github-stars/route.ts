@@ -13,7 +13,6 @@ export async function GET() {
 
     const res = await fetch("https://api.github.com/repos/heycupola/relic", {
       headers,
-      next: { revalidate: 3600 },
     });
 
     if (!res.ok) {
