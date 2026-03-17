@@ -6,7 +6,9 @@ import { components, internal } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import authSchema from "./betterAuth/schema";
 
-const siteUrl = process.env.SITE_URL || "";
+const SITE_URL =
+  process.env.SITE_URL ||
+  (process.env.ENVIRONMENT === "development" ? "http://localhost:3000" : "https://relic.so");
 
 const authFunctions: AuthFunctions = internal.auth;
 
@@ -88,7 +90,7 @@ export const createAuth = (
     logger: {
       disabled: optionsOnly,
     },
-    baseURL: siteUrl,
+    baseURL: SITE_URL,
     database: authComponent.adapter(ctx),
     socialProviders: {
       google: {

@@ -2,6 +2,7 @@ import {
   type DeviceAuthStatus,
   type DeviceCodeResponse,
   deviceAuth,
+  SITE_URL,
   validateSession,
 } from "@repo/auth";
 import { createLogger, trackEvent } from "@repo/logger";
@@ -14,6 +15,24 @@ function formatCode(code: string): string {
   if (code.includes("-")) return code;
   if (code.length === 8) return `${code.slice(0, 4)}-${code.slice(4)}`;
   return code;
+}
+
+function normalizeVerificationUri(uri: string): string {
+  try {
+    const current = new URL(uri);
+    const expected = new URL(SITE_URL);
+    const isLocalhost = current.hostname === "localhost" || current.hostname === "127.0.0.1";
+
+    if (isLocalhost && current.host !== expected.host) {
+      current.protocol = expected.protocol;
+      current.host = expected.host;
+      return current.toString();
+    }
+  } catch {
+    // Ignore invalid URLs and fall back to the server-provided value.
+  }
+
+  return uri;
 }
 
 export default async function login() {
@@ -36,7 +55,7 @@ export default async function login() {
     const result = await deviceAuth.startAuth({
       onCodeReceived: (code: DeviceCodeResponse) => {
         userCode = code.user_code;
-        verificationUri = code.verification_uri_complete;
+        verificationUri = normalizeVerificationUri(code.verification_uri_complete);
 
         spinner.stop();
         console.log();
