@@ -19,7 +19,7 @@
     },
     "apps/cli": {
       "name": "@repo/cli",
-      "version": "0.1.0",
+      "version": "0.4.0",
       "bin": {
         "relic": "index.ts",
       },
@@ -32,6 +32,7 @@
         "@repo/tui": "*",
         "commander": "^13.1.0",
         "convex": "catalog:",
+        "open": "^11.0.0",
         "ora": "^8.2.0",
         "picocolors": "^1.1.1",
         "smol-toml": "^1.6.0",
