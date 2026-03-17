@@ -6,7 +6,11 @@
       "@repo/backend": ["../backend/index.ts"],
       "@repo/backend/*": ["../backend/*"],
       "@repo/auth": ["../auth/index.ts"],
-      "@repo/auth/*": ["../auth/*"]
+      "@repo/auth/*": ["../auth/*"],
+      "@repo/crypto": ["../crypto/index.ts"],
+      "@repo/crypto/*": ["../crypto/*"],
+      "@repo/logger": ["../logger/index.ts"],
+      "@repo/logger/*": ["../logger/*"]
     },
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "jsxImportSource": "@opentui/react"
