@@ -1,5 +1,17 @@
 # @repo/cli
 
+## 0.4.3
+
+### Patch Changes
+
+- ca35e4f: Fix the bare CLI launch path by loading the TUI reliably in source runs and waiting for the async command action to finish.
+
+## 0.4.2
+
+### Patch Changes
+
+- 4adddb3: Fix the published CLI runtime by bundling the TUI correctly, preserving async imports in the bundle, and normalizing bad localhost device auth URLs.
+
 ## 0.4.1
 
 ### Patch Changes
