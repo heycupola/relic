@@ -33,6 +33,13 @@ function printHelpHint() {
   console.error(`\n  ${pc.dim(`Run ${pc.white("relic --help")} for more information.`)}\n`);
 }
 
+// Use a runtime file URL so local source runs can load the TUI
+// without pulling the whole package into the CLI tsconfig.
+async function loadTui() {
+  const tuiEntry = new URL("../../packages/tui/index.tsx", import.meta.url).href;
+  await import(tuiEntry);
+}
+
 const program = new Command()
   .name("relic")
   .description("Zero-knowledge secret layer for your projects")
@@ -45,7 +52,7 @@ const program = new Command()
   })
   .action(async () => {
     process.env._RELIC_FROM_CLI = "true";
-    await import("@repo/tui");
+    await loadTui();
   });
 
 program.command("login").description("Authenticate with Relic").action(login);
@@ -79,7 +86,7 @@ program
   );
 
 try {
-  program.parse();
+  await program.parseAsync();
 } catch (err) {
   if (err instanceof CommanderError) {
     if (err.code === "commander.helpDisplayed" || err.code === "commander.version") {
