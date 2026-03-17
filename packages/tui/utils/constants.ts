@@ -43,8 +43,8 @@ export const KEY_SYMBOLS = {
 } as const;
 
 export const PRICING = {
-  seatPrice: "$5",
-  projectPrice: "$10",
+  seatPrice: "$1",
+  projectPrice: "$2",
 } as const;
 
 export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;

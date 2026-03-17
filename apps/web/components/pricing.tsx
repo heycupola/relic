@@ -139,7 +139,7 @@ export function Pricing() {
                 <h3 className="text-lg font-semibold text-foreground sm:text-xl">Pro</h3>
                 <div className="flex items-baseline gap-1">
                   <span className="text-3xl font-bold text-foreground tabular-nums sm:text-4xl">
-                    $20
+                    $9
                   </span>
                   <span className="text-foreground/60 text-sm sm:text-base">/month</span>
                 </div>
@@ -183,8 +183,8 @@ export function Pricing() {
               <div className="pt-2 border-t border-border/50">
                 <p className="text-xs font-medium text-foreground/50 mb-1.5">Need more?</p>
                 <div className="text-xs text-foreground/60 space-y-0.5 tabular-nums">
-                  <p>• Additional projects: $10 each</p>
-                  <p>• Additional shares: $5 each</p>
+                  <p>• Additional projects: $2 each</p>
+                  <p>• Additional shares: $1 each</p>
                 </div>
               </div>
             </div>
