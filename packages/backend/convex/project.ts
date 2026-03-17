@@ -231,7 +231,7 @@ export const createProject = protectedAction({
             status: "requiresConfirmation" as const,
             balance: 0,
             freeLimit,
-            message: "No purchased projects available. Adding a project costs $10.",
+            message: "No purchased projects available. Adding a project costs $2.",
           };
         }
         return {
