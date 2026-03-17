@@ -6,6 +6,7 @@ on:
     paths:
       - 'apps/cli/**'
       - 'packages/runner/**'
+  workflow_dispatch:
 
 jobs:
   check-version:
@@ -15,7 +16,7 @@ jobs:
       version-changed: ${{ steps.check.outputs.changed }}
       new-version: ${{ steps.check.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 2
 
@@ -23,6 +24,14 @@ jobs:
         id: check
         run: |
           CURRENT=$(node -p "require('./apps/cli/package.json').version")
+          echo "version=$CURRENT" >> $GITHUB_OUTPUT
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual trigger — skipping version comparison"
+            echo "changed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
           git checkout HEAD~1 -- apps/cli/package.json 2>/dev/null || true
           PREVIOUS=$(node -p "require('./apps/cli/package.json').version" 2>/dev/null || echo "0.0.0")
           git checkout HEAD -- apps/cli/package.json
@@ -31,7 +40,6 @@ jobs:
 
           if [ "$CURRENT" != "$PREVIOUS" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "version=$CURRENT" >> $GITHUB_OUTPUT
           else
             echo "changed=false" >> $GITHUB_OUTPUT
           fi
@@ -60,7 +68,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -106,11 +114,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
     env:
       VERSION: ${{ needs.check-version.outputs.new-version }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -190,13 +199,15 @@ jobs:
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
           "
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+
       - name: Publish to npm
         working-directory: apps/cli
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
-          npm publish --access public
+        run: npm publish --access public
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

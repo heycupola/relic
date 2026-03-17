@@ -6,6 +6,7 @@
       "name": "relic",
       "devDependencies": {
         "@biomejs/biome": "^2.2.5",
+        "@changesets/changelog-git": "^0.2.1",
         "@changesets/changelog-github": "^0.6.0",
         "@changesets/cli": "^2.30.0",
         "@emnapi/core": "^1.5.0",
@@ -19,7 +20,7 @@
     },
     "apps/cli": {
       "name": "@repo/cli",
-      "version": "0.1.0",
+      "version": "0.4.0",
       "bin": {
         "relic": "index.ts",
       },
@@ -32,6 +33,7 @@
         "@repo/tui": "*",
         "commander": "^13.1.0",
         "convex": "catalog:",
+        "open": "^11.0.0",
         "ora": "^8.2.0",
         "picocolors": "^1.1.1",
         "smol-toml": "^1.6.0",
