@@ -14,12 +14,13 @@ jobs:
   build:
     name: Build ${{ matrix.platform }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
             platform: darwin-arm64
             target: aarch64-apple-darwin
-          - os: macos-13
+          - os: macos-latest
             platform: darwin-x64
             target: x86_64-apple-darwin
           - os: ubuntu-latest
