@@ -1,12 +1,4 @@
-import {
-  chmodSync,
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 const CLI_DIR = join(dirname(import.meta.dir));
@@ -40,10 +32,5 @@ const outputFile = join(DIST_DIR, "cli.js");
 const bundled = readFileSync(outputFile, "utf-8");
 writeFileSync(outputFile, `#!/usr/bin/env bun\n${bundled}`);
 chmodSync(outputFile, 0o755);
-
-const prebuildsDir = join(CLI_DIR, "prebuilds");
-if (existsSync(prebuildsDir)) {
-  cpSync(prebuildsDir, join(DIST_DIR, "..", "prebuilds"), { recursive: true });
-}
 
 console.log(`Build succeeded → ${outputFile}`);
