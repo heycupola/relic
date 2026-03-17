@@ -1,3 +1,4 @@
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { decryptPrivateKeyWithPassword } from "@repo/crypto";
 
@@ -7,11 +8,73 @@ const CONFIG_DIR =
     ? resolve(HOME, "AppData", "Roaming", "relic")
     : resolve(HOME, ".config", "relic");
 const PASSWORD_FILE = resolve(CONFIG_DIR, "password");
+const PASSWORD_METADATA_FILE = resolve(CONFIG_DIR, "password-meta.json");
 
 const SECRETS_SERVICE = "com.relic.tui";
 const SECRETS_NAME = "master-password";
 
 const ENV_PASSWORD_KEY = "RELIC_PASSWORD";
+
+interface StoredPasswordMetadata {
+  userId: string;
+  email?: string;
+  savedAt: number;
+}
+
+export interface PasswordAccount {
+  userId: string;
+  email?: string;
+  encryptedPrivateKey?: string | null;
+  salt?: string | null;
+}
+
+function readPasswordMetadata(): StoredPasswordMetadata | null {
+  try {
+    if (!existsSync(PASSWORD_METADATA_FILE)) {
+      return null;
+    }
+
+    const raw = JSON.parse(readFileSync(PASSWORD_METADATA_FILE, "utf-8"));
+    if (typeof raw.userId !== "string" || raw.userId.length === 0) {
+      return null;
+    }
+
+    return {
+      userId: raw.userId,
+      email: typeof raw.email === "string" ? raw.email : undefined,
+      savedAt: typeof raw.savedAt === "number" ? raw.savedAt : Date.now(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writePasswordMetadata(account: PasswordAccount): void {
+  if (!account.userId) {
+    return;
+  }
+
+  writeFileSync(
+    PASSWORD_METADATA_FILE,
+    JSON.stringify(
+      {
+        userId: account.userId,
+        email: account.email,
+        savedAt: Date.now(),
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function clearPasswordMetadata(): void {
+  try {
+    rmSync(PASSWORD_METADATA_FILE, { force: true });
+  } catch (_) {
+    void 0;
+  }
+}
 
 async function ensureConfigDir(): Promise<void> {
   const { mkdir, chmod } = await import("node:fs/promises");
@@ -105,8 +168,44 @@ export async function hasPassword(): Promise<boolean> {
   return password !== null && password.length > 0;
 }
 
-export async function savePassword(password: string): Promise<void> {
+export async function hasPasswordForAccount(account: PasswordAccount): Promise<boolean> {
+  const password = await getPasswordFromStorage();
+  if (!password) {
+    return false;
+  }
+
+  const metadata = readPasswordMetadata();
+  const canVerifyAgainstKeys = !!account.encryptedPrivateKey && !!account.salt;
+
+  if (metadata?.userId && metadata.userId !== account.userId) {
+    return false;
+  }
+
+  if (!canVerifyAgainstKeys) {
+    return metadata?.userId === account.userId;
+  }
+
+  const encryptedPrivateKey = account.encryptedPrivateKey;
+  const salt = account.salt;
+  if (!encryptedPrivateKey || !salt) {
+    return false;
+  }
+  const isValid = await verifyPasswordWithExistingKeys(password, encryptedPrivateKey, salt);
+
+  if (isValid && metadata?.userId !== account.userId) {
+    await ensureConfigDir();
+    writePasswordMetadata(account);
+  }
+
+  return isValid;
+}
+
+export async function savePassword(password: string, account?: PasswordAccount): Promise<void> {
   await savePasswordToStorage(password);
+  if (account) {
+    await ensureConfigDir();
+    writePasswordMetadata(account);
+  }
 }
 
 export async function verifyPassword(password: string): Promise<boolean> {
@@ -116,6 +215,7 @@ export async function verifyPassword(password: string): Promise<boolean> {
 
 export async function clearPassword(): Promise<void> {
   await deletePasswordFromStorage();
+  clearPasswordMetadata();
 }
 
 export interface PasswordValidationResult {
