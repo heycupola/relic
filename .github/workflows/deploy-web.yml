@@ -51,7 +51,12 @@ jobs:
         run: bunx vinext build
         working-directory: apps/web
         env:
-          NEXT_PUBLIC_CONVEX_URL: https://strong-viper-562.convex.cloud
+          NEXT_PUBLIC_CONVEX_URL: ${{ secrets.CONVEX_URL }}
+          NEXT_PUBLIC_CONVEX_SITE_URL: ${{ secrets.CONVEX_SITE_URL }}
+          NEXT_PUBLIC_SITE_URL: https://relic.so
+          NEXT_PUBLIC_BETTER_AUTH_URL: https://relic.so
+          NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
+          NEXT_PUBLIC_POSTHOG_HOST: https://us.i.posthog.com
 
       - name: Generate worker entry
         run: bun run predeploy
