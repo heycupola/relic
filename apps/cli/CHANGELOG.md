@@ -1,5 +1,11 @@
 # @repo/cli
 
+## 0.4.1
+
+### Patch Changes
+
+- ec58413: Fix npm publish by bundling workspace dependencies with bun build
+
 ## 0.4.0
 
 ### Minor Changes
