@@ -15,12 +15,12 @@ console.log("Bundling CLI...");
 
 const entrySource = readFileSync(SOURCE_ENTRY, "utf-8");
 const bundlerSource = entrySource.replace(
-  'await import("@repo/tui");',
+  "await loadTui();",
   'await import("../../packages/tui/index.tsx");',
 );
 
 if (bundlerSource === entrySource) {
-  throw new Error("Failed to rewrite TUI import for the bundle entry.");
+  throw new Error("Failed to rewrite the TUI loader for the bundle entry.");
 }
 
 writeFileSync(BUILD_ENTRY, bundlerSource);
