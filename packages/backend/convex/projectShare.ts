@@ -217,7 +217,7 @@ export const shareProject = protectedAction({
         success: false,
         requiresConfirmation: true,
         freeLimit: shareLimits.freeShareLimit,
-        message: "Adding a share costs $5. Confirm to proceed.",
+        message: "Adding a share costs $1. Confirm to proceed.",
       };
     }
 
