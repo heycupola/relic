@@ -207,7 +207,7 @@ jobs:
 
       - name: Publish to npm
         working-directory: apps/cli
-        run: npm publish --provenance --access public
+        run: npm publish --access public
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
