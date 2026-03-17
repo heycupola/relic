@@ -8,7 +8,7 @@ import {
 } from "@repo/crypto";
 import { createLogger, trackEvent } from "@repo/logger";
 import open from "open";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getProtectedApi } from "../api";
 import { InlineInput } from "../components/forms/InlineInput";
 import { CommandPaletteModal } from "../components/modals/CommandPaletteModal";
@@ -57,7 +57,7 @@ export function HomePage() {
   const { logout } = useAppSession();
   const { runTask, continueTask, cancelTask, showSuccess, showError, isProcessing } =
     useTaskQueue();
-  const { hasPro, isLoading: isLoadingPlan } = useUser();
+  const { user, hasPro, isLoading: isLoadingPlan } = useUser();
 
   const {
     archivedCount,
@@ -76,6 +76,13 @@ export function HomePage() {
     salt,
     updatePassword,
   } = useUserKeys();
+  const showSetupRequiredError = useCallback(() => {
+    showError(
+      hasKeys
+        ? "Unlock your master password to continue."
+        : "Create a master password first to generate your encryption keys.",
+    );
+  }, [hasKeys, showError]);
 
   const navigation = useListNavigation({
     items: projects,
@@ -145,6 +152,7 @@ export function HomePage() {
   const handleCreateProject = async (name: string, confirmPayment?: boolean) => {
     if (!hasKeys || !publicKey) {
       logger.error("Cannot create project: User has no keys");
+      showSetupRequiredError();
       return;
     }
 
@@ -322,7 +330,15 @@ export function HomePage() {
     }
 
     try {
-      await savePassword(newPassword);
+      await savePassword(
+        newPassword,
+        user
+          ? {
+              userId: user.id,
+              email: user.email,
+            }
+          : undefined,
+      );
     } catch (error) {
       logger.error("Failed to save password locally:", error);
     }
@@ -349,7 +365,11 @@ export function HomePage() {
 
     switch (cmd.key) {
       case "n":
-        if (!isLoadingKeys && hasKeys && publicKey) setCreatingProject(true);
+        if (!isLoadingKeys && hasKeys && publicKey) {
+          setCreatingProject(true);
+        } else if (!isLoadingKeys) {
+          showSetupRequiredError();
+        }
         break;
       case "u":
         if (isOwned && project.id) {
@@ -448,6 +468,8 @@ export function HomePage() {
     } else if (key.name === "n") {
       if (!isLoadingKeys && hasKeys && publicKey) {
         setCreatingProject(true);
+      } else if (!isLoadingKeys) {
+        showSetupRequiredError();
       }
     } else if (key.name === "u") {
       const project = projects[navigation.selectedIndex];
