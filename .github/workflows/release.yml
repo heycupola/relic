@@ -142,6 +142,10 @@ jobs:
           cp artifacts/rust-linux-x64/* apps/cli/prebuilds/linux-x64/
           cp artifacts/rust-win32-x64/* apps/cli/prebuilds/win32-x64/
 
+      - name: Build CLI for npm
+        working-directory: apps/cli
+        run: bun run build
+
       - name: Build standalone binaries
         run: |
           mkdir -p dist
@@ -207,7 +211,7 @@ jobs:
 
       - name: Publish to npm
         working-directory: apps/cli
-        run: npm publish --access public
+        run: npm publish --access public --provenance
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
