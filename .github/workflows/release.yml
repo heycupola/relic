@@ -6,6 +6,7 @@ on:
     paths:
       - 'apps/cli/**'
       - 'packages/runner/**'
+  workflow_dispatch:
 
 jobs:
   check-version:
