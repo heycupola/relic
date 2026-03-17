@@ -3,6 +3,10 @@ import { deviceAuthError, notFoundError } from "../lib/errors";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query } from "./_generated/server";
 
+const SITE_URL =
+  process.env.SITE_URL ||
+  (process.env.ENVIRONMENT === "development" ? "http://localhost:3000" : "https://relic.so");
+
 function generateSecureDeviceCode(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
@@ -58,7 +62,7 @@ export const requestDeviceCode = mutation({
       pollingInterval,
     });
 
-    const verificationUri = `${process.env.SITE_URL || "http://localhost:3000"}/oauth/authorize`;
+    const verificationUri = `${SITE_URL}/oauth/authorize`;
 
     return {
       device_code: deviceCode,

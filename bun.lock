@@ -20,7 +20,7 @@
     },
     "apps/cli": {
       "name": "@repo/cli",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "bin": {
         "relic": "dist/cli.js",
       },
@@ -43,6 +43,12 @@
         "ora": "^8.2.0",
         "picocolors": "^1.1.1",
         "smol-toml": "^1.6.0",
+      },
+      "optionalDependencies": {
+        "@opentui/core-darwin-arm64": "0.1.65",
+        "@opentui/core-darwin-x64": "0.1.65",
+        "@opentui/core-linux-x64": "0.1.65",
+        "@opentui/core-win32-x64": "0.1.65",
       },
       "peerDependencies": {
         "typescript": "^5",
