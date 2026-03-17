@@ -16,7 +16,7 @@ const result = await Bun.build({
   outdir: DIST_DIR,
   naming: "cli.js",
   target: "bun",
-  minify: true,
+  minify: { syntax: true },
   external: ["argon2"],
 });
 
