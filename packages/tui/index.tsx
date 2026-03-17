@@ -25,7 +25,7 @@ import {
   clearPassword,
   clearSession,
   getUserKeyCacheDb,
-  hasPassword,
+  hasPasswordForAccount,
   savePassword,
   validateSession,
   watchSession,
@@ -35,30 +35,66 @@ import { TaskBar } from "./components/shared/TaskBar";
 import { AppProvider, useUser } from "./context";
 import { ConvexAuthProvider } from "./convex/provider";
 import { AppSessionContext } from "./hooks/useAppSession";
-import { useCurrentUser } from "./hooks/useCurrentUser";
 import { TaskProvider } from "./hooks/useTaskQueue";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { PasswordSetupPage } from "./pages/PasswordSetupPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { RouterProvider, useRouter } from "./router";
+import { getUserDisplayName } from "./utils/mappers";
 
 function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
   const { route, navigate } = useRouter();
-  const { displayName } = useCurrentUser();
+  const { user, isLoading: isUserLoading } = useUser();
+  const displayName = user ? getUserDisplayName(user) : "User";
+  const hasExistingKeys = !!user?.publicKey && !!user?.encryptedPrivateKey && !!user?.salt;
 
-  const [passwordStatus, setPasswordStatus] = useState<{ has: boolean; loading: boolean }>({
-    has: false,
+  const [passwordStatus, setPasswordStatus] = useState<{ isReady: boolean; loading: boolean }>({
+    isReady: false,
     loading: true,
   });
 
   useEffect(() => {
+    let cancelled = false;
+
     const checkPassword = async () => {
-      const has = await hasPassword();
-      setPasswordStatus({ has, loading: false });
+      if (isUserLoading) {
+        return;
+      }
+
+      if (!user || !hasExistingKeys) {
+        if (!cancelled) {
+          setPasswordStatus({ isReady: false, loading: false });
+        }
+        return;
+      }
+
+      const isReady = await hasPasswordForAccount({
+        userId: user.id,
+        email: user.email,
+        encryptedPrivateKey: user.encryptedPrivateKey,
+        salt: user.salt,
+      });
+
+      if (!cancelled) {
+        setPasswordStatus({ isReady, loading: false });
+      }
     };
-    checkPassword();
-  }, []);
+
+    setPasswordStatus({ isReady: false, loading: true });
+    void checkPassword();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    hasExistingKeys,
+    isUserLoading,
+    user?.email,
+    user?.encryptedPrivateKey,
+    user?.id,
+    user?.salt,
+  ]);
 
   const handleLogout = useCallback(async () => {
     await onLogout();
@@ -66,20 +102,32 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
   }, [onLogout, navigate]);
 
   const handlePasswordSetup = async (password: string) => {
-    await savePassword(password);
+    await savePassword(
+      password,
+      user
+        ? {
+            userId: user.id,
+            email: user.email,
+          }
+        : undefined,
+    );
     trackEvent("password_setup_completed", { success: true });
-    setPasswordStatus({ has: true, loading: false });
+    setPasswordStatus({ isReady: true, loading: false });
     navigate({ name: "home" });
   };
 
-  if (passwordStatus.loading) {
+  if (isUserLoading || !user || passwordStatus.loading) {
     return null;
   }
 
-  if (!passwordStatus.has) {
+  if (!hasExistingKeys || !passwordStatus.isReady) {
     return (
       <>
-        <PasswordSetupPage onComplete={handlePasswordSetup} onLogout={handleLogout} />
+        <PasswordSetupPage
+          hasExistingKeys={hasExistingKeys}
+          onComplete={handlePasswordSetup}
+          onLogout={handleLogout}
+        />
         <AuthenticatedTaskBar />
       </>
     );

@@ -17,7 +17,8 @@ import { THEME_COLORS } from "../utils/constants";
 const logger = createLogger("tui");
 
 interface PasswordSetupPageProps {
-  onComplete: (password: string) => void;
+  hasExistingKeys: boolean;
+  onComplete: (password: string) => Promise<void>;
   onLogout: () => Promise<void>;
 }
 
@@ -29,7 +30,11 @@ type TaskStatus =
   | "rewrapping_key"
   | "updating_backend";
 
-export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPageProps) {
+export function PasswordSetupPage({
+  hasExistingKeys,
+  onComplete,
+  onLogout,
+}: PasswordSetupPageProps) {
   const { width, height } = useTerminalDimensions();
   const { encryptedPrivateKey, salt, checkHasKeys, updatePassword, storeUserKeys } = useUserKeys();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -38,6 +43,7 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
   const [currentEncryptedPrivateKey, setCurrentEncryptedPrivateKey] = useState<string | null>(null);
   const [currentSalt, setCurrentSalt] = useState<string | null>(null);
   const [taskStatus, setTaskStatus] = useState<TaskStatus>(null);
+  const [setupError, setSetupError] = useState<string | null>(null);
   const [rewrapError, setRewrapError] = useState<string | null>(null);
 
   const handleLogout = async () => {
@@ -46,6 +52,7 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
 
   const handlePasswordSubmit = async (password: string) => {
     trackEvent("password_setup_started");
+    setSetupError(null);
     setTaskStatus("checking_password");
 
     try {
@@ -67,7 +74,7 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
           });
 
           setTaskStatus(null);
-          onComplete(password);
+          await onComplete(password);
           return;
         } catch (error) {
           logger.error("Failed to create user keys:", error);
@@ -101,7 +108,7 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
 
         if (isSamePassword) {
           setTaskStatus(null);
-          onComplete(password);
+          await onComplete(password);
           return;
         }
 
@@ -115,11 +122,11 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
       }
 
       setTaskStatus(null);
-      onComplete(password);
+      setSetupError("Could not load your encryption keys. Please try again.");
     } catch (error) {
       logger.error("Error checking password:", error);
       setTaskStatus(null);
-      onComplete(password);
+      setSetupError("Failed to prepare your account. Please try again.");
     }
   };
 
@@ -169,7 +176,7 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
 
       setTaskStatus(null);
       setShowPasswordWarning(false);
-      onComplete(pendingPassword);
+      await onComplete(pendingPassword);
     } catch (error) {
       logger.error("Failed to rewrap password:", error);
       setTaskStatus(null);
@@ -248,13 +255,16 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
           paddingBottom={1}
         >
           <box height={1} marginTop={1}>
-            <text fg={THEME_COLORS.text}>Set Your Password</text>
+            <text fg={THEME_COLORS.text}>
+              {hasExistingKeys ? "Unlock Master Password" : "Create Master Password"}
+            </text>
           </box>
 
           <box height={1} marginTop={1}>
-            <text>
-              <span fg={THEME_COLORS.accent}>[!]</span>
-              <span fg={THEME_COLORS.accent}> Your master password is never stored</span>
+            <text fg={hasExistingKeys ? THEME_COLORS.textDim : THEME_COLORS.accent}>
+              {hasExistingKeys
+                ? "Enter your password to unlock this account."
+                : "Create a password to generate your encryption keys."}
             </text>
           </box>
 
@@ -264,6 +274,7 @@ export function PasswordSetupPage({ onComplete, onLogout }: PasswordSetupPagePro
               onSubmit={handlePasswordSubmit}
               width={46}
               disabled={isAnyModalOpen}
+              error={setupError}
             />
           </box>
         </box>
