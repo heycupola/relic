@@ -153,8 +153,8 @@ export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardPro
               <div className="pt-2 space-y-1.5">
                 <p className="text-xs font-medium text-foreground/50">Need more?</p>
                 <div className="text-xs text-foreground/60 space-y-0.5 tabular-nums">
-                  <p>• Additional projects: $10 each</p>
-                  <p>• Additional shares: $5 each</p>
+                  <p>• Additional projects: $2 each</p>
+                  <p>• Additional shares: $1 each</p>
                 </div>
               </div>
             </div>
@@ -165,7 +165,7 @@ export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardPro
               disabled={isLoadingUpgrade}
               className="block w-full text-center p-3 border-2 border-border bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed tabular-nums"
             >
-              {isLoadingUpgrade ? "Loading…" : "Upgrade to Pro - $20/month"}
+              {isLoadingUpgrade ? "Loading…" : "Upgrade to Pro - $9/month"}
             </button>
           </div>
         </>
