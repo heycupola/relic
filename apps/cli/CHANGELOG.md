@@ -6,7 +6,6 @@
 
 - 30a83d0: Fix TUI onboarding by checking the stored master password against the authenticated account before entering the home screen, and route missing-key accounts back through password setup.
 - 3fdbaf3: Update Relic pricing copy in the CLI/TUI to match the lower Pro plan and add-on costs.
-
 ## 0.4.3
 
 ### Patch Changes
