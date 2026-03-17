@@ -32,11 +32,11 @@ vi.mock("resend", () => ({
 
 // Mock Resend component
 vi.mock("../convex/resend", () => ({
-  resendSdk: {
+  getResendSdk: vi.fn().mockReturnValue({
     emails: {
       send: vi.fn().mockResolvedValue({ data: { id: "mock-email-id" }, error: null }),
     },
-  },
+  }),
   resend: {
     sendEmailManually: vi.fn().mockResolvedValue("mock-email-id"),
   },

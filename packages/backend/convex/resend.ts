@@ -17,7 +17,14 @@ import {
 } from "./lib/emails/index";
 import { EmailKind } from "./lib/types";
 
-export const resendSdk = new Resend(process.env.RESEND_API_KEY);
+let _resendSdk: Resend | null = null;
+
+export function getResendSdk(): Resend {
+  if (!_resendSdk) {
+    _resendSdk = new Resend(process.env.RESEND_API_KEY);
+  }
+  return _resendSdk;
+}
 
 export const resend: ResendComponent = new ResendComponent(components.resend, {});
 
@@ -156,7 +163,7 @@ export const sendEmail = async (
     ctx,
     { from, to, subject },
     async (idempotencyKey: string) => {
-      const { data: resendData, error } = await resendSdk.emails.send({
+      const { data: resendData, error } = await getResendSdk().emails.send({
         from,
         to,
         subject,
@@ -202,7 +209,7 @@ export const sendEmailDirect = async (
   const subject = getEmailSubject(data.kind);
   const html = await renderEmailTemplate(data);
 
-  const { data: resendData, error } = await resendSdk.emails.send({
+  const { data: resendData, error } = await getResendSdk().emails.send({
     from,
     to,
     subject,
