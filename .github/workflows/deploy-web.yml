@@ -4,9 +4,15 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "apps/web/**"
+      - "packages/ui/**"
   pull_request:
     branches:
       - main
+    paths:
+      - "apps/web/**"
+      - "packages/ui/**"
   workflow_dispatch:
 
 concurrency:
