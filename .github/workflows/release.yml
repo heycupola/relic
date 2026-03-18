@@ -208,13 +208,43 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Sync npm package version
+      - name: Populate npm platform packages
+        run: |
+          for platform in darwin-arm64 darwin-x64 linux-x64; do
+            mkdir -p npm/$platform/bin
+            cp dist/relic-$platform npm/$platform/bin/relic
+            cp apps/cli/prebuilds/$platform/librelic_runner.* npm/$platform/bin/
+            chmod +x npm/$platform/bin/relic
+          done
+
+          mkdir -p npm/win32-x64/bin
+          cp dist/relic-win32-x64.exe npm/win32-x64/bin/relic.exe
+          cp apps/cli/prebuilds/win32-x64/relic_runner.dll npm/win32-x64/bin/
+
+      - name: Sync npm package versions
         run: |
           node -e "
             const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('npm/relic/package.json', 'utf8'));
-            pkg.version = '${VERSION}';
-            fs.writeFileSync('npm/relic/package.json', JSON.stringify(pkg, null, 2) + '\n');
+            const version = '${VERSION}';
+            const packages = [
+              'npm/darwin-arm64/package.json',
+              'npm/darwin-x64/package.json',
+              'npm/linux-x64/package.json',
+              'npm/win32-x64/package.json',
+              'npm/relic/package.json',
+            ];
+            for (const p of packages) {
+              const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+              pkg.version = version;
+              if (pkg.optionalDependencies) {
+                for (const dep of Object.keys(pkg.optionalDependencies)) {
+                  if (dep.startsWith('relic-cli-')) {
+                    pkg.optionalDependencies[dep] = version;
+                  }
+                }
+              }
+              fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
+            }
           "
 
       - name: Setup Node.js
@@ -223,7 +253,14 @@ jobs:
           node-version: 24
           registry-url: "https://registry.npmjs.org"
 
-      - name: Publish to npm
+      - name: Publish platform packages to npm
+        run: |
+          for platform in darwin-arm64 darwin-x64 linux-x64 win32-x64; do
+            echo "Publishing relic-cli-$platform..."
+            (cd npm/$platform && npm publish --access public --provenance)
+          done
+
+      - name: Publish relic package to npm
         run: |
           cd npm/relic
           npm publish --access public --provenance

@@ -13,10 +13,13 @@
   "bin": {
     "relic": "bin/relic"
   },
-  "scripts": {
-    "postinstall": "node postinstall.mjs"
+  "files": ["bin/"],
+  "optionalDependencies": {
+    "relic-cli-darwin-arm64": "0.5.0",
+    "relic-cli-darwin-x64": "0.5.0",
+    "relic-cli-linux-x64": "0.5.0",
+    "relic-cli-win32-x64": "0.5.0"
   },
-  "files": ["bin/", "postinstall.mjs"],
   "engines": {
     "node": ">=18"
   }

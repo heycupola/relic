@@ -3,20 +3,50 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { platform } from "node:os";
+import { createRequire } from "node:module";
+import { platform, arch } from "node:os";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const PLATFORM_MAP = {
+  "darwin-arm64": "relic-cli-darwin-arm64",
+  "darwin-x64": "relic-cli-darwin-x64",
+  "linux-x64": "relic-cli-linux-x64",
+  "win32-x64": "relic-cli-win32-x64",
+};
+
+const currentPlatform = `${platform()}-${arch()}`;
+const pkg = PLATFORM_MAP[currentPlatform];
+
+if (!pkg) {
+  console.error(
+    `relic: Unsupported platform ${currentPlatform}.\n` +
+    `Supported: ${Object.keys(PLATFORM_MAP).join(", ")}\n` +
+    `Download manually from: https://github.com/heycupola/relic/releases`
+  );
+  process.exit(1);
+}
+
+const require = createRequire(import.meta.url);
 const isWindows = platform() === "win32";
 const binaryName = isWindows ? "relic.exe" : "relic";
-const binary = join(__dirname, binaryName);
+
+let binary;
+try {
+  const pkgJson = require.resolve(`${pkg}/package.json`);
+  binary = join(dirname(pkgJson), "bin", binaryName);
+} catch {
+  console.error(
+    `relic: Platform package ${pkg} is not installed.\n` +
+    `Try reinstalling: npm install -g relic\n\n` +
+    `If the problem persists, download from:\n` +
+    `  https://github.com/heycupola/relic/releases`
+  );
+  process.exit(1);
+}
 
 if (!existsSync(binary)) {
   console.error(
-    "relic: Binary not found. Run the postinstall script or reinstall:\n" +
-    "  npm install -g relic\n\n" +
-    "Or download manually from:\n" +
-    "  https://github.com/heycupola/relic/releases"
+    `relic: Binary not found at ${binary}\n` +
+    `Try reinstalling: npm install -g relic`
   );
   process.exit(1);
 }
