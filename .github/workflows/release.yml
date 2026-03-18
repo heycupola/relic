@@ -222,7 +222,7 @@ jobs:
               pkg.version = version;
               if (pkg.optionalDependencies) {
                 for (const dep of Object.keys(pkg.optionalDependencies)) {
-                  if (dep.startsWith('@relic/cli-')) {
+                  if (dep.startsWith('relic-cli-')) {
                     pkg.optionalDependencies[dep] = version;
                   }
                 }

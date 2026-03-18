@@ -1,5 +1,5 @@
 {
-  "name": "@relic/cli-linux-x64",
+  "name": "relic-cli-linux-x64",
   "version": "0.4.4",
   "description": "Relic CLI binary for Linux x64",
   "license": "MIT",
