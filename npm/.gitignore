@@ -1,0 +1,9 @@
+# Platform binaries are populated at release time by CI
+darwin-arm64/bin/relic
+darwin-arm64/bin/librelic_runner.*
+darwin-x64/bin/relic
+darwin-x64/bin/librelic_runner.*
+linux-x64/bin/relic
+linux-x64/bin/librelic_runner.*
+win32-x64/bin/relic.exe
+win32-x64/bin/relic_runner.dll
