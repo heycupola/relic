@@ -1,0 +1,20 @@
+{
+  "name": "@relic/cli-linux-x64",
+  "version": "0.4.4",
+  "description": "Relic CLI binary for Linux x64",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/heycupola/relic.git"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "bin/"
+  ],
+  "preferUnplugged": true
+}
