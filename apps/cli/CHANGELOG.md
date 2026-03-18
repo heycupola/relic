@@ -1,5 +1,15 @@
 # @repo/cli
 
+## 0.5.0
+
+### Minor Changes
+
+- d6fe498: Distribute compiled binaries via npm using platform-specific optional dependencies. Users can now install with `npm install -g relic` without needing Bun.
+
+### Patch Changes
+
+- 5b43d8f: Fix TUI onboarding by checking the stored master password against the authenticated account before entering the home screen, and route missing-key accounts back through password setup.
+
 ## 0.4.4
 
 ### Patch Changes
