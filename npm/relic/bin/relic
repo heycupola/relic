@@ -7,10 +7,10 @@ import { createRequire } from "node:module";
 import { platform, arch } from "node:os";
 
 const PLATFORM_MAP = {
-  "darwin-arm64": "@relic/cli-darwin-arm64",
-  "darwin-x64": "@relic/cli-darwin-x64",
-  "linux-x64": "@relic/cli-linux-x64",
-  "win32-x64": "@relic/cli-win32-x64",
+  "darwin-arm64": "relic-cli-darwin-arm64",
+  "darwin-x64": "relic-cli-darwin-x64",
+  "linux-x64": "relic-cli-linux-x64",
+  "win32-x64": "relic-cli-win32-x64",
 };
 
 const currentPlatform = `${platform()}-${arch()}`;

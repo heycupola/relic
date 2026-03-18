@@ -1,5 +1,5 @@
 {
-  "name": "@relic/cli-darwin-x64",
+  "name": "relic-cli-darwin-x64",
   "version": "0.4.4",
   "description": "Relic CLI binary for macOS x64",
   "license": "MIT",

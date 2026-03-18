@@ -22,10 +22,10 @@
     "bin/"
   ],
   "optionalDependencies": {
-    "@relic/cli-darwin-arm64": "0.4.4",
-    "@relic/cli-darwin-x64": "0.4.4",
-    "@relic/cli-linux-x64": "0.4.4",
-    "@relic/cli-win32-x64": "0.4.4"
+    "relic-cli-darwin-arm64": "0.4.4",
+    "relic-cli-darwin-x64": "0.4.4",
+    "relic-cli-linux-x64": "0.4.4",
+    "relic-cli-win32-x64": "0.4.4"
   },
   "engines": {
     "node": ">=18"
