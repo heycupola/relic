@@ -52,13 +52,17 @@ if (!existsSync(binary)) {
 }
 
 try {
-  const result = execFileSync(binary, process.argv.slice(2), {
+  execFileSync(binary, process.argv.slice(2), {
     stdio: "inherit",
     env: process.env,
   });
 } catch (err) {
   if (err.status !== null && err.status !== undefined) {
     process.exit(err.status);
+  }
+  if (err.signal) {
+    process.kill(process.pid, err.signal);
+    return;
   }
   throw err;
 }

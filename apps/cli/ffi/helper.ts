@@ -11,6 +11,8 @@ const PLATFORM_MAP: Record<string, string> = {
   "win32-x64": "win32-x64",
 };
 
+// `import.meta.dir` resolves to `/$bunfs/…` inside a Bun standalone binary.
+// This is a Bun-internal convention — update this check if it ever changes.
 function isCompiledBinary(): boolean {
   return import.meta.dir.startsWith("/$bunfs/");
 }
