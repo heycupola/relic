@@ -1,4 +1,5 @@
 import { dlopen, FFIType, suffix } from "bun:ffi";
+import { dirname } from "node:path";
 import { ISSUES_URL, RELEASES_URL } from "./constants";
 
 type Environment = "development" | "production";
@@ -10,9 +11,24 @@ const PLATFORM_MAP: Record<string, string> = {
   "win32-x64": "win32-x64",
 };
 
+function isCompiledBinary(): boolean {
+  return import.meta.dir.startsWith("/$bunfs/");
+}
+
+function getBaseDir(): string {
+  if (isCompiledBinary()) {
+    return dirname(process.execPath);
+  }
+  return import.meta.dir;
+}
+
 async function detectEnvironment(): Promise<Environment> {
   if (process.env.DEV === "true") {
     return "development";
+  }
+
+  if (isCompiledBinary()) {
+    return "production";
   }
 
   const prebuildsPath = `${import.meta.dir}/../prebuilds`;
@@ -58,10 +74,11 @@ async function findLibraryInProduction(
   targetPlatform: string,
   libName: string,
 ): Promise<string | null> {
+  const baseDir = getBaseDir();
   const searchPaths = [
-    `${import.meta.dir}/${libName}`,
-    `${import.meta.dir}/../lib/${libName}`,
-    `${import.meta.dir}/../prebuilds/${targetPlatform}/${libName}`,
+    `${baseDir}/${libName}`,
+    `${baseDir}/../lib/${libName}`,
+    `${baseDir}/../prebuilds/${targetPlatform}/${libName}`,
   ];
 
   for (const candidate of searchPaths) {
