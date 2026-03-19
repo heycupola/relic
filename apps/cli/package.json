@@ -1,7 +1,7 @@
 {
   "name": "@repo/cli",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "The Relic CLI for managing and sharing secrets. Encrypted on your device, never exposed to anyone else. Not even us.",
   "keywords": [
     "cli",

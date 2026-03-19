@@ -1,5 +1,11 @@
 # @repo/cli
 
+## 0.6.0
+
+### Minor Changes
+
+- a27e98a: Distribute compiled binaries via npm using platform-specific optional dependencies. Users can now install with `npm install -g relic` without needing Bun.
+
 ## 0.5.0
 
 ### Minor Changes
