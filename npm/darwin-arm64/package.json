@@ -1,0 +1,14 @@
+{
+  "name": "relic-cli-darwin-arm64",
+  "version": "0.5.0",
+  "description": "Relic CLI binary for macOS ARM64",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/heycupola/relic.git"
+  },
+  "os": ["darwin"],
+  "cpu": ["arm64"],
+  "files": ["bin/"],
+  "preferUnplugged": true
+}
