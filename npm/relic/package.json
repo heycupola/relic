@@ -13,7 +13,7 @@
   "bin": {
     "relic": "bin/relic"
   },
-  "files": ["bin/"],
+  "files": ["bin/", "README.md"],
   "optionalDependencies": {
     "relic-cli-darwin-arm64": "0.5.0",
     "relic-cli-darwin-x64": "0.5.0",
