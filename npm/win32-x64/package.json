@@ -1,5 +1,5 @@
 {
-  "name": "relic-cli-win32-x64",
+  "name": "relic-cli-windows-x64",
   "version": "0.5.0",
   "description": "Relic CLI binary for Windows x64",
   "license": "MIT",
