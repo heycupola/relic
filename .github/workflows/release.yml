@@ -254,17 +254,13 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Publish platform packages to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           for platform in darwin-arm64 darwin-x64 linux-x64 win32-x64; do
             echo "Publishing relic-cli-$platform..."
-            (cd npm/$platform && npm publish --access public --provenance)
+            (cd npm/$platform && npm publish --access public --provenance) || echo "Skipped relic-cli-$platform (already published or error)"
           done
 
       - name: Publish relic package to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           cd npm/relic
           npm publish --access public --provenance
