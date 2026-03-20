@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { SectionWrapper } from "./section-wrapper";
 
 interface VideoFeature {
@@ -82,37 +82,49 @@ function Badge({ badge }: { badge: "Free" | "Pro" }) {
 function VideoButton({
   feature,
   videoRef,
+  isPlaying,
   playVideo,
   resetVideo,
+  toggleVideo,
   className,
 }: {
   feature: VideoFeature;
   videoRef: React.RefObject<HTMLVideoElement | null>;
+  isPlaying: boolean;
   playVideo: () => void;
   resetVideo: () => void;
+  toggleVideo: () => void;
   className?: string;
 }) {
+  const handleClick = useCallback(() => {
+    if (window.matchMedia("(hover: hover)").matches) return;
+    toggleVideo();
+  }, [toggleVideo]);
+
   return (
     <button
       type="button"
       className={`group relative bg-muted/20 ${className ?? ""}`}
-      aria-label={`${feature.title} preview. Hover or focus to play.`}
+      aria-label={`${feature.title} preview. Hover or tap to play.`}
       onMouseEnter={playVideo}
       onMouseLeave={resetVideo}
       onFocus={playVideo}
       onBlur={resetVideo}
+      onClick={handleClick}
     >
       <video
         ref={videoRef}
-        src={feature.videoSrc}
+        src={`${feature.videoSrc}#t=0.001`}
         title={feature.title}
         muted
         playsInline
         preload="metadata"
         className="w-full h-auto"
       />
-      <span className="pointer-events-none absolute bottom-3 right-3 border border-white/15 bg-black/75 px-2 py-1 text-[11px] font-medium text-white/80 backdrop-blur-sm transition-colors group-hover:border-white/25 group-hover:text-white">
-        Hover to play
+      <span
+        className={`pointer-events-none absolute bottom-3 right-3 border border-white/15 bg-black/75 px-2 py-1 text-[11px] font-medium text-white/80 backdrop-blur-sm transition-all group-hover:border-white/25 group-hover:text-white ${isPlaying ? "opacity-0" : "opacity-100"}`}
+      >
+        Play preview
       </span>
     </button>
   );
@@ -120,29 +132,42 @@ function VideoButton({
 
 function useVideoControls() {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
 
-  const playVideo = async () => {
+  const playVideo = useCallback(async () => {
     const video = videoRef.current;
     if (!video) return;
     try {
       await video.play();
+      setIsPlaying(true);
     } catch {
       // Ignore autoplay blocking edge cases on unsupported browsers.
     }
-  };
+  }, []);
 
-  const resetVideo = () => {
+  const resetVideo = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
     video.pause();
     video.currentTime = 0;
-  };
+    setIsPlaying(false);
+  }, []);
 
-  return { videoRef, playVideo, resetVideo };
+  const toggleVideo = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      playVideo();
+    } else {
+      resetVideo();
+    }
+  }, [playVideo, resetVideo]);
+
+  return { videoRef, isPlaying, playVideo, resetVideo, toggleVideo };
 }
 
 function FeaturedVideoCard({ feature }: { feature: VideoFeature }) {
-  const { videoRef, playVideo, resetVideo } = useVideoControls();
+  const { videoRef, isPlaying, playVideo, resetVideo, toggleVideo } = useVideoControls();
 
   return (
     <div className="border-2 border-border bg-card flex flex-col md:flex-row hover:border-foreground/30 transition-colors">
@@ -158,8 +183,10 @@ function FeaturedVideoCard({ feature }: { feature: VideoFeature }) {
       <VideoButton
         feature={feature}
         videoRef={videoRef}
+        isPlaying={isPlaying}
         playVideo={playVideo}
         resetVideo={resetVideo}
+        toggleVideo={toggleVideo}
         className="w-full md:w-3/5 border-t-2 md:border-t-0 md:border-l-2 border-border"
       />
     </div>
@@ -167,7 +194,7 @@ function FeaturedVideoCard({ feature }: { feature: VideoFeature }) {
 }
 
 function VideoCard({ feature }: { feature: VideoFeature }) {
-  const { videoRef, playVideo, resetVideo } = useVideoControls();
+  const { videoRef, isPlaying, playVideo, resetVideo, toggleVideo } = useVideoControls();
 
   return (
     <div className="border-2 border-border bg-card flex flex-col hover:border-foreground/30 transition-colors">
@@ -181,8 +208,10 @@ function VideoCard({ feature }: { feature: VideoFeature }) {
       <VideoButton
         feature={feature}
         videoRef={videoRef}
+        isPlaying={isPlaying}
         playVideo={playVideo}
         resetVideo={resetVideo}
+        toggleVideo={toggleVideo}
         className="w-full border-t-2 border-border"
       />
     </div>
