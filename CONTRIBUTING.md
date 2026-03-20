@@ -15,7 +15,7 @@ This is a Bun + Turborepo monorepo:
 ```
 apps/
   cli/          CLI application (Go-based)
-  web/          Website, dashboard, blog, changelog (Vinext + React)
+  web/          Website, dashboard, blog, changelog (Next.js + OpenNext)
   docs/         Documentation (Mintlify)
 
 packages/

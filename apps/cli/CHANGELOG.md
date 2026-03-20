@@ -1,5 +1,11 @@
 # @repo/cli
 
+## 0.6.2
+
+### Patch Changes
+
+- Replace native argon2 with hash-wasm (pure WASM) to fix compiled binary crashes. Same argon2id algorithm, identical output.
+
 ## 0.6.1
 
 ### Patch Changes

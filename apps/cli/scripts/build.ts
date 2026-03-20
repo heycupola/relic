@@ -33,7 +33,7 @@ const result = await (async () => {
       naming: "cli.js",
       target: "bun",
       minify: { syntax: true },
-      external: ["argon2"],
+      external: [],
     });
   } finally {
     if (existsSync(BUILD_ENTRY)) {

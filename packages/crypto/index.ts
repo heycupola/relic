@@ -1,4 +1,4 @@
-import argon2 from "argon2";
+import { argon2id } from "hash-wasm";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -132,17 +132,18 @@ export async function deriveKeyFromPassword(password: string, salt: string): Pro
   try {
     const saltBuffer = base64ToArrayBuffer(salt);
 
-    const rawKey = await argon2.hash(password, {
-      type: argon2.argon2id,
-      salt: Buffer.from(saltBuffer),
-      memoryCost: 65536,
-      timeCost: 3,
+    const hashHex = await argon2id({
+      password,
+      salt: new Uint8Array(saltBuffer),
+      memorySize: 65536,
+      iterations: 3,
       parallelism: 4,
       hashLength: 32,
-      raw: true,
+      outputType: "hex",
     });
 
-    const keyBuffer = new Uint8Array(rawKey).buffer as ArrayBuffer;
+    const keyBuffer = new Uint8Array(hashHex.match(/.{2}/g)!.map((b) => Number.parseInt(b, 16)))
+      .buffer as ArrayBuffer;
 
     return await crypto.subtle.importKey(
       "raw",
