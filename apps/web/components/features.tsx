@@ -96,18 +96,30 @@ function VideoButton({
   toggleVideo: () => void;
   className?: string;
 }) {
+  const isHoverDevice = useCallback(() => window.matchMedia("(hover: hover)").matches, []);
+
+  const handleMouseEnter = useCallback(() => {
+    if (!isHoverDevice()) return;
+    playVideo();
+  }, [isHoverDevice, playVideo]);
+
+  const handleMouseLeave = useCallback(() => {
+    if (!isHoverDevice()) return;
+    resetVideo();
+  }, [isHoverDevice, resetVideo]);
+
   const handleClick = useCallback(() => {
-    if (window.matchMedia("(hover: hover)").matches) return;
+    if (isHoverDevice()) return;
     toggleVideo();
-  }, [toggleVideo]);
+  }, [isHoverDevice, toggleVideo]);
 
   return (
     <button
       type="button"
       className={`group relative bg-muted/20 ${className ?? ""}`}
       aria-label={`${feature.title} preview. Hover or tap to play.`}
-      onMouseEnter={playVideo}
-      onMouseLeave={resetVideo}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       onFocus={playVideo}
       onBlur={resetVideo}
       onClick={handleClick}
@@ -124,7 +136,9 @@ function VideoButton({
       <span
         className={`pointer-events-none absolute bottom-3 right-3 border border-white/15 bg-black/75 px-2 py-1 text-[11px] font-medium text-white/80 backdrop-blur-sm transition-all group-hover:border-white/25 group-hover:text-white ${isPlaying ? "opacity-0" : "opacity-100"}`}
       >
-        Play preview
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M4 2l10 6-10 6V2z" />
+        </svg>
       </span>
     </button>
   );
