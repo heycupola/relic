@@ -1,5 +1,11 @@
 # @repo/cli
 
+## 0.6.1
+
+### Patch Changes
+
+- Fix argon2 native addon crash by building standalone binaries on native platform runners instead of cross-compiling from Linux.
+
 ## 0.6.0
 
 ### Minor Changes
