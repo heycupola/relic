@@ -165,12 +165,12 @@ jobs:
 
       - name: Package archive (Windows)
         if: runner.os == 'Windows'
-        shell: bash
+        shell: pwsh
         run: |
-          mkdir -p staging
-          cp dist/${{ matrix.binary }} staging/
-          cp apps/cli/prebuilds/${{ matrix.platform }}/relic_runner.dll staging/
-          (cd staging && zip ../dist/relic-${{ matrix.platform }}.zip *)
+          New-Item -ItemType Directory -Force -Path staging
+          Copy-Item "dist/${{ matrix.binary }}" -Destination staging/
+          Copy-Item "apps/cli/prebuilds/${{ matrix.platform }}/relic_runner.dll" -Destination staging/
+          Compress-Archive -Path staging/* -DestinationPath "dist/relic-${{ matrix.platform }}.zip"
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
