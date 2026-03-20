@@ -108,15 +108,32 @@ jobs:
           path: artifacts/
           if-no-files-found: error
 
-  release:
-    name: Publish & Release
+  build-cli:
+    name: Build CLI (${{ matrix.platform }})
     needs: [check-version, build-rust]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
-    env:
-      VERSION: ${{ needs.check-version.outputs.new-version }}
+    if: needs.check-version.outputs.version-changed == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin-arm64
+            target: bun-darwin-arm64
+            binary: relic
+          - os: macos-latest
+            platform: darwin-x64
+            target: bun-darwin-x64
+            binary: relic
+          - os: ubuntu-latest
+            platform: linux-x64
+            target: bun-linux-x64
+            binary: relic
+          - os: windows-latest
+            platform: win32-x64
+            target: bun-windows-x64
+            binary: relic.exe
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v5
@@ -129,44 +146,87 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Download Rust artifacts
+      - name: Download Rust artifact
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          name: rust-${{ matrix.platform }}
+          path: apps/cli/prebuilds/${{ matrix.platform }}
 
-      - name: Organize prebuilds
+      - name: Build standalone binary
+        run: bun build --compile --target=${{ matrix.target }} apps/cli/index.ts --outfile dist/${{ matrix.binary }}
+
+      - name: Package archive (Unix)
+        if: runner.os != 'Windows'
         run: |
-          mkdir -p apps/cli/prebuilds/{darwin-arm64,darwin-x64,linux-x64,win32-x64}
-          cp artifacts/rust-darwin-arm64/* apps/cli/prebuilds/darwin-arm64/
-          cp artifacts/rust-darwin-x64/* apps/cli/prebuilds/darwin-x64/
-          cp artifacts/rust-linux-x64/* apps/cli/prebuilds/linux-x64/
-          cp artifacts/rust-win32-x64/* apps/cli/prebuilds/win32-x64/
+          mkdir -p staging
+          cp dist/${{ matrix.binary }} staging/
+          cp apps/cli/prebuilds/${{ matrix.platform }}/librelic_runner.* staging/
+          tar -czf dist/relic-${{ matrix.platform }}.tar.gz -C staging .
 
-      - name: Build CLI for npm
-        working-directory: apps/cli
-        run: bun run build
+      - name: Package archive (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          mkdir -p staging
+          cp dist/${{ matrix.binary }} staging/
+          cp apps/cli/prebuilds/${{ matrix.platform }}/relic_runner.dll staging/
+          (cd staging && zip ../dist/relic-${{ matrix.platform }}.zip *)
 
-      - name: Build standalone binaries
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.platform }}
+          path: dist/relic-${{ matrix.platform }}.*
+          if-no-files-found: error
+
+      - name: Upload raw binary for npm
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-bin-${{ matrix.platform }}
+          path: |
+            dist/${{ matrix.binary }}
+            apps/cli/prebuilds/${{ matrix.platform }}/
+          if-no-files-found: error
+
+  release:
+    name: Publish & Release
+    needs: [check-version, build-rust, build-cli]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      VERSION: ${{ needs.check-version.outputs.new-version }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download CLI archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: cli-*
+          path: artifacts
+          merge-multiple: false
+
+      - name: Collect release archives
         run: |
           mkdir -p dist
-          bun build --compile --target=bun-darwin-arm64 apps/cli/index.ts --outfile dist/relic-darwin-arm64
-          bun build --compile --target=bun-darwin-x64 apps/cli/index.ts --outfile dist/relic-darwin-x64
-          bun build --compile --target=bun-linux-x64 apps/cli/index.ts --outfile dist/relic-linux-x64
-          bun build --compile --target=bun-windows-x64 apps/cli/index.ts --outfile dist/relic-win32-x64.exe
-
-      - name: Package archives
-        run: |
-          for platform in darwin-arm64 darwin-x64 linux-x64; do
-            mkdir -p staging/$platform
-            cp dist/relic-$platform staging/$platform/relic
-            cp apps/cli/prebuilds/$platform/librelic_runner.* staging/$platform/
-            tar -czf dist/relic-$platform.tar.gz -C staging/$platform .
+          for platform in darwin-arm64 darwin-x64 linux-x64 win32-x64; do
+            cp artifacts/cli-$platform/relic-$platform.* dist/ 2>/dev/null || true
           done
 
-          mkdir -p staging/win32-x64
-          cp dist/relic-win32-x64.exe staging/win32-x64/relic.exe
-          cp apps/cli/prebuilds/win32-x64/relic_runner.dll staging/win32-x64/
-          (cd staging/win32-x64 && zip ../../dist/relic-win32-x64.zip *)
+      - name: Populate npm platform packages
+        run: |
+          for platform in darwin-arm64 darwin-x64 linux-x64; do
+            mkdir -p npm/$platform/bin
+            cp artifacts/cli-bin-$platform/dist/relic npm/$platform/bin/relic
+            cp artifacts/cli-bin-$platform/apps/cli/prebuilds/$platform/librelic_runner.* npm/$platform/bin/
+            chmod +x npm/$platform/bin/relic
+          done
+
+          mkdir -p npm/win32-x64/bin
+          cp artifacts/cli-bin-win32-x64/dist/relic.exe npm/win32-x64/bin/relic.exe
+          cp artifacts/cli-bin-win32-x64/apps/cli/prebuilds/win32-x64/relic_runner.dll npm/win32-x64/bin/
 
       - name: Extract changelog for release body
         id: changelog
@@ -207,19 +267,6 @@ jobs:
             dist/relic-win32-x64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Populate npm platform packages
-        run: |
-          for platform in darwin-arm64 darwin-x64 linux-x64; do
-            mkdir -p npm/$platform/bin
-            cp dist/relic-$platform npm/$platform/bin/relic
-            cp apps/cli/prebuilds/$platform/librelic_runner.* npm/$platform/bin/
-            chmod +x npm/$platform/bin/relic
-          done
-
-          mkdir -p npm/win32-x64/bin
-          cp dist/relic-win32-x64.exe npm/win32-x64/bin/relic.exe
-          cp apps/cli/prebuilds/win32-x64/relic_runner.dll npm/win32-x64/bin/
 
       - name: Sync npm package versions
         run: |
