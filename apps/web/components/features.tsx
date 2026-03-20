@@ -96,20 +96,42 @@ function VideoButton({
   toggleVideo: () => void;
   className?: string;
 }) {
+  const isHoverDevice = useCallback(() => window.matchMedia("(hover: hover)").matches, []);
+
+  const handleMouseEnter = useCallback(() => {
+    if (!isHoverDevice()) return;
+    playVideo();
+  }, [isHoverDevice, playVideo]);
+
+  const handleMouseLeave = useCallback(() => {
+    if (!isHoverDevice()) return;
+    resetVideo();
+  }, [isHoverDevice, resetVideo]);
+
+  const handleFocus = useCallback(() => {
+    if (!isHoverDevice()) return;
+    playVideo();
+  }, [isHoverDevice, playVideo]);
+
+  const handleBlur = useCallback(() => {
+    if (!isHoverDevice()) return;
+    resetVideo();
+  }, [isHoverDevice, resetVideo]);
+
   const handleClick = useCallback(() => {
-    if (window.matchMedia("(hover: hover)").matches) return;
+    if (isHoverDevice()) return;
     toggleVideo();
-  }, [toggleVideo]);
+  }, [isHoverDevice, toggleVideo]);
 
   return (
     <button
       type="button"
       className={`group relative bg-muted/20 ${className ?? ""}`}
       aria-label={`${feature.title} preview. Hover or tap to play.`}
-      onMouseEnter={playVideo}
-      onMouseLeave={resetVideo}
-      onFocus={playVideo}
-      onBlur={resetVideo}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
       onClick={handleClick}
     >
       <video
@@ -124,7 +146,8 @@ function VideoButton({
       <span
         className={`pointer-events-none absolute bottom-3 right-3 border border-white/15 bg-black/75 px-2 py-1 text-[11px] font-medium text-white/80 backdrop-blur-sm transition-all group-hover:border-white/25 group-hover:text-white ${isPlaying ? "opacity-0" : "opacity-100"}`}
       >
-        Play preview
+        <span className="hidden [@media(hover:hover)]:inline">Hover to play</span>
+        <span className="[@media(hover:hover)]:hidden">Tap to play</span>
       </span>
     </button>
   );
