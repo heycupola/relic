@@ -2,7 +2,7 @@
 
 import { ApiKeyScope, api } from "@repo/backend";
 import { cn } from "@repo/ui/lib/utils";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import { Dialog } from "@/components/dialog";
@@ -17,7 +17,6 @@ interface CreateApiKeyDialogProps {
 const MAX_KEYS = 5;
 
 const EXPIRATION_OPTIONS = [
-  { value: "", label: "No expiration" },
   { value: "30", label: "30 days" },
   { value: "60", label: "60 days" },
   { value: "90", label: "90 days" },
@@ -39,19 +38,28 @@ const AVAILABLE_SCOPES = [
 
 export function CreateApiKeyDialog({ open, onClose, activeKeyCount }: CreateApiKeyDialogProps) {
   const createApiKey = useMutation(api.apiKey.createApiKey);
+  const projectsData = useQuery(api.project.listUserProjects, open ? {} : "skip");
 
   const [step, setStep] = useState<"form" | "reveal">("form");
   const [name, setName] = useState("");
   const [selectedScopes, setSelectedScopes] = useState<Set<string>>(
     new Set(AVAILABLE_SCOPES.map((s) => s.id)),
   );
-  const [expiration, setExpiration] = useState("");
+  const [expiration, setExpiration] = useState("30");
+  const [selectedProjectId, setSelectedProjectId] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState("");
   const [createdKey, setCreatedKey] = useState("");
   const [copied, setCopied] = useState(false);
 
   const canCreate = name.trim().length > 0 && selectedScopes.size > 0 && activeKeyCount < MAX_KEYS;
+
+  const projectOptions = [
+    { value: "", label: "All projects" },
+    ...(projectsData?.projects ?? [])
+      .filter((p) => p.status === "owned" && !p.isArchived)
+      .map((p) => ({ value: String(p.id), label: p.name })),
+  ];
 
   const toggleScope = (scopeId: string) => {
     setSelectedScopes((prev) => {
@@ -69,7 +77,8 @@ export function CreateApiKeyDialog({ open, onClose, activeKeyCount }: CreateApiK
     setStep("form");
     setName("");
     setSelectedScopes(new Set(AVAILABLE_SCOPES.map((s) => s.id)));
-    setExpiration("");
+    setExpiration("30");
+    setSelectedProjectId("");
     setIsCreating(false);
     setError("");
     setCreatedKey("");
@@ -84,12 +93,15 @@ export function CreateApiKeyDialog({ open, onClose, activeKeyCount }: CreateApiK
 
     try {
       const scopes = Array.from(selectedScopes);
+      const expiresAt = Date.now() + Number.parseInt(expiration, 10) * 24 * 60 * 60 * 1000;
+      const projectId = selectedProjectId || undefined;
 
-      const expiresAt = expiration
-        ? Date.now() + Number.parseInt(expiration, 10) * 24 * 60 * 60 * 1000
-        : undefined;
-
-      const result = await createApiKey({ name: name.trim(), scopes, expiresAt });
+      const result = await createApiKey({
+        name: name.trim(),
+        scopes,
+        expiresAt,
+        projectId: projectId as Parameters<typeof createApiKey>[0]["projectId"],
+      });
       setCreatedKey(result.apiKey);
       setStep("reveal");
     } catch (err) {
@@ -187,6 +199,21 @@ export function CreateApiKeyDialog({ open, onClose, activeKeyCount }: CreateApiK
                   );
                 })}
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-sm text-foreground/70">Project scope</p>
+              <Select
+                id="api-key-project"
+                value={selectedProjectId}
+                onChange={setSelectedProjectId}
+                options={projectOptions}
+              />
+              <p className="text-xs text-foreground/40">
+                {selectedProjectId
+                  ? "This key can only access the selected project."
+                  : "This key can access all your projects."}
+              </p>
             </div>
 
             <div className="space-y-1.5">

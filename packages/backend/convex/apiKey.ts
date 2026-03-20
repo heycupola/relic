@@ -3,6 +3,7 @@ import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
+import { isProjectAccessible, ProjectAccessReason } from "./lib/access";
 import { extractPrefix, generateRawKey, hashKey } from "./lib/crypto";
 import { createError, ErrorCode } from "./lib/errors";
 import { createLogger } from "./lib/logger";
@@ -14,16 +15,18 @@ import { ApiKeyScope, ErrorSeverity, hasScopes, validateScopes } from "./lib/typ
 const log = createLogger("apiKey");
 
 const MAX_API_KEYS_PER_USER = 5;
+const MAX_EXPIRATION_MS = 365 * 24 * 60 * 60 * 1000;
 
 export const createApiKey = protectedMutation({
   args: {
     name: v.string(),
     scopes: v.array(v.string()),
-    expiresAt: v.optional(v.number()),
+    expiresAt: v.number(),
+    projectId: v.optional(v.id("project")),
   },
   handler: async (
     ctx: ProtectedMutationCtx,
-    args: { name: string; scopes: string[]; expiresAt?: number },
+    args: { name: string; scopes: string[]; expiresAt: number; projectId?: Id<"project"> },
   ): Promise<{ apiKey: string; prefix: string }> => {
     await checkRateLimit(ctx, "write");
 
@@ -54,14 +57,58 @@ export const createApiKey = protectedMutation({
       });
     }
 
+    const now = Date.now();
+
+    if (args.expiresAt <= now) {
+      throw createError({
+        code: ErrorCode.INVALID_ARGUMENTS,
+        message: "Expiration must be in the future",
+        severity: ErrorSeverity.Low,
+      });
+    }
+
+    if (args.expiresAt > now + MAX_EXPIRATION_MS) {
+      throw createError({
+        code: ErrorCode.INVALID_ARGUMENTS,
+        message: "Expiration cannot exceed 365 days",
+        severity: ErrorSeverity.Low,
+      });
+    }
+
+    if (args.projectId) {
+      const project = await ctx.runQuery(internal.project._loadProjectById, {
+        projectId: args.projectId,
+      });
+      if (!project) {
+        throw createError({
+          code: ErrorCode.REQUEST_NOT_FOUND,
+          message: "Project not found",
+          severity: ErrorSeverity.Medium,
+        });
+      }
+
+      const { accessible, reason } = await isProjectAccessible(ctx, project);
+      if (!accessible) {
+        throw createError({
+          code:
+            reason === ProjectAccessReason.Archived
+              ? ErrorCode.INVALID_OPERATION
+              : ErrorCode.REQUEST_NOT_FOUND,
+          message:
+            reason === ProjectAccessReason.Archived
+              ? "Cannot scope API key to an archived project"
+              : "Project not found or you don't have access",
+          severity: ErrorSeverity.Medium,
+        });
+      }
+    }
+
     const existing = await ctx.db
       .query("apiKey")
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
       .collect();
 
-    const activeKeys = existing.filter(
-      (k) => !k.revokedAt && (!k.expiresAt || k.expiresAt >= Date.now()),
-    );
+    const activeKeys = existing.filter((k) => !k.revokedAt && (!k.expiresAt || k.expiresAt >= now));
     if (activeKeys.length >= MAX_API_KEYS_PER_USER) {
       throw createError({
         code: ErrorCode.RATE_LIMIT_EXCEEDED,
@@ -80,8 +127,9 @@ export const createApiKey = protectedMutation({
       hashedKey,
       prefix,
       scopes: args.scopes,
+      projectId: args.projectId,
       expiresAt: args.expiresAt,
-      createdAt: Date.now(),
+      createdAt: now,
     });
 
     await ctx.runMutation(internal.actionLog._insertActionLog, {
@@ -111,6 +159,7 @@ export const listApiKeys = protectedQuery({
       name: k.name,
       prefix: k.prefix,
       scopes: k.scopes,
+      projectId: k.projectId,
       lastUsedAt: k.lastUsedAt,
       expiresAt: k.expiresAt,
       revokedAt: k.revokedAt,
@@ -165,14 +214,21 @@ export const _validateApiKey = internalMutation({
     hashedApiKey: v.string(),
     requiredScopes: v.array(v.string()),
     clientIp: v.optional(v.string()),
+    requestedProjectId: v.optional(v.string()),
   },
   returns: v.object({
     userId: v.string(),
+    projectId: v.optional(v.id("project")),
   }),
   handler: async (
     ctx,
-    args: { hashedApiKey: string; requiredScopes: string[]; clientIp?: string },
-  ): Promise<{ userId: string }> => {
+    args: {
+      hashedApiKey: string;
+      requiredScopes: string[];
+      clientIp?: string;
+      requestedProjectId?: string;
+    },
+  ): Promise<{ userId: string; projectId?: Id<"project"> }> => {
     const rateLimitKey = args.clientIp ?? "unknown";
     await checkRateLimit(ctx, "read", `apikey:${rateLimitKey}`);
 
@@ -217,6 +273,18 @@ export const _validateApiKey = internalMutation({
       });
     }
 
+    if (
+      keyDoc.projectId &&
+      args.requestedProjectId &&
+      keyDoc.projectId !== args.requestedProjectId
+    ) {
+      throw createError({
+        code: ErrorCode.INSUFFICIENT_PERMISSION,
+        message: "API key is scoped to a different project",
+        severity: ErrorSeverity.High,
+      });
+    }
+
     const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
       userId: keyDoc.userId as BetterAuthId<"user">,
     });
@@ -233,7 +301,7 @@ export const _validateApiKey = internalMutation({
 
     await ctx.db.patch(keyDoc._id, { lastUsedAt: Date.now() });
 
-    return { userId: keyDoc.userId };
+    return { userId: keyDoc.userId, projectId: keyDoc.projectId };
   },
 });
 

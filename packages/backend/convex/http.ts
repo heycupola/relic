@@ -252,6 +252,7 @@ http.route({
         hashedApiKey,
         requiredScopes: ["secrets.read"],
         clientIp,
+        requestedProjectId: body.projectId as string | undefined,
       });
 
       const result = await ctx.runMutation(internal.secret._exportSecretsCore, {

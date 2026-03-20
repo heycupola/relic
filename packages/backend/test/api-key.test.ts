@@ -16,6 +16,12 @@ import {
   type TestUser,
 } from "./setup";
 
+const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+
+function futureExpiry(days = 30): number {
+  return Date.now() + days * 24 * 60 * 60 * 1000;
+}
+
 function assertProjectCreated(result: {
   status: string;
   projectId?: string;
@@ -60,6 +66,7 @@ describe("API Key Management", () => {
       const result = await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "GitHub Actions",
         scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
       });
 
       expect(result.apiKey).toBeDefined();
@@ -70,7 +77,7 @@ describe("API Key Management", () => {
     });
 
     test("should create an API key with expiration", async () => {
-      const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+      const expiresAt = futureExpiry(30);
 
       const result = await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "Temporary Key",
@@ -93,6 +100,7 @@ describe("API Key Management", () => {
           freeUser.asUser.mutation(api.apiKey.createApiKey, {
             name: "Should Fail",
             scopes: ["secrets.read"],
+            expiresAt: futureExpiry(),
           }),
         ErrorCode.PRO_PLAN_REQUIRED,
       );
@@ -104,6 +112,7 @@ describe("API Key Management", () => {
           owner.asUser.mutation(api.apiKey.createApiKey, {
             name: "  ",
             scopes: ["secrets.read"],
+            expiresAt: futureExpiry(),
           }),
         ErrorCode.INVALID_ARGUMENTS,
       );
@@ -115,6 +124,7 @@ describe("API Key Management", () => {
           owner.asUser.mutation(api.apiKey.createApiKey, {
             name: "Bad Scopes",
             scopes: ["invalid.scope"],
+            expiresAt: futureExpiry(),
           }),
         ErrorCode.INVALID_ARGUMENTS,
       );
@@ -126,6 +136,7 @@ describe("API Key Management", () => {
           owner.asUser.mutation(api.apiKey.createApiKey, {
             name: "No Scopes",
             scopes: [],
+            expiresAt: futureExpiry(),
           }),
         ErrorCode.INVALID_ARGUMENTS,
       );
@@ -136,6 +147,7 @@ describe("API Key Management", () => {
         await owner.asUser.mutation(api.apiKey.createApiKey, {
           name: `Key ${i}`,
           scopes: ["secrets.read"],
+          expiresAt: futureExpiry(),
         });
       }
 
@@ -144,6 +156,7 @@ describe("API Key Management", () => {
           owner.asUser.mutation(api.apiKey.createApiKey, {
             name: "Key 6",
             scopes: ["secrets.read"],
+            expiresAt: futureExpiry(),
           }),
         ErrorCode.RATE_LIMIT_EXCEEDED,
       );
@@ -154,6 +167,7 @@ describe("API Key Management", () => {
         await owner.asUser.mutation(api.apiKey.createApiKey, {
           name: `Key ${i}`,
           scopes: ["secrets.read"],
+          expiresAt: futureExpiry(),
         });
       }
 
@@ -165,9 +179,320 @@ describe("API Key Management", () => {
       const result = await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "Replacement Key",
         scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
       });
 
       expect(result.apiKey).toBeDefined();
+    });
+
+    test("should reject expiration in the past", async () => {
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.apiKey.createApiKey, {
+            name: "Past Expiry",
+            scopes: ["secrets.read"],
+            expiresAt: Date.now() - 1000,
+          }),
+        ErrorCode.INVALID_ARGUMENTS,
+        "Expiration must be in the future",
+      );
+    });
+
+    test("should reject expiration beyond 365 days", async () => {
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.apiKey.createApiKey, {
+            name: "Too Far",
+            scopes: ["secrets.read"],
+            expiresAt: futureExpiry(400),
+          }),
+        ErrorCode.INVALID_ARGUMENTS,
+        "Expiration cannot exceed 365 days",
+      );
+    });
+
+    test("should accept expiration at exactly 365 days", async () => {
+      const result = await owner.asUser.mutation(api.apiKey.createApiKey, {
+        name: "Max Expiry",
+        scopes: ["secrets.read"],
+        expiresAt: futureExpiry(365),
+      });
+
+      expect(result.apiKey).toBeDefined();
+    });
+  });
+
+  describe("Project-Scoped API Keys", () => {
+    let projectId: Id<"project">;
+
+    beforeEach(async () => {
+      mockAutumn.setFeature(owner.userId, "projects", 2);
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+      const result = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+      projectId = assertProjectCreated(result);
+    });
+
+    test("should create a project-scoped API key", async () => {
+      const result = await owner.asUser.mutation(api.apiKey.createApiKey, {
+        name: "Scoped Key",
+        scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
+        projectId,
+      });
+
+      expect(result.apiKey).toBeDefined();
+
+      const keys = await owner.asUser.query(api.apiKey.listApiKeys, {});
+      const scopedKey = keys.find((k) => k.prefix === result.prefix);
+      expect(scopedKey?.projectId).toBe(projectId);
+    });
+
+    test("should list project-scoped keys with projectId", async () => {
+      await owner.asUser.mutation(api.apiKey.createApiKey, {
+        name: "Scoped Key",
+        scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
+        projectId,
+      });
+
+      await owner.asUser.mutation(api.apiKey.createApiKey, {
+        name: "Unscoped Key",
+        scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
+      });
+
+      const keys = await owner.asUser.query(api.apiKey.listApiKeys, {});
+      const scoped = keys.find((k) => k.name === "Scoped Key");
+      const unscoped = keys.find((k) => k.name === "Unscoped Key");
+
+      expect(scoped?.projectId).toBe(projectId);
+      expect(unscoped?.projectId).toBeUndefined();
+    });
+
+    test("should reject scoping to another user's project without share", async () => {
+      mockAutumn.setFeature(otherUser.userId, "projects", 2);
+      const { encryptedProjectKey } = await createProjectKey(otherUser.publicKey!);
+      const otherResult = await otherUser.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "other_project_" + randomString(),
+      });
+      const otherProjectId = assertProjectCreated(otherResult);
+
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.apiKey.createApiKey, {
+            name: "Not My Project",
+            scopes: ["secrets.read"],
+            expiresAt: futureExpiry(),
+            projectId: otherProjectId,
+          }),
+        ErrorCode.REQUEST_NOT_FOUND,
+      );
+    });
+
+    test("collaborator should create a scoped key for a shared project", async () => {
+      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
+      mockAutumn.setFeature(owner.userId, "additional_shares", 5);
+
+      const { wrapAESKeyWithRSA, importPublicKey, unwrapProjectKey } = await import("@repo/crypto");
+      const { encryptedProjectKey: ownerEPK } = await createProjectKey(owner.publicKey!);
+
+      const sharedProjectResult = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey: ownerEPK,
+        name: "shared_project_" + randomString(),
+      });
+      const sharedProjectId = assertProjectCreated(sharedProjectResult);
+
+      const projectKey = await unwrapProjectKey(
+        ownerEPK,
+        owner.encryptedPrivateKey!,
+        owner.password!,
+        owner.salt!,
+      );
+      const collabPublicKey = await importPublicKey(otherUser.publicKey!);
+      const collabEncryptedProjectKey = await wrapAESKeyWithRSA(projectKey, collabPublicKey);
+
+      await owner.asUser.action(api.projectShare.shareProject, {
+        projectId: sharedProjectId,
+        userEmail: otherUser.email,
+        encryptedProjectKey: collabEncryptedProjectKey,
+      });
+
+      const result = await otherUser.asUser.mutation(api.apiKey.createApiKey, {
+        name: "Collaborator Scoped Key",
+        scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
+        projectId: sharedProjectId,
+      });
+
+      expect(result.apiKey).toBeDefined();
+
+      const keys = await otherUser.asUser.query(api.apiKey.listApiKeys, {});
+      const scopedKey = keys.find((k) => k.prefix === result.prefix);
+      expect(scopedKey?.projectId).toBe(sharedProjectId);
+    });
+
+    test("collaborator scoped key should be rejected after share is revoked", async () => {
+      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
+      mockAutumn.setFeature(owner.userId, "additional_shares", 5);
+
+      const { wrapAESKeyWithRSA, importPublicKey, unwrapProjectKey } = await import("@repo/crypto");
+      const { encryptedProjectKey: ownerEPK } = await createProjectKey(owner.publicKey!);
+
+      const sharedProjectResult = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey: ownerEPK,
+        name: "shared_revoke_" + randomString(),
+      });
+      const sharedProjectId = assertProjectCreated(sharedProjectResult);
+
+      await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "production",
+        projectId: sharedProjectId,
+      });
+
+      const projectKey = await unwrapProjectKey(
+        ownerEPK,
+        owner.encryptedPrivateKey!,
+        owner.password!,
+        owner.salt!,
+      );
+      const collabPublicKey = await importPublicKey(otherUser.publicKey!);
+      const collabEncryptedProjectKey = await wrapAESKeyWithRSA(projectKey, collabPublicKey);
+
+      await owner.asUser.action(api.projectShare.shareProject, {
+        projectId: sharedProjectId,
+        userEmail: otherUser.email,
+        encryptedProjectKey: collabEncryptedProjectKey,
+      });
+
+      const { apiKey } = await otherUser.asUser.mutation(api.apiKey.createApiKey, {
+        name: "Collab Key Before Revoke",
+        scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
+        projectId: sharedProjectId,
+      });
+
+      const shares = await owner.asUser.query(api.projectShare.listActiveProjectSharesByProject, {
+        projectId: sharedProjectId,
+      });
+      const activeShare = shares.shares[0];
+
+      await owner.asUser.action(api.projectShare.revokeShare, {
+        shareId: activeShare!.id,
+      });
+
+      const response = await t.fetch("/api/secrets/export", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ projectId: sharedProjectId, environmentName: "production" }),
+      });
+
+      expect(response.status).toBe(403);
+    });
+
+    test("project-scoped key should export secrets for its project", async () => {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "production",
+        projectId,
+      });
+
+      await owner.asUser.mutation(api.secret.createSecret, {
+        encryptedValue: "value",
+        environmentId,
+        key: "SECRET_1",
+        valueType: "string",
+        folderId: undefined,
+      });
+
+      const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
+        name: "Scoped CI Key",
+        scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
+        projectId,
+      });
+
+      const response = await t.fetch("/api/secrets/export", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ projectId, environmentName: "production" }),
+      });
+
+      expect(response.status).toBe(200);
+      const result = await response.json();
+      expect(result.count).toBe(1);
+    });
+
+    test("project-scoped key should be rejected for a different project", async () => {
+      const { encryptedProjectKey: ePK2 } = await createProjectKey(owner.publicKey!);
+      const result2 = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey: ePK2,
+        name: "other_" + randomString(),
+      });
+      const otherProjectId = assertProjectCreated(result2);
+
+      await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "production",
+        projectId: otherProjectId,
+      });
+
+      const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
+        name: "Scoped to First",
+        scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
+        projectId,
+      });
+
+      const response = await t.fetch("/api/secrets/export", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ projectId: otherProjectId, environmentName: "production" }),
+      });
+
+      expect(response.status).toBe(403);
+    });
+
+    test("unscoped key should still access any owned project", async () => {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "production",
+        projectId,
+      });
+
+      await owner.asUser.mutation(api.secret.createSecret, {
+        encryptedValue: "value",
+        environmentId,
+        key: "KEY",
+        valueType: "string",
+        folderId: undefined,
+      });
+
+      const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
+        name: "Unscoped Key",
+        scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
+      });
+
+      const response = await t.fetch("/api/secrets/export", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ projectId, environmentName: "production" }),
+      });
+
+      expect(response.status).toBe(200);
     });
   });
 
@@ -176,11 +501,13 @@ describe("API Key Management", () => {
       await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "Key A",
         scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
       });
 
       await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "Key B",
         scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
       });
 
       const keys = await owner.asUser.query(api.apiKey.listApiKeys, {});
@@ -197,6 +524,7 @@ describe("API Key Management", () => {
       await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "Owner Key",
         scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
       });
 
       const otherKeys = await otherUser.asUser.query(api.apiKey.listApiKeys, {});
@@ -209,6 +537,7 @@ describe("API Key Management", () => {
       const { prefix } = await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "To Revoke",
         scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
       });
 
       const keysBefore = await owner.asUser.query(api.apiKey.listApiKeys, {});
@@ -228,6 +557,7 @@ describe("API Key Management", () => {
       await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "Owner Key",
         scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
       });
 
       const ownerKeys = await owner.asUser.query(api.apiKey.listApiKeys, {});
@@ -245,6 +575,7 @@ describe("API Key Management", () => {
       await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "Double Revoke",
         scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
       });
 
       const keys = await owner.asUser.query(api.apiKey.listApiKeys, {});
@@ -306,6 +637,7 @@ describe("API Key Management", () => {
       const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "CI Key",
         scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
       });
 
       const response = await exportViaHttp(apiKey, {
@@ -364,6 +696,7 @@ describe("API Key Management", () => {
       const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "Revocable Key",
         scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
       });
 
       const keys = await owner.asUser.query(api.apiKey.listApiKeys, {});
@@ -396,8 +729,10 @@ describe("API Key Management", () => {
       const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "Expired Key",
         scopes: ["secrets.read"],
-        expiresAt: Date.now() - 1000,
+        expiresAt: Date.now() + 1,
       });
+
+      await new Promise((r) => setTimeout(r, 10));
 
       const response = await exportViaHttp(apiKey, {
         projectId,
@@ -432,6 +767,7 @@ describe("API Key Management", () => {
       const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "Usage Tracker",
         scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
       });
 
       const keysBefore = await owner.asUser.query(api.apiKey.listApiKeys, {});
@@ -473,6 +809,7 @@ describe("API Key Management", () => {
       const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "Pre-downgrade Key",
         scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
       });
 
       await owner.asUser.mutation(components.betterAuth.user.downgradeToFree, {
@@ -509,6 +846,7 @@ describe("API Key Management", () => {
       const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "Unauthorized Key",
         scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
       });
 
       const response = await exportViaHttp(apiKey, {
@@ -534,6 +872,7 @@ describe("API Key Management", () => {
       const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "Keys Reader",
         scopes: ["user.keys.read"],
+        expiresAt: futureExpiry(),
       });
 
       const response = await fetchKeysViaHttp(apiKey);
@@ -549,6 +888,7 @@ describe("API Key Management", () => {
       const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "Pre-downgrade Keys Reader",
         scopes: ["user.keys.read"],
+        expiresAt: futureExpiry(),
       });
 
       await owner.asUser.mutation(components.betterAuth.user.downgradeToFree, {
@@ -567,6 +907,7 @@ describe("API Key Management", () => {
       const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "Secrets Only",
         scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
       });
 
       const response = await fetchKeysViaHttp(apiKey);
