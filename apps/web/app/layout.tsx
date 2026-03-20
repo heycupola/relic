@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Agentation } from "agentation";
-import Script from "next/script";
 import {
   BLOG_FEED_PATH,
   CHANGELOG_FEED_PATH,
@@ -88,43 +87,6 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const hydrationLockdownScript = `
-    (function () {
-      var ensureBodyStable = function () {
-        var body = document.body;
-        if (!body) return;
-
-        if (body.className !== "font-sans antialiased") {
-          body.className = "font-sans antialiased";
-        }
-
-        if (body.hasAttribute("cz-shortcut-listen")) {
-          body.removeAttribute("cz-shortcut-listen");
-        }
-      };
-
-      ensureBodyStable();
-
-      var observer = new MutationObserver(ensureBodyStable);
-      observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
-
-      var attempts = 0;
-      var interval = setInterval(function () {
-        ensureBodyStable();
-        attempts += 1;
-
-        if (attempts >= 25) {
-          clearInterval(interval);
-        }
-      }, 200);
-
-      setTimeout(function () {
-        observer.disconnect();
-        clearInterval(interval);
-      }, 5000);
-    })();
-  `;
-
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -163,9 +125,6 @@ export default function RootLayout({
             __html: `(function(){try{if(window.matchMedia("(prefers-color-scheme:dark)").matches){document.documentElement.classList.add("dark")}else{document.documentElement.classList.remove("dark")}}catch(e){}})()`,
           }}
         />
-        <Script id="relic-hydration-lockdown" strategy="beforeInteractive">
-          {hydrationLockdownScript}
-        </Script>
       </head>
       <body
         className={`${geist.variable} ${geistMono.variable} ${spaceGrotesk.variable} font-sans antialiased`}
