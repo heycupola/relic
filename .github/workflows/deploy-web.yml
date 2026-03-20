@@ -41,14 +41,18 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Sync changelog
+        run: bun run sync:changelog
+        working-directory: apps/web
+
       - name: Type check web app
         run: bun run check-types
         working-directory: apps/web
         env:
           NEXT_PUBLIC_CONVEX_URL: https://placeholder.convex.cloud
 
-      - name: Build with Vinext
-        run: bunx vinext build
+      - name: Build with OpenNext
+        run: bunx opennextjs-cloudflare build
         working-directory: apps/web
         env:
           NEXT_PUBLIC_CONVEX_URL: ${{ secrets.CONVEX_URL }}
@@ -58,15 +62,11 @@ jobs:
           NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
           NEXT_PUBLIC_POSTHOG_HOST: https://us.i.posthog.com
 
-      - name: Generate worker entry
-        run: bun run predeploy
-        working-directory: apps/web
-
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: web-dist
-          path: apps/web/dist/
+          path: apps/web/.open-next/
           retention-days: 1
 
   deploy:
@@ -91,7 +91,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: web-dist
-          path: apps/web/dist/
+          path: apps/web/.open-next/
 
       - name: Deploy to Cloudflare Workers
         working-directory: apps/web

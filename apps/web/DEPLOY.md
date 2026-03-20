@@ -13,8 +13,8 @@ From `apps/web`:
 
 1. Dev server (port 3000)
    - `bun run dev`
-2. Production build
-   - `bun run build`
+2. Preview (builds and runs locally in Workers runtime)
+   - `bun run preview`
 3. Deploy
    - `bun run deploy`
 
@@ -31,7 +31,7 @@ Required GitHub Secrets:
 
 ## Architecture
 
-- `vite.config.ts` — Vite config with vinext plugin
+- `next.config.js` — Next.js configuration
+- `open-next.config.ts` — OpenNext adapter configuration
 - `wrangler.jsonc` — Cloudflare Workers config (no secrets stored)
-- `worker/index.ts` — Source worker entry (used by vinext dev)
-- `dist/worker-entry.js` — Generated worker entry for deploy (created by `predeploy` script)
+- `.open-next/` — Build output (gitignored)

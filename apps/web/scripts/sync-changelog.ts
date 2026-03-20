@@ -56,8 +56,7 @@ function escapeFrontmatter(value: string): string {
 }
 
 function buildFrontmatter(release: GitHubRelease): string {
-  const publishedAt = release.published_at?.slice(0, 10);
-  if (!publishedAt) {
+  if (!release.published_at) {
     throw new Error(`Release ${release.tag_name} is missing published_at.`);
   }
 
@@ -68,7 +67,7 @@ function buildFrontmatter(release: GitHubRelease): string {
     "---",
     `title: ${escapeFrontmatter(title)}`,
     `description: ${escapeFrontmatter(extractDescription(release))}`,
-    `date: ${publishedAt}`,
+    `date: "${release.published_at}"`,
     `version: ${escapeFrontmatter(release.tag_name)}`,
     `releaseUrl: ${escapeFrontmatter(release.html_url)}`,
     `githubTag: ${escapeFrontmatter(release.tag_name)}`,
