@@ -19,9 +19,9 @@ import {
 
 import { ConvexClientProvider, PostHogProvider, ThemeProvider } from "./providers";
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
-const _spaceGrotesk = Space_Grotesk({ subsets: ["latin"] });
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk" });
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -167,7 +167,9 @@ export default function RootLayout({
           {hydrationLockdownScript}
         </Script>
       </head>
-      <body className={`font-sans antialiased`}>
+      <body
+        className={`${geist.variable} ${geistMono.variable} ${spaceGrotesk.variable} font-sans antialiased`}
+      >
         {process.env.NODE_ENV === "development" && <Agentation />}
         <PostHogProvider>
           <ConvexClientProvider>

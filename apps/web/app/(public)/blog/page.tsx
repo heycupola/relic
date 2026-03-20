@@ -15,6 +15,8 @@ import {
   SITE_URL,
 } from "@/lib/site";
 
+export const revalidate = 3600;
+
 export const metadata: Metadata = getBlogMetadata();
 
 export default async function BlogPage() {

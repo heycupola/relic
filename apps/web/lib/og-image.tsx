@@ -18,21 +18,18 @@ const FG = "#FAFAF9";
 const BORDER = "#3E3E3E";
 const MUTED = "#ABABAB";
 
-const GEIST_MONO_URL =
-  "https://cdn.jsdelivr.net/fontsource/fonts/geist-mono@latest/latin-400-normal.woff";
-const GEIST_SANS_URL =
-  "https://cdn.jsdelivr.net/fontsource/fonts/geist-sans@latest/latin-400-normal.woff";
-const GEIST_SANS_SEMIBOLD_URL =
-  "https://cdn.jsdelivr.net/fontsource/fonts/geist-sans@latest/latin-600-normal.woff";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
 let fontCache: { mono: ArrayBuffer; sans: ArrayBuffer; sansBold: ArrayBuffer } | null = null;
 
 async function loadFonts() {
   if (fontCache) return fontCache;
+  const fontsDir = join(process.cwd(), "public", "fonts");
   const [mono, sans, sansBold] = await Promise.all([
-    fetch(GEIST_MONO_URL).then((r) => r.arrayBuffer()),
-    fetch(GEIST_SANS_URL).then((r) => r.arrayBuffer()),
-    fetch(GEIST_SANS_SEMIBOLD_URL).then((r) => r.arrayBuffer()),
+    readFile(join(fontsDir, "geist-mono-400.woff")).then((b) => b.buffer as ArrayBuffer),
+    readFile(join(fontsDir, "geist-sans-400.woff")).then((b) => b.buffer as ArrayBuffer),
+    readFile(join(fontsDir, "geist-sans-600.woff")).then((b) => b.buffer as ArrayBuffer),
   ]);
   fontCache = { mono, sans, sansBold };
   return fontCache;
