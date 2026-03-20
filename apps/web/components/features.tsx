@@ -108,6 +108,16 @@ function VideoButton({
     resetVideo();
   }, [isHoverDevice, resetVideo]);
 
+  const handleFocus = useCallback(() => {
+    if (!isHoverDevice()) return;
+    playVideo();
+  }, [isHoverDevice, playVideo]);
+
+  const handleBlur = useCallback(() => {
+    if (!isHoverDevice()) return;
+    resetVideo();
+  }, [isHoverDevice, resetVideo]);
+
   const handleClick = useCallback(() => {
     if (isHoverDevice()) return;
     toggleVideo();
@@ -120,8 +130,8 @@ function VideoButton({
       aria-label={`${feature.title} preview. Hover or tap to play.`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      onFocus={playVideo}
-      onBlur={resetVideo}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
       onClick={handleClick}
     >
       <video
