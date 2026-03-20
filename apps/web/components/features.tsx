@@ -136,9 +136,8 @@ function VideoButton({
       <span
         className={`pointer-events-none absolute bottom-3 right-3 border border-white/15 bg-black/75 px-2 py-1 text-[11px] font-medium text-white/80 backdrop-blur-sm transition-all group-hover:border-white/25 group-hover:text-white ${isPlaying ? "opacity-0" : "opacity-100"}`}
       >
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-          <path d="M4 2l10 6-10 6V2z" />
-        </svg>
+        <span className="hidden [@media(hover:hover)]:inline">Hover to play</span>
+        <span className="[@media(hover:hover)]:hidden">Tap to play</span>
       </span>
     </button>
   );
