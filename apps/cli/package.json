@@ -35,9 +35,7 @@
     "prebuilds/**",
     "README.md"
   ],
-  "dependencies": {
-    "argon2": "^0.41.1"
-  },
+  "dependencies": {},
   "optionalDependencies": {
     "@opentui/core-darwin-arm64": "0.1.65",
     "@opentui/core-darwin-x64": "0.1.65",
