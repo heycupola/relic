@@ -219,6 +219,9 @@ export default function DashboardPage() {
 
           <ApiKeysCard
             apiKeys={apiKeysData ?? []}
+            projectNames={Object.fromEntries(
+              (projectsData?.projects ?? []).map((p) => [String(p.id), p.name]),
+            )}
             isLoading={apiKeysData === undefined}
             hasPro={userData?.hasPro || false}
           />

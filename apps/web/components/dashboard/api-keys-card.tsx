@@ -13,6 +13,7 @@ export interface ApiKeyItem {
   name: string;
   prefix: string;
   scopes: string[];
+  projectId?: Id<"project">;
   lastUsedAt?: number;
   expiresAt?: number;
   revokedAt?: number;
@@ -21,6 +22,7 @@ export interface ApiKeyItem {
 
 interface ApiKeysCardProps {
   apiKeys: ApiKeyItem[];
+  projectNames?: Record<string, string>;
   isLoading?: boolean;
   hasPro: boolean;
 }
@@ -58,7 +60,7 @@ function formatTimeAgo(timestamp: number): string {
   return "just now";
 }
 
-export function ApiKeysCard({ apiKeys, isLoading, hasPro }: ApiKeysCardProps) {
+export function ApiKeysCard({ apiKeys, projectNames, isLoading, hasPro }: ApiKeysCardProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
   const [keyToRevoke, setKeyToRevoke] = useState<ApiKeyItem | null>(null);
@@ -137,6 +139,11 @@ export function ApiKeysCard({ apiKeys, isLoading, hasPro }: ApiKeysCardProps) {
                               {scope}
                             </Badge>
                           ))}
+                          {key.projectId && (
+                            <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-transparent text-[10px] px-1.5 py-0">
+                              {projectNames?.[key.projectId] ?? "scoped"}
+                            </Badge>
+                          )}
                           <span className="text-foreground/20">·</span>
                           <span className="text-xs text-foreground/40">
                             {formatTimeAgo(key.createdAt)}

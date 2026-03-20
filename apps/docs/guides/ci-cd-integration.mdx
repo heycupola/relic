@@ -9,7 +9,7 @@ Relic works in CI/CD environments using API keys. Instead of interactive login, 
 
 <Steps>
   <Step title="Create an API key">
-    Open the web dashboard and create an API key. The key is shown once. Store it in your CI provider's secret storage.
+    Open the web dashboard and create an API key. Select the permissions, optionally scope it to a specific project, and choose an expiration period. The key is shown once. Store it in your CI provider's secret storage.
 
     ![API key creation](/assets/web-dashboard-api-key-generation.png)
   </Step>
@@ -117,5 +117,7 @@ Useful in monorepos where different services need different secrets from the sam
 
 - API keys can be revoked from the web dashboard at any time
 - Each API key has scoped permissions (`secrets.read`, `user.keys.read`)
+- API keys can be scoped to a specific project, restricting access to only that project's secrets
+- All API keys require an expiration date (maximum 365 days)
 - API key usage is logged in the [audit trail](/configuration/audit-logs)
 - The master password is used only for decryption and is never sent to the Relic server

@@ -164,6 +164,7 @@ export default defineSchema({
     hashedKey: v.string(),
     prefix: v.string(),
     scopes: v.array(v.string()),
+    projectId: v.optional(v.id("project")),
     lastUsedAt: v.optional(v.number()),
     expiresAt: v.optional(v.number()),
     revokedAt: v.optional(v.number()),
