@@ -1,10 +1,11 @@
 # Relic Web
 
-Marketing site and dashboard for Relic. Built with Vinext (Vite + React Server Components) and deployed to Cloudflare Workers.
+Marketing site and dashboard for Relic. Built with Next.js and deployed to Cloudflare Workers via OpenNext.
 
 ## Tech Stack
 
-- **Vinext** -- Vite-based React framework with RSC
+- **Next.js** -- React framework with App Router and RSC
+- **OpenNext** -- Cloudflare Workers adapter
 - **React 19** -- UI
 - **Tailwind CSS** -- Styling
 - **Convex** -- Backend (via `@repo/backend`)
@@ -80,8 +81,7 @@ bun run sync:changelog
 ├── components/         # UI components
 ├── content/            # MDX content (blog, changelog)
 ├── lib/                # Utilities (content parsing, auth, site config)
-├── scripts/            # Changelog sync
-└── worker-entry.ts     # Cloudflare Worker entry
+└── scripts/            # Changelog sync
 ```
 
 ## Development
@@ -97,4 +97,4 @@ bun run dev
 bun run deploy
 ```
 
-Build pipeline: `vinext build` -> copy `worker-entry.ts` -> `wrangler deploy`.
+Build pipeline: `next build` → `opennextjs-cloudflare build` → `wrangler deploy`.
