@@ -1,12 +1,15 @@
-import { ImageResponse } from "next/og";
-import type { ReactElement } from "react";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { initWasm, Resvg } from "@resvg/resvg-wasm";
+import type { ReactNode } from "react";
+import satori from "satori";
 
 export const OG_IMAGE_SIZE = {
   width: 1200,
   height: 630,
 } as const;
 
-interface OgImageOptions {
+export interface OgImageOptions {
   eyebrow: string;
   title: string;
   description: string;
@@ -18,10 +21,8 @@ const FG = "#FAFAF9";
 const BORDER = "#3E3E3E";
 const MUTED = "#ABABAB";
 
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-
 let fontCache: { mono: ArrayBuffer; sans: ArrayBuffer; sansBold: ArrayBuffer } | null = null;
+let wasmInitialized = false;
 
 async function loadFonts() {
   if (fontCache) return fontCache;
@@ -35,33 +36,20 @@ async function loadFonts() {
   return fontCache;
 }
 
-export async function createOgImage({
-  eyebrow,
-  title,
-  description,
-  footer = "relic.so",
-}: OgImageOptions) {
-  const fonts = await loadFonts();
+async function ensureWasm() {
+  if (wasmInitialized) return;
+  const wasmPath = join(process.cwd(), "node_modules", "@resvg", "resvg-wasm", "index_bg.wasm");
+  const wasmBuffer = await readFile(wasmPath);
+  await initWasm(wasmBuffer);
+  wasmInitialized = true;
+}
 
-  const element: ReactElement = (
-    <div
-      style={{
-        display: "flex",
-        width: "100%",
-        height: "100%",
-        backgroundColor: BG,
-      }}
-    >
+function OgLayout({ eyebrow, title, description, footer }: Required<OgImageOptions>): ReactNode {
+  return (
+    <div style={{ display: "flex", width: "100%", height: "100%", backgroundColor: BG }}>
       <div style={{ display: "flex", width: "2px", height: "100%", backgroundColor: BORDER }} />
 
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          flexGrow: 1,
-          height: "100%",
-        }}
-      >
+      <div style={{ display: "flex", flexDirection: "column", flexGrow: 1, height: "100%" }}>
         <div style={{ display: "flex", width: "100%", height: "2px", backgroundColor: BORDER }} />
 
         <div
@@ -159,12 +147,7 @@ export async function createOgImage({
             }}
           >
             <span
-              style={{
-                fontFamily: "Geist Sans",
-                fontSize: "16px",
-                fontWeight: 600,
-                color: BG,
-              }}
+              style={{ fontFamily: "Geist Sans", fontSize: "16px", fontWeight: 600, color: BG }}
             >
               r
             </span>
@@ -189,8 +172,20 @@ export async function createOgImage({
       <div style={{ display: "flex", width: "2px", height: "100%", backgroundColor: BORDER }} />
     </div>
   );
+}
 
-  return new ImageResponse(element, {
+export async function generateOgPng(options: OgImageOptions): Promise<Buffer> {
+  const fonts = await loadFonts();
+  await ensureWasm();
+
+  const element = OgLayout({
+    eyebrow: options.eyebrow,
+    title: options.title,
+    description: options.description,
+    footer: options.footer ?? "relic.so",
+  });
+
+  const svg = await satori(element as React.ReactElement, {
     ...OG_IMAGE_SIZE,
     fonts: [
       { name: "Geist Mono", data: fonts.mono, weight: 400 as const, style: "normal" as const },
@@ -202,8 +197,10 @@ export async function createOgImage({
         style: "normal" as const,
       },
     ],
-    headers: {
-      "Cache-Control": "public, max-age=86400, s-maxage=86400",
-    },
   });
+
+  const resvg = new Resvg(svg, {
+    fitTo: { mode: "width", value: OG_IMAGE_SIZE.width },
+  });
+  return Buffer.from(resvg.render().asPng());
 }
