@@ -31,9 +31,6 @@ yarn-error.log*
 # cloudflare
 .open-next/
 
-# generated OG images
-/public/og/
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts

@@ -68,7 +68,7 @@ export function getBlogMetadata(): Metadata {
     title: BLOG_TITLE,
     description: BLOG_DESCRIPTION,
     path: "/blog",
-    imagePath: "/og/blog-index.png",
+    imagePath: "/og?type=blog-index",
     feedPath: BLOG_FEED_PATH,
   });
 }
@@ -78,7 +78,7 @@ export function getChangelogMetadata(): Metadata {
     title: CHANGELOG_TITLE,
     description: CHANGELOG_DESCRIPTION,
     path: "/changelog",
-    imagePath: "/og/changelog-index.png",
+    imagePath: "/og?type=changelog-index",
     feedPath: CHANGELOG_FEED_PATH,
   });
 }
