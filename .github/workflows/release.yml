@@ -152,12 +152,8 @@ jobs:
           name: rust-${{ matrix.platform }}
           path: apps/cli/prebuilds/${{ matrix.platform }}
 
-      - name: Bundle CLI
-        working-directory: apps/cli
-        run: bun run build
-
       - name: Build standalone binary
-        run: bun build --compile --target=${{ matrix.target }} apps/cli/dist/cli.js --outfile dist/${{ matrix.binary }}
+        run: bun build --compile --target=${{ matrix.target }} apps/cli/index.ts --outfile dist/${{ matrix.binary }}
 
       - name: Package archive (Unix)
         if: runner.os != 'Windows'
