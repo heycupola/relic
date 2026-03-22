@@ -1,5 +1,11 @@
 # @repo/cli
 
+## 0.6.4
+
+### Patch Changes
+
+- Enable TUI in compiled binary by patching OpenTUI native lib resolution and bundling libopentui alongside the binary
+
 ## 0.6.3
 
 ### Patch Changes

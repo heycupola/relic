@@ -51,7 +51,20 @@ if (!result.success) {
 }
 
 const outputFile = join(DIST_DIR, "cli.js");
-const bundled = readFileSync(outputFile, "utf-8");
+let bundled = readFileSync(outputFile, "utf-8");
+
+const OPENTUI_IMPORT_PATTERN =
+  "module = await import(`@opentui/core-${process.platform}-${process.arch}/index.ts`), targetLibPath = module.default";
+const OPENTUI_REPLACEMENT =
+  'targetLibPath = (() => { const ext = process.platform === "win32" ? "dll" : process.platform === "darwin" ? "dylib" : "so"; return process.execPath.replace(/[\\/\\\\][^\\/\\\\]*$/, "") + "/libopentui." + ext; })()';
+
+if (bundled.includes(OPENTUI_IMPORT_PATTERN)) {
+  bundled = bundled.replace(OPENTUI_IMPORT_PATTERN, OPENTUI_REPLACEMENT);
+  console.log("Patched OpenTUI native library resolution for compiled binary.");
+} else {
+  console.warn("Warning: OpenTUI import pattern not found — skipping patch.");
+}
+
 writeFileSync(outputFile, `#!/usr/bin/env bun\n${bundled}`);
 chmodSync(outputFile, 0o755);
 
