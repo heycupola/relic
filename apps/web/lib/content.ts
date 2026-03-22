@@ -60,8 +60,19 @@ function getCollectionHref(collection: ContentCollection, slug: string): string 
   return collection === "blog" ? `/blog/${slug}` : `/changelog/${slug}`;
 }
 
-function getCollectionOgImagePath(collection: ContentCollection, slug: string): string {
-  return `/og?type=${collection}-entry&slug=${encodeURIComponent(slug)}`;
+function getCollectionOgImagePath(
+  collection: ContentCollection,
+  title: string,
+  description: string,
+  footer?: string,
+): string {
+  const params = new URLSearchParams({
+    type: `${collection}-entry`,
+    title,
+    description,
+  });
+  if (footer) params.set("footer", footer);
+  return `/og?${params.toString()}`;
 }
 
 function ensureString(value: unknown, field: string, slug: string): string {
@@ -191,23 +202,28 @@ function normalizeBaseEntry(
   const normalizedDate = normalizeDateInput(data.date, slug);
   const readingTimeMinutes = getReadingTimeMinutes(body);
 
+  const formattedDate = DATE_FORMATTER.format(normalizedDate.parsed);
+  const readingTimeText = formatReadingTime(readingTimeMinutes);
+  const ogFooter =
+    collection === "blog" ? `${formattedDate}  ·  ${readingTimeText}` : formattedDate;
+
   return {
     slug,
     title,
     description,
     body: body.trim(),
     href: getCollectionHref(collection, slug),
-    ogImagePath: getCollectionOgImagePath(collection, slug),
+    ogImagePath: getCollectionOgImagePath(collection, title, description, ogFooter),
     date: normalizedDate.raw,
     isoDate: normalizedDate.parsed.toISOString(),
-    formattedDate: DATE_FORMATTER.format(normalizedDate.parsed),
+    formattedDate,
     sortDate: normalizedDate.parsed.getTime(),
     published: toBoolean(data.published, true),
     featured: toBoolean(data.featured, false),
     tags: toStringArray(data.tags),
     excerpt: toExcerpt(body, description),
     readingTimeMinutes,
-    readingTimeText: formatReadingTime(readingTimeMinutes),
+    readingTimeText,
   };
 }
 
