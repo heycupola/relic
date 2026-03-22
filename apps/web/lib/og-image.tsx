@@ -1,5 +1,4 @@
-import { ImageResponse } from "@cf-wasm/og/edge-light";
-import { SITE_URL } from "./site";
+import { ImageResponse } from "next/og";
 
 export const OG_IMAGE_SIZE = {
   width: 1200,
@@ -20,12 +19,23 @@ const MUTED = "#ABABAB";
 
 let fontCache: { mono: ArrayBuffer; sans: ArrayBuffer; sansBold: ArrayBuffer } | null = null;
 
+async function loadGoogleFont(family: string, weight: number): Promise<ArrayBuffer> {
+  const css = await fetch(
+    `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:wght@${weight}&display=swap`,
+    { headers: { "User-Agent": "Mozilla/5.0 (compatible; OG Image Generator)" } },
+  ).then((r) => r.text());
+
+  const match = css.match(/src:\s*url\(([^)]+)\)/);
+  if (!match?.[1]) throw new Error(`Failed to load font: ${family} ${weight}`);
+  return fetch(match[1]).then((r) => r.arrayBuffer());
+}
+
 async function loadFonts() {
   if (fontCache) return fontCache;
   const [mono, sans, sansBold] = await Promise.all([
-    fetch(`${SITE_URL}/fonts/geist-mono-400.woff`).then((r) => r.arrayBuffer()),
-    fetch(`${SITE_URL}/fonts/geist-sans-400.woff`).then((r) => r.arrayBuffer()),
-    fetch(`${SITE_URL}/fonts/geist-sans-600.woff`).then((r) => r.arrayBuffer()),
+    loadGoogleFont("Geist Mono", 400),
+    loadGoogleFont("Geist", 400),
+    loadGoogleFont("Geist", 600),
   ]);
   fontCache = { mono, sans, sansBold };
   return fontCache;
@@ -92,7 +102,7 @@ export async function createOgImage({
           <div
             style={{
               display: "flex",
-              fontFamily: "Geist Sans",
+              fontFamily: "Geist",
               fontSize: "64px",
               fontWeight: 600,
               letterSpacing: "-0.03em",
@@ -108,7 +118,7 @@ export async function createOgImage({
           <div
             style={{
               display: "flex",
-              fontFamily: "Geist Sans",
+              fontFamily: "Geist",
               fontSize: "24px",
               lineHeight: 1.5,
               color: MUTED,
@@ -140,9 +150,7 @@ export async function createOgImage({
               backgroundColor: FG,
             }}
           >
-            <span
-              style={{ fontFamily: "Geist Sans", fontSize: "16px", fontWeight: 600, color: BG }}
-            >
+            <span style={{ fontFamily: "Geist", fontSize: "16px", fontWeight: 600, color: BG }}>
               r
             </span>
           </div>
@@ -168,9 +176,9 @@ export async function createOgImage({
     {
       ...OG_IMAGE_SIZE,
       fonts: [
-        { name: "Geist Mono", data: fonts.mono, weight: 400, style: "normal" as const },
-        { name: "Geist Sans", data: fonts.sans, weight: 400, style: "normal" as const },
-        { name: "Geist Sans", data: fonts.sansBold, weight: 600, style: "normal" as const },
+        { name: "Geist Mono", data: fonts.mono, weight: 400 as const, style: "normal" as const },
+        { name: "Geist", data: fonts.sans, weight: 400 as const, style: "normal" as const },
+        { name: "Geist", data: fonts.sansBold, weight: 600 as const, style: "normal" as const },
       ],
       headers: {
         "Cache-Control": "public, max-age=86400, s-maxage=86400",
