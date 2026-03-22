@@ -1,5 +1,11 @@
 # @repo/cli
 
+## 0.6.7
+
+### Patch Changes
+
+- Skip redundant keychain write to eliminate second macOS password prompt
+
 ## 0.6.6
 
 ### Patch Changes
