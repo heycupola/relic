@@ -152,8 +152,19 @@ jobs:
           name: rust-${{ matrix.platform }}
           path: apps/cli/prebuilds/${{ matrix.platform }}
 
+      - name: Bundle CLI with patched OpenTUI resolution
+        working-directory: apps/cli
+        run: bun run build
+
+      - name: Download OpenTUI native lib for target platform
+        run: |
+          npm pack @opentui/core-${{ matrix.platform }}@0.1.88
+          tar xzf opentui-core-*.tgz
+          mkdir -p opentui-lib
+          cp package/libopentui.* opentui-lib/ 2>/dev/null || cp package/opentui.* opentui-lib/ 2>/dev/null || true
+
       - name: Build standalone binary
-        run: bun build --compile --target=${{ matrix.target }} apps/cli/index.ts --outfile dist/${{ matrix.binary }}
+        run: bun build --compile --target=${{ matrix.target }} apps/cli/dist/cli.js --outfile dist/${{ matrix.binary }}
 
       - name: Package archive (Unix)
         if: runner.os != 'Windows'
@@ -161,6 +172,7 @@ jobs:
           mkdir -p staging
           cp dist/${{ matrix.binary }} staging/
           cp apps/cli/prebuilds/${{ matrix.platform }}/librelic_runner.* staging/
+          cp opentui-lib/libopentui.* staging/ 2>/dev/null || true
           tar -czf dist/relic-${{ matrix.platform }}.tar.gz -C staging .
 
       - name: Package archive (Windows)
@@ -170,6 +182,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path staging
           Copy-Item "dist/${{ matrix.binary }}" -Destination staging/
           Copy-Item "apps/cli/prebuilds/${{ matrix.platform }}/relic_runner.dll" -Destination staging/
+          Copy-Item "opentui-lib/opentui.*" -Destination staging/ -ErrorAction SilentlyContinue
           Compress-Archive -Path staging/* -DestinationPath "dist/relic-${{ matrix.platform }}.zip"
 
       - name: Upload binary artifact
@@ -186,6 +199,7 @@ jobs:
           path: |
             dist/${{ matrix.binary }}
             apps/cli/prebuilds/${{ matrix.platform }}/
+            opentui-lib/
           if-no-files-found: error
 
   release:
@@ -221,12 +235,14 @@ jobs:
             mkdir -p npm/$platform/bin
             cp artifacts/cli-bin-$platform/dist/relic npm/$platform/bin/relic
             cp artifacts/cli-bin-$platform/apps/cli/prebuilds/$platform/librelic_runner.* npm/$platform/bin/
+            cp artifacts/cli-bin-$platform/opentui-lib/libopentui.* npm/$platform/bin/ 2>/dev/null || true
             chmod +x npm/$platform/bin/relic
           done
 
           mkdir -p npm/win32-x64/bin
           cp artifacts/cli-bin-win32-x64/dist/relic.exe npm/win32-x64/bin/relic.exe
           cp artifacts/cli-bin-win32-x64/apps/cli/prebuilds/win32-x64/relic_runner.dll npm/win32-x64/bin/
+          cp artifacts/cli-bin-win32-x64/opentui-lib/opentui.* npm/win32-x64/bin/ 2>/dev/null || true
 
       - name: Extract changelog for release body
         id: changelog
