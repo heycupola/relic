@@ -1,5 +1,11 @@
 # @repo/cli
 
+## 0.6.3
+
+### Patch Changes
+
+- Fix CLI binary compilation to bundle TUI and resolve argon2 native module error
+
 ## 0.6.2
 
 ### Patch Changes
