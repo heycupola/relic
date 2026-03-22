@@ -51,6 +51,10 @@ jobs:
         env:
           NEXT_PUBLIC_CONVEX_URL: https://placeholder.convex.cloud
 
+      - name: Generate OG images
+        run: bun run generate:og
+        working-directory: apps/web
+
       - name: Build with OpenNext
         run: bunx opennextjs-cloudflare build
         working-directory: apps/web
