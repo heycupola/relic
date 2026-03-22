@@ -10,22 +10,18 @@ export function usePaste(callback: (text: string) => void): void {
     let pasteBuffer = "";
     let isPasting = false;
 
-    const handleData = (data: string) => {
-      // Bracketed Paste Mode markers:
-      // Start: \x1b[200~ (ESC [ 200 ~)
-      // End:   \x1b[201~ (ESC [ 201 ~)
+    const handleData = (raw: string | Buffer) => {
+      let data = typeof raw === "string" ? raw : raw.toString("utf-8");
 
       // Check for bracketed paste start
       if (data.includes("\x1b[200~")) {
         isPasting = true;
-        // Remove the start marker and keep the rest
         // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional marker detection
         data = data.replace(/\x1b\[200~/g, "");
       }
 
       // Check for bracketed paste end
       if (data.includes("\x1b[201~")) {
-        // Remove the end marker
         // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional marker detection
         data = data.replace(/\x1b\[201~/g, "");
         pasteBuffer += data;
