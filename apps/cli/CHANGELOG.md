@@ -1,5 +1,11 @@
 # @repo/cli
 
+## 0.6.5
+
+### Patch Changes
+
+- Fix TUI crash in compiled binary caused by Buffer stdin data and Windows release packaging
+
 ## 0.6.4
 
 ### Patch Changes
