@@ -93,16 +93,25 @@ export function isPasswordFromEnv(): boolean {
   return !!envPassword && envPassword.length > 0;
 }
 
+let cachedPassword: string | null | undefined;
+
 export async function getPasswordFromStorage(): Promise<string | null> {
   const envPassword = process.env[ENV_PASSWORD_KEY];
   if (envPassword && envPassword.length > 0) {
     return envPassword;
   }
 
+  if (cachedPassword !== undefined) {
+    return cachedPassword;
+  }
+
   const { secrets } = await import("bun");
   try {
     const password = await secrets.get({ service: SECRETS_SERVICE, name: SECRETS_NAME });
-    if (password !== null && password.length > 0) return password;
+    if (password !== null && password.length > 0) {
+      cachedPassword = password;
+      return password;
+    }
   } catch (_) {
     void 0;
   }
@@ -111,12 +120,16 @@ export async function getPasswordFromStorage(): Promise<string | null> {
     const file = Bun.file(PASSWORD_FILE);
     if (await file.exists()) {
       const password = await file.text();
-      return password.length > 0 ? password : null;
+      if (password.length > 0) {
+        cachedPassword = password;
+        return password;
+      }
     }
   } catch (_) {
     void 0;
   }
 
+  cachedPassword = null;
   return null;
 }
 
@@ -202,6 +215,7 @@ export async function hasPasswordForAccount(account: PasswordAccount): Promise<b
 
 export async function savePassword(password: string, account?: PasswordAccount): Promise<void> {
   await savePasswordToStorage(password);
+  cachedPassword = password;
   if (account) {
     await ensureConfigDir();
     writePasswordMetadata(account);
@@ -215,6 +229,7 @@ export async function verifyPassword(password: string): Promise<boolean> {
 
 export async function clearPassword(): Promise<void> {
   await deletePasswordFromStorage();
+  cachedPassword = undefined;
   clearPasswordMetadata();
 }
 
