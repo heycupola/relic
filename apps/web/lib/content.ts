@@ -61,7 +61,7 @@ function getCollectionHref(collection: ContentCollection, slug: string): string 
 }
 
 function getCollectionOgImagePath(collection: ContentCollection, slug: string): string {
-  return `/og?type=${collection}-entry&slug=${encodeURIComponent(slug)}`;
+  return `/og/${collection}-${slug}.png`;
 }
 
 function ensureString(value: unknown, field: string, slug: string): string {

@@ -47,7 +47,7 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     images: [
       {
-        url: getAbsoluteUrl("/og?type=home"),
+        url: getAbsoluteUrl("/og/home.png"),
         width: 1200,
         height: 630,
         alt: SITE_TITLE,
@@ -60,7 +60,7 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     creator: SITE_TWITTER_HANDLE,
     site: SITE_TWITTER_HANDLE,
-    images: [getAbsoluteUrl("/og?type=home")],
+    images: [getAbsoluteUrl("/og/home.png")],
   },
   robots: {
     index: true,

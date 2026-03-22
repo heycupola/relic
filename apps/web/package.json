@@ -6,7 +6,8 @@
   "license": "MIT",
   "scripts": {
     "dev": "next dev --port 3000",
-    "build": "next build",
+    "generate:og": "bun run scripts/generate-og.ts",
+    "build": "bun run generate:og && next build",
     "start": "next start",
     "lint": "biome check --write .",
     "format": "biome format --write .",
@@ -38,10 +39,12 @@
   },
   "devDependencies": {
     "@repo/typescript-config": "*",
+    "@resvg/resvg-wasm": "^2.6.2",
     "@types/node": "^22.15.3",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "agentation": "^2.2.1",
+    "satori": "^0.26.0",
     "tw-animate-css": "catalog:",
     "typescript": "5.9.2",
     "wrangler": "^4.76.0"

@@ -17,8 +17,6 @@ import {
   SITE_URL,
 } from "@/lib/site";
 
-export const revalidate = 3600;
-
 export const metadata: Metadata = {
   description: SITE_DESCRIPTION,
   alternates: {
