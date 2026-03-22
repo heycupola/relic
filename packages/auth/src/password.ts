@@ -134,6 +134,8 @@ export async function getPasswordFromStorage(): Promise<string | null> {
 }
 
 async function savePasswordToStorage(password: string): Promise<void> {
+  if (cachedPassword === password) return;
+
   const { secrets } = await import("bun");
   const { unlink } = await import("node:fs/promises");
 
