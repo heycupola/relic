@@ -68,6 +68,7 @@ jobs:
           name: web-dist
           path: apps/web/.open-next/
           retention-days: 1
+          include-hidden-files: true
 
   deploy:
     name: Deploy Production
