@@ -33,11 +33,21 @@ function printHelpHint() {
   console.error(`\n  ${pc.dim(`Run ${pc.white("relic --help")} for more information.`)}\n`);
 }
 
-// Use a runtime file URL so local source runs can load the TUI
-// without pulling the whole package into the CLI tsconfig.
 async function loadTui() {
-  const tuiEntry = new URL("../../packages/tui/index.tsx", import.meta.url).href;
-  await import(tuiEntry);
+  try {
+    const tuiEntry = new URL("../../packages/tui/index.tsx", import.meta.url).href;
+    await import(tuiEntry);
+  } catch {
+    console.error(
+      pc.red(pc.bold("\n  TUI is not available in standalone binary installations.\n")),
+    );
+    console.error(
+      pc.dim("  Use CLI commands instead. Run ") +
+        pc.white("relic --help") +
+        pc.dim(" to see available commands.\n"),
+    );
+    process.exit(1);
+  }
 }
 
 const program = new Command()
