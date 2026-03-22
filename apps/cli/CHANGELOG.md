@@ -1,5 +1,11 @@
 # @repo/cli
 
+## 0.6.6
+
+### Patch Changes
+
+- Fix TUI stdin Buffer crash, cache keychain password to avoid repeated macOS prompts, and resolve web migration issues
+
 ## 0.6.5
 
 ### Patch Changes
