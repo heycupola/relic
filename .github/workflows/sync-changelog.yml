@@ -5,17 +5,24 @@ on:
     types: [published, edited]
   workflow_dispatch:
 
+concurrency:
+  group: sync-changelog
+  cancel-in-progress: true
+
 jobs:
   sync:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch || 'main' }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          ref: ${{ env.DEFAULT_BRANCH }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -43,4 +50,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add apps/web/content/changelog/generated
           git commit -m "chore: sync changelog from GitHub releases"
-          git push
+          git fetch origin "$DEFAULT_BRANCH"
+          git rebase "origin/$DEFAULT_BRANCH"
+          git push origin HEAD:"$DEFAULT_BRANCH"
