@@ -1,0 +1,157 @@
+name: Update Homebrew Tap
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      sha_darwin_arm64:
+        required: false
+        type: string
+      sha_darwin_x64:
+        required: false
+        type: string
+      sha_linux_x64:
+        required: false
+        type: string
+    secrets:
+      HOMEBREW_TAP_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version without the leading v
+        required: true
+        type: string
+
+concurrency:
+  group: update-homebrew-tap
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Update relic formula
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ inputs.version }}
+      SHA_DARWIN_ARM64: ${{ inputs.sha_darwin_arm64 }}
+      SHA_DARWIN_X64: ${{ inputs.sha_darwin_x64 }}
+      SHA_LINUX_X64: ${{ inputs.sha_linux_x64 }}
+
+    steps:
+      - name: Validate Homebrew tap token
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "HOMEBREW_TAP_TOKEN is required"
+            exit 1
+          fi
+
+      - name: Resolve release digests
+        if: env.SHA_DARWIN_ARM64 == '' || env.SHA_DARWIN_X64 == '' || env.SHA_LINUX_X64 == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASE_JSON=$(gh release view "v${VERSION}" --repo heycupola/relic --json assets)
+          export RELEASE_JSON
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json
+          import os
+
+          assets = {
+              asset["name"]: asset.get("digest", "").replace("sha256:", "")
+              for asset in json.loads(os.environ["RELEASE_JSON"])["assets"]
+          }
+          required = {
+              "relic-darwin-arm64.tar.gz": "SHA_DARWIN_ARM64",
+              "relic-darwin-x64.tar.gz": "SHA_DARWIN_X64",
+              "relic-linux-x64.tar.gz": "SHA_LINUX_X64",
+          }
+          missing = []
+
+          for name, env_name in required.items():
+              digest = assets.get(name, "")
+              if not digest:
+                  missing.append(name)
+                  continue
+              print(f"{env_name}={digest}")
+
+          if missing:
+              raise SystemExit(f"Missing release digests for: {', '.join(missing)}")
+          PY
+
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@v5
+        with:
+          repository: heycupola/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update Formula/relic.rb
+        working-directory: homebrew-tap
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          lines = [
+              "# typed: false",
+              "# frozen_string_literal: true",
+              "",
+              "# This formula is maintained via the heycupola/relic release workflow.",
+              "class Relic < Formula",
+              '  desc "End-to-end encrypted secret layer for developers"',
+              '  homepage "https://relic.so"',
+              f'  version "{os.environ["VERSION"]}"',
+              '  license "MIT"',
+              "",
+              "  on_macos do",
+              "    if Hardware::CPU.arm?",
+              '      url "https://github.com/heycupola/relic/releases/download/v#{version}/relic-darwin-arm64.tar.gz"',
+              f'      sha256 "{os.environ["SHA_DARWIN_ARM64"]}"',
+              "    else",
+              '      url "https://github.com/heycupola/relic/releases/download/v#{version}/relic-darwin-x64.tar.gz"',
+              f'      sha256 "{os.environ["SHA_DARWIN_X64"]}"',
+              "    end",
+              "  end",
+              "",
+              "  on_linux do",
+              "    if Hardware::CPU.intel?",
+              '      url "https://github.com/heycupola/relic/releases/download/v#{version}/relic-linux-x64.tar.gz"',
+              f'      sha256 "{os.environ["SHA_LINUX_X64"]}"',
+              "    end",
+              "  end",
+              "",
+              "  def install",
+              '    bin.install "relic"',
+              '    lib.install Dir["librelic_runner.*"]',
+              '    lib.install Dir["relic_runner.dll"] if OS.windows?',
+              "  end",
+              "",
+              "  test do",
+              '    assert_match version.to_s, shell_output("#{bin}/relic --version")',
+              "  end",
+              "end",
+              "",
+          ]
+
+          Path("Formula/relic.rb").write_text("\n".join(lines), encoding="utf-8")
+          PY
+
+      - name: Commit and push formula update
+        working-directory: homebrew-tap
+        run: |
+          if git diff --quiet -- Formula/relic.rb; then
+            echo "Formula already up to date."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/relic.rb
+          git commit -m "chore: update relic to v${VERSION}"
+          git push

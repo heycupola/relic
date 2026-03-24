@@ -220,6 +220,10 @@ jobs:
     permissions:
       contents: write
       id-token: write
+    outputs:
+      sha_darwin_arm64: ${{ steps.homebrew_shas.outputs.sha_darwin_arm64 }}
+      sha_darwin_x64: ${{ steps.homebrew_shas.outputs.sha_darwin_x64 }}
+      sha_linux_x64: ${{ steps.homebrew_shas.outputs.sha_linux_x64 }}
     env:
       VERSION: ${{ needs.check-version.outputs.new-version }}
 
@@ -239,6 +243,13 @@ jobs:
           for platform in darwin-arm64 darwin-x64 linux-x64 win32-x64; do
             cp artifacts/cli-$platform/relic-$platform.* dist/ 2>/dev/null || true
           done
+
+      - name: Compute Homebrew tap checksums
+        id: homebrew_shas
+        run: |
+          echo "sha_darwin_arm64=$(sha256sum dist/relic-darwin-arm64.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "sha_darwin_x64=$(sha256sum dist/relic-darwin-x64.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "sha_linux_x64=$(sha256sum dist/relic-linux-x64.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Populate npm platform packages
         run: |
@@ -339,24 +350,15 @@ jobs:
           cd npm/relic
           npm publish --access public --provenance
 
-      - name: Update Homebrew tap
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "HOMEBREW_TAP_TOKEN not set, skipping Homebrew update"
-            exit 0
-          fi
-
-          SHA_DARWIN_ARM64=$(sha256sum dist/relic-darwin-arm64.tar.gz | cut -d' ' -f1)
-          SHA_DARWIN_X64=$(sha256sum dist/relic-darwin-x64.tar.gz | cut -d' ' -f1)
-          SHA_LINUX_X64=$(sha256sum dist/relic-linux-x64.tar.gz | cut -d' ' -f1)
-
-          gh api repos/heycupola/homebrew-tap/dispatches \
-            --method POST \
-            -f event_type=formula-update \
-            -f "client_payload[version]=${VERSION}" \
-            -f "client_payload[sha_darwin_arm64]=${SHA_DARWIN_ARM64}" \
-            -f "client_payload[sha_darwin_x64]=${SHA_DARWIN_X64}" \
-            -f "client_payload[sha_linux_x64]=${SHA_LINUX_X64}"
+  update-homebrew-tap:
+    name: Update Homebrew Tap
+    needs: [check-version, release]
+    if: needs.check-version.outputs.version-changed == 'true'
+    uses: ./.github/workflows/update-homebrew-tap.yml
+    with:
+      version: ${{ needs.check-version.outputs.new-version }}
+      sha_darwin_arm64: ${{ needs.release.outputs.sha_darwin_arm64 }}
+      sha_darwin_x64: ${{ needs.release.outputs.sha_darwin_x64 }}
+      sha_linux_x64: ${{ needs.release.outputs.sha_linux_x64 }}
+    secrets:
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
