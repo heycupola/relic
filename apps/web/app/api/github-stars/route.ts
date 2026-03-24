@@ -1,4 +1,4 @@
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
@@ -13,6 +13,7 @@ export async function GET() {
 
     const res = await fetch("https://api.github.com/repos/heycupola/relic", {
       headers,
+      cache: "no-store",
     });
 
     if (!res.ok) {
