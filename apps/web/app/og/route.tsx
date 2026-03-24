@@ -1,53 +1,67 @@
-import { createOgImage } from "@/lib/og-image";
-import {
-  BLOG_DESCRIPTION,
-  BLOG_TITLE,
-  CHANGELOG_DESCRIPTION,
-  CHANGELOG_TITLE,
-  SITE_DESCRIPTION,
-  SITE_SLOGAN,
-} from "@/lib/site";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-export const runtime = "edge";
+interface OgWorkerFetcher {
+  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+}
 
-const STATIC_PAGES: Record<string, { eyebrow: string; title: string; description: string }> = {
-  home: { eyebrow: "relic", title: SITE_SLOGAN, description: SITE_DESCRIPTION },
-  "blog-index": { eyebrow: "Blog", title: BLOG_TITLE, description: BLOG_DESCRIPTION },
-  "changelog-index": {
-    eyebrow: "Changelog",
-    title: CHANGELOG_TITLE,
-    description: CHANGELOG_DESCRIPTION,
-  },
-};
+const OG_WORKER_DEV_URL = process.env.OG_WORKER_DEV_URL || "http://127.0.0.1:8787";
+
+function getOgWorkerBinding(): OgWorkerFetcher | null {
+  const { env } = getCloudflareContext();
+  const binding = (env as { RELIC_OG?: OgWorkerFetcher }).RELIC_OG;
+  return binding && typeof binding.fetch === "function" ? binding : null;
+}
+
+async function proxyToOgWorker(request: Request): Promise<Response> {
+  const requestUrl = new URL(request.url);
+  const forwardedHeaders = new Headers();
+  const accept = request.headers.get("accept");
+  if (accept) {
+    forwardedHeaders.set("accept", accept);
+  }
+
+  const ogWorker = getOgWorkerBinding();
+  if (ogWorker) {
+    const upstreamUrl = new URL(requestUrl.pathname + requestUrl.search, "https://relic-og");
+    const upstreamRequest = new Request(upstreamUrl.toString(), {
+      method: request.method,
+      headers: forwardedHeaders,
+    });
+
+    const response = await ogWorker.fetch(upstreamRequest);
+    return new Response(request.method === "HEAD" ? null : response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+  }
+
+  if (process.env.NODE_ENV === "development") {
+    const upstreamUrl = new URL(requestUrl.pathname + requestUrl.search, OG_WORKER_DEV_URL);
+    const response = await fetch(
+      new Request(upstreamUrl.toString(), {
+        method: request.method,
+        headers: forwardedHeaders,
+      }),
+    );
+
+    return new Response(request.method === "HEAD" ? null : response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+  }
+
+  return Response.json(
+    { error: "OG worker binding is not configured for this environment." },
+    { status: 500 },
+  );
+}
 
 export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const type = searchParams.get("type");
+  return proxyToOgWorker(request);
+}
 
-    if (!type) return new Response("Missing type", { status: 400 });
-
-    const staticPage = STATIC_PAGES[type];
-    if (staticPage) {
-      return await createOgImage(staticPage);
-    }
-
-    const title = searchParams.get("title");
-    const description = searchParams.get("description");
-
-    if (!title) return new Response("Missing title", { status: 400 });
-
-    const eyebrow = type === "blog-entry" ? "Blog" : "Changelog";
-    const footer = searchParams.get("footer") ?? "relic.so";
-
-    return await createOgImage({
-      eyebrow,
-      title: decodeURIComponent(title),
-      description: description ? decodeURIComponent(description) : "",
-      footer: decodeURIComponent(footer),
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return Response.json({ error: message }, { status: 500 });
-  }
+export async function HEAD(request: Request) {
+  return proxyToOgWorker(request);
 }

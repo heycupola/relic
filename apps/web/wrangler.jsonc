@@ -15,12 +15,10 @@
     {
       "binding": "WORKER_SELF_REFERENCE",
       "service": "relic-web"
-    }
-  ],
-  "r2_buckets": [
+    },
     {
-      "binding": "NEXT_INC_CACHE_R2_BUCKET",
-      "bucket_name": "relic-web-cache"
+      "binding": "RELIC_OG",
+      "service": "relic-og"
     }
   ],
   "images": {
