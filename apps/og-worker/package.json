@@ -1,0 +1,21 @@
+{
+  "name": "@repo/og-worker",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@cf-wasm/og": "^0.3.7",
+    "react": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260317.0",
+    "@types/react": "^19.2.2",
+    "typescript": "5.9.2",
+    "wrangler": "^4.76.0"
+  }
+}
