@@ -1,0 +1,180 @@
+---
+title: MCP Server
+description: Use Relic with AI assistants through the Model Context Protocol.
+---
+
+Relic includes a built-in [MCP](https://modelcontextprotocol.io) server that lets AI assistants manage your secrets without ever seeing the actual values. Run `relic mcp` to start the server over stdio.
+
+```bash
+relic mcp
+```
+
+## Setup
+
+You must be authenticated before using the MCP server. Run `relic login` if you haven't already.
+
+### Cursor
+
+Add this to `.cursor/mcp.json` in your project root or global Cursor settings. This applies to both Cursor IDE and Cursor CLI.
+
+```json
+{
+  "mcpServers": {
+    "relic": {
+      "command": "relic",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+### Claude Code
+
+```bash
+claude mcp add relic -- relic mcp
+```
+
+This registers the server globally in `~/.claude.json`. To scope it to the current project, add the `--scope project` flag:
+
+```bash
+claude mcp add --scope project relic -- relic mcp
+```
+
+### Codex
+
+Run the CLI command:
+
+```bash
+codex mcp add relic -- relic mcp
+```
+
+Or add it manually to `~/.codex/config.toml` (global) or `.codex/config.toml` (project-scoped):
+
+```toml
+[mcp_servers.relic]
+command = "relic"
+args = ["mcp"]
+```
+
+### Zed
+
+Add this to your Zed `settings.json`:
+
+```json
+{
+  "context_servers": {
+    "relic": {
+      "source": "custom",
+      "command": "relic",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+<Note>
+  Zed supports MCP Tools and Prompts only — Resources and Sampling are not yet implemented.
+</Note>
+
+### OpenCode
+
+Add this to your `opencode.jsonc` or `opencode.json`:
+
+```json
+{
+  "mcp": {
+    "relic": {
+      "type": "local",
+      "command": ["relic", "mcp"],
+      "enabled": true
+    }
+  }
+}
+```
+
+### Claude Desktop
+
+Add this to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "relic": {
+      "command": "relic",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+| Platform | Path |
+|----------|------|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+
+## Available Tools
+
+### `whoami`
+
+Returns the authenticated user's name, email, and plan.
+
+### `list-projects`
+
+Lists all projects (owned and shared) with their environments and folders.
+
+### `list-secrets`
+
+Lists secret key names, and scopes for a given project environment.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `projectId` | Yes | Project ID |
+| `environment` | Yes | Environment name (e.g. `production`, `staging`) |
+| `folder` | No | Folder name |
+
+<Warning>
+  This tool returns secret **names only** — never decrypted values. This is by design. Relic's zero-knowledge model means secret values should never appear in an AI context window.
+</Warning>
+
+### `get-current-project`
+
+Reads `relic.toml` from the current directory and returns the project ID and config path. Useful for the AI to understand which project it's working in.
+
+### `run-with-secrets`
+
+Runs a command with decrypted secrets injected as environment variables. Returns the command's stdout, stderr, and exit code.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `command` | Yes | Command and arguments (e.g. `["npm", "run", "dev"]`) |
+| `environment` | Yes | Environment name |
+| `folder` | No | Folder name |
+| `scope` | No | Scope filter: `client`, `server`, or `shared` |
+| `projectId` | No | Project ID (defaults to `relic.toml` or `RELIC_PROJECT_ID`) |
+
+<Warning>
+  Secret values are decrypted locally and injected into the child process environment. They are **never** included in the tool response — only the command output is returned to the AI.
+</Warning>
+
+## Security Model
+
+The MCP server inherits Relic's client-side encryption. All decryption happens locally on your machine, and the server communicates with the AI assistant over stdio (no network exposure).
+
+| Guarantee | How |
+|-----------|-----|
+| Secret values never reach the AI | `list-secrets` returns names only; `run-with-secrets` returns command output only |
+| Client-side decryption | Secrets are decrypted on your device using your password and keys |
+| No disk writes | Secrets are held in memory for the duration of the command |
+| Session-based auth | The MCP server reuses your existing `relic login` session |
+| API key support | Set `RELIC_API_KEY` and `RELIC_PASSWORD` for CI-like environments |
+
+## Example Usage
+
+Once configured, you can ask your AI assistant things like:
+
+- *"What secrets are in my production environment?"*
+- *"List all my Relic projects"*
+- *"Run my test suite with staging secrets"*
+- *"Which project is this directory linked to?"*
+
+The assistant will use the appropriate MCP tool and return the results without ever seeing your secret values.
