@@ -150,15 +150,21 @@ server.registerTool(
           return text(`Folder "${folder}" not found. Available: ${available || "none"}`);
         }
         secrets = secrets.filter((s) => s.folderId === targetFolder.id);
-      } else {
-        secrets = secrets.filter((s) => !s.folderId);
       }
+
+      const folderMap = new Map(data.folders.map((f) => [f.id, f.name]));
 
       return json({
         environment: env.name,
         folder: folder ?? null,
         count: secrets.length,
-        secrets: secrets.map((s) => ({ key: s.key, scope: s.scope /* type: s.valueType */ })),
+        folders: data.folders.map((f) => f.name),
+        secrets: secrets.map((s) => ({
+          key: s.key,
+          scope: s.scope,
+          type: s.valueType,
+          folder: s.folderId ? (folderMap.get(s.folderId) ?? null) : null,
+        })),
       });
     } catch (err) {
       return text(`Failed to list secrets: ${err instanceof Error ? err.message : String(err)}`);
