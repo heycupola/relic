@@ -14,7 +14,7 @@ import pkg from "./package.json";
 await initLogger();
 
 if (isFirstRun()) {
-  console.log(
+  console.error(
     pc.dim(
       "Relic collects anonymous usage data to improve the product. Run `relic telemetry disable` to opt out.",
     ),
