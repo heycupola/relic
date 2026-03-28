@@ -14,7 +14,7 @@ import pkg from "./package.json";
 await initLogger();
 
 if (isFirstRun()) {
-  console.log(
+  console.error(
     pc.dim(
       "Relic collects anonymous usage data to improve the product. Run `relic telemetry disable` to opt out.",
     ),
@@ -77,6 +77,13 @@ const telemetryCmd = program
 telemetryCmd.command("status").description("Show telemetry status").action(telemetryStatus);
 telemetryCmd.command("enable").description("Enable telemetry").action(telemetryEnable);
 telemetryCmd.command("disable").description("Disable telemetry").action(telemetryDisable);
+
+program
+  .command("mcp")
+  .description("Start the Relic MCP server for AI assistants")
+  .action(async () => {
+    await import("./mcp/server");
+  });
 
 program
   .command("run")
