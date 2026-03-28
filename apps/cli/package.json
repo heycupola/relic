@@ -35,7 +35,9 @@
     "prebuilds/**",
     "README.md"
   ],
-  "dependencies": {},
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0"
+  },
   "optionalDependencies": {
     "@opentui/core-darwin-arm64": "0.1.88",
     "@opentui/core-darwin-x64": "0.1.88",
@@ -57,7 +59,8 @@
     "open": "^11.0.0",
     "ora": "^8.2.0",
     "picocolors": "^1.1.1",
-    "smol-toml": "^1.6.0"
+    "smol-toml": "^1.6.0",
+    "zod": "catalog:"
   },
   "peerDependencies": {
     "typescript": "^5"

@@ -79,6 +79,13 @@ telemetryCmd.command("enable").description("Enable telemetry").action(telemetryE
 telemetryCmd.command("disable").description("Disable telemetry").action(telemetryDisable);
 
 program
+  .command("mcp")
+  .description("Start the Relic MCP server for AI assistants")
+  .action(async () => {
+    await import("./mcp/server");
+  });
+
+program
   .command("run")
   .description("Run a command with secrets injected as environment variables")
   .requiredOption("-e, --environment <name>", "Environment name (required)")

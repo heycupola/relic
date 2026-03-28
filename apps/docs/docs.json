@@ -76,7 +76,7 @@
       },
       {
         "group": "Development",
-        "pages": ["development/runner"]
+        "pages": ["development/runner", "development/mcp"]
       },
       {
         "group": "Reference",
