@@ -15,14 +15,15 @@ jobs:
     permissions:
       contents: write
     env:
-      DEFAULT_BRANCH: ${{ github.event.repository.default_branch || 'main' }}
+      TARGET_BRANCH: main
+      EXPECTED_RELEASE_TAG: ${{ github.event.release.tag_name || '' }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          ref: ${{ env.DEFAULT_BRANCH }}
+          ref: ${{ env.TARGET_BRANCH }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -37,6 +38,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          EXPECTED_RELEASE_TAG: ${{ env.EXPECTED_RELEASE_TAG }}
         run: bun run sync:changelog
 
       - name: Commit generated changelog content
@@ -46,10 +48,9 @@ jobs:
             exit 0
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add apps/web/content/changelog/generated
-          git commit -m "chore: sync changelog from GitHub releases"
-          git fetch origin "$DEFAULT_BRANCH"
-          git rebase "origin/$DEFAULT_BRANCH"
-          git push origin HEAD:"$DEFAULT_BRANCH"
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "chore: sync changelog from GitHub releases"
+          git fetch origin "$TARGET_BRANCH"
+          git rebase "origin/$TARGET_BRANCH"
+          git push origin HEAD:"$TARGET_BRANCH"
