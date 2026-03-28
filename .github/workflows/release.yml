@@ -355,6 +355,9 @@ jobs:
     needs: [check-version, release]
     if: needs.check-version.outputs.version-changed == 'true'
     runs-on: ubuntu-latest
+    concurrency:
+      group: sync-changelog
+      cancel-in-progress: false
     permissions:
       contents: write
     env:
