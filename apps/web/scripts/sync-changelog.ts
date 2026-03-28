@@ -14,11 +14,16 @@ type GitHubRelease = {
 const REPO = process.env.GITHUB_REPOSITORY || "heycupola/relic";
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const EXPECTED_RELEASE_TAG = process.env.EXPECTED_RELEASE_TAG;
-const RELEASE_FETCH_RETRIES = Math.max(1, Number(process.env.RELEASE_FETCH_RETRIES ?? 6));
-const RELEASE_FETCH_RETRY_DELAY_MS = Math.max(
-  0,
-  Number(process.env.RELEASE_FETCH_RETRY_DELAY_MS ?? 5000),
-);
+const parsedReleaseFetchRetries = Number(process.env.RELEASE_FETCH_RETRIES ?? 6);
+const RELEASE_FETCH_RETRIES =
+  Number.isFinite(parsedReleaseFetchRetries) && parsedReleaseFetchRetries > 0
+    ? Math.max(1, Math.trunc(parsedReleaseFetchRetries))
+    : 6;
+const parsedReleaseFetchRetryDelayMs = Number(process.env.RELEASE_FETCH_RETRY_DELAY_MS ?? 5000);
+const RELEASE_FETCH_RETRY_DELAY_MS =
+  Number.isFinite(parsedReleaseFetchRetryDelayMs) && parsedReleaseFetchRetryDelayMs >= 0
+    ? Math.max(0, Math.trunc(parsedReleaseFetchRetryDelayMs))
+    : 5000;
 const OUTPUT_DIRECTORY = path.join(process.cwd(), "content", "changelog", "generated");
 
 function slugify(value: string): string {
@@ -149,6 +154,8 @@ async function fetchReleases(): Promise<GitHubRelease[]> {
       `Expected release ${EXPECTED_RELEASE_TAG} was not found in the GitHub Releases API after ${RELEASE_FETCH_RETRIES} attempts.`,
     );
   }
+
+  throw new Error("fetchReleases: unexpected exit from retry loop");
 }
 
 async function writeReleaseFiles(releases: GitHubRelease[]) {
