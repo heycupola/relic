@@ -449,6 +449,19 @@ export const archiveProject = protectedAction({
       });
     }
 
+    const activeServiceAccounts = await ctx.runQuery(
+      internal.serviceAccount._loadActiveServiceAccountsByProject,
+      { projectId: args.projectId },
+    );
+
+    if (activeServiceAccounts.length > 0) {
+      throw createError({
+        code: ErrorCode.INVALID_OPERATION,
+        message: `Cannot archive project with ${activeServiceAccounts.length} active service account(s). Revoke all service accounts first.`,
+        severity: ErrorSeverity.Medium,
+      });
+    }
+
     await ctx.runMutation(internal.project._archiveProject, {
       projectId: args.projectId,
     });

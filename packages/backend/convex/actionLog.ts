@@ -43,6 +43,8 @@ export const _insertActionLog = internalMutation({
       v.literal("apikey.revoked"),
       v.literal("account.deleted"),
       v.literal("onboarding.completed"),
+      v.literal("serviceaccount.created"),
+      v.literal("serviceaccount.revoked"),
     ),
     environmentId: v.optional(v.id("environment")),
     environmentName: v.optional(v.string()),

@@ -2,6 +2,25 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  serviceAccount: defineTable({
+    projectId: v.id("project"),
+    name: v.string(),
+    publicKey: v.string(),
+    encryptedPrivateKey: v.string(),
+    salt: v.string(),
+    encryptedProjectKey: v.string(),
+    hashedToken: v.string(),
+    tokenPrefix: v.string(),
+    createdBy: v.string(),
+    expiresAt: v.optional(v.number()),
+    revokedAt: v.optional(v.number()),
+    lastUsedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_hashedToken", ["hashedToken"])
+    .index("by_createdBy", ["createdBy"]),
   project: defineTable({
     name: v.string(),
     slug: v.string(),
@@ -128,6 +147,8 @@ export default defineSchema({
       v.literal("apikey.revoked"),
       v.literal("account.deleted"),
       v.literal("onboarding.completed"),
+      v.literal("serviceaccount.created"),
+      v.literal("serviceaccount.revoked"),
     ),
     metadata: v.optional(
       v.object({

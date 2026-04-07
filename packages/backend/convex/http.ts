@@ -312,4 +312,60 @@ http.route({
   }),
 });
 
+http.route({
+  path: "/api/sa/secrets/export",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const rawToken = authHeader.slice(7);
+    const hashedToken = await hashKey(rawToken);
+    const clientIp =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      request.headers.get("cf-connecting-ip") ??
+      "unknown";
+    let body: Record<string, unknown>;
+    try {
+      body = (await request.json()) as Record<string, unknown>;
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    try {
+      const sa = await ctx.runMutation(internal.serviceAccount._validateServiceToken, {
+        hashedToken,
+        clientIp,
+      });
+      const result = await ctx.runMutation(internal.secret._exportSecretsForServiceAccount, {
+        serviceAccountId: sa.serviceAccountId,
+        projectId: sa.projectId,
+        environmentName: body.environmentName as string | undefined,
+        folderName: body.folderName as string | undefined,
+        scope: body.scope as "client" | "server" | "shared" | undefined,
+      });
+      return new Response(
+        JSON.stringify({
+          ...result,
+          encryptedProjectKey: sa.encryptedProjectKey,
+          encryptedPrivateKey: sa.encryptedPrivateKey,
+          salt: sa.salt,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    } catch (error) {
+      return toHttpErrorResponse(error);
+    }
+  }),
+});
+
 export default http;

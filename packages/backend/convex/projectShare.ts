@@ -428,6 +428,14 @@ export const revokeShareWithRotation = protectedAction({
         newEncryptedValue: v.string(),
       }),
     ),
+    rewrappedServiceAccounts: v.optional(
+      v.array(
+        v.object({
+          serviceAccountId: v.id("serviceAccount"),
+          newEncryptedProjectKey: v.string(),
+        }),
+      ),
+    ),
   },
   handler: async (
     ctx: ProtectedActionCtx,
@@ -436,6 +444,10 @@ export const revokeShareWithRotation = protectedAction({
       newEncryptedProjectKey: string;
       rewrappedShares: Array<{ shareId: Id<"projectShare">; newEncryptedProjectKey: string }>;
       reEncryptedSecrets: Array<{ secretId: Id<"secret">; newEncryptedValue: string }>;
+      rewrappedServiceAccounts?: Array<{
+        serviceAccountId: Id<"serviceAccount">;
+        newEncryptedProjectKey: string;
+      }>;
     },
   ) => {
     const share: Doc<"projectShare"> = await ctx.runQuery(internal.projectShare._loadShareById, {
@@ -566,6 +578,15 @@ export const revokeShareWithRotation = protectedAction({
         shareId: rewrapped.shareId,
         newEncryptedProjectKey: rewrapped.newEncryptedProjectKey,
       });
+    }
+
+    if (args.rewrappedServiceAccounts) {
+      for (const rewrapped of args.rewrappedServiceAccounts) {
+        await ctx.runMutation(internal.serviceAccount._updateServiceAccountProjectKey, {
+          serviceAccountId: rewrapped.serviceAccountId,
+          newEncryptedProjectKey: rewrapped.newEncryptedProjectKey,
+        });
+      }
     }
 
     let secretsReEncrypted = 0;

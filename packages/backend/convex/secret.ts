@@ -30,6 +30,19 @@ type ExportSecretsResult = {
   folderId: Id<"folder"> | null;
 };
 
+type ServiceAccountExportResult = {
+  secrets: {
+    id: Id<"secret">;
+    key: string;
+    encryptedValue: string;
+    scope: "client" | "server" | "shared";
+    valueType: "string" | "number" | "boolean";
+  }[];
+  count: number;
+  environmentId: Id<"environment">;
+  folderId: Id<"folder"> | null;
+};
+
 const MAX_SECRETS_PER_ENVIRONMENT = 1024;
 export const createSecret = protectedMutation({
   args: {
@@ -737,7 +750,7 @@ export const _exportSecretsCore = internalMutation({
         folderId: resolvedFolderId,
       });
 
-      if (folder.environmentId !== resolvedEnvironmentId) {
+      if (folder && folder.environmentId !== resolvedEnvironmentId) {
         throw createError({
           code: ErrorCode.INVALID_ARGUMENTS,
           message: "Folder does not belong to this environment",
@@ -783,6 +796,123 @@ export const _exportSecretsCore = internalMutation({
       encryptedProjectKey,
       environmentId: resolvedEnvironmentId,
       folderId: resolvedFolderId ?? null,
+    };
+  },
+});
+
+export const _exportSecretsForServiceAccount = internalMutation({
+  args: {
+    serviceAccountId: v.string(),
+    projectId: v.id("project"),
+    environmentName: v.optional(v.string()),
+    folderName: v.optional(v.string()),
+    scope: v.optional(v.union(v.literal("client"), v.literal("server"), v.literal("shared"))),
+  },
+  returns: v.object({
+    secrets: v.array(
+      v.object({
+        id: v.id("secret"),
+        key: v.string(),
+        encryptedValue: v.string(),
+        scope: v.union(v.literal("client"), v.literal("server"), v.literal("shared")),
+        valueType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
+      }),
+    ),
+    count: v.number(),
+    environmentId: v.id("environment"),
+    folderId: v.union(v.id("folder"), v.null()),
+  }),
+  handler: async (
+    ctx,
+    args: {
+      serviceAccountId: string;
+      projectId: Id<"project">;
+      environmentName?: string;
+      folderName?: string;
+      scope?: "client" | "server" | "shared";
+    },
+  ): Promise<ServiceAccountExportResult> => {
+    const project = await ctx.runQuery(internal.project._loadProjectById, {
+      projectId: args.projectId,
+    });
+
+    if (!args.environmentName) {
+      throw createError({
+        code: ErrorCode.INVALID_ARGUMENTS,
+        message: "environmentName is required",
+        severity: ErrorSeverity.Medium,
+      });
+    }
+
+    const { environmentId, folderId } = await ctx.runQuery(
+      internal.secret._loadSecretLocationIdsPair,
+      {
+        projectId: args.projectId,
+        environmentName: args.environmentName,
+        folderName: args.folderName,
+      },
+    );
+
+    const environment = await ctx.runQuery(internal.environment._loadEnvironmentById, {
+      environmentId,
+    });
+
+    if (environment.projectId !== args.projectId) {
+      throw createError({
+        code: ErrorCode.INVALID_ARGUMENTS,
+        message: "Environment does not belong to this project",
+        severity: ErrorSeverity.Medium,
+      });
+    }
+
+    let folder: Doc<"folder"> | undefined;
+    if (folderId) {
+      folder = await ctx.runQuery(internal.folder._loadFolderById, { folderId });
+      if (folder && folder.environmentId !== environmentId) {
+        throw createError({
+          code: ErrorCode.INVALID_ARGUMENTS,
+          message: "Folder does not belong to this environment",
+          severity: ErrorSeverity.Medium,
+        });
+      }
+    }
+
+    const secrets: Doc<"secret">[] = await ctx.runQuery(internal.secret._loadSecrets, {
+      environmentId,
+      projectId: args.projectId,
+      folderId: folderId ?? undefined,
+    });
+
+    const filteredSecrets = args.scope
+      ? secrets.filter((secret) => secret.scope === args.scope)
+      : secrets;
+
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      projectId: project._id,
+      projectName: project.name,
+      userId: args.serviceAccountId,
+      action: "secret.exported",
+      environmentId,
+      environmentName: environment.name,
+      metadata: {
+        folderId: folderId ?? undefined,
+        folderName: folder?.name,
+        exportCount: filteredSecrets.length,
+        exportFormat: "env",
+      },
+    });
+
+    return {
+      secrets: filteredSecrets.map((s) => ({
+        id: s._id,
+        key: s.key,
+        encryptedValue: s.encryptedValue,
+        scope: s.scope,
+        valueType: s.valueType,
+      })),
+      count: filteredSecrets.length,
+      environmentId,
+      folderId: folderId ?? null,
     };
   },
 });
