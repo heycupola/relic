@@ -101,7 +101,12 @@ async function verifyJwtSignature(token: string, key: CryptoKey): Promise<boolea
   const signedContent = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
   const signature = base64UrlDecode(parts[2]);
 
-  return await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, signature, signedContent);
+  return await crypto.subtle.verify(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    signature.buffer.slice(signature.byteOffset, signature.byteOffset + signature.byteLength),
+    signedContent,
+  );
 }
 
 export function matchSubjectPattern(subject: string, pattern: string): boolean {
