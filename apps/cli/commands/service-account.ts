@@ -15,6 +15,9 @@ export async function serviceAccountCreate(options: {
   project?: string;
   name: string;
   expiresIn?: string;
+  oidcIssuer?: string;
+  oidcSubject?: string;
+  oidcAudience?: string;
 }) {
   const spinner = ora("Checking authentication...").start();
 
@@ -28,6 +31,16 @@ export async function serviceAccountCreate(options: {
   const password = await getPasswordFromStorage();
   if (!password) {
     spinner.fail(pc.red("No password set. Run 'relic tui' to set up your password first."));
+    process.exit(1);
+  }
+
+  if (options.oidcIssuer && !options.oidcSubject) {
+    spinner.fail(pc.red("--oidc-subject is required when --oidc-issuer is specified."));
+    process.exit(1);
+  }
+
+  if (!options.oidcIssuer && options.oidcSubject) {
+    spinner.fail(pc.red("--oidc-issuer is required when --oidc-subject is specified."));
     process.exit(1);
   }
 
@@ -100,6 +113,9 @@ export async function serviceAccountCreate(options: {
     hashedToken,
     tokenPrefix,
     expiresAt,
+    oidcIssuer: options.oidcIssuer,
+    oidcSubjectPattern: options.oidcSubject,
+    oidcAudience: options.oidcAudience,
   });
 
   spinner.succeed(pc.green("Service account created"));
@@ -111,9 +127,20 @@ export async function serviceAccountCreate(options: {
   console.log();
   console.log(pc.dim("  Store this token in your CI provider's secret storage."));
   console.log(pc.dim("  Set it as RELIC_SERVICE_TOKEN in your pipeline environment."));
+
+  if (options.oidcIssuer) {
+    console.log();
+    console.log(pc.dim("  OIDC policy configured:"));
+    console.log(pc.dim(`    Issuer:  ${options.oidcIssuer}`));
+    console.log(pc.dim(`    Subject: ${options.oidcSubject}`));
+    if (options.oidcAudience) {
+      console.log(pc.dim(`    Audience: ${options.oidcAudience}`));
+    }
+    console.log(pc.dim("  The OIDC token will be auto-detected in supported CI environments."));
+  }
   console.log();
 
-  trackEvent("service_account_created", { projectId });
+  trackEvent("service_account_created", { projectId, hasOidc: !!options.oidcIssuer });
 }
 
 export async function serviceAccountList(options: { project?: string }) {
@@ -158,12 +185,17 @@ export async function serviceAccountList(options: { project?: string }) {
         : pc.green("active");
 
     const lastUsed = sa.lastUsedAt ? new Date(sa.lastUsedAt).toLocaleDateString() : pc.dim("never");
-
     const expires = sa.expiresAt ? new Date(sa.expiresAt).toLocaleDateString() : pc.dim("never");
+    const oidc = sa.oidcIssuer ? pc.cyan("enabled") : pc.dim("off");
 
     console.log(`  ${pc.bold(sa.name)}`);
     console.log(`    Token:   ${pc.dim(`${sa.tokenPrefix}...`)}`);
     console.log(`    Status:  ${status}`);
+    console.log(`    OIDC:    ${oidc}`);
+    if (sa.oidcIssuer) {
+      console.log(`    Issuer:  ${pc.dim(sa.oidcIssuer)}`);
+      console.log(`    Subject: ${pc.dim(sa.oidcSubjectPattern ?? "")}`);
+    }
     console.log(`    Expires: ${expires}`);
     console.log(`    Used:    ${lastUsed}`);
     console.log(`    Created: ${new Date(sa.createdAt).toLocaleDateString()}`);

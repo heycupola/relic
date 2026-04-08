@@ -168,6 +168,34 @@ export async function prepareSecretsWithApiKey(
   return { secrets: secretsObj, count: result.count };
 }
 
+async function resolveOidcToken(): Promise<string | undefined> {
+  if (process.env.RELIC_OIDC_TOKEN) {
+    return process.env.RELIC_OIDC_TOKEN;
+  }
+
+  const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+  const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+  if (requestUrl && requestToken) {
+    try {
+      const response = await fetch(`${requestUrl}&audience=relic`, {
+        headers: { Authorization: `bearer ${requestToken}` },
+      });
+      if (response.ok) {
+        const data = (await response.json()) as { value?: string };
+        return data.value;
+      }
+    } catch {
+      log.warn("Failed to request GitHub Actions OIDC token");
+    }
+  }
+
+  if (process.env.CI_JOB_JWT_V2) {
+    return process.env.CI_JOB_JWT_V2;
+  }
+
+  return undefined;
+}
+
 export async function prepareSecretsWithServiceToken(
   options: RunOptions,
 ): Promise<PrepareSecretsResult> {
@@ -176,11 +204,17 @@ export async function prepareSecretsWithServiceToken(
     throw new Error("RELIC_SERVICE_TOKEN is required for service token mode.");
   }
 
-  const result = await exportSecretsViaServiceToken(serviceToken, {
-    environmentName: options.environment,
-    folderName: options.folder,
-    scope: options.scope,
-  });
+  const oidcToken = await resolveOidcToken();
+
+  const result = await exportSecretsViaServiceToken(
+    serviceToken,
+    {
+      environmentName: options.environment,
+      folderName: options.folder,
+      scope: options.scope,
+    },
+    oidcToken,
+  );
 
   if (result.count === 0) {
     throw new Error("No secrets found");
@@ -422,8 +456,9 @@ async function runWithApiKey(
   if (isCiEnvironment()) {
     console.error(
       pc.yellow(
-        "  ⚠ Using RELIC_PASSWORD in CI is deprecated. Use RELIC_SERVICE_TOKEN instead.\n" +
-          "    See: https://docs.relic.so/guides/service-accounts\n",
+        "  ⚠ Using RELIC_API_KEY + RELIC_PASSWORD in CI is deprecated.\n" +
+          "    Use RELIC_SERVICE_TOKEN with OIDC trust policies instead.\n" +
+          "    See: https://docs.relic.so/guides/oidc\n",
       ),
     );
   }

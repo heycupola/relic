@@ -91,9 +91,27 @@ saCmd
   .requiredOption("-n, --name <name>", "Service account name")
   .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
   .option("--expires-in <days>", "Expiration in days (optional, max 365)")
-  .action((options: { name: string; project?: string; expiresIn?: string }) => {
-    serviceAccountCreate(options);
-  });
+  .option(
+    "--oidc-issuer <url>",
+    "OIDC issuer URL (e.g. https://token.actions.githubusercontent.com)",
+  )
+  .option(
+    "--oidc-subject <pattern>",
+    "OIDC subject pattern (e.g. repo:org/repo:ref:refs/heads/main)",
+  )
+  .option("--oidc-audience <aud>", "OIDC audience (optional)")
+  .action(
+    (options: {
+      name: string;
+      project?: string;
+      expiresIn?: string;
+      oidcIssuer?: string;
+      oidcSubject?: string;
+      oidcAudience?: string;
+    }) => {
+      serviceAccountCreate(options);
+    },
+  );
 
 saCmd
   .command("list")

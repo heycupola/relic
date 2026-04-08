@@ -317,6 +317,9 @@ export class ProtectedApi {
     hashedToken: string;
     tokenPrefix: string;
     expiresAt?: number;
+    oidcIssuer?: string;
+    oidcSubjectPattern?: string;
+    oidcAudience?: string;
   }): Promise<{ id: string; tokenPrefix: string }> {
     const result = await this.withAuth(() =>
       this.client.mutation(api.serviceAccount.createServiceAccount, {
@@ -329,9 +332,28 @@ export class ProtectedApi {
         hashedToken: args.hashedToken,
         tokenPrefix: args.tokenPrefix,
         expiresAt: args.expiresAt,
+        oidcIssuer: args.oidcIssuer,
+        oidcSubjectPattern: args.oidcSubjectPattern,
+        oidcAudience: args.oidcAudience,
       }),
     );
     return { id: String(result.id), tokenPrefix: result.tokenPrefix };
+  }
+
+  async updateOidcPolicy(args: {
+    serviceAccountId: string;
+    oidcIssuer?: string;
+    oidcSubjectPattern?: string;
+    oidcAudience?: string;
+  }): Promise<{ success: boolean }> {
+    return await this.withAuth(() =>
+      this.client.mutation(api.serviceAccount.updateOidcPolicy, {
+        serviceAccountId: toId<"serviceAccount">(args.serviceAccountId),
+        oidcIssuer: args.oidcIssuer,
+        oidcSubjectPattern: args.oidcSubjectPattern,
+        oidcAudience: args.oidcAudience,
+      }),
+    );
   }
 
   async listServiceAccounts(projectId: string): Promise<
@@ -339,6 +361,9 @@ export class ProtectedApi {
       id: string;
       name: string;
       tokenPrefix: string;
+      oidcIssuer?: string;
+      oidcSubjectPattern?: string;
+      oidcAudience?: string;
       expiresAt?: number;
       revokedAt?: number;
       lastUsedAt?: number;
@@ -354,6 +379,9 @@ export class ProtectedApi {
       id: String(sa.id),
       name: sa.name,
       tokenPrefix: sa.tokenPrefix,
+      oidcIssuer: sa.oidcIssuer,
+      oidcSubjectPattern: sa.oidcSubjectPattern,
+      oidcAudience: sa.oidcAudience,
       expiresAt: sa.expiresAt,
       revokedAt: sa.revokedAt,
       lastUsedAt: sa.lastUsedAt,
@@ -468,15 +496,21 @@ export async function exportSecretsViaServiceToken(
     folderName?: string;
     scope?: string;
   },
+  oidcToken?: string,
 ): Promise<ServiceAccountExportResponse> {
   const url = `${CONVEX_SITE_URL}/api/sa/secrets/export`;
 
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${serviceToken}`,
+    "Content-Type": "application/json",
+  };
+  if (oidcToken) {
+    headers["X-Oidc-Token"] = oidcToken;
+  }
+
   const response = await fetch(url, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${serviceToken}`,
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify(body),
   });
 
