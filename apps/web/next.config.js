@@ -23,7 +23,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: https:",
               "font-src 'self' data: https://fonts.gstatic.com",
-              "connect-src 'self' https: wss:",
+              `connect-src 'self' https: wss: ${process.env.NODE_ENV === "development" ? "ws://127.0.0.1:* ws://localhost:*" : ""}`,
               "frame-ancestors 'none'",
             ].join("; "),
           },
