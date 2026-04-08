@@ -83,7 +83,7 @@ const ERROR_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCode.PROJECTS_LIMIT_REACHED]: "Project limit reached",
   [ErrorCode.ENVIRONMENT_LIMIT_REACHED]: "Environment limit reached",
   [ErrorCode.PROJECT_SHARES_LIMIT_REACHED]: "Project share limit reached",
-  [ErrorCode.PRO_PLAN_REQUIRED]: "API keys and CI/CD integration require a Pro plan.",
+  [ErrorCode.PRO_PLAN_REQUIRED]: "CI/CD integration requires a Pro plan.",
 
   // Duplicates
   [ErrorCode.RESOURCE_ALREADY_EXISTS]: "Resource already exists",

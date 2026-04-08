@@ -28,6 +28,7 @@ import pc from "picocolors";
 import { RunnerBridge } from "../ffi/bridge";
 import {
   exportSecretsViaApiKey,
+  exportSecretsViaServiceToken,
   fetchUserKeysViaApiKey,
   getApi,
   ProPlanRequiredError,
@@ -51,8 +52,23 @@ export interface PrepareSecretsResult {
   count: number;
 }
 
+function isServiceTokenMode(): boolean {
+  return !!process.env.RELIC_SERVICE_TOKEN;
+}
+
 function isApiKeyMode(): boolean {
   return !!process.env.RELIC_API_KEY;
+}
+
+function isCiEnvironment(): boolean {
+  return !!(
+    process.env.CI ||
+    process.env.GITHUB_ACTIONS ||
+    process.env.GITLAB_CI ||
+    process.env.CIRCLECI ||
+    process.env.JENKINS_URL ||
+    process.env.BUILDKITE
+  );
 }
 
 async function resolveUserKeysWithApiKey(
@@ -152,6 +168,79 @@ export async function prepareSecretsWithApiKey(
   return { secrets: secretsObj, count: result.count };
 }
 
+async function resolveOidcToken(): Promise<string | undefined> {
+  if (process.env.RELIC_OIDC_TOKEN) {
+    return process.env.RELIC_OIDC_TOKEN;
+  }
+
+  const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+  const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+  if (requestUrl && requestToken) {
+    try {
+      const response = await fetch(`${requestUrl}&audience=relic`, {
+        headers: { Authorization: `bearer ${requestToken}` },
+      });
+      if (response.ok) {
+        const data = (await response.json()) as { value?: string };
+        return data.value;
+      }
+    } catch {
+      log.warn("Failed to request GitHub Actions OIDC token");
+    }
+  }
+
+  if (process.env.CI_JOB_JWT_V2) {
+    return process.env.CI_JOB_JWT_V2;
+  }
+
+  return undefined;
+}
+
+export async function prepareSecretsWithServiceToken(
+  options: RunOptions,
+): Promise<PrepareSecretsResult> {
+  const serviceToken = process.env.RELIC_SERVICE_TOKEN;
+  if (!serviceToken) {
+    throw new Error("RELIC_SERVICE_TOKEN is required for service token mode.");
+  }
+
+  const oidcToken = await resolveOidcToken();
+
+  const result = await exportSecretsViaServiceToken(
+    serviceToken,
+    {
+      environmentName: options.environment,
+      folderName: options.folder,
+      scope: options.scope,
+    },
+    oidcToken,
+  );
+
+  if (result.count === 0) {
+    throw new Error("No secrets found");
+  }
+
+  const { unwrapProjectKeyWithServiceToken } = await import("@repo/crypto");
+  const projectKey = await unwrapProjectKeyWithServiceToken(
+    result.encryptedProjectKey,
+    result.encryptedPrivateKey,
+    serviceToken,
+    result.salt,
+  );
+
+  const decryptedSecrets = await decryptSecrets(
+    projectKey,
+    result.secrets.map((s) => ({ key: s.key, encryptedValue: s.encryptedValue })),
+  );
+
+  const secretsObj: Record<string, string> = {};
+  for (const secret of decryptedSecrets) {
+    secretsObj[secret.key] = secret.value;
+  }
+
+  return { secrets: secretsObj, count: result.count };
+}
+
 async function resolveUserKeys(
   userKeyDb: Database,
   api: ProtectedApi,
@@ -168,7 +257,7 @@ async function resolveUserKeys(
 
   const user = await api.getFullUser();
   if (!user.encryptedPrivateKey || !user.salt) {
-    throw new Error("No encryption keys found. Run 'relic tui' to set up your keys first.");
+    throw new Error("No encryption keys found. Run 'relic' to set up your keys first.");
   }
 
   cacheUserKeys(userKeyDb, {
@@ -285,7 +374,7 @@ async function resolveProjectKey(
 
       const freshUser = await api.getFullUser();
       if (!freshUser.encryptedPrivateKey || !freshUser.salt) {
-        throw new Error("No encryption keys found. Run 'relic tui' to set up your keys first.");
+        throw new Error("No encryption keys found. Run 'relic' to set up your keys first.");
       }
 
       cacheUserKeys(userKeyDb, {
@@ -344,11 +433,36 @@ export function resolveProjectId(options: RunOptions): string | null {
   return null;
 }
 
+async function runWithServiceToken(
+  command: string[],
+  options: RunOptions,
+  startTime: number,
+): Promise<void> {
+  const spinner = ora("Authenticating with service token...").start();
+
+  spinner.text = "Fetching secrets via service token...";
+  const { secrets, count } = await prepareSecretsWithServiceToken(options);
+
+  spinner.succeed(pc.green(`Injected ${count} secret${count !== 1 ? "s" : ""}`));
+
+  await executeCommand(command, secrets, count, startTime);
+}
+
 async function runWithApiKey(
   command: string[],
   options: RunOptions,
   startTime: number,
 ): Promise<void> {
+  if (isCiEnvironment()) {
+    console.error(
+      pc.yellow(
+        "  ⚠ Using RELIC_API_KEY + RELIC_PASSWORD in CI is deprecated.\n" +
+          "    Use RELIC_SERVICE_TOKEN with OIDC trust policies instead.\n" +
+          "    See: https://docs.relic.so/guides/oidc\n",
+      ),
+    );
+  }
+
   const spinner = ora("Authenticating with API key...").start();
 
   const projectId = resolveProjectId(options);
@@ -401,7 +515,7 @@ async function runWithSession(
   spinner.text = "Verifying password...";
   const hasPass = await hasPassword();
   if (!hasPass) {
-    spinner.fail(pc.red("No password set. Run 'relic tui' to set up your password first."));
+    spinner.fail(pc.red("No password set. Run 'relic' to set up your password first."));
     process.exit(1);
   }
 
@@ -484,15 +598,18 @@ export default async function run(command: string[], options: RunOptions) {
     options.scope = options.scope.toLowerCase() as SecretScope;
   }
 
+  const mode = isServiceTokenMode() ? "service_token" : isApiKeyMode() ? "api_key" : "session";
   const startTime = Date.now();
   trackEvent("cli_run_started", {
     has_folder: !!options.folder,
     has_scope: !!options.scope,
-    mode: isApiKeyMode() ? "api_key" : "session",
+    mode,
   });
 
   try {
-    if (isApiKeyMode()) {
+    if (isServiceTokenMode()) {
+      await runWithServiceToken(command, options, startTime);
+    } else if (isApiKeyMode()) {
       await runWithApiKey(command, options, startTime);
     } else {
       await runWithSession(command, options, startTime);

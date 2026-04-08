@@ -7,6 +7,11 @@ import login from "./commands/login";
 import logout from "./commands/logout";
 import projects from "./commands/projects";
 import run from "./commands/run";
+import {
+  serviceAccountCreate,
+  serviceAccountList,
+  serviceAccountRevoke,
+} from "./commands/service-account";
 import { telemetryDisable, telemetryEnable, telemetryStatus } from "./commands/telemetry";
 import whoami from "./commands/whoami";
 import pkg from "./package.json";
@@ -77,6 +82,53 @@ const telemetryCmd = program
 telemetryCmd.command("status").description("Show telemetry status").action(telemetryStatus);
 telemetryCmd.command("enable").description("Enable telemetry").action(telemetryEnable);
 telemetryCmd.command("disable").description("Disable telemetry").action(telemetryDisable);
+
+const saCmd = program.command("service-account").description("Manage service accounts for CI/CD");
+
+saCmd
+  .command("create")
+  .description("Create a service account for a project")
+  .requiredOption("-n, --name <name>", "Service account name")
+  .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
+  .option("--expires-in <days>", "Expiration in days (optional, max 365)")
+  .option("--github <org/repo>", "Enable OIDC for GitHub Actions (e.g. myorg/myrepo)")
+  .option("--gitlab <group/project>", "Enable OIDC for GitLab CI (e.g. mygroup/myproject)")
+  .option("--branch <name>", "Branch restriction for OIDC (default: * for all branches)")
+  .option("--oidc-issuer <url>", "OIDC issuer URL (advanced, prefer --github or --gitlab)")
+  .option("--oidc-subject <pattern>", "OIDC subject pattern (advanced)")
+  .option("--oidc-audience <aud>", "OIDC audience (optional)")
+  .action(
+    (options: {
+      name: string;
+      project?: string;
+      expiresIn?: string;
+      github?: string;
+      gitlab?: string;
+      branch?: string;
+      oidcIssuer?: string;
+      oidcSubject?: string;
+      oidcAudience?: string;
+    }) => {
+      serviceAccountCreate(options);
+    },
+  );
+
+saCmd
+  .command("list")
+  .description("List service accounts for a project")
+  .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
+  .action((options: { project?: string }) => {
+    serviceAccountList(options);
+  });
+
+saCmd
+  .command("revoke")
+  .description("Revoke a service account")
+  .requiredOption("-n, --name <name>", "Service account name to revoke")
+  .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
+  .action((options: { name: string; project?: string }) => {
+    serviceAccountRevoke(options);
+  });
 
 program
   .command("mcp")

@@ -1,5 +1,19 @@
 # @repo/cli
 
+## 0.8.0
+
+### Minor Changes
+
+- Add machine identity with service accounts and OIDC trust policies.
+
+  - **Service accounts** for passwordless CI/CD — single `RELIC_SERVICE_TOKEN` replaces `RELIC_API_KEY` + `RELIC_PASSWORD`
+  - **OIDC trust policies** for GitHub Actions and GitLab CI — verify CI platform identity with `--github org/repo` or `--gitlab group/project`
+  - **Dashboard management** — list, revoke service accounts, and configure OIDC policies from the web
+  - **CLI commands** — `relic service-account create`, `list`, `revoke`
+  - **MCP server** — service token support and tool annotations (`readOnlyHint`, `destructiveHint`)
+  - **HKDF-SHA256** key derivation for service account tokens (no master password needed)
+  - API key + master password in CI is now deprecated — use service accounts instead
+
 ## 0.7.0
 
 ### Minor Changes

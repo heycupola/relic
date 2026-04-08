@@ -47,7 +47,7 @@ export function UpgradeToProDialog({ open, onClose }: UpgradeToProDialogProps) {
         <div className="space-y-2">
           <h3 className="text-base font-semibold text-foreground">Pro Plan Required</h3>
           <p className="text-sm text-foreground/70 leading-relaxed">
-            Upgrade to Pro to unlock API keys and more.
+            Upgrade to Pro to unlock CI/CD integration and more.
           </p>
         </div>
 
@@ -55,7 +55,11 @@ export function UpgradeToProDialog({ open, onClose }: UpgradeToProDialogProps) {
           <ul className="space-y-2.5 border border-border bg-muted/20 p-3 text-xs">
             <li className="flex items-center gap-2">
               <Check className="h-3.5 w-3.5 text-foreground/50 shrink-0" aria-hidden="true" />
-              <span className="text-foreground/70">API keys for CI/CD pipelines</span>
+              <span className="text-foreground/70">Service accounts & OIDC for CI/CD</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <Check className="h-3.5 w-3.5 text-foreground/50 shrink-0" aria-hidden="true" />
+              <span className="text-foreground/70">API keys for programmatic access</span>
             </li>
             <li className="flex items-center gap-2">
               <Check className="h-3.5 w-3.5 text-foreground/50 shrink-0" aria-hidden="true" />
