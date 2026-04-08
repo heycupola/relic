@@ -264,8 +264,8 @@ describe("Service Account Management", () => {
       );
     });
 
-    test("should enforce max 3 active service accounts per project", async () => {
-      for (let i = 0; i < 3; i++) {
+    test("should enforce max 5 active service accounts per project", async () => {
+      for (let i = 0; i < 5; i++) {
         const { rawToken, ...saArgs } = await buildServiceAccountArgs(
           owner.publicKey!,
           owner.encryptedPrivateKey!,
@@ -292,7 +292,7 @@ describe("Service Account Management", () => {
         () =>
           owner.asUser.mutation(api.serviceAccount.createServiceAccount, {
             projectId,
-            name: "SA 4",
+            name: "SA 6",
             ...saArgs,
           }),
         ErrorCode.RATE_LIMIT_EXCEEDED,
@@ -300,7 +300,7 @@ describe("Service Account Management", () => {
     });
 
     test("should allow creating after revoking one at limit", async () => {
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 5; i++) {
         const { rawToken, ...saArgs } = await buildServiceAccountArgs(
           owner.publicKey!,
           owner.encryptedPrivateKey!,

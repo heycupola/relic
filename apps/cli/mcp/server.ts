@@ -2,7 +2,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { getUserKeyCacheDb, hasPassword, validateSession } from "@repo/auth";
 import { z } from "zod";
-import { prepareSecrets, prepareSecretsWithApiKey, type RunOptions } from "../commands/run";
+import {
+  prepareSecrets,
+  prepareSecretsWithApiKey,
+  prepareSecretsWithServiceToken,
+  type RunOptions,
+} from "../commands/run";
 import { getCacheDb } from "../helpers/cache";
 import { getApi } from "../lib/api";
 import { findConfig } from "../lib/config";
@@ -213,26 +218,7 @@ server.registerTool(
     },
   },
   async (args) => {
-    const authError = await requireAuth();
-    if (authError) return text(authError);
-
     try {
-      const hasPass = await hasPassword();
-      if (!hasPass) {
-        return text("No password set. Run the Relic TUI to set up your password first.");
-      }
-
-      let projectId = args.projectId ?? process.env.RELIC_PROJECT_ID;
-      if (!projectId) {
-        const config = await findConfig();
-        if (!config) {
-          return text(
-            "No project ID provided and no relic.toml found. Use the projectId parameter or run `relic init`.",
-          );
-        }
-        projectId = config.config.project_id;
-      }
-
       const options: RunOptions = {
         environment: args.environment,
         folder: args.folder,
@@ -241,15 +227,39 @@ server.registerTool(
 
       let secrets: Record<string, string>;
 
-      if (process.env.RELIC_API_KEY) {
-        const result = await prepareSecretsWithApiKey(projectId, options);
+      if (process.env.RELIC_SERVICE_TOKEN) {
+        const result = await prepareSecretsWithServiceToken(options);
         secrets = result.secrets;
       } else {
-        const db = await getCacheDb();
-        const userKeyDb = await getUserKeyCacheDb();
-        const api = getApi();
-        const result = await prepareSecrets(projectId, options, db, userKeyDb, api);
-        secrets = result.secrets;
+        const authError = await requireAuth();
+        if (authError) return text(authError);
+
+        const hasPass = await hasPassword();
+        if (!hasPass) {
+          return text("No password set. Run the Relic TUI to set up your password first.");
+        }
+
+        let projectId = args.projectId ?? process.env.RELIC_PROJECT_ID;
+        if (!projectId) {
+          const config = await findConfig();
+          if (!config) {
+            return text(
+              "No project ID provided and no relic.toml found. Use the projectId parameter or run `relic init`.",
+            );
+          }
+          projectId = config.config.project_id;
+        }
+
+        if (process.env.RELIC_API_KEY) {
+          const result = await prepareSecretsWithApiKey(projectId, options);
+          secrets = result.secrets;
+        } else {
+          const db = await getCacheDb();
+          const userKeyDb = await getUserKeyCacheDb();
+          const api = getApi();
+          const result = await prepareSecrets(projectId, options, db, userKeyDb, api);
+          secrets = result.secrets;
+        }
       }
 
       const proc = Bun.spawn(args.command, {

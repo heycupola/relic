@@ -13,7 +13,7 @@ import schema from "./schema";
 
 const log = createLogger("serviceAccount");
 
-const MAX_SERVICE_ACCOUNTS_PER_PROJECT = 3;
+const MAX_SERVICE_ACCOUNTS_PER_PROJECT = 5;
 const MAX_EXPIRATION_MS = 365 * 24 * 60 * 60 * 1000;
 
 export const createServiceAccount = protectedMutation({
