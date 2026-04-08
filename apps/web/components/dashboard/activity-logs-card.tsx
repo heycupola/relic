@@ -2,12 +2,14 @@
 
 import {
   Archive,
+  Bot,
   Check,
   FolderPlus,
   Key,
   LogOut,
   Pencil,
   Plus,
+  Shield,
   Trash2,
   Upload,
   UserPlus,
@@ -75,6 +77,8 @@ function getActionColor(action: string): string {
 
 function getActionIcon(action: string) {
   if (action === "account.deleted") return LogOut;
+  if (action === "serviceaccount.oidc_updated") return Shield;
+  if (action.startsWith("serviceaccount.")) return Bot;
   if (action.includes("folder.created")) return FolderPlus;
   if (action.includes("archived")) return Archive;
   if (action.includes("created") || action.includes("unarchived")) return Plus;
@@ -187,6 +191,18 @@ function formatActionDescription(log: ActionLog): string {
       break;
     case "apikey.revoked":
       parts.push("API key revoked");
+      if (log.metadata?.apiKeyPrefix) parts.push(`(${log.metadata.apiKeyPrefix}…)`);
+      break;
+    case "serviceaccount.created":
+      parts.push("service account created");
+      if (log.metadata?.apiKeyPrefix) parts.push(`(${log.metadata.apiKeyPrefix}…)`);
+      break;
+    case "serviceaccount.revoked":
+      parts.push("service account revoked");
+      if (log.metadata?.apiKeyPrefix) parts.push(`(${log.metadata.apiKeyPrefix}…)`);
+      break;
+    case "serviceaccount.oidc_updated":
+      parts.push("OIDC policy updated");
       if (log.metadata?.apiKeyPrefix) parts.push(`(${log.metadata.apiKeyPrefix}…)`);
       break;
     case "account.deleted":
