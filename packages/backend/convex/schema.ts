@@ -152,6 +152,7 @@ export default defineSchema({
       v.literal("onboarding.completed"),
       v.literal("serviceaccount.created"),
       v.literal("serviceaccount.revoked"),
+      v.literal("serviceaccount.oidc_updated"),
     ),
     metadata: v.optional(
       v.object({

@@ -179,9 +179,9 @@ export const createServiceAccount = protectedMutation({
 export const updateOidcPolicy = protectedMutation({
   args: {
     serviceAccountId: v.id("serviceAccount"),
-    oidcIssuer: v.optional(v.string()),
-    oidcSubjectPattern: v.optional(v.string()),
-    oidcAudience: v.optional(v.string()),
+    oidcIssuer: v.optional(v.union(v.string(), v.null())),
+    oidcSubjectPattern: v.optional(v.union(v.string(), v.null())),
+    oidcAudience: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx: ProtectedMutationCtx, args) => {
     await checkRateLimit(ctx, "write");
@@ -211,7 +211,15 @@ export const updateOidcPolicy = protectedMutation({
       });
     }
 
-    if (args.oidcIssuer && !args.oidcSubjectPattern) {
+    const newIssuer = args.oidcIssuer === null ? undefined : (args.oidcIssuer ?? sa.oidcIssuer);
+    const newSubject =
+      args.oidcSubjectPattern === null
+        ? undefined
+        : (args.oidcSubjectPattern ?? sa.oidcSubjectPattern);
+    const newAudience =
+      args.oidcAudience === null ? undefined : (args.oidcAudience ?? sa.oidcAudience);
+
+    if (newIssuer && !newSubject) {
       throw createError({
         code: ErrorCode.INVALID_ARGUMENTS,
         message: "OIDC subject pattern is required when issuer is specified",
@@ -219,7 +227,7 @@ export const updateOidcPolicy = protectedMutation({
       });
     }
 
-    if (!args.oidcIssuer && args.oidcSubjectPattern) {
+    if (!newIssuer && newSubject) {
       throw createError({
         code: ErrorCode.INVALID_ARGUMENTS,
         message: "OIDC issuer is required when subject pattern is specified",
@@ -227,18 +235,27 @@ export const updateOidcPolicy = protectedMutation({
       });
     }
 
-    await ctx.db.patch(sa._id, {
-      oidcIssuer: args.oidcIssuer,
-      oidcSubjectPattern: args.oidcSubjectPattern,
-      oidcAudience: args.oidcAudience,
+    await ctx.db.replace(sa._id, {
+      ...sa,
+      oidcIssuer: newIssuer,
+      oidcSubjectPattern: newSubject,
+      oidcAudience: newAudience,
       updatedAt: Date.now(),
+    });
+
+    await ctx.runMutation(internal.actionLog._insertActionLog, {
+      projectId: sa.projectId,
+      projectName: project.name,
+      userId: ctx.userId,
+      action: "serviceaccount.oidc_updated",
+      metadata: { apiKeyPrefix: sa.tokenPrefix },
     });
 
     log.info("OIDC policy updated", {
       serviceAccountId: sa._id,
       projectId: sa.projectId,
       userId: ctx.userId,
-      hasOidc: !!args.oidcIssuer,
+      hasOidc: !!newIssuer,
     });
 
     return { success: true };

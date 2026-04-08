@@ -45,6 +45,7 @@ export const _insertActionLog = internalMutation({
       v.literal("onboarding.completed"),
       v.literal("serviceaccount.created"),
       v.literal("serviceaccount.revoked"),
+      v.literal("serviceaccount.oidc_updated"),
     ),
     environmentId: v.optional(v.id("environment")),
     environmentName: v.optional(v.string()),
