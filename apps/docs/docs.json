@@ -61,6 +61,7 @@
           "guides/cli",
           "guides/tui",
           "guides/project-collaboration",
+          "guides/service-accounts",
           "guides/ci-cd-integration"
         ]
       },

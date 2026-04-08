@@ -3,37 +3,30 @@ title: CI/CD Integration
 description: Use Relic in GitHub Actions, GitLab CI, and other CI/CD pipelines.
 ---
 
-Relic works in CI/CD environments using API keys. Instead of interactive login, the CLI authenticates with an API key and decrypts secrets using the master password provided as an environment variable.
+Relic works in CI/CD environments using **service accounts** (recommended) or API keys. Service accounts require only a single environment variable and don't need your master password.
 
-## Setup
+## Service Accounts (Recommended)
+
+Service accounts provide passwordless CI/CD integration. See the [Service Accounts guide](/guides/service-accounts) for full details.
 
 <Steps>
-  <Step title="Create an API key">
-    Open the web dashboard and create an API key. Select the permissions, optionally scope it to a specific project, and choose an expiration period. The key is shown once. Store it in your CI provider's secret storage.
-
-    ![API key creation](/assets/web-dashboard-api-key-generation.png)
+  <Step title="Create a service account">
+    ```bash
+    relic service-account create --name "ci-deploy" --project <project-id>
+    ```
+    The CLI outputs a service token. Store it in your CI provider's secret storage.
   </Step>
-  <Step title="Set environment variables">
-    Add the following secrets to your CI/CD provider:
-
+  <Step title="Set the environment variable">
     | Variable | Required | Description |
     |----------|----------|-------------|
-    | `RELIC_API_KEY` | Yes | The API key you just created |
-    | `RELIC_PASSWORD` | Yes | Your master password |
-    | `RELIC_PROJECT_ID` | No | Your project ID (not needed if `relic.toml` is committed) |
+    | `RELIC_SERVICE_TOKEN` | Yes | The service token from the previous step |
   </Step>
   <Step title="Run with secrets">
-    Use `relic run` in your pipeline:
-
     ```bash
     relic run -e production -- npm run deploy
     ```
   </Step>
 </Steps>
-
-<Note>
-  In API key mode, caching is disabled. Secrets are always fetched fresh from the server.
-</Note>
 
 ## GitHub Actions
 
@@ -58,9 +51,7 @@ jobs:
 
       - name: Deploy with secrets
         env:
-          RELIC_API_KEY: ${{ secrets.RELIC_API_KEY }}
-          RELIC_PASSWORD: ${{ secrets.RELIC_PASSWORD }}
-          RELIC_PROJECT_ID: ${{ secrets.RELIC_PROJECT_ID }}
+          RELIC_SERVICE_TOKEN: ${{ secrets.RELIC_SERVICE_TOKEN }}
         run: relic run -e production -- npm run deploy
 ```
 
@@ -74,9 +65,7 @@ deploy:
     - bun add -g relic
     - relic run -e production -- npm run deploy
   variables:
-    RELIC_API_KEY: $RELIC_API_KEY
-    RELIC_PASSWORD: $RELIC_PASSWORD
-    RELIC_PROJECT_ID: $RELIC_PROJECT_ID
+    RELIC_SERVICE_TOKEN: $RELIC_SERVICE_TOKEN
 ```
 
 ## Other Providers
@@ -84,8 +73,22 @@ deploy:
 Relic works with any CI/CD provider that supports environment variables. The pattern is always the same:
 
 1. Install Relic (`bun add -g relic` or `npm install -g relic`)
-2. Set the required environment variables
+2. Set `RELIC_SERVICE_TOKEN` in your pipeline environment
 3. Run `relic run -e <environment> -- <your command>`
+
+## API Keys (Legacy)
+
+<Warning>
+  Using `RELIC_API_KEY` with `RELIC_PASSWORD` in CI is deprecated. Migrate to [service accounts](/guides/service-accounts) for better security and simpler setup.
+</Warning>
+
+API keys still work but require two environment variables (`RELIC_API_KEY` + `RELIC_PASSWORD`) and expose your master password to the CI environment. To use API keys:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `RELIC_API_KEY` | Yes | API key from the web dashboard |
+| `RELIC_PASSWORD` | Yes | Your master password |
+| `RELIC_PROJECT_ID` | No | Project ID (not needed if `relic.toml` is committed) |
 
 ## Scope Filtering
 
