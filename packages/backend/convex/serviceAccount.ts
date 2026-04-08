@@ -27,6 +27,9 @@ export const createServiceAccount = protectedMutation({
     hashedToken: v.string(),
     tokenPrefix: v.string(),
     expiresAt: v.optional(v.number()),
+    oidcIssuer: v.optional(v.string()),
+    oidcSubjectPattern: v.optional(v.string()),
+    oidcAudience: v.optional(v.string()),
   },
   handler: async (
     ctx,
@@ -40,6 +43,9 @@ export const createServiceAccount = protectedMutation({
       hashedToken: string;
       tokenPrefix: string;
       expiresAt?: number;
+      oidcIssuer?: string;
+      oidcSubjectPattern?: string;
+      oidcAudience?: string;
     },
   ): Promise<{ id: Id<"serviceAccount">; tokenPrefix: string }> => {
     await checkRateLimit(ctx, "write");
@@ -68,6 +74,22 @@ export const createServiceAccount = protectedMutation({
       throw createError({
         code: ErrorCode.INVALID_ARGUMENTS,
         message: "Service account name is required",
+        severity: ErrorSeverity.Low,
+      });
+    }
+
+    if (args.oidcIssuer && !args.oidcSubjectPattern) {
+      throw createError({
+        code: ErrorCode.INVALID_ARGUMENTS,
+        message: "OIDC subject pattern is required when issuer is specified",
+        severity: ErrorSeverity.Low,
+      });
+    }
+
+    if (!args.oidcIssuer && args.oidcSubjectPattern) {
+      throw createError({
+        code: ErrorCode.INVALID_ARGUMENTS,
+        message: "OIDC issuer is required when subject pattern is specified",
         severity: ErrorSeverity.Low,
       });
     }
@@ -127,6 +149,9 @@ export const createServiceAccount = protectedMutation({
       hashedToken: args.hashedToken,
       tokenPrefix: args.tokenPrefix,
       createdBy: ctx.userId,
+      oidcIssuer: args.oidcIssuer,
+      oidcSubjectPattern: args.oidcSubjectPattern,
+      oidcAudience: args.oidcAudience,
       expiresAt: args.expiresAt,
       createdAt: now,
       updatedAt: now,
@@ -144,9 +169,79 @@ export const createServiceAccount = protectedMutation({
       serviceAccountId: saId,
       projectId: args.projectId,
       userId: ctx.userId,
+      hasOidc: !!args.oidcIssuer,
     });
 
     return { id: saId, tokenPrefix: args.tokenPrefix };
+  },
+});
+
+export const updateOidcPolicy = protectedMutation({
+  args: {
+    serviceAccountId: v.id("serviceAccount"),
+    oidcIssuer: v.optional(v.string()),
+    oidcSubjectPattern: v.optional(v.string()),
+    oidcAudience: v.optional(v.string()),
+  },
+  handler: async (ctx: ProtectedMutationCtx, args) => {
+    await checkRateLimit(ctx, "write");
+
+    const sa = await ctx.db.get(args.serviceAccountId);
+    if (!sa) {
+      throw createError({
+        code: ErrorCode.REQUEST_NOT_FOUND,
+        message: "Service account not found",
+        severity: ErrorSeverity.Medium,
+      });
+    }
+
+    const project = await ctx.runQuery(internal.project._loadProjectById, {
+      projectId: sa.projectId,
+    });
+
+    if (ctx.userId !== project.ownerId) {
+      throw permissionError("update OIDC policy for this service account", ErrorSeverity.High);
+    }
+
+    if (sa.revokedAt) {
+      throw createError({
+        code: ErrorCode.INVALID_OPERATION,
+        message: "Cannot update OIDC policy on a revoked service account",
+        severity: ErrorSeverity.Medium,
+      });
+    }
+
+    if (args.oidcIssuer && !args.oidcSubjectPattern) {
+      throw createError({
+        code: ErrorCode.INVALID_ARGUMENTS,
+        message: "OIDC subject pattern is required when issuer is specified",
+        severity: ErrorSeverity.Low,
+      });
+    }
+
+    if (!args.oidcIssuer && args.oidcSubjectPattern) {
+      throw createError({
+        code: ErrorCode.INVALID_ARGUMENTS,
+        message: "OIDC issuer is required when subject pattern is specified",
+        severity: ErrorSeverity.Low,
+      });
+    }
+
+    await ctx.db.patch(sa._id, {
+      oidcIssuer: args.oidcIssuer,
+      oidcSubjectPattern: args.oidcSubjectPattern,
+      oidcAudience: args.oidcAudience,
+      updatedAt: Date.now(),
+    });
+
+    log.info("OIDC policy updated", {
+      serviceAccountId: sa._id,
+      projectId: sa.projectId,
+      userId: ctx.userId,
+      hasOidc: !!args.oidcIssuer,
+    });
+
+    return { success: true };
   },
 });
 
@@ -169,6 +264,9 @@ export const listServiceAccounts = protectedQuery({
       id: sa._id,
       name: sa.name,
       tokenPrefix: sa.tokenPrefix,
+      oidcIssuer: sa.oidcIssuer,
+      oidcSubjectPattern: sa.oidcSubjectPattern,
+      oidcAudience: sa.oidcAudience,
       expiresAt: sa.expiresAt,
       revokedAt: sa.revokedAt,
       lastUsedAt: sa.lastUsedAt,
@@ -241,6 +339,9 @@ export const _validateServiceToken = internalMutation({
     salt: v.string(),
     encryptedProjectKey: v.string(),
     publicKey: v.string(),
+    oidcIssuer: v.optional(v.string()),
+    oidcSubjectPattern: v.optional(v.string()),
+    oidcAudience: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
     const rateLimitKey = args.clientIp ?? "unknown";
@@ -307,6 +408,9 @@ export const _validateServiceToken = internalMutation({
       salt: sa.salt,
       encryptedProjectKey: sa.encryptedProjectKey,
       publicKey: sa.publicKey,
+      oidcIssuer: sa.oidcIssuer,
+      oidcSubjectPattern: sa.oidcSubjectPattern,
+      oidcAudience: sa.oidcAudience,
     };
   },
 });

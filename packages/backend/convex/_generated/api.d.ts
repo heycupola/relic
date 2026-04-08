@@ -30,6 +30,7 @@ import type * as lib_errors from "../lib/errors.js";
 import type * as lib_helpers from "../lib/helpers.js";
 import type * as lib_logger from "../lib/logger.js";
 import type * as lib_middleware from "../lib/middleware.js";
+import type * as lib_oidc from "../lib/oidc.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
 import type * as lib_resend from "../lib/resend.js";
 import type * as lib_types from "../lib/types.js";
@@ -73,6 +74,7 @@ declare const fullApi: ApiFromModules<{
   "lib/helpers": typeof lib_helpers;
   "lib/logger": typeof lib_logger;
   "lib/middleware": typeof lib_middleware;
+  "lib/oidc": typeof lib_oidc;
   "lib/rateLimit": typeof lib_rateLimit;
   "lib/resend": typeof lib_resend;
   "lib/types": typeof lib_types;

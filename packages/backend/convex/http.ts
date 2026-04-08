@@ -325,6 +325,7 @@ http.route({
     }
     const rawToken = authHeader.slice(7);
     const hashedToken = await hashKey(rawToken);
+    const oidcToken = request.headers.get("X-Oidc-Token") ?? undefined;
     const clientIp =
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
       request.headers.get("cf-connecting-ip") ??
@@ -343,6 +344,34 @@ http.route({
         hashedToken,
         clientIp,
       });
+
+      if (sa.oidcIssuer && sa.oidcSubjectPattern) {
+        if (!oidcToken) {
+          return new Response(
+            JSON.stringify({
+              error: "OIDC token required. This service account has an OIDC policy configured.",
+              code: "OIDC_TOKEN_REQUIRED",
+            }),
+            { status: 401, headers: { "Content-Type": "application/json" } },
+          );
+        }
+
+        const { validateOidcToken } = await import("./lib/oidc");
+        const oidcResult = await validateOidcToken(
+          oidcToken,
+          sa.oidcIssuer,
+          sa.oidcSubjectPattern,
+          sa.oidcAudience,
+        );
+
+        if (!oidcResult.valid) {
+          return new Response(
+            JSON.stringify({ error: oidcResult.error, code: "OIDC_VALIDATION_FAILED" }),
+            { status: 403, headers: { "Content-Type": "application/json" } },
+          );
+        }
+      }
+
       const result = await ctx.runMutation(internal.secret._exportSecretsForServiceAccount, {
         serviceAccountId: sa.serviceAccountId,
         projectId: sa.projectId,
