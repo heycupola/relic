@@ -535,4 +535,195 @@ describe("Service Account Management", () => {
       ).rejects.toThrow();
     });
   });
+
+  describe("OIDC policy on create", () => {
+    test("should create a service account with OIDC policy", async () => {
+      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+        owner.publicKey!,
+        owner.encryptedPrivateKey!,
+        owner.password!,
+        owner.salt!,
+        encryptedProjectKey,
+      );
+
+      const result = await owner.asUser.mutation(api.serviceAccount.createServiceAccount, {
+        projectId,
+        name: "OIDC SA",
+        ...saArgs,
+        oidcIssuer: "https://token.actions.githubusercontent.com",
+        oidcSubjectPattern: "repo:org/repo:ref:refs/heads/main",
+        oidcAudience: "relic",
+      });
+
+      expect(result.id).toBeDefined();
+
+      const accounts = await owner.asUser.query(api.serviceAccount.listServiceAccounts, {
+        projectId,
+      });
+      const sa = accounts.find((a) => a.name === "OIDC SA");
+      expect(sa?.oidcIssuer).toBe("https://token.actions.githubusercontent.com");
+      expect(sa?.oidcSubjectPattern).toBe("repo:org/repo:ref:refs/heads/main");
+      expect(sa?.oidcAudience).toBe("relic");
+    });
+
+    test("should reject OIDC issuer without subject", async () => {
+      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+        owner.publicKey!,
+        owner.encryptedPrivateKey!,
+        owner.password!,
+        owner.salt!,
+        encryptedProjectKey,
+      );
+
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.serviceAccount.createServiceAccount, {
+            projectId,
+            name: "Bad OIDC",
+            ...saArgs,
+            oidcIssuer: "https://token.actions.githubusercontent.com",
+          }),
+        ErrorCode.INVALID_ARGUMENTS,
+        "subject pattern is required",
+      );
+    });
+
+    test("should reject OIDC subject without issuer", async () => {
+      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+        owner.publicKey!,
+        owner.encryptedPrivateKey!,
+        owner.password!,
+        owner.salt!,
+        encryptedProjectKey,
+      );
+
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.serviceAccount.createServiceAccount, {
+            projectId,
+            name: "Bad OIDC",
+            ...saArgs,
+            oidcSubjectPattern: "repo:org/repo:*",
+          }),
+        ErrorCode.INVALID_ARGUMENTS,
+        "issuer is required",
+      );
+    });
+  });
+
+  describe("updateOidcPolicy", () => {
+    let serviceAccountId: string;
+
+    beforeEach(async () => {
+      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+        owner.publicKey!,
+        owner.encryptedPrivateKey!,
+        owner.password!,
+        owner.salt!,
+        encryptedProjectKey,
+      );
+
+      const result = await owner.asUser.mutation(api.serviceAccount.createServiceAccount, {
+        projectId,
+        name: "OIDC Update Target",
+        ...saArgs,
+      });
+      serviceAccountId = result.id;
+    });
+
+    test("should set OIDC policy on existing SA", async () => {
+      await owner.asUser.mutation(api.serviceAccount.updateOidcPolicy, {
+        serviceAccountId: serviceAccountId as Id<"serviceAccount">,
+        oidcIssuer: "https://token.actions.githubusercontent.com",
+        oidcSubjectPattern: "repo:org/repo:*",
+      });
+
+      const accounts = await owner.asUser.query(api.serviceAccount.listServiceAccounts, {
+        projectId,
+      });
+      const sa = accounts.find((a) => a.name === "OIDC Update Target");
+      expect(sa?.oidcIssuer).toBe("https://token.actions.githubusercontent.com");
+      expect(sa?.oidcSubjectPattern).toBe("repo:org/repo:*");
+    });
+
+    test("should clear OIDC policy with null values", async () => {
+      await owner.asUser.mutation(api.serviceAccount.updateOidcPolicy, {
+        serviceAccountId: serviceAccountId as Id<"serviceAccount">,
+        oidcIssuer: "https://token.actions.githubusercontent.com",
+        oidcSubjectPattern: "repo:org/repo:*",
+      });
+
+      await owner.asUser.mutation(api.serviceAccount.updateOidcPolicy, {
+        serviceAccountId: serviceAccountId as Id<"serviceAccount">,
+        oidcIssuer: null,
+        oidcSubjectPattern: null,
+        oidcAudience: null,
+      });
+
+      const accounts = await owner.asUser.query(api.serviceAccount.listServiceAccounts, {
+        projectId,
+      });
+      const sa = accounts.find((a) => a.name === "OIDC Update Target");
+      expect(sa?.oidcIssuer).toBeUndefined();
+      expect(sa?.oidcSubjectPattern).toBeUndefined();
+      expect(sa?.oidcAudience).toBeUndefined();
+    });
+
+    test("should reject issuer without subject pattern", async () => {
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.serviceAccount.updateOidcPolicy, {
+            serviceAccountId: serviceAccountId as Id<"serviceAccount">,
+            oidcIssuer: "https://token.actions.githubusercontent.com",
+          }),
+        ErrorCode.INVALID_ARGUMENTS,
+      );
+    });
+
+    test("should reject non-owner updating OIDC policy", async () => {
+      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
+      mockAutumn.setFeature(owner.userId, "additional_shares", 5);
+
+      const projectKey = await unwrapProjectKey(
+        encryptedProjectKey,
+        owner.encryptedPrivateKey!,
+        owner.password!,
+        owner.salt!,
+      );
+      const collabPublicKey = await importPublicKey(collaborator.publicKey!);
+      const collabEncryptedProjectKey = await wrapAESKeyWithRSA(projectKey, collabPublicKey);
+
+      await owner.asUser.action(api.projectShare.shareProject, {
+        projectId,
+        userEmail: collaborator.email,
+        encryptedProjectKey: collabEncryptedProjectKey,
+      });
+
+      await expectConvexError(
+        () =>
+          collaborator.asUser.mutation(api.serviceAccount.updateOidcPolicy, {
+            serviceAccountId: serviceAccountId as Id<"serviceAccount">,
+            oidcIssuer: "https://token.actions.githubusercontent.com",
+            oidcSubjectPattern: "repo:org/repo:*",
+          }),
+        ErrorCode.INSUFFICIENT_PERMISSION,
+      );
+    });
+
+    test("should reject updating OIDC on revoked SA", async () => {
+      await owner.asUser.mutation(api.serviceAccount.revokeServiceAccount, {
+        serviceAccountId: serviceAccountId as Id<"serviceAccount">,
+      });
+
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.serviceAccount.updateOidcPolicy, {
+            serviceAccountId: serviceAccountId as Id<"serviceAccount">,
+            oidcIssuer: "https://token.actions.githubusercontent.com",
+            oidcSubjectPattern: "repo:org/repo:*",
+          }),
+        ErrorCode.INVALID_OPERATION,
+      );
+    });
+  });
 });
