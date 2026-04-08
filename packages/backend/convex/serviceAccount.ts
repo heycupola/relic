@@ -186,6 +186,17 @@ export const updateOidcPolicy = protectedMutation({
   handler: async (ctx: ProtectedMutationCtx, args) => {
     await checkRateLimit(ctx, "write");
 
+    const currentUser = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: ctx.userId,
+    });
+    if (!currentUser?.hasPro) {
+      throw createError({
+        code: ErrorCode.PRO_PLAN_REQUIRED,
+        message: "OIDC trust policies require a Pro plan.",
+        severity: ErrorSeverity.Medium,
+      });
+    }
+
     const sa = await ctx.db.get(args.serviceAccountId);
     if (!sa) {
       throw createError({
