@@ -41,7 +41,7 @@ export const PlanUpgradedEmail = ({
           <Section style={block}>
             <Text style={listItem}>Collaborate on projects with your team</Text>
             <Text style={listItem}>5 projects and 5 shares per project included</Text>
-            <Text style={listItem}>API keys for CI/CD integration</Text>
+            <Text style={listItem}>Service accounts & OIDC for CI/CD integration</Text>
             <Text style={listItemLast}>Activity logs and audit trail</Text>
           </Section>
           <Section style={infoBlock}>

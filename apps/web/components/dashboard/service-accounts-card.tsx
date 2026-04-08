@@ -92,7 +92,7 @@ export function ServiceAccountsCard({ projectId, isOwner, hasPro }: ServiceAccou
               <Bot className="h-5 w-5 text-foreground/20 mx-auto mb-2" aria-hidden="true" />
               <p className="text-sm text-foreground/50">No service accounts yet</p>
               <p className="text-xs text-foreground/40 mt-1">
-                Upgrade to Pro to create service accounts
+                Upgrade to Pro for passwordless CI/CD integration
               </p>
             </div>
           </div>
