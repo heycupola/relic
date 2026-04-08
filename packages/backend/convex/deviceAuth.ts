@@ -9,6 +9,10 @@ import type { ProtectedMutationCtx } from "./lib/types";
 
 const log = createLogger("deviceAuth");
 
+const SITE_URL =
+  process.env.SITE_URL ||
+  (process.env.ENVIRONMENT === "development" ? "http://localhost:3000" : "https://relic.so");
+
 export const requestDeviceCode = mutation({
   args: {
     clientId: v.optional(v.string()),
@@ -17,25 +21,20 @@ export const requestDeviceCode = mutation({
   handler: async (ctx, args) => {
     await checkRateLimit(ctx, "write", "device-auth-request");
 
-    const {
-      device_code,
-      expires_in,
-      interval,
-      user_code,
-      verification_uri,
-      verification_uri_complete,
-    } = await ctx.runMutation(components.betterAuth.deviceAuth.requestDeviceCode, {
+    const result = await ctx.runMutation(components.betterAuth.deviceAuth.requestDeviceCode, {
       clientId: args.clientId,
       scope: args.scope,
     });
 
+    const verificationUri = `${SITE_URL}/oauth/authorize`;
+
     return {
-      device_code,
-      user_code,
-      verification_uri,
-      verification_uri_complete,
-      expires_in,
-      interval,
+      device_code: result.device_code,
+      user_code: result.user_code,
+      verification_uri: verificationUri,
+      verification_uri_complete: `${verificationUri}?user_code=${result.user_code}`,
+      expires_in: result.expires_in,
+      interval: result.interval,
     };
   },
 });
