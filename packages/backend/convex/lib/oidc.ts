@@ -114,7 +114,8 @@ export function matchSubjectPattern(subject: string, pattern: string): boolean {
   }
 
   if (pattern.includes("*")) {
-    const regex = new RegExp(`^${pattern.replace(/\*/g, ".*")}$`);
+    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+    const regex = new RegExp(`^${escaped}$`);
     return regex.test(subject);
   }
 
