@@ -40,6 +40,7 @@ server.registerTool(
   "whoami",
   {
     description: "Show the currently authenticated Relic user",
+    annotations: { readOnlyHint: true, destructiveHint: false },
   },
   async () => {
     const authError = await requireAuth();
@@ -58,6 +59,7 @@ server.registerTool(
   "list-projects",
   {
     description: "List all Relic projects with their environments and folders",
+    annotations: { readOnlyHint: true, destructiveHint: false },
   },
   async () => {
     const authError = await requireAuth();
@@ -123,6 +125,7 @@ server.registerTool(
   {
     description:
       "List secret keys for a project environment. Returns names, scopes, and types only — never values.",
+    annotations: { readOnlyHint: true, destructiveHint: false },
     inputSchema: {
       projectId: z.string().describe("Project ID"),
       environment: z.string().describe("Environment name (e.g. production, staging)"),
@@ -181,6 +184,7 @@ server.registerTool(
   "get-current-project",
   {
     description: "Get the project configuration from relic.toml in the current directory",
+    annotations: { readOnlyHint: true, destructiveHint: false },
   },
   async () => {
     try {
@@ -206,6 +210,7 @@ server.registerTool(
   {
     description:
       "Run a command with Relic secrets injected as environment variables. Secret values are never exposed — only command output is returned.",
+    annotations: { readOnlyHint: false, destructiveHint: true },
     inputSchema: {
       command: z.array(z.string()).describe('Command and arguments (e.g. ["npm", "run", "dev"])'),
       environment: z.string().describe("Environment name (e.g. production, staging)"),
@@ -290,3 +295,4 @@ server.registerTool(
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
+console.error(`Relic MCP server v${pkg.version} started`);
