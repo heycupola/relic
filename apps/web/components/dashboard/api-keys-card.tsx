@@ -105,7 +105,7 @@ export function ApiKeysCard({ apiKeys, projectNames, isLoading, hasPro }: ApiKey
               <p className="text-sm text-foreground/50">No API keys yet</p>
               <p className="text-xs text-foreground/40 mt-1">
                 {hasPro
-                  ? "Create a key to access secrets programmatically"
+                  ? "Create a key for programmatic access"
                   : "Upgrade to Pro to create API keys"}
               </p>
             </div>

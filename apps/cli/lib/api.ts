@@ -1,4 +1,4 @@
-import { CONVEX_SITE_URL, CONVEX_URL, ensureValidJwt } from "@repo/auth";
+import { CONVEX_SITE_URL, CONVEX_URL, ensureValidJwt, SITE_URL } from "@repo/auth";
 import { api, type Id, type TableNames } from "@repo/backend";
 import { trackError } from "@repo/logger";
 import { ConvexHttpClient } from "convex/browser";
@@ -306,6 +306,96 @@ export class ProtectedApi {
       folderId: result.folderId ? String(result.folderId) : null,
     };
   }
+
+  async createServiceAccount(args: {
+    projectId: string;
+    name: string;
+    publicKey: string;
+    encryptedPrivateKey: string;
+    salt: string;
+    encryptedProjectKey: string;
+    hashedToken: string;
+    tokenPrefix: string;
+    expiresAt?: number;
+    oidcIssuer?: string;
+    oidcSubjectPattern?: string;
+    oidcAudience?: string;
+  }): Promise<{ id: string; tokenPrefix: string }> {
+    const result = await this.withAuth(() =>
+      this.client.mutation(api.serviceAccount.createServiceAccount, {
+        projectId: toId<"project">(args.projectId),
+        name: args.name,
+        publicKey: args.publicKey,
+        encryptedPrivateKey: args.encryptedPrivateKey,
+        salt: args.salt,
+        encryptedProjectKey: args.encryptedProjectKey,
+        hashedToken: args.hashedToken,
+        tokenPrefix: args.tokenPrefix,
+        expiresAt: args.expiresAt,
+        oidcIssuer: args.oidcIssuer,
+        oidcSubjectPattern: args.oidcSubjectPattern,
+        oidcAudience: args.oidcAudience,
+      }),
+    );
+    return { id: String(result.id), tokenPrefix: result.tokenPrefix };
+  }
+
+  async updateOidcPolicy(args: {
+    serviceAccountId: string;
+    oidcIssuer?: string;
+    oidcSubjectPattern?: string;
+    oidcAudience?: string;
+  }): Promise<{ success: boolean }> {
+    return await this.withAuth(() =>
+      this.client.mutation(api.serviceAccount.updateOidcPolicy, {
+        serviceAccountId: toId<"serviceAccount">(args.serviceAccountId),
+        oidcIssuer: args.oidcIssuer,
+        oidcSubjectPattern: args.oidcSubjectPattern,
+        oidcAudience: args.oidcAudience,
+      }),
+    );
+  }
+
+  async listServiceAccounts(projectId: string): Promise<
+    Array<{
+      id: string;
+      name: string;
+      tokenPrefix: string;
+      oidcIssuer?: string;
+      oidcSubjectPattern?: string;
+      oidcAudience?: string;
+      expiresAt?: number;
+      revokedAt?: number;
+      lastUsedAt?: number;
+      createdAt: number;
+    }>
+  > {
+    const result = await this.withAuth(() =>
+      this.client.query(api.serviceAccount.listServiceAccounts, {
+        projectId: toId<"project">(projectId),
+      }),
+    );
+    return result.map((sa) => ({
+      id: String(sa.id),
+      name: sa.name,
+      tokenPrefix: sa.tokenPrefix,
+      oidcIssuer: sa.oidcIssuer,
+      oidcSubjectPattern: sa.oidcSubjectPattern,
+      oidcAudience: sa.oidcAudience,
+      expiresAt: sa.expiresAt,
+      revokedAt: sa.revokedAt,
+      lastUsedAt: sa.lastUsedAt,
+      createdAt: sa.createdAt,
+    }));
+  }
+
+  async revokeServiceAccount(serviceAccountId: string): Promise<{ success: boolean }> {
+    return await this.withAuth(() =>
+      this.client.mutation(api.serviceAccount.revokeServiceAccount, {
+        serviceAccountId: toId<"serviceAccount">(serviceAccountId),
+      }),
+    );
+  }
 }
 
 let instance: ProtectedApi | null = null;
@@ -373,7 +463,7 @@ export async function exportSecretsViaApiKey(
     if (response.status === 402 || parsed?.code === "PRO_PLAN_REQUIRED") {
       throw new ProPlanRequiredError(
         parsed?.error || "API keys require a Pro plan.",
-        parsed?.upgradeUrl || "https://relic.so/dashboard?action=upgrade",
+        parsed?.upgradeUrl || `${SITE_URL}/dashboard?action=upgrade`,
       );
     }
 
@@ -381,6 +471,64 @@ export async function exportSecretsViaApiKey(
   }
 
   return (await response.json()) as ExportSecretsHttpResponse;
+}
+
+export interface ServiceAccountExportResponse {
+  secrets: {
+    id: string;
+    key: string;
+    encryptedValue: string;
+    scope: "client" | "server" | "shared";
+    valueType: "string" | "number" | "boolean";
+  }[];
+  count: number;
+  environmentId: string;
+  folderId: string | null;
+  encryptedProjectKey: string;
+  encryptedPrivateKey: string;
+  salt: string;
+}
+
+export async function exportSecretsViaServiceToken(
+  serviceToken: string,
+  body: {
+    environmentName: string;
+    folderName?: string;
+    scope?: string;
+  },
+  oidcToken?: string,
+): Promise<ServiceAccountExportResponse> {
+  const url = `${CONVEX_SITE_URL}/api/sa/secrets/export`;
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${serviceToken}`,
+    "Content-Type": "application/json",
+  };
+  if (oidcToken) {
+    headers["X-Oidc-Token"] = oidcToken;
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    const parsed = errorBody as { error?: string; code?: string; upgradeUrl?: string } | null;
+
+    if (response.status === 402 || parsed?.code === "PRO_PLAN_REQUIRED") {
+      throw new ProPlanRequiredError(
+        parsed?.error || "Service accounts require a Pro plan.",
+        parsed?.upgradeUrl || `${SITE_URL}/dashboard?action=upgrade`,
+      );
+    }
+
+    throw new Error(parsed?.error ?? `HTTP ${response.status}`);
+  }
+
+  return (await response.json()) as ServiceAccountExportResponse;
 }
 
 export async function fetchUserKeysViaApiKey(apiKey: string): Promise<UserCryptoKeysResponse> {
@@ -400,7 +548,7 @@ export async function fetchUserKeysViaApiKey(apiKey: string): Promise<UserCrypto
     if (response.status === 402 || parsed?.code === "PRO_PLAN_REQUIRED") {
       throw new ProPlanRequiredError(
         parsed?.error || "API keys require a Pro plan.",
-        parsed?.upgradeUrl || "https://relic.so/dashboard?action=upgrade",
+        parsed?.upgradeUrl || `${SITE_URL}/dashboard?action=upgrade`,
       );
     }
 

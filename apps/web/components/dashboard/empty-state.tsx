@@ -49,7 +49,7 @@ export function EmptyState() {
             <p className="text-sm text-foreground/50">
               Or launch the TUI:{" "}
               <code className="font-mono text-foreground bg-muted/50 px-2 py-1 border border-border">
-                relic tui
+                relic
               </code>
             </p>
           </div>

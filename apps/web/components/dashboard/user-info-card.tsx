@@ -131,7 +131,13 @@ export function UserInfoCard({ name, email, hasPro, isLoading }: UserInfoCardPro
                 <li className="flex items-start gap-2">
                   <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground">
-                    <strong>API keys</strong> for CI/CD integration
+                    <strong>Service accounts & OIDC</strong> for CI/CD
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
+                  <span className="text-foreground">
+                    <strong>API keys</strong> for programmatic access
                   </span>
                 </li>
                 <li className="flex items-start gap-2">

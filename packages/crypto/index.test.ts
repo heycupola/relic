@@ -2,12 +2,15 @@ import { describe, expect, test } from "bun:test";
 import {
   CryptoError,
   createProjectKey,
+  createServiceAccountKeys,
   createUserKeys,
   decryptPrivateKeyWithPassword,
   decryptSecret,
+  decryptServiceAccountPrivateKey,
   decryptWithAES,
   decryptWithRSA,
   deriveKeyFromPassword,
+  deriveKeyFromToken,
   encryptPrivateKeyWithPassword,
   encryptSecret,
   encryptWithAES,
@@ -22,6 +25,7 @@ import {
   importPublicKey,
   unwrapAESKeyWithRSA,
   unwrapProjectKey,
+  unwrapProjectKeyWithServiceToken,
   wrapAESKeyWithRSA,
 } from "./index";
 
@@ -658,5 +662,128 @@ describe("Concurrency", () => {
     const decryptedValues = await Promise.all(decryptedPromises);
 
     expect(decryptedValues).toEqual(secrets.map((s) => s.value));
+  });
+});
+
+describe("Service Account Key Derivation", () => {
+  test("deriveKeyFromToken should produce a valid AES key", async () => {
+    const token = "rsk_" + "a".repeat(64);
+    const salt = generateSalt();
+    const key = await deriveKeyFromToken(token, salt);
+    expect(key).toBeDefined();
+    expect(key.type).toBe("secret");
+
+    const data = "test-data";
+    const encrypted = await encryptWithAES(key, data);
+    expect(encrypted).not.toBe(data);
+  });
+
+  test("same token and salt should derive the same key", async () => {
+    const token = "rsk_" + "b".repeat(64);
+    const salt = generateSalt();
+    const key1 = await deriveKeyFromToken(token, salt);
+    const key2 = await deriveKeyFromToken(token, salt);
+
+    const data = "deterministic-test";
+    const encrypted = await encryptWithAES(key1, data);
+    const decrypted = await decryptWithAES(key2, encrypted);
+    expect(decrypted).toBe(data);
+  });
+
+  test("different tokens should derive different keys", async () => {
+    const salt = generateSalt();
+    const key1 = await deriveKeyFromToken("rsk_token_one", salt);
+    const key2 = await deriveKeyFromToken("rsk_token_two", salt);
+
+    const data = "cross-key-test";
+    const encrypted = await encryptWithAES(key1, data);
+    await expect(decryptWithAES(key2, encrypted)).rejects.toThrow();
+  });
+
+  test("different salts should derive different keys", async () => {
+    const token = "rsk_same_token";
+    const key1 = await deriveKeyFromToken(token, generateSalt());
+    const key2 = await deriveKeyFromToken(token, generateSalt());
+
+    const data = "cross-salt-test";
+    const encrypted = await encryptWithAES(key1, data);
+    await expect(decryptWithAES(key2, encrypted)).rejects.toThrow();
+  });
+
+  test("should reject empty token", async () => {
+    await expect(deriveKeyFromToken("", generateSalt())).rejects.toThrow(CryptoError);
+  });
+
+  test("should reject empty salt", async () => {
+    await expect(deriveKeyFromToken("rsk_test", "")).rejects.toThrow(CryptoError);
+  });
+});
+
+describe("Service Account Keys", () => {
+  test("createServiceAccountKeys should return valid key pair", async () => {
+    const token = "rsk_" + "c".repeat(64);
+    const keys = await createServiceAccountKeys(token);
+
+    expect(keys.publicKey).toBeDefined();
+    expect(keys.encryptedPrivateKey).toBeDefined();
+    expect(keys.salt).toBeDefined();
+    expect(keys.publicKey.length).toBeGreaterThan(0);
+    expect(keys.encryptedPrivateKey.length).toBeGreaterThan(0);
+    expect(keys.salt.length).toBeGreaterThan(0);
+  });
+
+  test("decryptServiceAccountPrivateKey should round-trip", async () => {
+    const token = "rsk_" + "d".repeat(64);
+    const keys = await createServiceAccountKeys(token);
+
+    const privateKey = await decryptServiceAccountPrivateKey(
+      keys.encryptedPrivateKey,
+      token,
+      keys.salt,
+    );
+
+    expect(privateKey).toBeDefined();
+    expect(privateKey.type).toBe("private");
+
+    const pubKey = await importPublicKey(keys.publicKey);
+    const testData = "round-trip-test";
+    const encrypted = await encryptWithRSA(pubKey, testData);
+    const decrypted = await decryptWithRSA(privateKey, encrypted);
+    expect(decrypted).toBe(testData);
+  });
+
+  test("wrong token should fail to decrypt private key", async () => {
+    const token = "rsk_" + "e".repeat(64);
+    const keys = await createServiceAccountKeys(token);
+
+    await expect(
+      decryptServiceAccountPrivateKey(keys.encryptedPrivateKey, "rsk_wrong_token", keys.salt),
+    ).rejects.toThrow(CryptoError);
+  });
+
+  test("unwrapProjectKeyWithServiceToken full chain", async () => {
+    const userPassword = "user-password-123";
+    const userKeys = await createUserKeys(userPassword);
+    const { projectKey, encryptedProjectKey: ownerEncProjectKey } = await createProjectKey(
+      userKeys.publicKey,
+    );
+
+    const token = "rsk_" + "f".repeat(64);
+    const saKeys = await createServiceAccountKeys(token);
+
+    const saPublicKey = await importPublicKey(saKeys.publicKey);
+    const saEncProjectKey = await wrapAESKeyWithRSA(projectKey, saPublicKey);
+
+    const unwrappedKey = await unwrapProjectKeyWithServiceToken(
+      saEncProjectKey,
+      saKeys.encryptedPrivateKey,
+      token,
+      saKeys.salt,
+    );
+
+    const secretValue = "super-secret-value";
+    const encrypted = await encryptSecret(projectKey, secretValue);
+    const decrypted = await decryptSecret(unwrappedKey, encrypted);
+    expect(decrypted).toBe(secretValue);
   });
 });

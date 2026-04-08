@@ -36,7 +36,8 @@ export const createApiKey = protectedMutation({
     if (!currentUser?.hasPro) {
       throw createError({
         code: ErrorCode.PRO_PLAN_REQUIRED,
-        message: "API keys require a Pro plan. Upgrade to unlock CI/CD integration.",
+        message:
+          "CI/CD integration requires a Pro plan. Consider using service accounts for passwordless access.",
         severity: ErrorSeverity.Medium,
       });
     }
@@ -291,7 +292,8 @@ export const _validateApiKey = internalMutation({
     if (!user?.hasPro) {
       throw createError({
         code: ErrorCode.PRO_PLAN_REQUIRED,
-        message: "API keys require a Pro plan. Upgrade to unlock CI/CD integration.",
+        message:
+          "CI/CD integration requires a Pro plan. Consider using service accounts for passwordless access.",
         severity: ErrorSeverity.Medium,
         metadata: {
           upgradeUrl: `${process.env.SITE_URL || "https://relic.so"}/dashboard?action=upgrade`,

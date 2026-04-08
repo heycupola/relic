@@ -589,6 +589,113 @@ export async function decryptSecret(
   return await decryptWithAES(projectKey, encryptedValue);
 }
 
+export async function deriveKeyFromToken(token: string, salt: string): Promise<CryptoKey> {
+  assertNonEmptyString(token, "token");
+  assertNonEmptyString(salt, "salt");
+
+  try {
+    const saltBuffer = base64ToArrayBuffer(salt);
+    const tokenKey = await crypto.subtle.importKey("raw", encoder.encode(token), "HKDF", false, [
+      "deriveKey",
+    ]);
+
+    return await crypto.subtle.deriveKey(
+      {
+        name: "HKDF",
+        hash: "SHA-256",
+        salt: new Uint8Array(saltBuffer),
+        info: encoder.encode("relic-service-account"),
+      },
+      tokenKey,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"],
+    );
+  } catch (error) {
+    if (error instanceof CryptoError) {
+      throw error;
+    }
+    throw new CryptoError("KEY_DERIVATION_FAILED", "Failed to derive key from token", error);
+  }
+}
+
+export async function createServiceAccountKeys(token: string): Promise<SerializedKeyPair> {
+  assertNonEmptyString(token, "token");
+
+  const keyPair = await generateRSAKeyPair();
+  const salt = generateSalt();
+
+  const publicKey = await exportPublicKey(keyPair.publicKey);
+  const derivedKey = await deriveKeyFromToken(token, salt);
+  const privateKeyData = await exportPrivateKey(keyPair.privateKey);
+  const iv = generateIV();
+
+  const encrypted = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    derivedKey,
+    encoder.encode(privateKeyData),
+  );
+
+  const combined = new Uint8Array(iv.length + encrypted.byteLength);
+  combined.set(iv);
+  combined.set(new Uint8Array(encrypted), iv.length);
+
+  return {
+    publicKey,
+    encryptedPrivateKey: arrayBufferToBase64(combined),
+    salt,
+  };
+}
+
+export async function decryptServiceAccountPrivateKey(
+  encryptedPrivateKey: string,
+  token: string,
+  salt: string,
+): Promise<CryptoKey> {
+  assertNonEmptyString(encryptedPrivateKey, "encryptedPrivateKey");
+  assertNonEmptyString(token, "token");
+  assertNonEmptyString(salt, "salt");
+
+  try {
+    const derivedKey = await deriveKeyFromToken(token, salt);
+    const combinedBuffer = base64ToArrayBuffer(encryptedPrivateKey);
+
+    assertMinLength(combinedBuffer, IV_LENGTH + 1, "encrypted private key");
+
+    const combined = new Uint8Array(combinedBuffer);
+    const iv = combined.slice(0, IV_LENGTH);
+    const ciphertext = combined.slice(IV_LENGTH);
+
+    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, derivedKey, ciphertext);
+
+    const privateKeyStr = decoder.decode(decrypted);
+    return await importPrivateKey(privateKeyStr);
+  } catch (error) {
+    if (error instanceof CryptoError) {
+      throw error;
+    }
+    throw new CryptoError(
+      "DECRYPTION_FAILED",
+      "Failed to decrypt service account private key - invalid token or corrupted data",
+      error,
+    );
+  }
+}
+
+export async function unwrapProjectKeyWithServiceToken(
+  encryptedProjectKey: string,
+  saEncryptedPrivateKey: string,
+  serviceToken: string,
+  saSalt: string,
+): Promise<CryptoKey> {
+  const privateKey = await decryptServiceAccountPrivateKey(
+    saEncryptedPrivateKey,
+    serviceToken,
+    saSalt,
+  );
+  return await unwrapAESKeyWithRSA(encryptedProjectKey, privateKey);
+}
+
 function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
   const bytes = buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : buffer;
   return Buffer.from(bytes).toString("base64");

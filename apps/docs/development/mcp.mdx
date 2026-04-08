@@ -166,7 +166,8 @@ The MCP server inherits Relic's client-side encryption. All decryption happens l
 | Client-side decryption | Secrets are decrypted on your device using your password and keys |
 | No disk writes | Secrets are held in memory for the duration of the command |
 | Session-based auth | The MCP server reuses your existing `relic login` session |
-| API key support | Set `RELIC_API_KEY` and `RELIC_PASSWORD` for CI-like environments |
+| Service token support | Set `RELIC_SERVICE_TOKEN` for CI-like environments. OIDC tokens are auto-detected. |
+| API key support (deprecated) | `RELIC_API_KEY` + `RELIC_PASSWORD` still works but [service tokens](/guides/service-accounts) are recommended. |
 
 ## Example Usage
 

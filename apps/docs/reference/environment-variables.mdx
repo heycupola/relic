@@ -9,8 +9,10 @@ Relic reads the following environment variables. None of them are required for n
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `RELIC_PASSWORD` | Master password for secret decryption. Used in CI/CD instead of interactive prompt. | Read from keychain or file |
-| `RELIC_API_KEY` | API key for CI/CD authentication. Replaces interactive login. | None |
+| `RELIC_SERVICE_TOKEN` | Service account token for CI/CD. Handles both authentication and decryption. Recommended over API keys. | None |
+| `RELIC_OIDC_TOKEN` | OIDC token for identity verification. Auto-detected in GitHub Actions and GitLab CI. Set manually for other providers. | Auto-detected |
+| `RELIC_PASSWORD` | Master password for secret decryption. Used with `RELIC_API_KEY` in CI/CD (deprecated). | Read from keychain or file |
+| `RELIC_API_KEY` | API key for CI/CD authentication (deprecated). Use `RELIC_SERVICE_TOKEN` instead. | None |
 | `RELIC_PROJECT_ID` | Project ID. Overrides `relic.toml` and `--project` flag. | Read from `relic.toml` |
 
 ## Server
@@ -49,12 +51,10 @@ Relic reads the following environment variables. None of them are required for n
 
 ## CI/CD Quick Reference
 
-The minimum variables needed to run Relic in a CI/CD pipeline:
+The recommended way to run Relic in a CI/CD pipeline using a service account:
 
 ```bash
-RELIC_API_KEY=relic_...       # API key from dashboard
-RELIC_PASSWORD=...            # Master password
-RELIC_PROJECT_ID=...          # Project ID (optional if relic.toml exists)
+RELIC_SERVICE_TOKEN=rsk_...   # Service token from `relic service-account create`
 ```
 
 ```bash
@@ -62,5 +62,5 @@ relic run -e production -- npm run deploy
 ```
 
 <Tip>
-  `RELIC_PROJECT_ID` is optional if your repository contains a `relic.toml` file with the project ID.
+  Service accounts are scoped to a project, so `RELIC_PROJECT_ID` is not needed.
 </Tip>

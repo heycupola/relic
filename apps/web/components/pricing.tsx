@@ -107,7 +107,7 @@ export function Pricing() {
                 </li>
                 <li className="flex items-start gap-2">
                   <X className="h-4 w-4 text-foreground/30 shrink-0 mt-0.5" aria-hidden="true" />
-                  <span className="text-foreground/50">No API keys or CI/CD integration</span>
+                  <span className="text-foreground/50">No CI/CD integration</span>
                 </li>
               </ul>
             </div>
@@ -161,7 +161,13 @@ export function Pricing() {
                 <li className="flex items-start gap-2">
                   <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
                   <span className="text-foreground">
-                    <strong>API keys</strong> for CI/CD integration
+                    <strong>Service accounts & OIDC</strong> for CI/CD
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
+                  <span className="text-foreground">
+                    <strong>API keys</strong> for programmatic access
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
