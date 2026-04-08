@@ -1,4 +1,4 @@
-import { getPasswordFromStorage, validateSession } from "@repo/auth";
+import { getPasswordFromStorage, SITE_URL, validateSession } from "@repo/auth";
 import { trackEvent } from "@repo/logger";
 import { ConvexError } from "convex/values";
 import ora from "ora";
@@ -12,7 +12,7 @@ function resolveProjectId(projectId?: string): string | null {
   return null;
 }
 
-const UPGRADE_URL = "https://relic.so/dashboard?action=upgrade";
+const UPGRADE_URL = `${SITE_URL}/dashboard?action=upgrade`;
 
 function parseConvexError(err: unknown): { code?: string; message: string } {
   if (err instanceof ConvexError) {

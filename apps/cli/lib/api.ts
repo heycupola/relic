@@ -1,4 +1,4 @@
-import { CONVEX_SITE_URL, CONVEX_URL, ensureValidJwt } from "@repo/auth";
+import { CONVEX_SITE_URL, CONVEX_URL, ensureValidJwt, SITE_URL } from "@repo/auth";
 import { api, type Id, type TableNames } from "@repo/backend";
 import { trackError } from "@repo/logger";
 import { ConvexHttpClient } from "convex/browser";
@@ -463,7 +463,7 @@ export async function exportSecretsViaApiKey(
     if (response.status === 402 || parsed?.code === "PRO_PLAN_REQUIRED") {
       throw new ProPlanRequiredError(
         parsed?.error || "API keys require a Pro plan.",
-        parsed?.upgradeUrl || "https://relic.so/dashboard?action=upgrade",
+        parsed?.upgradeUrl || `${SITE_URL}/dashboard?action=upgrade`,
       );
     }
 
@@ -521,7 +521,7 @@ export async function exportSecretsViaServiceToken(
     if (response.status === 402 || parsed?.code === "PRO_PLAN_REQUIRED") {
       throw new ProPlanRequiredError(
         parsed?.error || "Service accounts require a Pro plan.",
-        parsed?.upgradeUrl || "https://relic.so/dashboard?action=upgrade",
+        parsed?.upgradeUrl || `${SITE_URL}/dashboard?action=upgrade`,
       );
     }
 
@@ -548,7 +548,7 @@ export async function fetchUserKeysViaApiKey(apiKey: string): Promise<UserCrypto
     if (response.status === 402 || parsed?.code === "PRO_PLAN_REQUIRED") {
       throw new ProPlanRequiredError(
         parsed?.error || "API keys require a Pro plan.",
-        parsed?.upgradeUrl || "https://relic.so/dashboard?action=upgrade",
+        parsed?.upgradeUrl || `${SITE_URL}/dashboard?action=upgrade`,
       );
     }
 
