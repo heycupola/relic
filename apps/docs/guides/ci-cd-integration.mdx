@@ -12,8 +12,15 @@ Service accounts provide passwordless CI/CD integration. See the [Service Accoun
 <Steps>
   <Step title="Create a service account">
     ```bash
-    relic service-account create --name "ci-deploy" --project <project-id>
+    relic service-account create --name "ci-deploy"
     ```
+
+    For GitHub Actions with OIDC (recommended):
+
+    ```bash
+    relic service-account create --name "ci-deploy" --github myorg/myrepo --branch main
+    ```
+
     The CLI outputs a service token. Store it in your CI provider's secret storage.
   </Step>
   <Step title="Set the environment variable">
@@ -37,6 +44,10 @@ on:
   push:
     branches: [main]
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -54,6 +65,10 @@ jobs:
           RELIC_SERVICE_TOKEN: ${{ secrets.RELIC_SERVICE_TOKEN }}
         run: relic run -e production -- npm run deploy
 ```
+
+<Note>
+  The `id-token: write` permission is required if you configured OIDC on your service account. Without OIDC, it can be omitted.
+</Note>
 
 ## GitLab CI
 
