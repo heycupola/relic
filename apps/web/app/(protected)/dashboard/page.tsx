@@ -8,6 +8,7 @@ import { ActivityLogsCard } from "@/components/dashboard/activity-logs-card";
 import { ApiKeysCard } from "@/components/dashboard/api-keys-card";
 import { ProjectsOverviewCard } from "@/components/dashboard/projects-overview-card";
 import { QuickActionsCard } from "@/components/dashboard/quick-actions-card";
+import { ServiceAccountsCard } from "@/components/dashboard/service-accounts-card";
 import { UserInfoCard } from "@/components/dashboard/user-info-card";
 import { StatusBox } from "@/components/status-box";
 import { usePaginatedActionLogs } from "@/hooks/usePaginatedActionLogs";
@@ -225,6 +226,17 @@ export default function DashboardPage() {
             isLoading={apiKeysData === undefined}
             hasPro={userData?.hasPro || false}
           />
+
+          {(projectsData?.projects ?? [])
+            .filter((p) => p.status === "owned" && !p.isArchived)
+            .map((project) => (
+              <ServiceAccountsCard
+                key={`sa-${project.id}`}
+                projectId={String(project.id)}
+                isOwner={true}
+                hasPro={userData?.hasPro || false}
+              />
+            ))}
         </div>
       </div>
     </>
