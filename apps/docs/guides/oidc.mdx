@@ -1,0 +1,146 @@
+---
+title: OIDC Trust Policies
+description: Secure your CI/CD pipelines with OIDC identity verification on top of service accounts.
+---
+
+OIDC trust policies add identity verification to service accounts. When configured, a service account only works when the request includes a valid OIDC token from a trusted CI/CD provider. Even if the service token leaks, it's useless outside the trusted environment.
+
+## How It Works
+
+1. You create a service account with an OIDC policy (or add one later via the dashboard)
+2. The policy specifies which CI provider and identity can use this service account
+3. At runtime, the CLI auto-detects the OIDC token from the CI environment
+4. The server validates both the service token AND the OIDC token before returning secrets
+
+Neither credential is sufficient alone — the service token handles decryption, the OIDC token proves identity.
+
+## Setup
+
+### GitHub Actions
+
+<Steps>
+  <Step title="Create a service account with OIDC">
+    ```bash
+    relic service-account create \
+      --name "github-deploy" \
+      --oidc-issuer "https://token.actions.githubusercontent.com" \
+      --oidc-subject "repo:your-org/your-repo:ref:refs/heads/main"
+    ```
+
+    Store the service token in your repository's secrets as `RELIC_SERVICE_TOKEN`.
+  </Step>
+  <Step title="Add permissions to your workflow">
+    Your GitHub Actions workflow needs `id-token: write` permission:
+
+    ```yaml
+    permissions:
+      id-token: write
+      contents: read
+    ```
+  </Step>
+  <Step title="Run with secrets">
+    ```yaml
+    - name: Deploy with secrets
+      env:
+        RELIC_SERVICE_TOKEN: ${{ secrets.RELIC_SERVICE_TOKEN }}
+      run: relic run -e production -- npm run deploy
+    ```
+
+    The OIDC token is auto-detected and sent with the request.
+  </Step>
+</Steps>
+
+### GitLab CI
+
+<Steps>
+  <Step title="Create a service account with OIDC">
+    ```bash
+    relic service-account create \
+      --name "gitlab-deploy" \
+      --oidc-issuer "https://gitlab.com" \
+      --oidc-subject "project_path:your-group/your-project:ref_type:branch:ref:main"
+    ```
+  </Step>
+  <Step title="Run with secrets">
+    ```yaml
+    deploy:
+      stage: deploy
+      id_tokens:
+        RELIC_OIDC_TOKEN:
+          aud: relic
+      script:
+        - relic run -e production -- npm run deploy
+      variables:
+        RELIC_SERVICE_TOKEN: $RELIC_SERVICE_TOKEN
+    ```
+  </Step>
+</Steps>
+
+### Other Providers
+
+For CI providers that support OIDC but aren't auto-detected, set the `RELIC_OIDC_TOKEN` environment variable manually:
+
+```yaml
+env:
+  RELIC_SERVICE_TOKEN: ${{ secrets.RELIC_SERVICE_TOKEN }}
+  RELIC_OIDC_TOKEN: ${{ steps.get-token.outputs.token }}
+```
+
+## Managing OIDC Policies
+
+### Add via CLI (at creation time)
+
+```bash
+relic service-account create --name "deploy" \
+  --oidc-issuer "https://token.actions.githubusercontent.com" \
+  --oidc-subject "repo:org/repo:ref:refs/heads/main" \
+  --oidc-audience "relic"
+```
+
+### Add or update via dashboard
+
+OIDC policies can be configured from the web dashboard without re-creating the service account. Navigate to your project's service accounts settings and edit the OIDC policy for any existing service account.
+
+### Remove OIDC policy
+
+To remove an OIDC policy and fall back to token-only authentication, clear the OIDC fields from the dashboard or create a new service account without OIDC flags.
+
+## Subject Patterns
+
+Subject patterns control which CI identities can use the service account.
+
+| Pattern | Matches |
+|---------|---------|
+| `repo:org/repo:ref:refs/heads/main` | Exact match — only main branch |
+| `repo:org/repo:*` | Any branch or event in the repo |
+| `repo:org/*:ref:refs/heads/main` | Main branch of any repo in the org |
+
+## Auto-Detection
+
+The CLI automatically detects OIDC tokens in supported environments:
+
+| Provider | Detection Method |
+|----------|-----------------|
+| GitHub Actions | Requests token via `ACTIONS_ID_TOKEN_REQUEST_URL` |
+| GitLab CI | Reads `CI_JOB_JWT_V2` or `RELIC_OIDC_TOKEN` |
+| Other | Reads `RELIC_OIDC_TOKEN` environment variable |
+
+## Security Model
+
+- **Service token alone**: authenticates + decrypts (works without OIDC)
+- **Service token + OIDC**: authenticates via both, decrypts with token. If OIDC is configured, both are required.
+- **OIDC token alone**: not sufficient — the token is for identity only, not decryption
+
+This preserves Relic's end-to-end encryption while adding CI identity verification. The server never sees your secrets in plaintext.
+
+<Warning>
+  OIDC doesn't eliminate the need for `RELIC_SERVICE_TOKEN`. The token is still required for client-side decryption. OIDC adds a second authentication factor that proves the request comes from a trusted CI environment.
+</Warning>
+
+## Comparison
+
+| Setup | Env vars needed | Identity verified | E2E encrypted |
+|-------|----------------|-------------------|---------------|
+| API key (legacy) | `RELIC_API_KEY` + `RELIC_PASSWORD` | No | Yes |
+| Service token only | `RELIC_SERVICE_TOKEN` | No | Yes |
+| Service token + OIDC | `RELIC_SERVICE_TOKEN` | Yes | Yes |

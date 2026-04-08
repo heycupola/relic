@@ -76,6 +76,10 @@ Relic works with any CI/CD provider that supports environment variables. The pat
 2. Set `RELIC_SERVICE_TOKEN` in your pipeline environment
 3. Run `relic run -e <environment> -- <your command>`
 
+## OIDC Trust Policies
+
+For additional security, add OIDC trust policies to your service accounts. This verifies the CI platform's identity so the service token only works from trusted environments. See the [OIDC Trust Policies](/guides/oidc) guide for details.
+
 ## API Keys (Legacy)
 
 <Warning>

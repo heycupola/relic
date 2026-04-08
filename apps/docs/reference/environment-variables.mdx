@@ -10,6 +10,7 @@ Relic reads the following environment variables. None of them are required for n
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `RELIC_SERVICE_TOKEN` | Service account token for CI/CD. Handles both authentication and decryption. Recommended over API keys. | None |
+| `RELIC_OIDC_TOKEN` | OIDC token for identity verification. Auto-detected in GitHub Actions and GitLab CI. Set manually for other providers. | Auto-detected |
 | `RELIC_PASSWORD` | Master password for secret decryption. Used with `RELIC_API_KEY` in CI/CD (deprecated). | Read from keychain or file |
 | `RELIC_API_KEY` | API key for CI/CD authentication (deprecated). Use `RELIC_SERVICE_TOKEN` instead. | None |
 | `RELIC_PROJECT_ID` | Project ID. Overrides `relic.toml` and `--project` flag. | Read from `relic.toml` |

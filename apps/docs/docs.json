@@ -62,6 +62,7 @@
           "guides/tui",
           "guides/project-collaboration",
           "guides/service-accounts",
+          "guides/oidc",
           "guides/ci-cd-integration"
         ]
       },
