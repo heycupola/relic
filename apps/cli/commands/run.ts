@@ -28,6 +28,7 @@ import pc from "picocolors";
 import { RunnerBridge } from "../ffi/bridge";
 import {
   exportSecretsViaApiKey,
+  exportSecretsViaServiceToken,
   fetchUserKeysViaApiKey,
   getApi,
   ProPlanRequiredError,
@@ -51,8 +52,23 @@ export interface PrepareSecretsResult {
   count: number;
 }
 
+function isServiceTokenMode(): boolean {
+  return !!process.env.RELIC_SERVICE_TOKEN;
+}
+
 function isApiKeyMode(): boolean {
   return !!process.env.RELIC_API_KEY;
+}
+
+function isCiEnvironment(): boolean {
+  return !!(
+    process.env.CI ||
+    process.env.GITHUB_ACTIONS ||
+    process.env.GITLAB_CI ||
+    process.env.CIRCLECI ||
+    process.env.JENKINS_URL ||
+    process.env.BUILDKITE
+  );
 }
 
 async function resolveUserKeysWithApiKey(
@@ -138,6 +154,45 @@ export async function prepareSecretsWithApiKey(
       freshKeys.salt,
     );
   }
+
+  const decryptedSecrets = await decryptSecrets(
+    projectKey,
+    result.secrets.map((s) => ({ key: s.key, encryptedValue: s.encryptedValue })),
+  );
+
+  const secretsObj: Record<string, string> = {};
+  for (const secret of decryptedSecrets) {
+    secretsObj[secret.key] = secret.value;
+  }
+
+  return { secrets: secretsObj, count: result.count };
+}
+
+export async function prepareSecretsWithServiceToken(
+  options: RunOptions,
+): Promise<PrepareSecretsResult> {
+  const serviceToken = process.env.RELIC_SERVICE_TOKEN;
+  if (!serviceToken) {
+    throw new Error("RELIC_SERVICE_TOKEN is required for service token mode.");
+  }
+
+  const result = await exportSecretsViaServiceToken(serviceToken, {
+    environmentName: options.environment,
+    folderName: options.folder,
+    scope: options.scope,
+  });
+
+  if (result.count === 0) {
+    throw new Error("No secrets found");
+  }
+
+  const { unwrapProjectKeyWithServiceToken } = await import("@repo/crypto");
+  const projectKey = await unwrapProjectKeyWithServiceToken(
+    result.encryptedProjectKey,
+    result.encryptedPrivateKey,
+    serviceToken,
+    result.salt,
+  );
 
   const decryptedSecrets = await decryptSecrets(
     projectKey,
@@ -344,11 +399,35 @@ export function resolveProjectId(options: RunOptions): string | null {
   return null;
 }
 
+async function runWithServiceToken(
+  command: string[],
+  options: RunOptions,
+  startTime: number,
+): Promise<void> {
+  const spinner = ora("Authenticating with service token...").start();
+
+  spinner.text = "Fetching secrets via service token...";
+  const { secrets, count } = await prepareSecretsWithServiceToken(options);
+
+  spinner.succeed(pc.green(`Injected ${count} secret${count !== 1 ? "s" : ""}`));
+
+  await executeCommand(command, secrets, count, startTime);
+}
+
 async function runWithApiKey(
   command: string[],
   options: RunOptions,
   startTime: number,
 ): Promise<void> {
+  if (isCiEnvironment()) {
+    console.error(
+      pc.yellow(
+        "  ⚠ Using RELIC_PASSWORD in CI is deprecated. Use RELIC_SERVICE_TOKEN instead.\n" +
+          "    See: https://docs.relic.so/guides/service-accounts\n",
+      ),
+    );
+  }
+
   const spinner = ora("Authenticating with API key...").start();
 
   const projectId = resolveProjectId(options);
@@ -484,15 +563,18 @@ export default async function run(command: string[], options: RunOptions) {
     options.scope = options.scope.toLowerCase() as SecretScope;
   }
 
+  const mode = isServiceTokenMode() ? "service_token" : isApiKeyMode() ? "api_key" : "session";
   const startTime = Date.now();
   trackEvent("cli_run_started", {
     has_folder: !!options.folder,
     has_scope: !!options.scope,
-    mode: isApiKeyMode() ? "api_key" : "session",
+    mode,
   });
 
   try {
-    if (isApiKeyMode()) {
+    if (isServiceTokenMode()) {
+      await runWithServiceToken(command, options, startTime);
+    } else if (isApiKeyMode()) {
       await runWithApiKey(command, options, startTime);
     } else {
       await runWithSession(command, options, startTime);
