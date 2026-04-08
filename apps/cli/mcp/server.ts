@@ -241,7 +241,7 @@ server.registerTool(
 
         const hasPass = await hasPassword();
         if (!hasPass) {
-          return text("No password set. Run the Relic TUI to set up your password first.");
+          return text("No password set. Run 'relic' to set up your password first.");
         }
 
         let projectId = args.projectId ?? process.env.RELIC_PROJECT_ID;

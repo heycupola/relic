@@ -30,7 +30,7 @@ export async function serviceAccountCreate(options: {
   spinner.text = "Verifying password...";
   const password = await getPasswordFromStorage();
   if (!password) {
-    spinner.fail(pc.red("No password set. Run 'relic tui' to set up your password first."));
+    spinner.fail(pc.red("No password set. Run 'relic' to set up your password first."));
     process.exit(1);
   }
 
@@ -63,7 +63,7 @@ export async function serviceAccountCreate(options: {
   const user = await api.getFullUser();
 
   if (!user.publicKey || !user.encryptedPrivateKey || !user.salt) {
-    spinner.fail(pc.red("Encryption keys not set up. Run 'relic tui' to set up your keys."));
+    spinner.fail(pc.red("Encryption keys not set up. Run 'relic' to set up your keys."));
     process.exit(1);
   }
 

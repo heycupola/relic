@@ -257,7 +257,7 @@ async function resolveUserKeys(
 
   const user = await api.getFullUser();
   if (!user.encryptedPrivateKey || !user.salt) {
-    throw new Error("No encryption keys found. Run 'relic tui' to set up your keys first.");
+    throw new Error("No encryption keys found. Run 'relic' to set up your keys first.");
   }
 
   cacheUserKeys(userKeyDb, {
@@ -374,7 +374,7 @@ async function resolveProjectKey(
 
       const freshUser = await api.getFullUser();
       if (!freshUser.encryptedPrivateKey || !freshUser.salt) {
-        throw new Error("No encryption keys found. Run 'relic tui' to set up your keys first.");
+        throw new Error("No encryption keys found. Run 'relic' to set up your keys first.");
       }
 
       cacheUserKeys(userKeyDb, {
@@ -515,7 +515,7 @@ async function runWithSession(
   spinner.text = "Verifying password...";
   const hasPass = await hasPassword();
   if (!hasPass) {
-    spinner.fail(pc.red("No password set. Run 'relic tui' to set up your password first."));
+    spinner.fail(pc.red("No password set. Run 'relic' to set up your password first."));
     process.exit(1);
   }
 
