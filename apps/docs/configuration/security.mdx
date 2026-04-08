@@ -226,15 +226,73 @@ When a collaborator is revoked, their share record is marked as revoked. However
   Key rotation is optional when revoking. If you trust that the revoked collaborator did not extract secrets, you can revoke without rotation. If you want to ensure they cannot decrypt anything going forward, use revoke with rotation.
 </Warning>
 
+## Service Accounts (Machine Identity)
+
+Service accounts provide machine identity for CI/CD pipelines. Each service account has its own RSA-2048 key pair, independent from any human user.
+
+### Key management
+
+Unlike human users (whose private key is protected by Argon2id + master password), service account private keys are protected by HKDF-SHA256 + service token:
+
+```
+Service Token (high-entropy random)
+        │
+        ▼
+  HKDF-SHA256 (with random salt, info: "relic-service-account")
+        │
+        ▼
+  AES-256-GCM Derived Key
+        │
+        ▼
+  Encrypt / Decrypt SA RSA Private Key
+```
+
+HKDF is used instead of Argon2id because the service token is already high-entropy (256-bit random), so the expensive memory-hard KDF is unnecessary.
+
+### What the server stores
+
+| Data | Server sees |
+|------|-------------|
+| SA public key | Plaintext |
+| SA private key | Encrypted (AES-256-GCM + HKDF) |
+| SA salt | Plaintext (used for HKDF derivation) |
+| Project key (for SA) | Encrypted (RSA-wrapped with SA public key) |
+| Service token | SHA-256 hash only |
+| OIDC policy | Plaintext (issuer, subject pattern, audience) |
+
+The raw service token never reaches the server. Only a SHA-256 hash is stored for authentication.
+
+### OIDC trust policies
+
+Service accounts can optionally require OIDC identity verification. When configured, requests must include both:
+
+1. **Service token** — for authentication (hash check) and decryption (key derivation)
+2. **OIDC token** — for CI platform identity verification (JWT signature + claims validation)
+
+Neither credential is sufficient alone. The service token provides E2E decryption capability, while the OIDC token proves the request originates from a trusted CI environment (e.g., GitHub Actions for a specific repository and branch).
+
+OIDC tokens are validated by:
+- Fetching the issuer's JWKS (JSON Web Key Set) via the OpenID Connect discovery document
+- Verifying the JWT signature (RS256)
+- Checking issuer, subject (with pattern matching), audience, and expiration claims
+
+See the [OIDC Trust Policies](/guides/oidc) guide for setup instructions.
+
+### Key rotation with service accounts
+
+When a project key is rotated (e.g., after revoking a collaborator with rotation), the new project key is automatically re-wrapped with each active service account's public key. Existing service tokens continue to work without any changes.
+
 ## Algorithms
 
 | Purpose | Algorithm | Parameters |
 |---------|-----------|------------|
-| Key derivation | Argon2id | 64 MB memory, 3 iterations, 4 parallelism, 32-byte output |
+| Key derivation (users) | Argon2id | 64 MB memory, 3 iterations, 4 parallelism, 32-byte output |
+| Key derivation (service accounts) | HKDF-SHA256 | Random salt, info: "relic-service-account" |
 | Symmetric encryption | AES-256-GCM | 12-byte IV, prepended to ciphertext |
 | Asymmetric encryption | RSA-OAEP | 2048-bit, SHA-256 |
 | Key wrapping | RSA-OAEP | Wrap AES key with RSA public key |
-| Hashing | SHA-256 | API key hashing |
+| Hashing | SHA-256 | API key and service token hashing |
+| OIDC signature verification | RS256 | RSASSA-PKCS1-v1_5 with SHA-256 |
 
 ## Runtime Security
 
