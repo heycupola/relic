@@ -2,61 +2,65 @@
 
 import { api } from "@repo/backend";
 import { useAction, useQuery } from "convex/react";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityLogsCard } from "@/components/dashboard/activity-logs-card";
 import { ApiKeysCard } from "@/components/dashboard/api-keys-card";
 import { ProjectsOverviewCard } from "@/components/dashboard/projects-overview-card";
 import { QuickActionsCard } from "@/components/dashboard/quick-actions-card";
 import { ServiceAccountsCard } from "@/components/dashboard/service-accounts-card";
 import { UserInfoCard } from "@/components/dashboard/user-info-card";
+import { Dialog } from "@/components/dialog";
 import { StatusBox } from "@/components/status-box";
 import { usePaginatedActionLogs } from "@/hooks/usePaginatedActionLogs";
 import { authClient } from "@/lib/auth";
 import { trackWebEvent } from "@/lib/posthog";
 
-function UpgradeHandler({
-  userData,
-  onError,
-}: {
-  userData: { hasPro?: boolean } | undefined;
-  onError: (error: string) => void;
-}) {
-  const searchParams = useSearchParams();
+function useUpgradeAction(
+  userData: { hasPro?: boolean } | undefined,
+  onState: (state: "idle" | "already_pro" | "redirecting" | "error") => void,
+) {
   const getProPlanAction = useAction(api.user.getProPlan);
+  const [handled, setHandled] = useState(false);
 
   useEffect(() => {
-    const action = searchParams.get("action");
+    if (handled || !userData) return;
 
-    if (action === "upgrade" && userData && !userData.hasPro) {
-      const handleUpgrade = async () => {
-        trackWebEvent("web_upgrade_started");
-        try {
-          const result = await getProPlanAction({});
-          if (result.checkoutLink) {
-            // Clean the URL before redirecting
-            const url = new URL(window.location.href);
-            url.searchParams.delete("action");
-            window.history.replaceState({}, "", url.toString());
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("action") !== "upgrade") return;
 
-            // Redirect to checkout
-            window.location.href = result.checkoutLink;
-          }
-        } catch (error) {
-          console.error("Failed to get checkout link:", error);
-          onError("Failed to start checkout. Please try again.");
-          // Clean the URL even on error
-          const url = new URL(window.location.href);
-          url.searchParams.delete("action");
-          window.history.replaceState({}, "", url.toString());
-        }
-      };
+    setHandled(true);
 
-      handleUpgrade();
+    const cleanUrl = () => {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("action");
+      window.history.replaceState({}, "", url.toString());
+    };
+
+    if (userData.hasPro) {
+      onState("already_pro");
+      cleanUrl();
+      return;
     }
-  }, [searchParams, userData, getProPlanAction, onError]);
 
-  return null;
+    onState("redirecting");
+    trackWebEvent("web_upgrade_started");
+
+    getProPlanAction({})
+      .then((result) => {
+        if (result.checkoutLink) {
+          cleanUrl();
+          window.location.href = result.checkoutLink;
+        } else {
+          onState("error");
+          cleanUrl();
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to get checkout link:", error);
+        onState("error");
+        cleanUrl();
+      });
+  }, [userData, handled, getProPlanAction, onState]);
 }
 
 export default function DashboardPage() {
@@ -113,7 +117,15 @@ export default function DashboardPage() {
       });
   }, [session?.user, getLimitsAction, getProjectLimitsAction]);
 
-  const [upgradeError, setUpgradeError] = useState<string>("");
+  const [upgradeState, setUpgradeState] = useState<
+    "idle" | "already_pro" | "redirecting" | "error"
+  >("idle");
+  const handleUpgradeState = useCallback(
+    (s: "idle" | "already_pro" | "redirecting" | "error") => setUpgradeState(s),
+    [],
+  );
+
+  useUpgradeAction(userData, handleUpgradeState);
 
   const isLoading =
     userData === undefined ||
@@ -171,13 +183,54 @@ export default function DashboardPage() {
 
   return (
     <>
-      <Suspense fallback={null}>
-        <UpgradeHandler userData={userData} onError={setUpgradeError} />
-      </Suspense>
-      <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-12">
-        <div className="sr-only" role="alert" aria-live="assertive" aria-atomic="true">
-          {upgradeError}
+      <Dialog open={upgradeState === "redirecting"} onClose={() => void 0} closeOnBackdrop={false}>
+        <div className="p-6 text-center space-y-4">
+          <div className="h-6 w-6 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin mx-auto" />
+          <div className="space-y-1">
+            <h3 className="text-base font-semibold text-foreground">Upgrading to Pro</h3>
+            <p className="text-sm text-foreground/60">Redirecting you to checkout…</p>
+          </div>
         </div>
+      </Dialog>
+
+      <Dialog open={upgradeState === "already_pro"} onClose={() => setUpgradeState("idle")}>
+        <div className="p-5 space-y-4">
+          <div className="space-y-2">
+            <h3 className="text-base font-semibold text-foreground">Already on Pro</h3>
+            <p className="text-sm text-foreground/70 leading-relaxed">
+              You're already on the Pro plan. All features are unlocked.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setUpgradeState("idle")}
+            className="w-full p-2.5 border border-border bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors"
+          >
+            Got it
+          </button>
+        </div>
+      </Dialog>
+
+      <Dialog open={upgradeState === "error"} onClose={() => setUpgradeState("idle")}>
+        <div className="p-5 space-y-4">
+          <div className="space-y-2">
+            <h3 className="text-base font-semibold text-foreground">Checkout Failed</h3>
+            <p className="text-sm text-foreground/70 leading-relaxed">
+              Failed to start checkout. Please try again.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setUpgradeState("idle")}
+            className="w-full p-2.5 border border-border text-sm text-foreground hover:bg-muted/50 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </Dialog>
+
+      <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-12">
+        <div></div>
         <div className="space-y-4 sm:space-y-5">
           {isOverProjectLimit && (
             <StatusBox variant="warning">
