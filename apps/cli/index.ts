@@ -91,20 +91,20 @@ saCmd
   .requiredOption("-n, --name <name>", "Service account name")
   .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
   .option("--expires-in <days>", "Expiration in days (optional, max 365)")
-  .option(
-    "--oidc-issuer <url>",
-    "OIDC issuer URL (e.g. https://token.actions.githubusercontent.com)",
-  )
-  .option(
-    "--oidc-subject <pattern>",
-    "OIDC subject pattern (e.g. repo:org/repo:ref:refs/heads/main)",
-  )
+  .option("--github <org/repo>", "Enable OIDC for GitHub Actions (e.g. myorg/myrepo)")
+  .option("--gitlab <group/project>", "Enable OIDC for GitLab CI (e.g. mygroup/myproject)")
+  .option("--branch <name>", "Branch restriction for OIDC (default: * for all branches)")
+  .option("--oidc-issuer <url>", "OIDC issuer URL (advanced, prefer --github or --gitlab)")
+  .option("--oidc-subject <pattern>", "OIDC subject pattern (advanced)")
   .option("--oidc-audience <aud>", "OIDC audience (optional)")
   .action(
     (options: {
       name: string;
       project?: string;
       expiresIn?: string;
+      github?: string;
+      gitlab?: string;
+      branch?: string;
       oidcIssuer?: string;
       oidcSubject?: string;
       oidcAudience?: string;

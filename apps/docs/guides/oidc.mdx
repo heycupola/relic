@@ -23,11 +23,11 @@ Neither credential is sufficient alone — the service token handles decryption,
     ```bash
     relic service-account create \
       --name "github-deploy" \
-      --oidc-issuer "https://token.actions.githubusercontent.com" \
-      --oidc-subject "repo:your-org/your-repo:ref:refs/heads/main"
+      --github your-org/your-repo \
+      --branch main
     ```
 
-    Store the service token in your repository's secrets as `RELIC_SERVICE_TOKEN`.
+    Omit `--branch` to allow all branches. Store the service token in your repository's secrets as `RELIC_SERVICE_TOKEN`.
   </Step>
   <Step title="Add permissions to your workflow">
     Your GitHub Actions workflow needs `id-token: write` permission:
@@ -57,11 +57,11 @@ Neither credential is sufficient alone — the service token handles decryption,
     ```bash
     relic service-account create \
       --name "gitlab-deploy" \
-      --oidc-issuer "https://gitlab.com" \
-      --oidc-subject "project_path:your-group/your-project:ref_type:branch:ref:main"
+      --gitlab your-group/your-project \
+      --branch main
     ```
   </Step>
-  <Step title="Run with secrets">
+  <Step title="Add id_tokens to your CI config">
     ```yaml
     deploy:
       stage: deploy
@@ -91,19 +91,22 @@ env:
 ### Add via CLI (at creation time)
 
 ```bash
-relic service-account create --name "deploy" \
-  --oidc-issuer "https://token.actions.githubusercontent.com" \
-  --oidc-subject "repo:org/repo:ref:refs/heads/main" \
-  --oidc-audience "relic"
+relic service-account create --name "deploy" --github myorg/myrepo --branch main
+```
+
+Or for GitLab:
+
+```bash
+relic service-account create --name "deploy" --gitlab mygroup/myproject --branch main
 ```
 
 ### Add or update via dashboard
 
-OIDC policies can be configured from the web dashboard without re-creating the service account. Navigate to your project's service accounts settings and edit the OIDC policy for any existing service account.
+OIDC policies can be configured from the web dashboard without re-creating the service account. Navigate to your project's service accounts, click "Add OIDC" or "Edit OIDC", select the provider, and enter your organization, repository, and branch.
 
 ### Remove OIDC policy
 
-To remove an OIDC policy and fall back to token-only authentication, clear the OIDC fields from the dashboard or create a new service account without OIDC flags.
+To remove an OIDC policy and fall back to token-only authentication, click "Remove" in the OIDC dialog on the dashboard.
 
 ## Subject Patterns
 

@@ -64,10 +64,60 @@ async function handleError(spinner: ReturnType<typeof ora>, err: unknown) {
   process.exit(1);
 }
 
+function resolveOidcArgs(options: {
+  github?: string;
+  gitlab?: string;
+  branch?: string;
+  oidcIssuer?: string;
+  oidcSubject?: string;
+  oidcAudience?: string;
+}): { oidcIssuer?: string; oidcSubjectPattern?: string; oidcAudience?: string } {
+  if (options.github && options.gitlab) {
+    throw new Error("Cannot use both --github and --gitlab.");
+  }
+
+  if (options.github) {
+    const parts = options.github.split("/");
+    if (parts.length !== 2 || !parts[0] || !parts[1]) {
+      throw new Error("--github must be in the format org/repo (e.g. myorg/myrepo).");
+    }
+    const branch = options.branch ?? "*";
+    const ref = branch === "*" ? "*" : `ref:refs/heads/${branch}`;
+    return {
+      oidcIssuer: "https://token.actions.githubusercontent.com",
+      oidcSubjectPattern: `repo:${options.github}:${ref}`,
+      oidcAudience: options.oidcAudience,
+    };
+  }
+
+  if (options.gitlab) {
+    const parts = options.gitlab.split("/");
+    if (parts.length !== 2 || !parts[0] || !parts[1]) {
+      throw new Error("--gitlab must be in the format group/project (e.g. mygroup/myproject).");
+    }
+    const branch = options.branch ?? "*";
+    const ref = branch === "*" ? "*" : `ref_type:branch:ref:${branch}`;
+    return {
+      oidcIssuer: "https://gitlab.com",
+      oidcSubjectPattern: `project_path:${options.gitlab}:${ref}`,
+      oidcAudience: options.oidcAudience,
+    };
+  }
+
+  return {
+    oidcIssuer: options.oidcIssuer,
+    oidcSubjectPattern: options.oidcSubject,
+    oidcAudience: options.oidcAudience,
+  };
+}
+
 export async function serviceAccountCreate(options: {
   project?: string;
   name: string;
   expiresIn?: string;
+  github?: string;
+  gitlab?: string;
+  branch?: string;
   oidcIssuer?: string;
   oidcSubject?: string;
   oidcAudience?: string;
@@ -75,6 +125,8 @@ export async function serviceAccountCreate(options: {
   const spinner = ora("Checking authentication...").start();
 
   try {
+    const oidcArgs = resolveOidcArgs(options);
+
     const sessionValidation = await validateSession();
     if (!sessionValidation.isValid || sessionValidation.isExpired) {
       spinner.fail(pc.red("Not logged in. Run 'relic login' first."));
@@ -85,16 +137,6 @@ export async function serviceAccountCreate(options: {
     const password = await getPasswordFromStorage();
     if (!password) {
       spinner.fail(pc.red("No password set. Run 'relic' to set up your password first."));
-      process.exit(1);
-    }
-
-    if (options.oidcIssuer && !options.oidcSubject) {
-      spinner.fail(pc.red("--oidc-subject is required when --oidc-issuer is specified."));
-      process.exit(1);
-    }
-
-    if (!options.oidcIssuer && options.oidcSubject) {
-      spinner.fail(pc.red("--oidc-issuer is required when --oidc-subject is specified."));
       process.exit(1);
     }
 
@@ -167,9 +209,9 @@ export async function serviceAccountCreate(options: {
       hashedToken,
       tokenPrefix,
       expiresAt,
-      oidcIssuer: options.oidcIssuer,
-      oidcSubjectPattern: options.oidcSubject,
-      oidcAudience: options.oidcAudience,
+      oidcIssuer: oidcArgs.oidcIssuer,
+      oidcSubjectPattern: oidcArgs.oidcSubjectPattern,
+      oidcAudience: oidcArgs.oidcAudience,
     });
 
     spinner.succeed(pc.green("Service account created"));
@@ -182,19 +224,15 @@ export async function serviceAccountCreate(options: {
     console.log(pc.dim("  Store this token in your CI provider's secret storage."));
     console.log(pc.dim("  Set it as RELIC_SERVICE_TOKEN in your pipeline environment."));
 
-    if (options.oidcIssuer) {
+    if (oidcArgs.oidcIssuer) {
       console.log();
-      console.log(pc.dim("  OIDC policy configured:"));
-      console.log(pc.dim(`    Issuer:  ${options.oidcIssuer}`));
-      console.log(pc.dim(`    Subject: ${options.oidcSubject}`));
-      if (options.oidcAudience) {
-        console.log(pc.dim(`    Audience: ${options.oidcAudience}`));
-      }
-      console.log(pc.dim("  The OIDC token will be auto-detected in supported CI environments."));
+      console.log(pc.dim("  OIDC trust policy:"));
+      console.log(pc.dim(`    ${oidcArgs.oidcSubjectPattern}`));
+      console.log(pc.dim("  OIDC token will be auto-detected in supported CI environments."));
     }
     console.log();
 
-    trackEvent("service_account_created", { projectId, hasOidc: !!options.oidcIssuer });
+    trackEvent("service_account_created", { projectId, hasOidc: !!oidcArgs.oidcIssuer });
   } catch (err) {
     await handleError(spinner, err);
   }
