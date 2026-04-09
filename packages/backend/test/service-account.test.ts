@@ -367,7 +367,7 @@ describe("Service Account Management", () => {
       expect((accounts[0] as Record<string, unknown>).hashedToken).toBeUndefined();
     });
 
-    test("should allow collaborator to list service accounts", async () => {
+    test("should reject collaborator from listing service accounts", async () => {
       mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
       mockAutumn.setFeature(owner.userId, "additional_shares", 5);
 
@@ -386,25 +386,13 @@ describe("Service Account Management", () => {
         encryptedProjectKey: collabEncryptedProjectKey,
       });
 
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
-        owner.publicKey!,
-        owner.encryptedPrivateKey!,
-        owner.password!,
-        owner.salt!,
-        encryptedProjectKey,
+      await expectConvexError(
+        () =>
+          collaborator.asUser.query(api.serviceAccount.listServiceAccounts, {
+            projectId,
+          }),
+        ErrorCode.INSUFFICIENT_PERMISSION,
       );
-      await owner.asUser.mutation(api.serviceAccount.createServiceAccount, {
-        projectId,
-        name: "Visible to Collab",
-        ...saArgs,
-      });
-
-      const accounts = await collaborator.asUser.query(api.serviceAccount.listServiceAccounts, {
-        projectId,
-      });
-
-      expect(accounts).toHaveLength(1);
-      expect(accounts[0].name).toBe("Visible to Collab");
     });
 
     test("should reject for user without project access", async () => {

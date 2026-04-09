@@ -283,6 +283,10 @@ export const listServiceAccounts = protectedQuery({
     });
     await assertProjectAccess(ctx, project);
 
+    if (ctx.userId !== project.ownerId) {
+      throw permissionError("list service accounts for this project", ErrorSeverity.High);
+    }
+
     const accounts = await ctx.db
       .query("serviceAccount")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
