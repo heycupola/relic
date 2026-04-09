@@ -280,16 +280,28 @@ export default function DashboardPage() {
             hasPro={userData?.hasPro || false}
           />
 
-          {(projectsData?.projects ?? [])
-            .filter((p) => p.status === "owned" && !p.isArchived)
-            .map((project) => (
+          {(() => {
+            const ownedProjects = (projectsData?.projects ?? []).filter(
+              (p) => p.status === "owned" && !p.isArchived,
+            );
+            if (ownedProjects.length > 0) {
+              return ownedProjects.map((project) => (
+                <ServiceAccountsCard
+                  key={`sa-${project.id}`}
+                  projectId={String(project.id)}
+                  isOwner={true}
+                  hasPro={userData?.hasPro || false}
+                />
+              ));
+            }
+            return (
               <ServiceAccountsCard
-                key={`sa-${project.id}`}
-                projectId={String(project.id)}
-                isOwner={true}
+                projectId=""
+                isOwner={false}
                 hasPro={userData?.hasPro || false}
               />
-            ))}
+            );
+          })()}
         </div>
       </div>
     </>
