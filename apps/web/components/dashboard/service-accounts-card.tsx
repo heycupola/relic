@@ -4,7 +4,7 @@ import type { Id } from "@repo/backend";
 import { api } from "@repo/backend";
 import { Badge } from "@repo/ui/components/badge";
 import { useQuery } from "convex/react";
-import { Bot, Plus, Shield, Terminal } from "lucide-react";
+import { Bot, Check, Copy, Plus, Shield } from "lucide-react";
 import { useState } from "react";
 import { OidcPolicyDialog } from "./oidc-policy-dialog";
 import { RevokeServiceAccountDialog } from "./revoke-service-account-dialog";
@@ -67,10 +67,20 @@ export function ServiceAccountsCard({ projectId, isOwner, hasPro }: ServiceAccou
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
   const [saToRevoke, setSaToRevoke] = useState<ServiceAccountItem | null>(null);
   const [saToConfigOidc, setSaToConfigOidc] = useState<ServiceAccountItem | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const copyCommand = async () => {
+    try {
+      await navigator.clipboard.writeText('relic service-account create --name "my-sa"');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // clipboard not available
+    }
+  };
 
   const isLoading = accounts === undefined;
   const visibleAccounts = (accounts ?? []).filter((sa) => !sa.revokedAt) as ServiceAccountItem[];
-  const activeCount = visibleAccounts.filter((sa) => getStatus(sa) === "active").length;
 
   if (!hasPro) {
     return (
@@ -123,13 +133,22 @@ export function ServiceAccountsCard({ projectId, isOwner, hasPro }: ServiceAccou
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-sm font-medium text-foreground/60">Service Accounts</h3>
             <div className="relative group">
-              <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-foreground/40 cursor-default">
-                <Terminal className="h-3 w-3" aria-hidden="true" />
-                <span>Create via CLI</span>
-              </div>
+              <button
+                type="button"
+                onClick={copyCommand}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-border hover:border-foreground hover:bg-muted/50 transition-all text-foreground"
+              >
+                <Plus className="h-3 w-3" aria-hidden="true" />
+                Create via CLI
+              </button>
               <div className="absolute right-0 top-full mt-1 hidden group-hover:block z-10">
-                <div className="bg-foreground text-background text-xs font-mono px-3 py-2 whitespace-nowrap">
-                  relic service-account create --name &quot;my-sa&quot;
+                <div className="flex items-center gap-2 bg-foreground text-background text-xs font-mono px-3 py-2 whitespace-nowrap">
+                  <span>relic service-account create --name &quot;my-sa&quot;</span>
+                  {copied ? (
+                    <Check className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  ) : (
+                    <Copy className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  )}
                 </div>
               </div>
             </div>
@@ -223,10 +242,6 @@ export function ServiceAccountsCard({ projectId, isOwner, hasPro }: ServiceAccou
                 );
               })}
             </div>
-          )}
-
-          {visibleAccounts.length > 0 && (
-            <p className="text-xs text-foreground/40 tabular-nums">{activeCount}/5 active</p>
           )}
         </div>
       </div>

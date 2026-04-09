@@ -271,15 +271,6 @@ export default function DashboardPage() {
             />
           </div>
 
-          <ApiKeysCard
-            apiKeys={apiKeysData ?? []}
-            projectNames={Object.fromEntries(
-              (projectsData?.projects ?? []).map((p) => [String(p.id), p.name]),
-            )}
-            isLoading={apiKeysData === undefined}
-            hasPro={userData?.hasPro || false}
-          />
-
           {(() => {
             const ownedProjects = (projectsData?.projects ?? []).filter(
               (p) => p.status === "owned" && !p.isArchived,
@@ -302,6 +293,15 @@ export default function DashboardPage() {
               />
             );
           })()}
+
+          <ApiKeysCard
+            apiKeys={apiKeysData ?? []}
+            projectNames={Object.fromEntries(
+              (projectsData?.projects ?? []).map((p) => [String(p.id), p.name]),
+            )}
+            isLoading={apiKeysData === undefined}
+            hasPro={userData?.hasPro || false}
+          />
         </div>
       </div>
     </>
