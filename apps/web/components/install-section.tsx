@@ -19,9 +19,10 @@ const installMethods: InstallMethod[] = [
 
 interface InstallSectionProps {
   showWrapper?: boolean;
+  compact?: boolean;
 }
 
-export function InstallSection({ showWrapper = true }: InstallSectionProps) {
+export function InstallSection({ showWrapper = true, compact = false }: InstallSectionProps) {
   const [activeMethod, setActiveMethod] = useState<InstallMethod>(installMethods[0]!);
   const [copied, setCopied] = useState(false);
 
@@ -71,9 +72,9 @@ export function InstallSection({ showWrapper = true }: InstallSectionProps) {
   };
 
   const installContent = (
-    <div className="overflow-hidden border-2 border-border bg-card">
+    <div className={cn("overflow-hidden border-2 border-border bg-card", compact && "border")}>
       <div
-        className="grid grid-cols-4 border-b-2 border-border sm:flex"
+        className={cn("grid grid-cols-4 border-b-2 border-border sm:flex", compact && "border-b")}
         role="tablist"
         aria-label="Installation methods"
       >
@@ -89,7 +90,8 @@ export function InstallSection({ showWrapper = true }: InstallSectionProps) {
             aria-controls={`install-panel-${method.name}`}
             tabIndex={activeMethod.name === method.name ? 0 : -1}
             className={cn(
-              "py-3 font-mono text-xs uppercase transition-all focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring border-r-2 border-border last:border-r-0 sm:px-6 sm:py-3 sm:last:border-r-2",
+              "font-mono text-xs uppercase transition-all focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring border-r-2 border-border last:border-r-0 sm:last:border-r-2",
+              compact ? "py-2 sm:px-4 sm:py-2" : "py-3 sm:px-6 sm:py-3",
               activeMethod.name === method.name
                 ? "bg-foreground text-background font-bold"
                 : "text-foreground/60 hover:text-foreground hover:bg-muted",
@@ -100,13 +102,18 @@ export function InstallSection({ showWrapper = true }: InstallSectionProps) {
         ))}
       </div>
       <div
-        className="bg-muted/20 px-4 py-4 overflow-x-auto sm:px-6"
+        className={cn("bg-muted/20 overflow-x-auto", compact ? "px-3 py-2.5" : "px-4 py-4 sm:px-6")}
         role="tabpanel"
         id={`install-panel-${activeMethod.name}`}
         aria-labelledby={`install-tab-${activeMethod.name}`}
       >
         <div className="flex items-center gap-2">
-          <code className="font-mono text-sm text-foreground whitespace-nowrap">
+          <code
+            className={cn(
+              "font-mono text-foreground whitespace-nowrap",
+              compact ? "text-xs" : "text-sm",
+            )}
+          >
             {activeMethod.command}
           </code>
           <button
