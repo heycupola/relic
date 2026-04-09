@@ -62,7 +62,7 @@ function formatTimeAgo(timestamp: number): string {
 export function ServiceAccountsCard({ projectId, isOwner, hasPro }: ServiceAccountsCardProps) {
   const accounts = useQuery(
     api.serviceAccount.listServiceAccounts,
-    hasPro ? { projectId: projectId as Id<"project"> } : "skip",
+    hasPro && projectId ? { projectId: projectId as Id<"project"> } : "skip",
   );
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
   const [saToRevoke, setSaToRevoke] = useState<ServiceAccountItem | null>(null);
