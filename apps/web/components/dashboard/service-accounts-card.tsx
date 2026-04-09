@@ -122,9 +122,16 @@ export function ServiceAccountsCard({ projectId, isOwner, hasPro }: ServiceAccou
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-sm font-medium text-foreground/60">Service Accounts</h3>
-            <div className="flex items-center gap-2 text-xs text-foreground/40">
-              <Terminal className="h-3 w-3" aria-hidden="true" />
-              <span>Create via CLI</span>
+            <div className="relative group">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-foreground/40 cursor-default">
+                <Terminal className="h-3 w-3" aria-hidden="true" />
+                <span>Create via CLI</span>
+              </div>
+              <div className="absolute right-0 top-full mt-1 hidden group-hover:block z-10">
+                <div className="bg-foreground text-background text-xs font-mono px-3 py-2 whitespace-nowrap">
+                  relic service-account create --name &quot;my-sa&quot;
+                </div>
+              </div>
             </div>
           </div>
 
