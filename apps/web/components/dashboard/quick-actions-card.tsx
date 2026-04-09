@@ -16,7 +16,7 @@ export function QuickActionsCard() {
         <h3 className="text-sm font-medium text-foreground/60">Quick Actions</h3>
 
         <div className="space-y-2">
-          <InstallSection showWrapper={false} />
+          <InstallSection showWrapper={false} compact />
 
           <Link
             href="https://github.com/heycupola/relic/releases"
