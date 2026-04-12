@@ -168,8 +168,8 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
 
 // NOTE: TaskBar wrapper that has access to user context.
 function AuthenticatedTaskBar() {
-  const { user } = useUser();
-  return <TaskBar userEmail={user?.email} />;
+  const { user, hasPro } = useUser();
+  return <TaskBar userEmail={user?.email} hasPro={hasPro} />;
 }
 
 function AppRouter() {

@@ -20,9 +20,10 @@ const STATUS_CONFIG: Record<
 
 interface TaskBarProps {
   userEmail?: string;
+  hasPro?: boolean;
 }
 
-export function TaskBar({ userEmail }: TaskBarProps) {
+export function TaskBar({ userEmail, hasPro }: TaskBarProps) {
   const { width, height } = useTerminalDimensions();
   const { task } = useTaskQueue();
   const [spinnerFrame, setSpinnerFrame] = useState(0);
@@ -45,6 +46,7 @@ export function TaskBar({ userEmail }: TaskBarProps) {
   // NOTE: User email color adapts to background for readability.
   // Using textMuted (brighter) instead of textDim for better visibility in idle state.
   const userTextColor = isResult ? config.textColor : THEME_COLORS.textMuted;
+  const version = process.env._RELIC_VERSION;
 
   return (
     <box
@@ -78,7 +80,27 @@ export function TaskBar({ userEmail }: TaskBarProps) {
           </>
         )}
       </text>
-      {userEmail && <text fg={userTextColor}>{userEmail}</text>}
+      <text>
+        {userEmail && (
+          <>
+            <span fg={userTextColor}>{userEmail}</span>
+            <span fg={isResult ? config.textColor : THEME_COLORS.textDim}> · </span>
+            <span
+              fg={
+                isResult ? config.textColor : hasPro ? THEME_COLORS.success : THEME_COLORS.textDim
+              }
+            >
+              {hasPro ? "Pro" : "Free"}
+            </span>
+          </>
+        )}
+        {version && (
+          <>
+            {userEmail && <span fg={isResult ? config.textColor : THEME_COLORS.textDim}> · </span>}
+            <span fg={isResult ? config.textColor : THEME_COLORS.textDim}>v{version}</span>
+          </>
+        )}
+      </text>
     </box>
   );
 }
