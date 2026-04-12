@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { exec, execSync } from "node:child_process";
 import { trackEvent } from "@repo/logger";
 import ora from "ora";
 import pc from "picocolors";
@@ -6,30 +6,33 @@ import pkg from "../package.json";
 
 type InstallMethod = "homebrew" | "npm" | "bun" | "unknown";
 
-function detectInstallMethod(): InstallMethod {
+function tryExec(cmd: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    exec(cmd, { encoding: "utf-8", timeout: 10_000 }, (err, stdout) => {
+      if (err) reject(err);
+      else resolve(stdout);
+    });
+  });
+}
+
+async function detectInstallMethod(): Promise<InstallMethod> {
   try {
-    execSync("brew list relic 2>/dev/null", { stdio: "pipe" });
+    await tryExec("brew list relic 2>/dev/null");
     return "homebrew";
   } catch (_) {
     // not installed via homebrew
   }
 
   try {
-    const result = execSync("npm list -g relic 2>/dev/null", {
-      encoding: "utf-8",
-      stdio: "pipe",
-    });
+    const result = await tryExec("npm list -g relic 2>/dev/null");
     if (result.includes("relic@")) return "npm";
   } catch (_) {
     // not installed via npm
   }
 
   try {
-    const result = execSync("bun pm ls -g 2>/dev/null", {
-      encoding: "utf-8",
-      stdio: "pipe",
-    });
-    if (result.includes("relic")) return "bun";
+    const result = await tryExec("bun pm ls -g 2>/dev/null");
+    if (result.includes("relic@")) return "bun";
   } catch (_) {
     // not installed via bun
   }
@@ -39,7 +42,12 @@ function detectInstallMethod(): InstallMethod {
 
 async function getLatestVersion(): Promise<string | null> {
   try {
-    const response = await fetch("https://registry.npmjs.org/relic/latest");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5_000);
+    const response = await fetch("https://registry.npmjs.org/relic/latest", {
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
     if (!response.ok) return null;
     const data = (await response.json()) as { version: string };
     return data.version;
@@ -100,7 +108,7 @@ export default async function upgrade() {
     : `Upgrading via ${method}...`;
 
   try {
-    execSync(upgradeCmd, { stdio: "pipe" });
+    execSync(upgradeCmd, { stdio: "inherit" });
     spinner.succeed(
       latestVersion
         ? `Upgraded to ${pc.green(`v${latestVersion}`)} via ${method}`
