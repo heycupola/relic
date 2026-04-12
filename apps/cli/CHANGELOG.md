@@ -1,5 +1,11 @@
 # @repo/cli
 
+## 0.9.0
+
+### Minor Changes
+
+- 1ff1b4c: Add `relic version` and `relic upgrade` commands, redesign CLI help output, and show version/plan in TUI status bar
+
 ## 0.8.0
 
 ### Minor Changes
