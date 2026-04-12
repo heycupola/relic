@@ -1,5 +1,11 @@
 # @repo/cli
 
+## 0.9.1
+
+### Patch Changes
+
+- ace257c: Isolate dev and production data paths: when DEV=true, all config/session/password/cache files use ~/.config/relic-dev/ and keychain service uses com.relic.tui.dev
+
 ## 0.9.0
 
 ### Minor Changes
