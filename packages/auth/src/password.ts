@@ -1,16 +1,12 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { decryptPrivateKeyWithPassword } from "@repo/crypto";
+import { CONFIG_DIR, KEYCHAIN_SERVICE } from "./paths";
 
-const HOME = process.env.HOME || process.env.USERPROFILE || "~";
-const CONFIG_DIR =
-  process.platform === "win32"
-    ? resolve(HOME, "AppData", "Roaming", "relic")
-    : resolve(HOME, ".config", "relic");
 const PASSWORD_FILE = resolve(CONFIG_DIR, "password");
 const PASSWORD_METADATA_FILE = resolve(CONFIG_DIR, "password-meta.json");
 
-const SECRETS_SERVICE = "com.relic.tui";
+const SECRETS_SERVICE = KEYCHAIN_SERVICE;
 const SECRETS_NAME = "master-password";
 
 const ENV_PASSWORD_KEY = "RELIC_PASSWORD";
@@ -320,9 +316,7 @@ export async function verifyPasswordWithExistingKeys(
   }
 }
 
-export function getConfigDir(): string {
-  return CONFIG_DIR;
-}
+export { getConfigDir } from "./paths";
 
 export function getPasswordFilePath(): string {
   return PASSWORD_FILE;

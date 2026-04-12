@@ -98,6 +98,10 @@ Authentication and session management for Relic. Handles device code OAuth, JWT 
 
 On Windows, `~/.config/relic/` is replaced with `%APPDATA%/relic/`.
 
+### Dev mode isolation
+
+When `DEV=true`, all paths use `~/.config/relic-dev/` instead and the keychain service changes to `com.relic.tui.dev`. This prevents local development from overwriting production sessions, passwords, or cached keys.
+
 ## Development
 
 ```bash

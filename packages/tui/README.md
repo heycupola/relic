@@ -64,7 +64,7 @@ Terminal UI for Relic. Built with OpenTUI and React. Provides interactive secret
 
 ## Caching
 
-The TUI shares a local SQLite cache with the CLI at `~/.config/relic/relic.db`. When secrets are modified through the TUI, the backend bumps `updatedAt` on the affected environment/folder, invalidating the CLI cache on next run.
+The TUI shares a local SQLite cache with the CLI at `~/.config/relic/relic.db` (or `~/.config/relic-dev/relic.db` in dev mode). When secrets are modified through the TUI, the backend bumps `updatedAt` on the affected environment/folder, invalidating the CLI cache on next run.
 
 User encryption keys are cached separately and persist across session expiry. They are cleared only on explicit logout.
 

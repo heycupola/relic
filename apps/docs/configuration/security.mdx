@@ -40,8 +40,8 @@ The password is read in this order:
 | Priority | Source | Use case |
 |----------|--------|----------|
 | 1 | `RELIC_PASSWORD` environment variable | CI/CD pipelines |
-| 2 | System keychain (`com.relic.tui`) | macOS, Linux with keychain |
-| 3 | `~/.config/relic/password` file | Fallback when keychain is unavailable |
+| 2 | System keychain (`com.relic.tui`, or `com.relic.tui.dev` in dev mode) | macOS, Linux with keychain |
+| 3 | `~/.config/relic/password` file (or `~/.config/relic-dev/password` in dev mode) | Fallback when keychain is unavailable |
 
 When saving, Relic tries the system keychain first. If that succeeds, the file fallback is removed. If the keychain is unavailable, the password is written to the config file.
 
@@ -88,7 +88,7 @@ Master Password + Salt
 
 ### Local key cache
 
-Your encrypted private key and salt are cached locally at `~/.config/relic/relic.db` (SQLite). This avoids fetching keys from the server on every operation.
+Your encrypted private key and salt are cached locally at `~/.config/relic/relic.db` (SQLite, or `~/.config/relic-dev/relic.db` in dev mode). This avoids fetching keys from the server on every operation.
 
 The cache:
 
