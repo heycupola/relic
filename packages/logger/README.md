@@ -46,8 +46,8 @@ trackError("cli", error, { action: "decrypt_secret" });
 
 | Export | Description |
 |--------|-------------|
-| `getConfigDir()` | Config directory (`~/.config/relic/`) |
-| `getLogsDir()` | Logs directory (`~/.config/relic/logs/`) |
+| `getConfigDir()` | Config directory (`~/.config/relic/`, or `~/.config/relic-dev/` in dev mode) |
+| `getLogsDir()` | Logs directory (`~/.config/relic/logs/`, or `~/.config/relic-dev/logs/` in dev mode) |
 
 ## Logging
 
@@ -61,7 +61,7 @@ Built on [Consola](https://github.com/unjs/consola).
 
 | Mode | File |
 |------|------|
-| Dev | `~/.config/relic/logs/debug.log` |
+| Dev | `~/.config/relic-dev/logs/debug.log` |
 | Prod | `~/.config/relic/logs/relic.log` |
 
 Override with `RELIC_LOG_FILE`.
@@ -81,7 +81,7 @@ Telemetry is enabled when all conditions are met:
 
 Each event includes `platform`, `arch`, and `node_version` as properties.
 
-Preference is stored in `~/.config/relic/telemetry.json`.
+Preference is stored in `~/.config/relic/telemetry.json` (or `~/.config/relic-dev/telemetry.json` in dev mode).
 
 ## Environment Variables
 

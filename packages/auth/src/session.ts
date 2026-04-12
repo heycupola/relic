@@ -1,15 +1,11 @@
 import { existsSync } from "node:fs";
 import { chmod, mkdir, unlink, watch } from "node:fs/promises";
 import { resolve } from "node:path";
+import { CONFIG_DIR } from "./paths";
 import type { Session, SessionValidation } from "./types";
 
 export type SessionChangeEvent = "created" | "deleted" | "changed";
 
-const HOME = process.env.HOME || process.env.USERPROFILE || "~";
-const CONFIG_DIR =
-  process.platform === "win32"
-    ? resolve(HOME, "AppData", "Roaming", "relic")
-    : resolve(HOME, ".config", "relic");
 const SESSION_FILE = resolve(CONFIG_DIR, "session.json");
 
 async function ensureConfigDir(): Promise<void> {

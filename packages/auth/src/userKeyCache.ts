@@ -1,8 +1,8 @@
 import { Database } from "bun:sqlite";
 import { resolve } from "node:path";
-import { getConfigDir } from "./password";
+import { CONFIG_DIR } from "./paths";
 
-const DB_PATH = resolve(getConfigDir(), "relic.db");
+const DB_PATH = resolve(CONFIG_DIR, "relic.db");
 
 export interface CachedUserKeys {
   encryptedPrivateKey: string;
@@ -15,11 +15,10 @@ let db: Database | null = null;
 
 async function ensureConfigDir(): Promise<void> {
   const { mkdir, chmod } = await import("node:fs/promises");
-  const configDir = getConfigDir();
   try {
-    await mkdir(configDir, { recursive: true, mode: 0o700 });
+    await mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
     if (process.platform !== "win32") {
-      await chmod(configDir, 0o700);
+      await chmod(CONFIG_DIR, 0o700);
     }
   } catch (_) {
     void 0;

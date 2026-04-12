@@ -16,7 +16,6 @@ export {
 export {
   checkPasswordRequirements,
   clearPassword,
-  getConfigDir,
   getPasswordFilePath,
   getPasswordFromStorage,
   getStrengthColor,
@@ -31,6 +30,7 @@ export {
   verifyPassword,
   verifyPasswordWithExistingKeys,
 } from "./src/password";
+export { getConfigDir, isDev, KEYCHAIN_SERVICE } from "./src/paths";
 export {
   clearSession,
   getJwtToken,
