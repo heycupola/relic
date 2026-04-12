@@ -2,11 +2,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 const HOME = process.env.HOME || process.env.USERPROFILE || "~";
+const DIR_NAME = process.env.DEV === "true" ? "relic-dev" : "relic";
 
 const CONFIG_DIR =
   process.platform === "win32"
-    ? resolve(HOME, "AppData", "Roaming", "relic")
-    : resolve(HOME, ".config", "relic");
+    ? resolve(HOME, "AppData", "Roaming", DIR_NAME)
+    : resolve(HOME, ".config", DIR_NAME);
 
 const LOGS_DIR = resolve(CONFIG_DIR, "logs");
 const TELEMETRY_FILE = resolve(CONFIG_DIR, "telemetry.json");

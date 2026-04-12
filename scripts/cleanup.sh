@@ -10,9 +10,11 @@ BOLD='\033[1m'
 RESET='\033[0m'
 
 KEYCHAIN_SERVICE="com.relic.tui"
+KEYCHAIN_SERVICE_DEV="com.relic.tui.dev"
 KEYCHAIN_NAME="master-password"
 
 GLOBAL_CONFIG_DIR="$HOME/.config/relic"
+GLOBAL_CONFIG_DIR_DEV="$HOME/.config/relic-dev"
 GLOBAL_RELIC_DIR="$HOME/.relic"
 
 PROJECT_CONFIG="relic.toml"
@@ -29,6 +31,10 @@ if [ -d "$GLOBAL_CONFIG_DIR" ]; then
   found_items+=("$GLOBAL_CONFIG_DIR (session, password, user key cache)")
 fi
 
+if [ -d "$GLOBAL_CONFIG_DIR_DEV" ]; then
+  found_items+=("$GLOBAL_CONFIG_DIR_DEV (dev: session, password, user key cache)")
+fi
+
 if [ -d "$GLOBAL_RELIC_DIR" ]; then
   found_items+=("$GLOBAL_RELIC_DIR (logs, password)")
 fi
@@ -42,10 +48,15 @@ if [ -d "$PROJECT_RELIC_DIR" ]; then
 fi
 
 keychain_found=false
+keychain_dev_found=false
 if [[ "$OSTYPE" == "darwin"* ]] && command -v security &>/dev/null; then
   if security find-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_NAME" &>/dev/null; then
     keychain_found=true
     found_items+=("macOS Keychain: $KEYCHAIN_SERVICE/$KEYCHAIN_NAME")
+  fi
+  if security find-generic-password -s "$KEYCHAIN_SERVICE_DEV" -a "$KEYCHAIN_NAME" &>/dev/null; then
+    keychain_dev_found=true
+    found_items+=("macOS Keychain: $KEYCHAIN_SERVICE_DEV/$KEYCHAIN_NAME (dev)")
   fi
 fi
 
@@ -70,6 +81,7 @@ if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
 fi
 
 [ -d "$GLOBAL_CONFIG_DIR" ] && rm -rf "$GLOBAL_CONFIG_DIR" && echo -e "  ${GREEN}Deleted${RESET} $GLOBAL_CONFIG_DIR"
+[ -d "$GLOBAL_CONFIG_DIR_DEV" ] && rm -rf "$GLOBAL_CONFIG_DIR_DEV" && echo -e "  ${GREEN}Deleted${RESET} $GLOBAL_CONFIG_DIR_DEV"
 [ -d "$GLOBAL_RELIC_DIR" ] && rm -rf "$GLOBAL_RELIC_DIR" && echo -e "  ${GREEN}Deleted${RESET} $GLOBAL_RELIC_DIR"
 [ -f "$PROJECT_CONFIG" ] && rm -f "$PROJECT_CONFIG" && echo -e "  ${GREEN}Deleted${RESET} $(pwd)/$PROJECT_CONFIG"
 [ -d "$PROJECT_RELIC_DIR" ] && rm -rf "$PROJECT_RELIC_DIR" && echo -e "  ${GREEN}Deleted${RESET} $(pwd)/$PROJECT_RELIC_DIR"
@@ -77,6 +89,11 @@ fi
 if [ "$keychain_found" = true ]; then
   security delete-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_NAME" 2>/dev/null || true
   echo -e "  ${GREEN}Deleted${RESET} Keychain: $KEYCHAIN_SERVICE/$KEYCHAIN_NAME"
+fi
+
+if [ "$keychain_dev_found" = true ]; then
+  security delete-generic-password -s "$KEYCHAIN_SERVICE_DEV" -a "$KEYCHAIN_NAME" 2>/dev/null || true
+  echo -e "  ${GREEN}Deleted${RESET} Keychain: $KEYCHAIN_SERVICE_DEV/$KEYCHAIN_NAME"
 fi
 
 echo ""
