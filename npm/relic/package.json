@@ -8,12 +8,24 @@
     "type": "git",
     "url": "https://github.com/heycupola/relic.git"
   },
-  "keywords": ["cli", "secrets", "encryption", "security"],
+  "keywords": [
+    "cli",
+    "secrets",
+    "encryption",
+    "security"
+  ],
   "author": "Can Vardar",
+  "scripts": {
+    "postinstall": "node scripts/postinstall.mjs"
+  },
   "bin": {
     "relic": "bin/relic"
   },
-  "files": ["bin/", "README.md"],
+  "files": [
+    "bin/",
+    "scripts/",
+    "README.md"
+  ],
   "optionalDependencies": {
     "relic-cli-darwin-arm64": "0.5.0",
     "relic-cli-darwin-x64": "0.5.0",
