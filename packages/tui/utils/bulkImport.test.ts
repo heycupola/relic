@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { validateBulkImportJson } from "./bulkImport";
-
-const BULK_IMPORT_LIMIT = 100;
+import { computeRemovedKeys, validateBulkImportJson } from "./bulkImport";
 
 describe("bulkImportValidator", () => {
   describe("validateBulkImportJson", () => {
@@ -88,6 +86,38 @@ describe("bulkImportValidator", () => {
     test("allows empty values", () => {
       const result = validateBulkImportJson([{ key: "EMPTY", value: "", type: "string" }]);
       expect(result.valid).toBe(true);
+    });
+  });
+
+  describe("computeRemovedKeys", () => {
+    test("returns empty when keys are identical", () => {
+      const result = computeRemovedKeys(["A", "B", "C"], ["A", "B", "C"]);
+      expect(result).toEqual([]);
+    });
+
+    test("detects a single removed key", () => {
+      const result = computeRemovedKeys(["A", "B", "C"], ["A", "C"]);
+      expect(result).toEqual(["B"]);
+    });
+
+    test("detects all keys removed", () => {
+      const result = computeRemovedKeys(["A", "B"], []);
+      expect(result).toEqual(["A", "B"]);
+    });
+
+    test("returns empty when new keys are added but none removed", () => {
+      const result = computeRemovedKeys(["A", "B"], ["A", "B", "C"]);
+      expect(result).toEqual([]);
+    });
+
+    test("detects removed keys when new keys are also added", () => {
+      const result = computeRemovedKeys(["A", "B", "C"], ["A", "D"]);
+      expect(result).toEqual(["B", "C"]);
+    });
+
+    test("returns empty when both lists are empty", () => {
+      const result = computeRemovedKeys([], []);
+      expect(result).toEqual([]);
     });
   });
 });
