@@ -311,3 +311,8 @@ export function validateBulkImportJson(data: unknown): ValidationResult {
     duplicateKeys,
   };
 }
+
+export function computeRemovedKeys(existingKeys: string[], editorKeys: string[]): string[] {
+  const editorKeySet = new Set(editorKeys);
+  return existingKeys.filter((key) => !editorKeySet.has(key));
+}

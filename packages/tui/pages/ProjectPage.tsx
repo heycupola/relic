@@ -28,7 +28,13 @@ import { useTaskQueue } from "../hooks/useTaskQueue";
 import { useRouter } from "../router";
 import type { ModalType, ProjectStatus, SharedUser, ViewLevel } from "../types/models";
 import type { BulkImportFormat, CollisionInfo } from "../utils/bulkImport";
-import { envToJson, jsonToEnv, parseEnvContent, validateBulkImportJson } from "../utils/bulkImport";
+import {
+  computeRemovedKeys,
+  envToJson,
+  jsonToEnv,
+  parseEnvContent,
+  validateBulkImportJson,
+} from "../utils/bulkImport";
 import { DASHBOARD_URL, KEY_SYMBOLS, STATUS_COLORS, THEME_COLORS } from "../utils/constants";
 
 const logger = createLogger("tui");
@@ -886,9 +892,36 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
                   })),
                   mode: "overwrite",
                 });
+
+                const removedKeys = computeRemovedKeys(
+                  relevantSecrets.map((s) => s.key),
+                  result.secrets.map((s) => s.key),
+                );
+                for (const key of removedKeys) {
+                  const secretId = keyToSecretId.get(key);
+                  if (secretId) await deleteSecret(secretId);
+                }
               });
-              trackEvent("bulk_import_completed", { count: result.secrets.length, success: true });
-              showSuccess(`${result.secrets.length} secrets saved`);
+              const removedCount = computeRemovedKeys(
+                secrets
+                  .filter(
+                    viewLevel === "folder" && selectedFolderId
+                      ? (s) => s.folderId === selectedFolderId
+                      : (s) => s.environmentId === selectedEnvId && !s.folderId,
+                  )
+                  .map((s) => s.key),
+                result.secrets.map((s) => s.key),
+              ).length;
+              trackEvent("bulk_import_completed", {
+                count: result.secrets.length,
+                deleted: removedCount,
+                success: true,
+              });
+              const msg =
+                removedCount > 0
+                  ? `${result.secrets.length} secrets saved, ${removedCount} removed`
+                  : `${result.secrets.length} secrets saved`;
+              showSuccess(msg);
               setActiveModal("none");
               bulkImportInput.reset();
             } catch (error) {
