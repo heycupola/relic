@@ -8,7 +8,14 @@ import type { ProtectedActionCtx, ProtectedMutationCtx } from "./types";
 
 const log = createLogger("rateLimit");
 
-type OperationType = "read" | "write" | "delete" | "bulk" | "keyRotation";
+type OperationType =
+  | "read"
+  | "write"
+  | "delete"
+  | "bulk"
+  | "keyRotation"
+  | "apiKeyExport"
+  | "serviceAccountExport";
 
 export async function checkRateLimit(
   ctx: ProtectedMutationCtx,
@@ -49,6 +56,8 @@ export async function checkRateLimit(
     delete: "deleteOperation",
     bulk: "bulkOperation",
     keyRotation: "keyRotation",
+    apiKeyExport: "apiKeyExport",
+    serviceAccountExport: "serviceAccountExport",
   } as const;
 
   const rateLimitKey = key || (ctx as ProtectedMutationCtx).userId;
