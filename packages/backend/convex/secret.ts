@@ -645,6 +645,7 @@ export const deleteSecret = protectedMutation({
 export const _exportSecretsCore = internalMutation({
   args: {
     userId: v.string(),
+    apiKeyId: v.optional(v.id("apiKey")),
     projectId: v.id("project"),
     environmentName: v.optional(v.string()),
     environmentId: v.optional(v.id("environment")),
@@ -671,6 +672,7 @@ export const _exportSecretsCore = internalMutation({
     ctx,
     args: {
       userId: string;
+      apiKeyId?: Id<"apiKey">;
       projectId: Id<"project">;
       environmentName?: string;
       environmentId?: Id<"environment">;
@@ -679,6 +681,10 @@ export const _exportSecretsCore = internalMutation({
       scope?: "client" | "server" | "shared";
     },
   ): Promise<ExportSecretsResult> => {
+    if (args.apiKeyId) {
+      await checkRateLimit(ctx, "apiKeyExport", `apiKeyExport:${args.apiKeyId}`);
+    }
+
     const authCtx = {
       ...ctx,
       userId: args.userId,
@@ -832,6 +838,8 @@ export const _exportSecretsForServiceAccount = internalMutation({
       scope?: "client" | "server" | "shared";
     },
   ): Promise<ServiceAccountExportResult> => {
+    await checkRateLimit(ctx, "serviceAccountExport", `saExport:${args.serviceAccountId}`);
+
     const project = await ctx.runQuery(internal.project._loadProjectById, {
       projectId: args.projectId,
     });
