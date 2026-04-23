@@ -248,7 +248,7 @@ http.route({
     }
 
     try {
-      const { userId } = await ctx.runMutation(internal.apiKey._validateApiKey, {
+      const { userId, apiKeyId } = await ctx.runMutation(internal.apiKey._validateApiKey, {
         hashedApiKey,
         requiredScopes: ["secrets.read"],
         clientIp,
@@ -257,6 +257,7 @@ http.route({
 
       const result = await ctx.runMutation(internal.secret._exportSecretsCore, {
         userId,
+        apiKeyId,
         projectId: body.projectId as Id<"project">,
         environmentName: body.environmentName as string | undefined,
         environmentId: body.environmentId as Id<"environment"> | undefined,

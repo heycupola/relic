@@ -219,6 +219,7 @@ export const _validateApiKey = internalMutation({
   },
   returns: v.object({
     userId: v.string(),
+    apiKeyId: v.id("apiKey"),
     projectId: v.optional(v.id("project")),
   }),
   handler: async (
@@ -229,7 +230,7 @@ export const _validateApiKey = internalMutation({
       clientIp?: string;
       requestedProjectId?: string;
     },
-  ): Promise<{ userId: string; projectId?: Id<"project"> }> => {
+  ): Promise<{ userId: string; apiKeyId: Id<"apiKey">; projectId?: Id<"project"> }> => {
     const rateLimitKey = args.clientIp ?? "unknown";
     await checkRateLimit(ctx, "read", `apikey:${rateLimitKey}`);
 
@@ -303,7 +304,7 @@ export const _validateApiKey = internalMutation({
 
     await ctx.db.patch(keyDoc._id, { lastUsedAt: Date.now() });
 
-    return { userId: keyDoc.userId, projectId: keyDoc.projectId };
+    return { userId: keyDoc.userId, apiKeyId: keyDoc._id, projectId: keyDoc.projectId };
   },
 });
 
