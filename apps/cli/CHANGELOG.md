@@ -1,5 +1,12 @@
 # @repo/cli
 
+## 0.9.2
+
+### Patch Changes
+
+- 0d14cec: Isolate dev and production data paths: when DEV=true, all config/session/password/cache files use ~/.config/relic-dev/ and keychain service uses com.relic.tui.dev
+- 0d14cec: Fix editor not deleting secrets that were removed before saving
+
 ## 0.9.1
 
 ### Patch Changes
