@@ -1,4 +1,6 @@
+import { MINUTE } from "@convex-dev/rate-limiter";
 import { ConvexError } from "convex/values";
+import { EXPORT_RATE_LIMIT_POLICIES } from "../rateLimiter";
 import { ErrorSeverity } from "./types";
 
 export enum ErrorCode {
@@ -261,13 +263,22 @@ const HTTP_STATUS_MAP: Partial<Record<ErrorCode, number>> = {
   [ErrorCode.PRO_PLAN_REQUIRED]: 402,
 };
 
-// Advertised capacities per limiter type. Keep in sync with rateLimiter.ts.
-// These are informational only (sent via X-RateLimit-Limit on 429s) so clients
-// and CI logs can surface the actual policy without guessing.
-const RATE_LIMIT_ADVERTISED_CAPACITY: Record<string, number> = {
-  apiKeyExport: 6,
-  serviceAccountExport: 6,
-};
+// Serializes a single rate-limit policy into Retry-After-adjacent headers.
+// X-RateLimit-Limit advertises the sustained rate per minute (so the sum of
+// what a well-behaved client can do over time), while X-RateLimit-Burst
+// reflects the token-bucket capacity (max back-to-back requests from a full
+// bucket). Keeping both makes the policy unambiguous for CI logs.
+function policyHeaders(type: string): Record<string, string> {
+  const policy = (
+    EXPORT_RATE_LIMIT_POLICIES as Record<string, { rate: number; period: number; capacity: number }>
+  )[type];
+  if (!policy) return {};
+  const perMinute = Math.round((policy.rate * MINUTE) / policy.period);
+  return {
+    "X-RateLimit-Limit": String(perMinute),
+    "X-RateLimit-Burst": String(policy.capacity),
+  };
+}
 
 export function toHttpErrorResponse(error: unknown): Response {
   let code = ErrorCode.SERVER_ERROR;
@@ -312,8 +323,8 @@ export function toHttpErrorResponse(error: unknown): Response {
       headers["Retry-After"] = String(retryAfterSeconds);
       headers["X-RateLimit-Remaining"] = "0";
     }
-    if (rateLimitType && RATE_LIMIT_ADVERTISED_CAPACITY[rateLimitType] !== undefined) {
-      headers["X-RateLimit-Limit"] = String(RATE_LIMIT_ADVERTISED_CAPACITY[rateLimitType]);
+    if (rateLimitType) {
+      Object.assign(headers, policyHeaders(rateLimitType));
     }
   }
 
