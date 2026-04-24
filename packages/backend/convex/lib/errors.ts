@@ -1,4 +1,6 @@
+import { MINUTE } from "@convex-dev/rate-limiter";
 import { ConvexError } from "convex/values";
+import { EXPORT_RATE_LIMIT_POLICIES } from "../rateLimiter";
 import { ErrorSeverity } from "./types";
 
 export enum ErrorCode {
@@ -261,11 +263,30 @@ const HTTP_STATUS_MAP: Partial<Record<ErrorCode, number>> = {
   [ErrorCode.PRO_PLAN_REQUIRED]: 402,
 };
 
+// Serializes a single rate-limit policy into Retry-After-adjacent headers.
+// X-RateLimit-Limit advertises the sustained rate per minute (so the sum of
+// what a well-behaved client can do over time), while X-RateLimit-Burst
+// reflects the token-bucket capacity (max back-to-back requests from a full
+// bucket). Keeping both makes the policy unambiguous for CI logs.
+function policyHeaders(type: string): Record<string, string> {
+  const policy = (
+    EXPORT_RATE_LIMIT_POLICIES as Record<string, { rate: number; period: number; capacity: number }>
+  )[type];
+  if (!policy) return {};
+  const perMinute = Math.round((policy.rate * MINUTE) / policy.period);
+  return {
+    "X-RateLimit-Limit": String(perMinute),
+    "X-RateLimit-Burst": String(policy.capacity),
+  };
+}
+
 export function toHttpErrorResponse(error: unknown): Response {
   let code = ErrorCode.SERVER_ERROR;
   let message = "Internal server error";
 
   let upgradeUrl: string | undefined;
+  let retryAfterSeconds: number | undefined;
+  let rateLimitType: string | undefined;
 
   if (error instanceof ConvexError) {
     let errorData = error.data;
@@ -281,6 +302,8 @@ export function toHttpErrorResponse(error: unknown): Response {
       code = (errorData as { code?: ErrorCode }).code ?? ErrorCode.SERVER_ERROR;
       message = (errorData as { message?: string }).message ?? message;
       upgradeUrl = (errorData as { upgradeUrl?: string }).upgradeUrl;
+      retryAfterSeconds = (errorData as { retryAfterSeconds?: number }).retryAfterSeconds;
+      rateLimitType = (errorData as { type?: string }).type;
     }
   } else if (error instanceof Error) {
     message = error.message;
@@ -293,8 +316,20 @@ export function toHttpErrorResponse(error: unknown): Response {
     body.upgradeUrl = upgradeUrl;
   }
 
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+  if (code === ErrorCode.RATE_LIMIT_EXCEEDED) {
+    if (typeof retryAfterSeconds === "number" && retryAfterSeconds > 0) {
+      headers["Retry-After"] = String(retryAfterSeconds);
+      headers["X-RateLimit-Remaining"] = "0";
+    }
+    if (rateLimitType) {
+      Object.assign(headers, policyHeaders(rateLimitType));
+    }
+  }
+
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers,
   });
 }
