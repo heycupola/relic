@@ -1,6 +1,24 @@
 import { HOUR, MINUTE, RateLimiter } from "@convex-dev/rate-limiter";
 import { components } from "./_generated/api";
 
+// Public policies consumed by both the RateLimiter and the HTTP error
+// serializer (see toHttpErrorResponse) as a single source of truth for
+// advertised limits. Keyed by the limiter name used in checkRateLimit.
+export const EXPORT_RATE_LIMIT_POLICIES = {
+  apiKeyExport: {
+    kind: "token bucket",
+    rate: 6,
+    period: MINUTE,
+    capacity: 3,
+  },
+  serviceAccountExport: {
+    kind: "token bucket",
+    rate: 6,
+    period: MINUTE,
+    capacity: 3,
+  },
+} as const;
+
 export const rateLimiter = new RateLimiter(components.rateLimiter, {
   writeOperation: {
     kind: "token bucket",
@@ -34,16 +52,5 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
     period: HOUR,
     capacity: 3,
   },
-  apiKeyExport: {
-    kind: "token bucket",
-    rate: 30,
-    period: MINUTE,
-    capacity: 10,
-  },
-  serviceAccountExport: {
-    kind: "token bucket",
-    rate: 12,
-    period: MINUTE,
-    capacity: 6,
-  },
+  ...EXPORT_RATE_LIMIT_POLICIES,
 });
