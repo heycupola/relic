@@ -261,11 +261,21 @@ const HTTP_STATUS_MAP: Partial<Record<ErrorCode, number>> = {
   [ErrorCode.PRO_PLAN_REQUIRED]: 402,
 };
 
+// Advertised capacities per limiter type. Keep in sync with rateLimiter.ts.
+// These are informational only (sent via X-RateLimit-Limit on 429s) so clients
+// and CI logs can surface the actual policy without guessing.
+const RATE_LIMIT_ADVERTISED_CAPACITY: Record<string, number> = {
+  apiKeyExport: 6,
+  serviceAccountExport: 6,
+};
+
 export function toHttpErrorResponse(error: unknown): Response {
   let code = ErrorCode.SERVER_ERROR;
   let message = "Internal server error";
 
   let upgradeUrl: string | undefined;
+  let retryAfterSeconds: number | undefined;
+  let rateLimitType: string | undefined;
 
   if (error instanceof ConvexError) {
     let errorData = error.data;
@@ -281,6 +291,8 @@ export function toHttpErrorResponse(error: unknown): Response {
       code = (errorData as { code?: ErrorCode }).code ?? ErrorCode.SERVER_ERROR;
       message = (errorData as { message?: string }).message ?? message;
       upgradeUrl = (errorData as { upgradeUrl?: string }).upgradeUrl;
+      retryAfterSeconds = (errorData as { retryAfterSeconds?: number }).retryAfterSeconds;
+      rateLimitType = (errorData as { type?: string }).type;
     }
   } else if (error instanceof Error) {
     message = error.message;
@@ -293,8 +305,20 @@ export function toHttpErrorResponse(error: unknown): Response {
     body.upgradeUrl = upgradeUrl;
   }
 
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+  if (code === ErrorCode.RATE_LIMIT_EXCEEDED) {
+    if (typeof retryAfterSeconds === "number" && retryAfterSeconds > 0) {
+      headers["Retry-After"] = String(retryAfterSeconds);
+      headers["X-RateLimit-Remaining"] = "0";
+    }
+    if (rateLimitType && RATE_LIMIT_ADVERTISED_CAPACITY[rateLimitType] !== undefined) {
+      headers["X-RateLimit-Limit"] = String(RATE_LIMIT_ADVERTISED_CAPACITY[rateLimitType]);
+    }
+  }
+
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers,
   });
 }

@@ -36,14 +36,14 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   },
   apiKeyExport: {
     kind: "token bucket",
-    rate: 30,
+    rate: 6,
     period: MINUTE,
-    capacity: 10,
+    capacity: 3,
   },
   serviceAccountExport: {
     kind: "token bucket",
-    rate: 12,
+    rate: 6,
     period: MINUTE,
-    capacity: 6,
+    capacity: 3,
   },
 });
