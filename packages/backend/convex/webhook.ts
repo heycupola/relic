@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
 
-const webhookSource = v.union(v.literal("stripe"), v.literal("resend"));
+const webhookSource = v.union(v.literal("autumn"), v.literal("resend"));
 
 export const _isProcessed = internalQuery({
   args: { eventId: v.string(), source: webhookSource },

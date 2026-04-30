@@ -227,7 +227,7 @@ export default defineSchema({
   }).index("by_user", ["userId"]),
   processedWebhook: defineTable({
     eventId: v.string(),
-    source: v.union(v.literal("stripe"), v.literal("resend")),
+    source: v.union(v.literal("autumn"), v.literal("resend")),
     processedAt: v.number(),
   })
     .index("by_eventId_source", ["eventId", "source"])

@@ -1,8 +1,8 @@
 import { createLogger } from "./logger";
 
-const log = createLogger("resendSignature");
+const log = createLogger("svixSignature");
 
-export async function verifyResendSignature(
+export async function verifySvixSignature(
   payload: string,
   headers: {
     "svix-id": string | null;
@@ -22,34 +22,20 @@ export async function verifyResendSignature(
 
   const timestampNum = Number.parseInt(svixTimestamp, 10);
   const now = Math.floor(Date.now() / 1000);
-  const TOLERANCE_SECONDS = 300;
+  const toleranceSeconds = 300;
 
-  if (Math.abs(now - timestampNum) > TOLERANCE_SECONDS) {
+  if (Math.abs(now - timestampNum) > toleranceSeconds) {
     log.error("Timestamp outside tolerance window");
     return false;
   }
 
   const signedContent = `${svixId}.${svixTimestamp}.${payload}`;
-
   const secretWithoutPrefix = secret.startsWith("whsec_") ? secret.substring(6) : secret;
-
-  const base64ToBytes = (base64: string): Uint8Array => {
-    try {
-      const binaryString = atob(base64);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      return bytes;
-    } catch (_error) {
-      log.error("Invalid base64 in secret");
-      throw new Error("Invalid webhook secret format");
-    }
-  };
 
   const secretBytes = base64ToBytes(secretWithoutPrefix);
   const secretBuffer = new ArrayBuffer(secretBytes.length);
   new Uint8Array(secretBuffer).set(secretBytes);
+
   const key = await crypto.subtle.importKey(
     "raw",
     secretBuffer,
@@ -63,7 +49,6 @@ export async function verifyResendSignature(
     key,
     new TextEncoder().encode(signedContent),
   );
-
   const signatureArray = new Uint8Array(signatureBytes);
   const expectedSignatureBase64 = btoa(String.fromCharCode(...Array.from(signatureArray)));
 
@@ -79,4 +64,20 @@ export async function verifyResendSignature(
 
   log.error("Signature verification failed - no match");
   return false;
+}
+
+function base64ToBytes(base64: string): Uint8Array {
+  try {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    return bytes;
+  } catch (_error) {
+    log.error("Invalid base64 in secret");
+    throw new Error("Invalid webhook secret format");
+  }
 }

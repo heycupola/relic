@@ -43,7 +43,7 @@ Enums: `ApiKeyScope`, `EmailKind`, `ErrorSeverity`, `SecretValueType`.
 |--------|------|-------------|
 | POST | `/api/secrets/export` | Export secrets (API key auth) |
 | GET | `/api/user/keys` | Get user crypto keys (API key auth) |
-| POST | `/webhook/stripe` | Stripe webhook (signature verified) |
+| POST | `/webhook/autumn` | Autumn billing webhook (Svix signature) |
 | POST | `/webhook/resend` | Resend email webhook (Svix signature) |
 | GET | `/health` | Health check |
 
@@ -63,8 +63,8 @@ Auth routes are registered by Better Auth.
 | `apiKey.ts` | API key creation, revocation, validation |
 | `actionLog.ts` | Audit log queries (by resource, by user) |
 | `deviceAuth.ts` | Device code OAuth flow (code generation, polling, approval) |
-| `stripe.ts` | Stripe webhook handling, subscription management |
 | `autumn.ts` | Usage tracking and plan checks |
+| `autumnWebhook.ts` | Billing lifecycle webhook handling |
 | `resend.ts` | Email sending (React Email templates) |
 | `crons.ts` | Daily plan status checks (03:00 UTC) |
 | `rateLimiter.ts` | Rate limit configuration |
@@ -123,8 +123,8 @@ Downgrade triggers a 7-day grace period. Newest projects remain accessible. Dail
 │   ├── apiKey.ts
 │   ├── actionLog.ts
 │   ├── deviceAuth.ts
-│   ├── stripe.ts
 │   ├── autumn.ts
+│   ├── autumnWebhook.ts
 │   ├── resend.ts
 │   └── lib/
 │       ├── middleware.ts

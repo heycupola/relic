@@ -3,80 +3,86 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { httpAction } from "./_generated/server";
 import { authComponent, createAuth } from "./auth";
+import { type AutumnWebhookEvent, handleAutumnWebhookEvent } from "./autumnWebhook";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
 import { hashKey } from "./lib/crypto";
 import { toHttpErrorResponse } from "./lib/errors";
 import { createLogger } from "./lib/logger";
-import { verifyResendSignature } from "./lib/resend";
+import { verifySvixSignature } from "./lib/svix";
 import { EmailKind } from "./lib/types";
-import { handleWebhookEvent, type StripeEvent, verifyStripeSignature } from "./stripe";
 
-const stripeLog = createLogger("stripeWebhook");
+const autumnLog = createLogger("autumnWebhook");
 const resendLog = createLogger("resendWebhook");
 
 const http = httpRouter();
 authComponent.registerRoutes(http, createAuth);
 
-export const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+export const AUTUMN_WEBHOOK_SECRET = process.env.AUTUMN_WEBHOOK_SECRET;
 export const RESEND_WEBHOOK_SECRET = process.env.RESEND_WEBHOOK_SECRET;
 
 http.route({
-  path: "/webhook/stripe",
+  path: "/webhook/autumn",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    const signature = request.headers.get("stripe-signature");
-    const payload = await request.text();
+    const svixId = request.headers.get("svix-id");
+    const svixTimestamp = request.headers.get("svix-timestamp");
+    const svixSignature = request.headers.get("svix-signature");
+    const rawPayload = await request.text();
 
-    if (!signature) {
-      stripeLog.error("Missing stripe-signature header");
-      return new Response("Missing signature", { status: 400 });
-    }
-
-    if (!STRIPE_WEBHOOK_SECRET) {
-      stripeLog.error("STRIPE_WEBHOOK_SECRET is not configured");
+    if (!AUTUMN_WEBHOOK_SECRET) {
+      autumnLog.error("AUTUMN_WEBHOOK_SECRET is not configured");
       return new Response("Server configuration error", { status: 500 });
     }
 
-    const isValid = await verifyStripeSignature(payload, signature, STRIPE_WEBHOOK_SECRET);
+    const isValid = await verifySvixSignature(
+      rawPayload,
+      {
+        "svix-id": svixId,
+        "svix-timestamp": svixTimestamp,
+        "svix-signature": svixSignature,
+      },
+      AUTUMN_WEBHOOK_SECRET,
+    );
 
     if (!isValid) {
-      stripeLog.error("Invalid webhook signature");
+      autumnLog.error("Invalid signature");
       return new Response("Invalid signature", { status: 401 });
     }
 
-    let event: StripeEvent;
-
-    try {
-      event = JSON.parse(payload);
-    } catch (err) {
-      stripeLog.error("Error parsing webhook payload", { err: String(err) });
-      return new Response("Invalid payload", { status: 400 });
+    if (!svixId) {
+      autumnLog.error("Missing svix-id header");
+      return new Response("Missing event ID", { status: 400 });
     }
 
-    stripeLog.info("Event received", { type: event.type, eventId: event.id });
-
     const alreadyProcessed = await ctx.runQuery(internal.webhook._isProcessed, {
-      eventId: event.id,
-      source: "stripe",
+      eventId: svixId,
+      source: "autumn",
     });
     if (alreadyProcessed) {
-      stripeLog.info("Event already processed, skipping", { eventId: event.id });
+      autumnLog.info("Event already processed, skipping", { svixId });
       return new Response("Already processed", { status: 200 });
     }
 
     try {
-      await handleWebhookEvent(ctx, event);
+      const payload = JSON.parse(rawPayload) as AutumnWebhookEvent;
+      autumnLog.info("Event received", {
+        type: payload.type,
+        scenario: payload.data?.scenario,
+        svixId,
+      });
+
+      await handleAutumnWebhookEvent(ctx, payload);
 
       await ctx.runMutation(internal.webhook._markProcessed, {
-        eventId: event.id,
-        source: "stripe",
+        eventId: svixId,
+        source: "autumn",
       });
     } catch (error) {
-      stripeLog.error("Error handling event", { type: event.type, error: String(error) });
-      return new Response("Error processing webhook", { status: 500 });
+      autumnLog.error("Error handling webhook", { error: String(error) });
+      return new Response("Webhook handler error", { status: 500 });
     }
 
-    return new Response("OK", { status: 200 });
+    return new Response(null, { status: 200 });
   }),
 });
 
@@ -123,7 +129,7 @@ http.route({
       return new Response("Server configuration error", { status: 500 });
     }
 
-    const isValid = await verifyResendSignature(
+    const isValid = await verifySvixSignature(
       rawPayload,
       {
         "svix-id": svixId,
