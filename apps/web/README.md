@@ -19,29 +19,29 @@ Pages are organized into `(protected)` and `(public)` route groups. Protected pa
 
 **Protected** (require auth):
 
-| Route | Description |
-|-------|-------------|
-| `/dashboard` | Projects, API keys, activity |
-| `/dashboard/settings` | Account settings |
-| `/onboarding` | Post-signup flow |
-| `/oauth/authorize` | CLI device code authorization |
+| Route                 | Description                   |
+| --------------------- | ----------------------------- |
+| `/dashboard`          | Projects, API keys, activity  |
+| `/dashboard/settings` | Account settings              |
+| `/onboarding`         | Post-signup flow              |
+| `/oauth/authorize`    | CLI device code authorization |
 
 **Public** (no auth required):
 
-| Route | Description |
-|-------|-------------|
-| `/` | Landing page |
-| `/login` | Sign in (Google, GitHub) |
-| `/blog` | Blog index |
-| `/blog/[slug]` | Blog post |
-| `/changelog` | Changelog index |
-| `/changelog/[slug]` | Changelog entry |
-| `/subscription/success` | Stripe checkout success |
-| `/subscription/cancel` | Stripe checkout cancel |
-| `/privacy-policy` | Privacy policy |
-| `/terms-of-service` | Terms of service |
-| `/dpa` | Data processing agreement |
-| `/og` | Proxies OG image requests to the standalone OG worker |
+| Route                   | Description                                           |
+| ----------------------- | ----------------------------------------------------- |
+| `/`                     | Landing page                                          |
+| `/login`                | Sign in (Google, GitHub)                              |
+| `/blog`                 | Blog index                                            |
+| `/blog/[slug]`          | Blog post                                             |
+| `/changelog`            | Changelog index                                       |
+| `/changelog/[slug]`     | Changelog entry                                       |
+| `/subscription/success` | Stripe checkout success                               |
+| `/subscription/cancel`  | Stripe checkout cancel                                |
+| `/privacy-policy`       | Privacy policy                                        |
+| `/terms-of-service`     | Terms of service                                      |
+| `/dpa`                  | Data processing agreement                             |
+| `/og`                   | Proxies OG image requests to the standalone OG worker |
 
 RSS feeds available at `/blog/rss.xml` and `/changelog/rss.xml`.
 

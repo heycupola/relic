@@ -1,9 +1,9 @@
 {
   "name": "@repo/ui",
   "version": "0.0.0",
-  "type": "module",
   "private": true,
   "license": "MIT",
+  "type": "module",
   "exports": {
     "./globals.css": "./src/styles/globals.css",
     "./postcss.config": "./postcss.config.mjs",
@@ -12,20 +12,12 @@
     "./hooks/*": "./src/hooks/*.ts"
   },
   "scripts": {
-    "lint": "biome check --write .",
-    "format": "biome format --write .",
+    "lint": "oxlint .",
+    "format": "oxfmt .",
     "generate:component": "turbo gen react-component",
-    "check-types": "tsc --noEmit"
-  },
-  "devDependencies": {
-    "@repo/typescript-config": "*",
-    "@tailwindcss/postcss": "catalog:",
-    "@types/node": "^22.15.3",
-    "@types/react": "19.1.0",
-    "@types/react-dom": "19.1.1",
-    "postcss": "catalog:",
-    "tailwindcss": "catalog:",
-    "typescript": "5.9.2"
+    "check-types": "tsc --noEmit",
+    "lint:fix": "oxlint . --fix",
+    "format:check": "oxfmt --check ."
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -37,5 +29,15 @@
     "react-dom": "catalog:",
     "tailwind-merge": "^3.3.1",
     "tw-animate-css": "catalog:"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "*",
+    "@tailwindcss/postcss": "catalog:",
+    "@types/node": "^22.15.3",
+    "@types/react": "19.1.0",
+    "@types/react-dom": "19.1.1",
+    "postcss": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "5.9.2"
   }
 }

@@ -1,25 +1,18 @@
 {
   "name": "@repo/tui",
-  "module": "index.tsx",
-  "type": "module",
   "private": true,
   "license": "MIT",
+  "type": "module",
+  "module": "index.tsx",
   "scripts": {
     "start": "bun --hot ./index.tsx",
     "dev:tui": "DEV=true bun --hot ./index.tsx",
     "log:watch": "bun run ../../packages/logger/scripts/watch.ts",
-    "lint": "biome check --write .",
-    "format": "biome format --write .",
-    "test": "bun test"
-  },
-  "devDependencies": {
-    "@repo/typescript-config": "*",
-    "@types/bun": "latest",
-    "@types/react": "^19.2.7",
-    "react-devtools-core": "7"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
+    "lint": "oxlint .",
+    "format": "oxfmt .",
+    "test": "bun test",
+    "lint:fix": "oxlint . --fix",
+    "format:check": "oxfmt --check ."
   },
   "dependencies": {
     "@opentui/core": "^0.1.65",
@@ -29,5 +22,14 @@
     "convex": "catalog:",
     "open": "catalog:",
     "react": "catalog:"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "*",
+    "@types/bun": "latest",
+    "@types/react": "^19.2.7",
+    "react-devtools-core": "7"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
   }
 }

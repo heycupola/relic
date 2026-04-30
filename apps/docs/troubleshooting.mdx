@@ -18,6 +18,7 @@ Solutions for common issues you may encounter while using Relic.
     <Tip>
       Session data is stored at `~/.config/relic/session.json`. If the file is corrupted, delete it and log in again.
     </Tip>
+
   </Accordion>
 
   <Accordion title="Invalid JWT error">
@@ -27,6 +28,7 @@ Solutions for common issues you may encounter while using Relic.
     relic logout
     relic login
     ```
+
   </Accordion>
 </AccordionGroup>
 
@@ -45,6 +47,7 @@ Solutions for common issues you may encounter while using Relic.
     ```
 
     The next `relic run` will fetch fresh data from the server.
+
   </Accordion>
 
   <Accordion title="Secrets have outdated values">
@@ -57,6 +60,7 @@ Solutions for common issues you may encounter while using Relic.
     <Note>
       When using API keys (CI/CD mode), caching is disabled and secrets are always fetched fresh.
     </Note>
+
   </Accordion>
 </AccordionGroup>
 
@@ -80,6 +84,7 @@ Solutions for common issues you may encounter while using Relic.
     <Tip>
       If you see `xterm` or `screen`, your terminal may not support the full color range the TUI needs.
     </Tip>
+
   </Accordion>
 
   <Accordion title="TUI won't start or crashes">
@@ -94,6 +99,7 @@ Solutions for common issues you may encounter while using Relic.
     ```bash
     cat ~/.config/relic/logs/debug.log
     ```
+
   </Accordion>
 </AccordionGroup>
 
@@ -108,6 +114,7 @@ When something isn't working, enable debug logs to get more information.
     ```bash
     RELIC_LOG=debug relic run -e development -- npm start
     ```
+
   </Step>
   <Step title="Check the log file">
     Logs are written to `~/.config/relic/logs/`:
@@ -118,6 +125,7 @@ When something isn't working, enable debug logs to get more information.
     | Production | `relic.log` |
 
     Override the log path with `RELIC_LOG_FILE` if needed.
+
   </Step>
   <Step title="Watch logs in real time">
     Tail the log file while running Relic in another terminal:
@@ -125,6 +133,7 @@ When something isn't working, enable debug logs to get more information.
     ```bash
     tail -f ~/.config/relic/logs/debug.log
     ```
+
   </Step>
 </Steps>
 
@@ -132,14 +141,15 @@ When something isn't working, enable debug logs to get more information.
 
 Relic caches data locally to reduce API calls. If you need to reset it:
 
-| What to clear | How |
-|---------------|-----|
-| Project cache | Delete `.relic/cache.db` in your project directory |
-| User key cache | Delete `~/.config/relic/relic.db` |
-| Session and auth | Run `relic logout` |
+| What to clear    | How                                                |
+| ---------------- | -------------------------------------------------- |
+| Project cache    | Delete `.relic/cache.db` in your project directory |
+| User key cache   | Delete `~/.config/relic/relic.db`                  |
+| Session and auth | Run `relic logout`                                 |
 
 <Warning>
-  Clearing the user key cache does not delete your encryption keys from the server. You will not lose access to your secrets.
+  Clearing the user key cache does not delete your encryption keys from the server. You will not
+  lose access to your secrets.
 </Warning>
 
 ## Still stuck?

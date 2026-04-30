@@ -10,18 +10,18 @@ bun install
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `relic` | Launch the TUI (default) |
-| `relic login` | Authenticate via device code flow |
-| `relic logout` | Clear session, cached keys, and password |
-| `relic whoami` | Show current user (name, email, plan) |
-| `relic projects` | List projects with environments and folders |
-| `relic init` | Create `relic.toml` and `.relic/` directory |
-| `relic run` | Run a command with secrets injected |
-| `relic telemetry status` | Show telemetry status |
-| `relic telemetry enable` | Enable telemetry |
-| `relic telemetry disable` | Disable telemetry |
+| Command                   | Description                                 |
+| ------------------------- | ------------------------------------------- |
+| `relic`                   | Launch the TUI (default)                    |
+| `relic login`             | Authenticate via device code flow           |
+| `relic logout`            | Clear session, cached keys, and password    |
+| `relic whoami`            | Show current user (name, email, plan)       |
+| `relic projects`          | List projects with environments and folders |
+| `relic init`              | Create `relic.toml` and `.relic/` directory |
+| `relic run`               | Run a command with secrets injected         |
+| `relic telemetry status`  | Show telemetry status                       |
+| `relic telemetry enable`  | Enable telemetry                            |
+| `relic telemetry disable` | Disable telemetry                           |
 
 ### `relic run`
 
@@ -29,12 +29,12 @@ bun install
 relic run -e <environment> [options] -- <command>
 ```
 
-| Flag | Description |
-|------|-------------|
-| `-e, --environment` | Environment name (required) |
-| `-f, --folder` | Folder name |
-| `-s, --scope` | `client`, `server`, or `shared` |
-| `-p, --project` | Project ID (overrides `relic.toml`) |
+| Flag                | Description                         |
+| ------------------- | ----------------------------------- |
+| `-e, --environment` | Environment name (required)         |
+| `-f, --folder`      | Folder name                         |
+| `-s, --scope`       | `client`, `server`, or `shared`     |
+| `-p, --project`     | Project ID (overrides `relic.toml`) |
 
 ```bash
 relic run -e production -- npm run deploy
@@ -77,12 +77,12 @@ Scope filtering (`--scope`) is applied locally against cached data.
 
 Use API keys instead of interactive login:
 
-| Variable | Description |
-|----------|-------------|
-| `RELIC_API_KEY` | API key for authentication |
-| `RELIC_PASSWORD` | Master password for decryption |
+| Variable           | Description                                  |
+| ------------------ | -------------------------------------------- |
+| `RELIC_API_KEY`    | API key for authentication                   |
+| `RELIC_PASSWORD`   | Master password for decryption               |
 | `RELIC_PROJECT_ID` | Project ID (optional if `relic.toml` exists) |
-| `CONVEX_SITE_URL` | Convex HTTP actions URL |
+| `CONVEX_SITE_URL`  | Convex HTTP actions URL                      |
 
 ### GitHub Actions
 

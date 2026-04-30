@@ -26,6 +26,7 @@ Workflow: `.github/workflows/deploy-web.yml`
 - **Push to main**: build + deploy production
 
 Required GitHub Secrets:
+
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
 

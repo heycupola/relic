@@ -1,18 +1,20 @@
 {
   "name": "@repo/auth",
   "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
   "type": "module",
   "main": "./index.ts",
   "module": "./index.ts",
   "exports": {
     ".": "./index.ts"
   },
-  "private": true,
-  "license": "MIT",
   "scripts": {
-    "lint": "biome check --write .",
-    "format": "biome format --write .",
-    "test": "bun test"
+    "lint": "oxlint .",
+    "format": "oxfmt .",
+    "test": "bun test",
+    "lint:fix": "oxlint . --fix",
+    "format:check": "oxfmt --check ."
   },
   "dependencies": {
     "@repo/backend": "*",
