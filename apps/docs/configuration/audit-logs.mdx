@@ -6,7 +6,9 @@ description: Every action in Relic is logged. See what happened, who did it, and
 Relic keeps a complete audit trail of every action taken across your projects. Audit logs are recorded automatically on the server and cannot be disabled.
 
 <Note>
-  Audit logs are separate from [telemetry](/configuration/telemetry). Telemetry is anonymous usage analytics that can be opted out of. Audit logs are a security feature tied to your account and projects.
+  Audit logs are separate from [telemetry](/configuration/telemetry). Telemetry is anonymous usage
+  analytics that can be opted out of. Audit logs are a security feature tied to your account and
+  projects.
 </Note>
 
 ## Where to View
@@ -23,104 +25,103 @@ Logs can be queried by:
 
 ### Account
 
-| Action | Description |
-|--------|-------------|
-| `user.keys_created` | Encryption keys generated for the first time |
-| `user.password_changed` | Master password changed |
-| `account.deleted` | Account permanently deleted |
-| `onboarding.completed` | Onboarding flow completed |
+| Action                  | Description                                  |
+| ----------------------- | -------------------------------------------- |
+| `user.keys_created`     | Encryption keys generated for the first time |
+| `user.password_changed` | Master password changed                      |
+| `account.deleted`       | Account permanently deleted                  |
+| `onboarding.completed`  | Onboarding flow completed                    |
 
 ### Projects
 
-| Action | Description |
-|--------|-------------|
-| `project.created` | New project created |
-| `project.updated` | Project name or description changed |
-| `project.archived` | Project archived |
-| `project.unarchived` | Project unarchived |
-| `project.key_rotated` | Project encryption key rotated |
+| Action                | Description                         |
+| --------------------- | ----------------------------------- |
+| `project.created`     | New project created                 |
+| `project.updated`     | Project name or description changed |
+| `project.archived`    | Project archived                    |
+| `project.unarchived`  | Project unarchived                  |
+| `project.key_rotated` | Project encryption key rotated      |
 
 ### Environments
 
-| Action | Description |
-|--------|-------------|
-| `environment.created` | New environment created |
+| Action                | Description                                     |
+| --------------------- | ----------------------------------------------- |
+| `environment.created` | New environment created                         |
 | `environment.updated` | Environment name, description, or color changed |
-| `environment.deleted` | Environment deleted |
+| `environment.deleted` | Environment deleted                             |
 
 ### Folders
 
-| Action | Description |
-|--------|-------------|
+| Action           | Description                              |
+| ---------------- | ---------------------------------------- |
 | `folder.created` | New folder created within an environment |
-| `folder.updated` | Folder name or description changed |
-| `folder.deleted` | Folder deleted |
+| `folder.updated` | Folder name or description changed       |
+| `folder.deleted` | Folder deleted                           |
 
 ### Secrets
 
-| Action | Description |
-|--------|-------------|
-| `secret.created` | New secret created |
-| `secret.updated` | Secret value or metadata updated |
-| `secret.deleted` | Secret soft-deleted |
-| `secret.exported` | Secret exported via CLI or API |
-| `secrets.bulk.updated` | Multiple secrets updated at once |
-| `secrets.bulk_deleted` | Multiple secrets deleted at once |
+| Action                  | Description                       |
+| ----------------------- | --------------------------------- |
+| `secret.created`        | New secret created                |
+| `secret.updated`        | Secret value or metadata updated  |
+| `secret.deleted`        | Secret soft-deleted               |
+| `secret.exported`       | Secret exported via CLI or API    |
+| `secrets.bulk.updated`  | Multiple secrets updated at once  |
+| `secrets.bulk_deleted`  | Multiple secrets deleted at once  |
 | `secrets.bulk_exported` | Multiple secrets exported at once |
 
 <Note>
-  The naming inconsistency between `secrets.bulk.updated` (dot) and `secrets.bulk_deleted` (underscore) reflects the current API. This will be aligned in a future release.
+  The naming inconsistency between `secrets.bulk.updated` (dot) and `secrets.bulk_deleted`
+  (underscore) reflects the current API. This will be aligned in a future release.
 </Note>
 
 ### Sharing & Collaboration
 
-| Action | Description |
-|--------|-------------|
-| `share.added` | Collaborator added to a project |
-| `share.revoked` | Collaborator access revoked |
-| `share.key_updated` | Collaborator's encrypted project key updated |
-| `keys.rotated` | Full key rotation after collaborator revocation |
+| Action              | Description                                     |
+| ------------------- | ----------------------------------------------- |
+| `share.added`       | Collaborator added to a project                 |
+| `share.revoked`     | Collaborator access revoked                     |
+| `share.key_updated` | Collaborator's encrypted project key updated    |
+| `keys.rotated`      | Full key rotation after collaborator revocation |
 
 ### API Keys
 
-| Action | Description |
-|--------|-------------|
+| Action           | Description         |
+| ---------------- | ------------------- |
 | `apikey.created` | New API key created |
-| `apikey.revoked` | API key revoked |
+| `apikey.revoked` | API key revoked     |
 
 ## Metadata
 
 Each log entry includes contextual metadata depending on the action type:
 
-| Field | Included with |
-|-------|---------------|
-| `key` / `newKey` | Secret create, update, rename |
-| `folderName` | Folder actions |
-| `environmentName` | Environment actions |
-| `exportCount` / `exportFormat` | Export actions (`relic`, `env`, `json`) |
-| `deleteCount` | Bulk delete |
-| `affectedValueCount` | Bulk update |
-| `sharedUserEmail` | Collaborator add/revoke |
-| `oldKeyVersion` / `newKeyVersion` | Key rotation |
-| `secretsReEncrypted` / `sharesUpdated` | Key rotation stats |
-| `reason` | Key rotation, collaborator revocation |
-| `apiKeyPrefix` | API key create/revoke |
+| Field                                  | Included with                           |
+| -------------------------------------- | --------------------------------------- |
+| `key` / `newKey`                       | Secret create, update, rename           |
+| `folderName`                           | Folder actions                          |
+| `environmentName`                      | Environment actions                     |
+| `exportCount` / `exportFormat`         | Export actions (`relic`, `env`, `json`) |
+| `deleteCount`                          | Bulk delete                             |
+| `affectedValueCount`                   | Bulk update                             |
+| `sharedUserEmail`                      | Collaborator add/revoke                 |
+| `oldKeyVersion` / `newKeyVersion`      | Key rotation                            |
+| `secretsReEncrypted` / `sharesUpdated` | Key rotation stats                      |
+| `reason`                               | Key rotation, collaborator revocation   |
+| `apiKeyPrefix`                         | API key create/revoke                   |
 
 ## Log Entry Structure
 
 Every audit log entry contains:
 
-| Field | Description |
-|-------|-------------|
-| `action` | The action type (see tables above) |
-| `userId` | The user who performed the action |
-| `projectId` | The associated project (if applicable) |
-| `projectName` | Project name at the time of the action |
-| `environmentId` | The associated environment (if applicable) |
+| Field             | Description                                |
+| ----------------- | ------------------------------------------ |
+| `action`          | The action type (see tables above)         |
+| `userId`          | The user who performed the action          |
+| `projectId`       | The associated project (if applicable)     |
+| `projectName`     | Project name at the time of the action     |
+| `environmentId`   | The associated environment (if applicable) |
 | `environmentName` | Environment name at the time of the action |
-| `metadata` | Action-specific context (see above) |
-| `timestamp` | Unix timestamp of when the action occurred |
+| `metadata`        | Action-specific context (see above)        |
+| `timestamp`       | Unix timestamp of when the action occurred |
 
-<Warning>
-  Audit logs cannot be deleted or modified. They are append-only by design.
-</Warning>
+<Warning>Audit logs cannot be deleted or modified. They are append-only by design.</Warning>

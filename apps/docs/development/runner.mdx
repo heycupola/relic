@@ -14,54 +14,60 @@ The runner is written in Rust (compiled as a C-compatible dynamic library) becau
     The CLI decrypts secrets and serializes them as JSON along with the command to run.
   </Step>
   <Step title="FFI call">
-    The CLI calls the runner's `run_with_secrets` function via Bun's `dlopen` FFI. Two null-terminated C strings are passed: the command and the secrets.
+    The CLI calls the runner's `run_with_secrets` function via Bun's `dlopen` FFI. Two
+    null-terminated C strings are passed: the command and the secrets.
   </Step>
   <Step title="Environment setup">
-    On Unix, the runner clears the child process environment entirely, then re-adds only essential system variables (`PATH`, `HOME`, `USER`, `SHELL`, `TERM`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR`, `TZ`). Secrets are injected on top.
+    On Unix, the runner clears the child process environment entirely, then re-adds only essential
+    system variables (`PATH`, `HOME`, `USER`, `SHELL`, `TERM`, `LANG`, `LC_ALL`, `LC_CTYPE`,
+    `TMPDIR`, `TZ`). Secrets are injected on top.
   </Step>
   <Step title="Process spawn">
-    The child process is spawned with the clean environment. The runner forwards SIGTERM and SIGINT so your process can shut down gracefully.
+    The child process is spawned with the clean environment. The runner forwards SIGTERM and SIGINT
+    so your process can shut down gracefully.
   </Step>
   <Step title="Cleanup">
-    After the child exits, secret values are zeroed in memory (via `Zeroizing`). The TypeScript side also zeroes its buffers.
+    After the child exits, secret values are zeroed in memory (via `Zeroizing`). The TypeScript side
+    also zeroes its buffers.
   </Step>
 </Steps>
 
 ## Security Measures
 
-| Protection | How |
-|------------|-----|
-| Memory zeroing | Secret values wrapped in `Zeroizing<String>`, wiped on drop |
-| Core dump prevention | `RLIMIT_CORE` set to zero on Unix |
-| Environment isolation | `env_clear()` with system variable allowlist (Unix) |
-| Signal forwarding | SIGTERM/SIGINT relayed to child via `AtomicU32` PID |
-| Key validation | Rejects empty keys, null bytes, and `=` in key names |
-| Buffer clearing | TypeScript buffers zeroed in `finally` block after FFI call |
+| Protection            | How                                                         |
+| --------------------- | ----------------------------------------------------------- |
+| Memory zeroing        | Secret values wrapped in `Zeroizing<String>`, wiped on drop |
+| Core dump prevention  | `RLIMIT_CORE` set to zero on Unix                           |
+| Environment isolation | `env_clear()` with system variable allowlist (Unix)         |
+| Signal forwarding     | SIGTERM/SIGINT relayed to child via `AtomicU32` PID         |
+| Key validation        | Rejects empty keys, null bytes, and `=` in key names        |
+| Buffer clearing       | TypeScript buffers zeroed in `finally` block after FFI call |
 
 ## Platform Support
 
-| Feature | Unix | Windows |
-|---------|------|---------|
+| Feature              | Unix            | Windows           |
+| -------------------- | --------------- | ----------------- |
 | Environment clearing | Yes (allowlist) | No (full inherit) |
-| Core dump prevention | Yes | No |
-| Signal forwarding | Yes | No |
-| Secret injection | Yes | Yes |
-| Memory zeroing | Yes | Yes |
+| Core dump prevention | Yes             | No                |
+| Signal forwarding    | Yes             | No                |
+| Secret injection     | Yes             | Yes               |
+| Memory zeroing       | Yes             | Yes               |
 
 <Note>
-  Windows support is limited. The child process inherits the full parent environment instead of starting clean. Full Windows support with an environment allowlist is planned.
+  Windows support is limited. The child process inherits the full parent environment instead of
+  starting clean. Full Windows support with an environment allowlist is planned.
 </Note>
 
 ## Prebuilt Binaries
 
 The runner is compiled as a C-compatible dynamic library (`cdylib`):
 
-| Platform | Binary |
-|----------|--------|
+| Platform              | Binary                  |
+| --------------------- | ----------------------- |
 | macOS (Apple Silicon) | `librelic_runner.dylib` |
-| macOS (Intel) | `librelic_runner.dylib` |
-| Linux (x64) | `librelic_runner.so` |
-| Windows (x64) | `relic_runner.dll` |
+| macOS (Intel)         | `librelic_runner.dylib` |
+| Linux (x64)           | `librelic_runner.so`    |
+| Windows (x64)         | `relic_runner.dll`      |
 
 Prebuilt binaries ship in `apps/cli/prebuilds/<platform>/`. In development, the CLI loads from `packages/runner/target/release/`.
 

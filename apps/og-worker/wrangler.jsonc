@@ -3,5 +3,5 @@
   "name": "relic-og",
   "main": "src/index.tsx",
   "compatibility_date": "2026-03-20",
-  "workers_dev": false
+  "workers_dev": false,
 }

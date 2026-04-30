@@ -11,13 +11,13 @@ Terminal UI for Relic. Built with OpenTUI and React. Provides interactive secret
 
 ## Screens
 
-| Screen | Description |
-|--------|-------------|
-| Login | Device code OAuth (Google, GitHub) |
-| Password Setup | Master password creation and key generation |
-| Password Unlock | Master password verification on return |
-| Home | Project list with create, rename, archive |
-| Project | Environment, folder, and secret operations |
+| Screen          | Description                                 |
+| --------------- | ------------------------------------------- |
+| Login           | Device code OAuth (Google, GitHub)          |
+| Password Setup  | Master password creation and key generation |
+| Password Unlock | Master password verification on return      |
+| Home            | Project list with create, rename, archive   |
+| Project         | Environment, folder, and secret operations  |
 
 ## Features
 
@@ -32,13 +32,13 @@ Terminal UI for Relic. Built with OpenTUI and React. Provides interactive secret
 
 ## Navigation
 
-| Key | Action |
-|-----|--------|
-| `j` / `k` or arrows | Move up / down |
-| `Enter` | Select |
-| `Esc` | Go back |
-| `g` | Open dashboard |
-| `?` | Command palette |
+| Key                 | Action          |
+| ------------------- | --------------- |
+| `j` / `k` or arrows | Move up / down  |
+| `Enter`             | Select          |
+| `Esc`               | Go back         |
+| `g`                 | Open dashboard  |
+| `?`                 | Command palette |
 
 ## Structure
 

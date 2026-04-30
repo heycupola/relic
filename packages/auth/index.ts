@@ -1,11 +1,7 @@
 export { PublicApi, publicApi } from "./src/api";
 export { CONVEX_SITE_URL, CONVEX_URL, SITE_URL } from "./src/constants";
 export { DeviceAuthService, deviceAuth } from "./src/deviceAuth";
-export {
-  AuthenticationError,
-  InvalidJwtError,
-  SessionExpiredError,
-} from "./src/errors";
+export { AuthenticationError, InvalidJwtError, SessionExpiredError } from "./src/errors";
 export {
   ensureValidJwt,
   fetchJwtToken,

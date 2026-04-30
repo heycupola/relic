@@ -24,64 +24,64 @@ Enums: `ApiKeyScope`, `EmailKind`, `ErrorSeverity`, `SecretValueType`.
 
 ## Schema
 
-| Table | Description |
-|-------|-------------|
-| `project` | Projects with encrypted key, archive status, owner |
-| `projectShare` | Project sharing (encrypted key per collaborator) |
-| `environment` | Environments per project (dev, staging, production) |
-| `folder` | Folders within environments |
-| `secret` | Encrypted secrets with scope, tags, soft delete |
-| `keyRotation` | Key rotation audit records |
-| `actionLog` | Full audit trail for all actions |
-| `apiKey` | Hashed API keys with scopes and expiration |
-| `onboarding` | User onboarding data (source, team size) |
-| `deletedAccount` | Anonymized records of deleted accounts |
+| Table            | Description                                         |
+| ---------------- | --------------------------------------------------- |
+| `project`        | Projects with encrypted key, archive status, owner  |
+| `projectShare`   | Project sharing (encrypted key per collaborator)    |
+| `environment`    | Environments per project (dev, staging, production) |
+| `folder`         | Folders within environments                         |
+| `secret`         | Encrypted secrets with scope, tags, soft delete     |
+| `keyRotation`    | Key rotation audit records                          |
+| `actionLog`      | Full audit trail for all actions                    |
+| `apiKey`         | Hashed API keys with scopes and expiration          |
+| `onboarding`     | User onboarding data (source, team size)            |
+| `deletedAccount` | Anonymized records of deleted accounts              |
 
 ## HTTP Routes
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/secrets/export` | Export secrets (API key auth) |
-| GET | `/api/user/keys` | Get user crypto keys (API key auth) |
-| POST | `/webhook/autumn` | Autumn billing webhook (Svix signature) |
-| POST | `/webhook/resend` | Resend email webhook (Svix signature) |
-| GET | `/health` | Health check |
+| Method | Path                  | Description                             |
+| ------ | --------------------- | --------------------------------------- |
+| POST   | `/api/secrets/export` | Export secrets (API key auth)           |
+| GET    | `/api/user/keys`      | Get user crypto keys (API key auth)     |
+| POST   | `/webhook/autumn`     | Autumn billing webhook (Svix signature) |
+| POST   | `/webhook/resend`     | Resend email webhook (Svix signature)   |
+| GET    | `/health`             | Health check                            |
 
 Auth routes are registered by Better Auth.
 
 ## Server Functions
 
-| Module | Scope |
-|--------|-------|
-| `user.ts` | User CRUD, plan sync, account deletion, email handling |
-| `userKey.ts` | Encryption key storage and rotation |
-| `project.ts` | Project CRUD, archive/unarchive, restriction checks |
-| `projectShare.ts` | Collaborator sharing, revocation, key rotation |
-| `environment.ts` | Environment CRUD, reordering |
-| `folder.ts` | Folder CRUD |
-| `secret.ts` | Secret CRUD, history, soft delete/restore, bulk operations, export |
-| `apiKey.ts` | API key creation, revocation, validation |
-| `actionLog.ts` | Audit log queries (by resource, by user) |
-| `deviceAuth.ts` | Device code OAuth flow (code generation, polling, approval) |
-| `autumn.ts` | Usage tracking and plan checks |
-| `autumnWebhook.ts` | Billing lifecycle webhook handling |
-| `resend.ts` | Email sending (React Email templates) |
-| `crons.ts` | Daily plan status checks (03:00 UTC) |
-| `rateLimiter.ts` | Rate limit configuration |
+| Module             | Scope                                                              |
+| ------------------ | ------------------------------------------------------------------ |
+| `user.ts`          | User CRUD, plan sync, account deletion, email handling             |
+| `userKey.ts`       | Encryption key storage and rotation                                |
+| `project.ts`       | Project CRUD, archive/unarchive, restriction checks                |
+| `projectShare.ts`  | Collaborator sharing, revocation, key rotation                     |
+| `environment.ts`   | Environment CRUD, reordering                                       |
+| `folder.ts`        | Folder CRUD                                                        |
+| `secret.ts`        | Secret CRUD, history, soft delete/restore, bulk operations, export |
+| `apiKey.ts`        | API key creation, revocation, validation                           |
+| `actionLog.ts`     | Audit log queries (by resource, by user)                           |
+| `deviceAuth.ts`    | Device code OAuth flow (code generation, polling, approval)        |
+| `autumn.ts`        | Usage tracking and plan checks                                     |
+| `autumnWebhook.ts` | Billing lifecycle webhook handling                                 |
+| `resend.ts`        | Email sending (React Email templates)                              |
+| `crons.ts`         | Daily plan status checks (03:00 UTC)                               |
+| `rateLimiter.ts`   | Rate limit configuration                                           |
 
 ## Lib
 
-| Module | Description |
-|--------|-------------|
-| `middleware.ts` | Auth middleware for queries/mutations |
-| `access.ts` | Permission and ownership checks |
-| `types.ts` | Shared types, enums, constants |
-| `errors.ts` | Error formatting and HTTP error responses |
-| `crypto.ts` | Server-side hashing (API key hashing) |
-| `helpers.ts` | General utilities |
-| `rateLimit.ts` | Rate limit definitions |
-| `resend.ts` | Resend signature verification |
-| `logger.ts` | Structured logging |
+| Module          | Description                               |
+| --------------- | ----------------------------------------- |
+| `middleware.ts` | Auth middleware for queries/mutations     |
+| `access.ts`     | Permission and ownership checks           |
+| `types.ts`      | Shared types, enums, constants            |
+| `errors.ts`     | Error formatting and HTTP error responses |
+| `crypto.ts`     | Server-side hashing (API key hashing)     |
+| `helpers.ts`    | General utilities                         |
+| `rateLimit.ts`  | Rate limit definitions                    |
+| `resend.ts`     | Resend signature verification             |
+| `logger.ts`     | Structured logging                        |
 
 ## Access Control
 
@@ -95,9 +95,9 @@ All handlers enforce checks in this order:
 ## Plan Limits
 
 | Plan | Project Limit |
-|------|---------------|
-| Free | 2 |
-| Pro | 10 |
+| ---- | ------------- |
+| Free | 2             |
+| Pro  | 10            |
 
 Downgrade triggers a 7-day grace period. Newest projects remain accessible. Daily cron syncs plan status.
 

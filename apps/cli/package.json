@@ -1,48 +1,44 @@
 {
   "name": "@repo/cli",
-  "private": true,
   "version": "0.9.2",
+  "private": true,
   "description": "The Relic CLI for managing and sharing secrets. Encrypted on your device, never exposed to anyone else. Not even us.",
   "keywords": [
     "cli",
     "tui"
   ],
+  "license": "MIT",
+  "author": "Can Vardar",
   "repository": {
     "type": "git",
     "url": "https://github.com/heycupola/relic.git",
     "directory": "apps/cli"
   },
-  "author": "Can Vardar",
-  "license": "MIT",
-  "module": "index.ts",
-  "type": "module",
   "bin": {
     "relic": "dist/cli.js"
-  },
-  "scripts": {
-    "build": "bun run scripts/build.ts",
-    "build:runner": "cd ../../packages/runner && cargo build --release",
-    "prepublishOnly": "bun run build",
-    "dev:cli": "DEV=true bun run build:runner && bun run index.ts",
-    "log:watch": "bun run ../../packages/logger/scripts/watch.ts",
-    "lint": "biome check --write .",
-    "format": "biome format --write .",
-    "check-types": "tsc --noEmit",
-    "test": "bun test"
   },
   "files": [
     "dist/**",
     "prebuilds/**",
     "README.md"
   ],
+  "type": "module",
+  "module": "index.ts",
+  "scripts": {
+    "build": "bun run scripts/build.ts",
+    "build:runner": "cd ../../packages/runner && cargo build --release",
+    "prepublishOnly": "bun run build",
+    "dev:cli": "DEV=true bun run build:runner && bun run index.ts",
+    "log:watch": "bun run ../../packages/logger/scripts/watch.ts",
+    "lint": "oxlint .",
+    "format": "oxfmt .",
+    "check-types": "tsc --noEmit",
+    "test": "bun test",
+    "lint:fix": "oxlint . --fix",
+    "format:check": "oxfmt --check ."
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0"
-  },
-  "optionalDependencies": {
-    "@opentui/core-darwin-arm64": "0.1.88",
-    "@opentui/core-darwin-x64": "0.1.88",
-    "@opentui/core-linux-x64": "0.1.88",
-    "@opentui/core-win32-x64": "0.1.88"
   },
   "devDependencies": {
     "@clack/prompts": "^0.11.0",
@@ -64,6 +60,12 @@
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "optionalDependencies": {
+    "@opentui/core-darwin-arm64": "0.1.88",
+    "@opentui/core-darwin-x64": "0.1.88",
+    "@opentui/core-linux-x64": "0.1.88",
+    "@opentui/core-win32-x64": "0.1.88"
   },
   "engines": {
     "node": ">=18"

@@ -168,9 +168,8 @@ export async function serviceAccountCreate(options: {
     spinner.text = "Generating service account keys...";
     const { createServiceAccountKeys, unwrapProjectKey, wrapAESKeyWithRSA, importPublicKey } =
       await import("@repo/crypto");
-    const { generateServiceToken, extractServiceTokenPrefix, hashKey } = await import(
-      "@repo/backend/convex/lib/crypto"
-    );
+    const { generateServiceToken, extractServiceTokenPrefix, hashKey } =
+      await import("@repo/backend/convex/lib/crypto");
 
     const rawToken = generateServiceToken();
     const hashedToken = await hashKey(rawToken);

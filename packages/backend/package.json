@@ -1,14 +1,14 @@
 {
   "name": "@repo/backend",
-  "module": "index.ts",
-  "types": "index.d.ts",
-  "type": "module",
   "private": true,
   "license": "MIT",
+  "type": "module",
+  "module": "index.ts",
+  "types": "index.d.ts",
   "scripts": {
     "dev": "bunx convex dev",
-    "lint": "biome check --write .",
-    "format": "biome format --write .",
+    "lint": "oxlint .",
+    "format": "oxfmt .",
     "check-types": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -16,21 +16,9 @@
     "test:coverage": "vitest --coverage",
     "betterAuth:generate-schema": "cd ./convex/betterAuth && better-auth generate -y --output generatedSchema.ts",
     "deploy": "bunx convex deploy",
-    "deploy:dry-run": "bunx convex deploy --dry-run"
-  },
-  "devDependencies": {
-    "@better-auth/cli": "catalog:",
-    "@edge-runtime/vm": "^5.0.0",
-    "@repo/typescript-config": "*",
-    "@types/bun": "latest",
-    "@types/react": "^19.2.7",
-    "@types/react-dom": "^19.2.3",
-    "@vitest/coverage-v8": "4.0.16",
-    "convex-test": "^0.0.38",
-    "vitest": "^4.0.16"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
+    "deploy:dry-run": "bunx convex deploy --dry-run",
+    "lint:fix": "oxlint . --fix",
+    "format:check": "oxfmt --check ."
   },
   "dependencies": {
     "@convex-dev/better-auth": "catalog:",
@@ -47,5 +35,19 @@
     "react-dom": "catalog:",
     "react-email": "^5.1.0",
     "resend": "^6.6.0"
+  },
+  "devDependencies": {
+    "@better-auth/cli": "catalog:",
+    "@edge-runtime/vm": "^5.0.0",
+    "@repo/typescript-config": "*",
+    "@types/bun": "latest",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitest/coverage-v8": "4.0.16",
+    "convex-test": "^0.0.38",
+    "vitest": "^4.0.16"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
   }
 }
