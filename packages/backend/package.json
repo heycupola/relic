@@ -16,8 +16,7 @@
     "test:coverage": "vitest --coverage",
     "betterAuth:generate-schema": "cd ./convex/betterAuth && better-auth generate -y --output generatedSchema.ts",
     "deploy": "bunx convex deploy",
-    "deploy:dry-run": "bunx convex deploy --dry-run",
-    "stripe:listen-local": "stripe listen --forward-to http://127.0.0.1:3211/webhook/stripe"
+    "deploy:dry-run": "bunx convex deploy --dry-run"
   },
   "devDependencies": {
     "@better-auth/cli": "catalog:",
