@@ -4,6 +4,10 @@
 //! command and secrets as JSON, injects them as environment variables into
 //! a child process, and returns its exit code. All network operations
 //! (auth, fetching secrets) are handled by the TypeScript CLI.
+//!
+//! On Unix and Windows, the child is spawned after clearing the inherited environment;
+//! only a small allowlist of parent variables (path, locale, standard user directories)
+//! is re-applied so unrelated secrets in the parent environment are not inherited.
 
 use std::{
     collections::HashMap, ffi::CStr, os::raw::c_char, process::Command, sync::atomic::AtomicU32,
@@ -38,6 +42,33 @@ fn disable_core_dumps() {
 #[cfg(unix)]
 const INHERITED_ENV_KEYS: &[&str] = &[
     "PATH", "HOME", "USER", "SHELL", "TERM", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR", "TZ",
+];
+
+/// Windows counterpart: only infrastructure/locale paths so the child can resolve executables
+/// and user dirs without inheriting the full parent environment (which may contain secrets).
+#[cfg(windows)]
+const INHERITED_ENV_KEYS: &[&str] = &[
+    "PATH",
+    "PATHEXT",
+    "COMSPEC",
+    "SYSTEMROOT",
+    "WINDIR",
+    "USERPROFILE",
+    "USERNAME",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "PROGRAMFILES",
+    "PROGRAMFILES(X86)",
+    "PROGRAMW6432",
+    "TEMP",
+    "TMP",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "TZ",
+    "HOME",
 ];
 
 /// Run a command with secrets injected as environment variables.
@@ -111,9 +142,17 @@ fn run_with_secrets_impl(
 
     #[cfg(unix)]
     {
-        // NOTE: On Windows, env_clear is skipped so the child inherits the full
-        // parent environment. A Windows-specific allowlist should be added when
-        // Windows support is implemented.
+        cmd.env_clear();
+
+        for key in INHERITED_ENV_KEYS {
+            if let Ok(val) = std::env::var(key) {
+                cmd.env(key, val);
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    {
         cmd.env_clear();
 
         for key in INHERITED_ENV_KEYS {
