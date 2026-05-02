@@ -1,5 +1,12 @@
 # @repo/cli
 
+## 0.9.3
+
+### Patch Changes
+
+- 9c05d01: Isolate dev and production data paths: when DEV=true, all config/session/password/cache files use ~/.config/relic-dev/ and keychain service uses com.relic.tui.dev
+- 9c05d01: Fix editor not deleting secrets that were removed before saving
+
 ## 0.9.2
 
 ### Patch Changes
@@ -39,6 +46,7 @@
 - 08bf115: Add built-in MCP server for AI assistants. Run `relic mcp` to start a stdio-based Model Context Protocol server that integrates with Cursor, Claude Code, Codex, Zed, OpenCode, and Claude Desktop.
 
   Available tools:
+
   - `whoami` — show the authenticated user
   - `list-projects` — list all projects with environments and folders
   - `list-secrets` — list secret key names, scopes, and types (never values)
