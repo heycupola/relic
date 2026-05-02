@@ -20,6 +20,7 @@
     "**/.turbo",
     "**/rust/target",
     "**/rust/prebuilt",
-    "**/_generated"
+    "**/_generated",
+    "**/*.mdx"
   ]
 }

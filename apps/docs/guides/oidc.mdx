@@ -57,12 +57,25 @@ Neither credential is sufficient alone — the service token handles decryption,
 
 <Steps>
   <Step title="Create a service account with OIDC">
-    ```bash relic service-account create \ --name "gitlab-deploy" \ --gitlab your-group/your-project
-    \ --branch main ```
+    ```bash
+    relic service-account create \
+      --name "gitlab-deploy" \
+      --gitlab your-group/your-project \
+      --branch main
+    ```
   </Step>
   <Step title="Add id_tokens to your CI config">
-    ```yaml deploy: stage: deploy id_tokens: RELIC_OIDC_TOKEN: aud: relic script: - relic run -e
-    production -- npm run deploy variables: RELIC_SERVICE_TOKEN: $RELIC_SERVICE_TOKEN ```
+    ```yaml
+    deploy:
+      stage: deploy
+      id_tokens:
+        RELIC_OIDC_TOKEN:
+          aud: relic
+      script:
+        - relic run -e production -- npm run deploy
+      variables:
+        RELIC_SERVICE_TOKEN: $RELIC_SERVICE_TOKEN
+    ```
   </Step>
 </Steps>
 
