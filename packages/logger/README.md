@@ -21,33 +21,33 @@ trackError("cli", error, { action: "decrypt_secret" });
 
 ### Core
 
-| Export | Description |
-|--------|-------------|
-| `initLogger()` | One-time setup: loads config, sets up transports, registers shutdown hook |
-| `createLogger(tag)` | Returns a tagged Consola logger instance |
+| Export              | Description                                                               |
+| ------------------- | ------------------------------------------------------------------------- |
+| `initLogger()`      | One-time setup: loads config, sets up transports, registers shutdown hook |
+| `createLogger(tag)` | Returns a tagged Consola logger instance                                  |
 
 ### Telemetry
 
-| Export | Description |
-|--------|-------------|
-| `trackEvent(event, properties?)` | Send event to PostHog and log it |
+| Export                                | Description                                        |
+| ------------------------------------- | -------------------------------------------------- |
+| `trackEvent(event, properties?)`      | Send event to PostHog and log it                   |
 | `trackError(source, error, context?)` | Send `error_occurred` event with message and stack |
-| `flushTelemetry()` | Flush and shut down PostHog client |
+| `flushTelemetry()`                    | Flush and shut down PostHog client                 |
 
 ### Telemetry Preferences
 
-| Export | Description |
-|--------|-------------|
-| `saveTelemetryPreference(enabled)` | Write preference to `telemetry.json` |
-| `getTelemetryPreference()` | Read stored preference (`null` on first run) |
-| `isFirstRun()` | `true` when no telemetry preference file exists |
+| Export                             | Description                                     |
+| ---------------------------------- | ----------------------------------------------- |
+| `saveTelemetryPreference(enabled)` | Write preference to `telemetry.json`            |
+| `getTelemetryPreference()`         | Read stored preference (`null` on first run)    |
+| `isFirstRun()`                     | `true` when no telemetry preference file exists |
 
 ### Paths
 
-| Export | Description |
-|--------|-------------|
-| `getConfigDir()` | Config directory (`~/.config/relic/`, or `~/.config/relic-dev/` in dev mode) |
-| `getLogsDir()` | Logs directory (`~/.config/relic/logs/`, or `~/.config/relic-dev/logs/` in dev mode) |
+| Export           | Description                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| `getConfigDir()` | Config directory (`~/.config/relic/`, or `~/.config/relic-dev/` in dev mode)         |
+| `getLogsDir()`   | Logs directory (`~/.config/relic/logs/`, or `~/.config/relic-dev/logs/` in dev mode) |
 
 ## Logging
 
@@ -59,10 +59,10 @@ Built on [Consola](https://github.com/unjs/consola).
 
 ### Log Files
 
-| Mode | File |
-|------|------|
-| Dev | `~/.config/relic-dev/logs/debug.log` |
-| Prod | `~/.config/relic/logs/relic.log` |
+| Mode | File                                 |
+| ---- | ------------------------------------ |
+| Dev  | `~/.config/relic-dev/logs/debug.log` |
+| Prod | `~/.config/relic/logs/relic.log`     |
 
 Override with `RELIC_LOG_FILE`.
 
@@ -85,15 +85,15 @@ Preference is stored in `~/.config/relic/telemetry.json` (or `~/.config/relic-de
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `RELIC_LOG` | Log level (`debug`, `info`, `warn`, `error`, `off`) | Dev: `info`, Prod: `warn` |
-| `RELIC_LOG_FILE` | Log file path | See log files table |
-| `RELIC_TELEMETRY` | Set to `"false"` to disable | Enabled |
-| `RELIC_POSTHOG_KEY` | PostHog API key | Empty (disables telemetry) |
-| `RELIC_TELEMETRY_URL` | PostHog proxy host | `https://telemetry.relic.so` |
-| `DEV` | Dev mode | `"true"` enables |
-| `CI` | CI mode | Disables telemetry and console output |
+| Variable              | Description                                         | Default                               |
+| --------------------- | --------------------------------------------------- | ------------------------------------- |
+| `RELIC_LOG`           | Log level (`debug`, `info`, `warn`, `error`, `off`) | Dev: `info`, Prod: `warn`             |
+| `RELIC_LOG_FILE`      | Log file path                                       | See log files table                   |
+| `RELIC_TELEMETRY`     | Set to `"false"` to disable                         | Enabled                               |
+| `RELIC_POSTHOG_KEY`   | PostHog API key                                     | Empty (disables telemetry)            |
+| `RELIC_TELEMETRY_URL` | PostHog proxy host                                  | `https://telemetry.relic.so`          |
+| `DEV`                 | Dev mode                                            | `"true"` enables                      |
+| `CI`                  | CI mode                                             | Disables telemetry and console output |
 
 ## Development
 

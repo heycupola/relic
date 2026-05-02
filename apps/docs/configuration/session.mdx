@@ -12,7 +12,8 @@ Relic uses the [OAuth 2.0 Device Authorization Grant](https://datatracker.ietf.o
     When you run `relic login` or `relic`, the CLI requests a one-time device code from the server.
   </Step>
   <Step title="Approve in browser">
-    A browser window opens with the verification URL. You sign in with your Google or GitHub account and approve the device code shown on screen.
+    A browser window opens with the verification URL. You sign in with your Google or GitHub account
+    and approve the device code shown on screen.
   </Step>
   <Step title="Session created">
     Once approved, a session token is returned and stored locally. You are now authenticated.
@@ -25,22 +26,22 @@ No passwords are sent to the server during login. The server issues a session to
 
 A session represents your authenticated state on a device. It contains:
 
-| Field | Description |
-|-------|-------------|
-| `sessionToken` | Token used to authenticate API requests |
-| `tokenType` | Token type (e.g. `bearer`) |
-| `expiresAt` | When the session expires (Unix timestamp) |
-| `jwtToken` | Short-lived JWT for Convex queries (auto-refreshed) |
-| `jwtExpiresAt` | When the JWT expires |
+| Field          | Description                                         |
+| -------------- | --------------------------------------------------- |
+| `sessionToken` | Token used to authenticate API requests             |
+| `tokenType`    | Token type (e.g. `bearer`)                          |
+| `expiresAt`    | When the session expires (Unix timestamp)           |
+| `jwtToken`     | Short-lived JWT for Convex queries (auto-refreshed) |
+| `jwtExpiresAt` | When the JWT expires                                |
 
 ### Storage
 
 The session is stored as a JSON file:
 
-| Platform | Path |
-|----------|------|
+| Platform      | Path                           |
+| ------------- | ------------------------------ |
 | macOS / Linux | `~/.config/relic/session.json` |
-| Windows | `%APPDATA%\relic\session.json` |
+| Windows       | `%APPDATA%\relic\session.json` |
 
 The config directory is created with `0700` permissions (owner-only access).
 

@@ -16,7 +16,8 @@ When you share a project:
 The collaborator can now decrypt the project key with their own private key and access all secrets in the project.
 
 <Note>
-  Both users must have completed the password setup (encryption keys generated) before sharing is possible.
+  Both users must have completed the password setup (encryption keys generated) before sharing is
+  possible.
 </Note>
 
 ## Adding a Collaborator
@@ -31,13 +32,13 @@ Open the TUI and navigate to any environment in the project:
 
 The collaborator must already have a Relic account with encryption keys set up. They will receive an email notification.
 
-| Key | Action |
-|-----|--------|
-| `c` | Open collaborator modal |
-| `n` | Add collaborator |
+| Key       | Action                     |
+| --------- | -------------------------- |
+| `c`       | Open collaborator modal    |
+| `n`       | Add collaborator           |
 | `j` / `k` | Navigate collaborator list |
-| `d` | Revoke collaborator |
-| `Esc` | Close modal |
+| `d`       | Revoke collaborator        |
+| `Esc`     | Close modal                |
 
 ## Revoking Access
 
@@ -56,49 +57,49 @@ For maximum security, revoke with key rotation. This generates a new project key
 Press `d` on a collaborator, then `r` to revoke and rotate.
 
 <Steps>
-  <Step title="Share revoked">
-    The collaborator loses access immediately.
-  </Step>
-  <Step title="New project key generated">
-    A fresh AES-256 key is created on your device.
-  </Step>
+  <Step title="Share revoked">The collaborator loses access immediately.</Step>
+  <Step title="New project key generated">A fresh AES-256 key is created on your device.</Step>
   <Step title="Secrets re-encrypted">
-    Every secret in the project is decrypted with the old key and re-encrypted with the new key. This happens entirely on your device.
+    Every secret in the project is decrypted with the old key and re-encrypted with the new key.
+    This happens entirely on your device.
   </Step>
   <Step title="Remaining shares updated">
     The new project key is wrapped with each remaining collaborator's public key.
   </Step>
   <Step title="Caches invalidated">
-    The key version is bumped. All CLI caches are invalidated so the next `relic run` fetches fresh data.
+    The key version is bumped. All CLI caches are invalidated so the next `relic run` fetches fresh
+    data.
   </Step>
 </Steps>
 
 <Tip>
-  Use revoke with rotation if you suspect the collaborator may have extracted the project key. Otherwise, a simple revoke is sufficient since they can no longer fetch encrypted secrets from the server.
+  Use revoke with rotation if you suspect the collaborator may have extracted the project key.
+  Otherwise, a simple revoke is sufficient since they can no longer fetch encrypted secrets from the
+  server.
 </Tip>
 
 ## Permissions
 
-| Action | Owner | Collaborator |
-|--------|-------|-------------|
-| View secrets | Yes | Yes |
-| Create / edit secrets | Yes | Yes |
-| Delete secrets | Yes | Yes |
-| Create environments | Yes | Yes |
-| Delete environments | Yes | Yes |
-| Add collaborators | Yes | No |
-| Revoke collaborators | Yes | No |
-| Archive project | Yes | No |
-| Rename project | Yes | No |
+| Action                | Owner | Collaborator |
+| --------------------- | ----- | ------------ |
+| View secrets          | Yes   | Yes          |
+| Create / edit secrets | Yes   | Yes          |
+| Delete secrets        | Yes   | Yes          |
+| Create environments   | Yes   | Yes          |
+| Delete environments   | Yes   | Yes          |
+| Add collaborators     | Yes   | No           |
+| Revoke collaborators  | Yes   | No           |
+| Archive project       | Yes   | No           |
+| Rename project        | Yes   | No           |
 
 Only the project owner can manage collaborators and archive the project.
 
 ## Limits
 
-| Plan | Shares per project |
-|------|--------------------|
-| Free | Not available |
-| Pro | 5 included, additional shares at $5 each |
+| Plan | Shares per project                       |
+| ---- | ---------------------------------------- |
+| Free | Not available                            |
+| Pro  | 5 included, additional shares at $5 each |
 
 Sharing requires the Pro plan. If you exceed the included shares, the TUI will prompt you to confirm the additional cost before proceeding.
 

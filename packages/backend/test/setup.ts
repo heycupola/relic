@@ -76,9 +76,8 @@ const createTestUser = async (
   if (args.hasKeys) {
     const password = "password".concat(randomString());
 
-    const { createUserKeys, decryptPrivateKeyWithPassword, deriveKeyFromPassword } = await import(
-      "@repo/crypto"
-    );
+    const { createUserKeys, decryptPrivateKeyWithPassword, deriveKeyFromPassword } =
+      await import("@repo/crypto");
     const { encryptedPrivateKey, publicKey, salt } = await createUserKeys(password);
 
     await asUser.mutation(components.betterAuth.user.setKeysAndSalt, {

@@ -18,7 +18,8 @@ Relic runs in the terminal. For the best experience with the TUI, use a modern t
 - [iTerm2](https://iterm2.com)
 
 <Note>
-  Other terminals work for the CLI, but may have rendering issues with colors and UI elements in the TUI.
+  Other terminals work for the CLI, but may have rendering issues with colors and UI elements in the
+  TUI.
 </Note>
 
 ## Installation
@@ -93,6 +94,7 @@ When you run `relic run -e production`, all secrets in that environment are inje
     ```
 
     Both methods use device authorization. A browser window opens, you approve the request, and the session is stored locally.
+
   </Step>
   <Step title="Manage secrets">
     After signing in, the TUI opens your project list. From here you can:
@@ -102,6 +104,7 @@ When you run `relic run -e production`, all secrets in that environment are inje
     - Create and organize secrets within environments
 
     See [TUI guide](/guides/tui) for details.
+
   </Step>
   <Step title="Initialize your project">
     Navigate to the root of your project and run:
@@ -117,6 +120,7 @@ When you run `relic run -e production`, all secrets in that environment are inje
     <Info>
       Add `.relic/` to your `.gitignore` to keep cache files out of version control.
     </Info>
+
   </Step>
   <Step title="Inject secrets">
     Run any command with secrets injected as environment variables:
@@ -128,5 +132,6 @@ When you run `relic run -e production`, all secrets in that environment are inje
     Secrets are decrypted locally and passed to your process at runtime. Nothing is written to disk.
 
     See [CLI guide](/guides/cli) for all available options.
+
   </Step>
 </Steps>

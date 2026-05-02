@@ -24,7 +24,6 @@
 ### Minor Changes
 
 - Add machine identity with service accounts and OIDC trust policies.
-
   - **Service accounts** for passwordless CI/CD — single `RELIC_SERVICE_TOKEN` replaces `RELIC_API_KEY` + `RELIC_PASSWORD`
   - **OIDC trust policies** for GitHub Actions and GitLab CI — verify CI platform identity with `--github org/repo` or `--gitlab group/project`
   - **Dashboard management** — list, revoke service accounts, and configure OIDC policies from the web
@@ -40,7 +39,6 @@
 - 08bf115: Add built-in MCP server for AI assistants. Run `relic mcp` to start a stdio-based Model Context Protocol server that integrates with Cursor, Claude Code, Codex, Zed, OpenCode, and Claude Desktop.
 
   Available tools:
-
   - `whoami` — show the authenticated user
   - `list-projects` — list all projects with environments and folders
   - `list-secrets` — list secret key names, scopes, and types (never values)
@@ -137,7 +135,6 @@
 ### Minor Changes
 
 - [#37](https://github.com/heycupola/relic/pull/37) [`3bc478e`](https://github.com/heycupola/relic/commit/3bc478e4cca4875bb0f1189922dff7a5de69c1f1) Thanks [@icanvardar](https://github.com/icanvardar)! - ### Initial Public Release
-
   - Zero-knowledge secret management with end-to-end encryption
   - `relic run` — inject secrets as environment variables into any command
   - `relic init` — initialize Relic for a project

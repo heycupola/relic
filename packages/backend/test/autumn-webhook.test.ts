@@ -47,28 +47,26 @@ describe("handleAutumnWebhookEvent", () => {
     expect(args).toEqual({ userId: "test-user-id" });
   });
 
-  test.each([
-    "downgrade",
-    "cancel",
-    "expired",
-    "past_due",
-  ] as const)("%s Pro plan event triggers a downgrade", async (scenario) => {
-    await handleAutumnWebhookEvent({ scheduler } as any, makeEvent(scenario));
+  test.each(["downgrade", "cancel", "expired", "past_due"] as const)(
+    "%s Pro plan event triggers a downgrade",
+    async (scenario) => {
+      await handleAutumnWebhookEvent({ scheduler } as any, makeEvent(scenario));
 
-    expect(scheduler.runAfter).toHaveBeenCalledOnce();
-    const [delay, , args] = scheduler.runAfter.mock.calls[0];
-    expect(delay).toBe(0);
-    expect(args).toEqual({ userId: "test-user-id" });
-  });
+      expect(scheduler.runAfter).toHaveBeenCalledOnce();
+      const [delay, , args] = scheduler.runAfter.mock.calls[0];
+      expect(delay).toBe(0);
+      expect(args).toEqual({ userId: "test-user-id" });
+    },
+  );
 
-  test.each([
-    "scheduled",
-    "renew",
-  ] as const)("%s Pro plan event does not change local plan state", async (scenario) => {
-    await handleAutumnWebhookEvent({ scheduler } as any, makeEvent(scenario));
+  test.each(["scheduled", "renew"] as const)(
+    "%s Pro plan event does not change local plan state",
+    async (scenario) => {
+      await handleAutumnWebhookEvent({ scheduler } as any, makeEvent(scenario));
 
-    expect(scheduler.runAfter).not.toHaveBeenCalled();
-  });
+      expect(scheduler.runAfter).not.toHaveBeenCalled();
+    },
+  );
 
   test("non-Pro product event is ignored", async () => {
     await handleAutumnWebhookEvent(

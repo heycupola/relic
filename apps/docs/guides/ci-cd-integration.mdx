@@ -22,6 +22,7 @@ Service accounts provide passwordless CI/CD integration. See the [Service Accoun
     ```
 
     The CLI outputs a service token. Store it in your CI provider's secret storage.
+
   </Step>
   <Step title="Set the environment variable">
     | Variable | Required | Description |
@@ -67,7 +68,8 @@ jobs:
 ```
 
 <Note>
-  The `id-token: write` permission is required if you configured OIDC on your service account. Without OIDC, it can be omitted.
+  The `id-token: write` permission is required if you configured OIDC on your service account.
+  Without OIDC, it can be omitted.
 </Note>
 
 ## GitLab CI
@@ -98,16 +100,17 @@ For additional security, add OIDC trust policies to your service accounts. This 
 ## API Keys (Legacy)
 
 <Warning>
-  Using `RELIC_API_KEY` with `RELIC_PASSWORD` in CI is deprecated. Migrate to [service accounts](/guides/service-accounts) for better security and simpler setup.
+  Using `RELIC_API_KEY` with `RELIC_PASSWORD` in CI is deprecated. Migrate to [service
+  accounts](/guides/service-accounts) for better security and simpler setup.
 </Warning>
 
 API keys still work but require two environment variables (`RELIC_API_KEY` + `RELIC_PASSWORD`) and expose your master password to the CI environment. To use API keys:
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `RELIC_API_KEY` | Yes | API key from the web dashboard |
-| `RELIC_PASSWORD` | Yes | Your master password |
-| `RELIC_PROJECT_ID` | No | Project ID (not needed if `relic.toml` is committed) |
+| Variable           | Required | Description                                          |
+| ------------------ | -------- | ---------------------------------------------------- |
+| `RELIC_API_KEY`    | Yes      | API key from the web dashboard                       |
+| `RELIC_PASSWORD`   | Yes      | Your master password                                 |
+| `RELIC_PROJECT_ID` | No       | Project ID (not needed if `relic.toml` is committed) |
 
 ## Scope Filtering
 
@@ -134,7 +137,8 @@ Useful in monorepos where different services need different secrets from the sam
 ## Security Considerations
 
 <Warning>
-  Store `RELIC_API_KEY` and `RELIC_PASSWORD` in your CI provider's secret storage. Never hardcode them in pipeline files or commit them to your repository.
+  Store `RELIC_API_KEY` and `RELIC_PASSWORD` in your CI provider's secret storage. Never hardcode
+  them in pipeline files or commit them to your repository.
 </Warning>
 
 - API keys can be revoked from the web dashboard at any time

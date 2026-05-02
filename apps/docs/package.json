@@ -5,7 +5,11 @@
   "license": "MIT",
   "scripts": {
     "dev": "mint dev --port 3001",
-    "build": "mint validate"
+    "build": "mint validate",
+    "lint": "oxlint . --no-error-on-unmatched-pattern",
+    "lint:fix": "oxlint . --fix --no-error-on-unmatched-pattern",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check ."
   },
   "devDependencies": {
     "mint": "^4"

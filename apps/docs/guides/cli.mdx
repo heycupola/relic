@@ -58,7 +58,8 @@ relic init
 Run this at the root of the project where you want to inject secrets.
 
 <Info>
-  Add `.relic/` to your `.gitignore`. See [Introduction](/introduction#initialize-your-project) for details.
+  Add `.relic/` to your `.gitignore`. See [Introduction](/introduction#initialize-your-project) for
+  details.
 </Info>
 
 ### `relic run`
@@ -69,12 +70,12 @@ Run a command with secrets injected as environment variables.
 relic run -e <environment> [options] -- <command>
 ```
 
-| Flag | Description |
-|------|-------------|
-| `-e, --environment` | Environment name (required) |
-| `-f, --folder` | Folder name |
-| `-s, --scope` | Scope filter: `client`, `server`, or `shared` |
-| `-p, --project` | Project ID (overrides `relic.toml`) |
+| Flag                | Description                                   |
+| ------------------- | --------------------------------------------- |
+| `-e, --environment` | Environment name (required)                   |
+| `-f, --folder`      | Folder name                                   |
+| `-s, --scope`       | Scope filter: `client`, `server`, or `shared` |
+| `-p, --project`     | Project ID (overrides `relic.toml`)           |
 
 **Examples:**
 

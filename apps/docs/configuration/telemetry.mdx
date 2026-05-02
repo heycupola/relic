@@ -5,9 +5,7 @@ description: What Relic collects, where it sends data, and how to opt out.
 
 Relic collects anonymous usage telemetry to help us understand how the product is used and where to improve it. Telemetry is entirely optional and can be disabled at any time.
 
-<Note>
-  No secrets, project names, environment names, or personal data are ever collected.
-</Note>
+<Note>No secrets, project names, environment names, or personal data are ever collected.</Note>
 
 ## What Is Collected
 
@@ -17,24 +15,24 @@ The CLI and TUI send anonymous events through a first-party telemetry proxy (`te
 
 **Events collected:**
 
-| Event | When |
-|-------|------|
-| `cli_login_started` / `cli_login_completed` | User logs in via CLI |
-| `cli_logout` | User logs out |
-| `cli_run_started` / `cli_run_completed` | Secret injection run (success/failure, duration) |
-| `cli_project_initialized` | `relic init` is run |
-| `cli_command_executed` | `whoami` or `projects` command used |
-| `tui_launched` | TUI is opened |
-| `tui_page_viewed` | A page is viewed in the TUI |
-| `project_created` / `project_renamed` / `project_archived` | Project actions |
-| `environment_created` / `environment_deleted` | Environment actions |
-| `folder_created` / `folder_deleted` | Folder actions |
-| `secret_deleted` | Secret deleted |
-| `bulk_import_completed` | Bulk import action |
-| `collaborator_added` / `collaborator_revoked` | Sharing actions |
-| `password_setup_started` / `password_setup_completed` | Password setup |
-| `password_changed` | Password changed |
-| `error_occurred` | An error happens (error message and stack, no secret data) |
+| Event                                                      | When                                                       |
+| ---------------------------------------------------------- | ---------------------------------------------------------- |
+| `cli_login_started` / `cli_login_completed`                | User logs in via CLI                                       |
+| `cli_logout`                                               | User logs out                                              |
+| `cli_run_started` / `cli_run_completed`                    | Secret injection run (success/failure, duration)           |
+| `cli_project_initialized`                                  | `relic init` is run                                        |
+| `cli_command_executed`                                     | `whoami` or `projects` command used                        |
+| `tui_launched`                                             | TUI is opened                                              |
+| `tui_page_viewed`                                          | A page is viewed in the TUI                                |
+| `project_created` / `project_renamed` / `project_archived` | Project actions                                            |
+| `environment_created` / `environment_deleted`              | Environment actions                                        |
+| `folder_created` / `folder_deleted`                        | Folder actions                                             |
+| `secret_deleted`                                           | Secret deleted                                             |
+| `bulk_import_completed`                                    | Bulk import action                                         |
+| `collaborator_added` / `collaborator_revoked`              | Sharing actions                                            |
+| `password_setup_started` / `password_setup_completed`      | Password setup                                             |
+| `password_changed`                                         | Password changed                                           |
+| `error_occurred`                                           | An error happens (error message and stack, no secret data) |
 
 **Metadata attached to each event:**
 
@@ -107,7 +105,8 @@ relic telemetry status
 The preference is stored in `~/.config/relic/telemetry.json`.
 
 <Tip>
-  You can also set the `RELIC_TELEMETRY=false` environment variable to disable telemetry without modifying the config file. This is useful for CI or automation scripts.
+  You can also set the `RELIC_TELEMETRY=false` environment variable to disable telemetry without
+  modifying the config file. This is useful for CI or automation scripts.
 </Tip>
 
 ### Web
@@ -118,9 +117,9 @@ For EU/EEA visitors, click "Reject" on the cookie consent banner. For all other 
 
 Telemetry is disabled automatically when any of these conditions are true:
 
-| Condition | How it's detected |
-|-----------|-------------------|
-| CI environment | `CI` environment variable is set |
-| Development mode | `DEV=true` environment variable |
-| User opted out | `relic telemetry disable` or `RELIC_TELEMETRY=false` |
-| No API key configured | `RELIC_POSTHOG_KEY` is empty |
+| Condition             | How it's detected                                    |
+| --------------------- | ---------------------------------------------------- |
+| CI environment        | `CI` environment variable is set                     |
+| Development mode      | `DEV=true` environment variable                      |
+| User opted out        | `relic telemetry disable` or `RELIC_TELEMETRY=false` |
+| No API key configured | `RELIC_POSTHOG_KEY` is empty                         |
