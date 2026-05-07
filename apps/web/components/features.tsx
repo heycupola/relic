@@ -34,7 +34,7 @@ const videoFeatures: VideoFeature[] = [
     title: "Run Anywhere",
     badge: "Pro",
     description:
-      "Inject secrets into any process with API keys. Works in GitHub Actions, GitLab CI, and more.",
+      "Inject secrets into any pipeline with service accounts or OIDC trust. Works in GitHub Actions, GitLab CI, and more.",
     videoSrc: "/videos/cicd-demo.mp4",
   },
 ];
