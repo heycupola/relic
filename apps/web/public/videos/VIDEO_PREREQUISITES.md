@@ -4,14 +4,14 @@ All marketing videos served from `apps/web/public/videos/` must share the same d
 
 ## Required format
 
-| Field       | Value                |
-| ----------- | -------------------- |
-| Resolution  | `1592x1080`          |
-| Aspect      | ~3:2                 |
-| Codec       | `H.264` (libx264)    |
-| Audio       | Stripped (no audio)  |
-| Container   | `.mp4`               |
-| Faststart   | Required (`+faststart`) |
+| Field      | Value                   |
+| ---------- | ----------------------- |
+| Resolution | `1592x1080`             |
+| Aspect     | ~3:2                    |
+| Codec      | `H.264` (libx264)       |
+| Audio      | Stripped (no audio)     |
+| Container  | `.mp4`                  |
+| Faststart  | Required (`+faststart`) |
 
 If a recording comes out at `1920x1080` (16:9) or any other size, normalize it to `1592x1080` before committing.
 
