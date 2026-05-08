@@ -37,6 +37,7 @@ import {
 } from "../lib/api";
 import { findConfig } from "../lib/config";
 import { decryptSecrets, getProjectKey, ProjectKeyError } from "../lib/crypto";
+import { formatRunErrorMessage } from "../lib/errors";
 
 const log = createLogger("cli");
 
@@ -643,7 +644,7 @@ export default async function run(command: string[], options: RunOptions) {
     }
 
     const spinner = ora();
-    spinner.fail(pc.red(err instanceof Error ? err.message : String(err)));
+    spinner.fail(pc.red(formatRunErrorMessage(err)));
     process.exit(1);
   }
 }
