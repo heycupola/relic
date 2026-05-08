@@ -31,6 +31,7 @@ mock.module("ora", () => ({
 mock.module("../lib/api", () => ({
   getApi: mock(() => ({})),
   exportSecretsViaApiKey: mock(),
+  exportSecretsViaServiceToken: mock(),
   fetchUserKeysViaApiKey: mock(),
   ProPlanRequiredError: class extends Error {
     upgradeUrl: string;
