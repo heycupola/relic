@@ -26,7 +26,8 @@ export function parseConvexError(err: unknown): ParsedConvexError {
 export function formatRunErrorMessage(err: unknown): string {
   const parsed = parseConvexError(err);
   if (parsed.code === "ENVIRONMENT_NOT_FOUND") {
-    return `${parsed.message}. Open the TUI with \`relic\` to create it, or use \`relic run -e <name>\` with an existing environment.`;
+    const base = parsed.message.trim().replace(/[.!?]+$/, "");
+    return `${base}. Open the TUI with \`relic\` to create it, or use \`relic run -e <name>\` with an existing environment.`;
   }
   return parsed.message;
 }

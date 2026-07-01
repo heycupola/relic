@@ -28,6 +28,12 @@ describe("parseConvexError", () => {
       message: "Environment not found",
     });
   });
+
+  test("falls back to plain Error messages", () => {
+    expect(parseConvexError(new Error("Unexpected failure"))).toEqual({
+      message: "Unexpected failure",
+    });
+  });
 });
 
 describe("formatRunErrorMessage", () => {
@@ -40,5 +46,25 @@ describe("formatRunErrorMessage", () => {
     expect(formatRunErrorMessage(error)).toBe(
       "Environment not found. Open the TUI with `relic` to create it, or use `relic run -e <name>` with an existing environment.",
     );
+  });
+
+  test("normalizes missing environment punctuation before adding the hint", () => {
+    const error = new ConvexError({
+      code: "ENVIRONMENT_NOT_FOUND",
+      message: "Environment not found.",
+    });
+
+    expect(formatRunErrorMessage(error)).toBe(
+      "Environment not found. Open the TUI with `relic` to create it, or use `relic run -e <name>` with an existing environment.",
+    );
+  });
+
+  test("does not add a hint for unrelated structured errors", () => {
+    const error = new ConvexError({
+      code: "PROJECT_NOT_FOUND",
+      message: "Project not found",
+    });
+
+    expect(formatRunErrorMessage(error)).toBe("Project not found");
   });
 });
