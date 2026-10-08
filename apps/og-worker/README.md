@@ -12,7 +12,7 @@ Standalone Cloudflare Worker that renders relic's Open Graph images dynamically.
   - `changelog-entry`
 - Caches rendered responses at the edge
 - Stays decoupled from Next.js and OpenNext runtime internals
-- Uses a bundled local image asset for the `home` card only
+- Uses bundled Geist fonts so cards match the site typography
 
 The public `/og` URL is still served by the web app, but `apps/web/app/og/route.tsx` now proxies those requests to this worker through a Cloudflare service binding.
 
