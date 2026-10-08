@@ -91,7 +91,7 @@ Preference is stored in `~/.config/relic/telemetry.json` (or `~/.config/relic-de
 | `RELIC_LOG_FILE`      | Log file path                                       | See log files table                   |
 | `RELIC_TELEMETRY`     | Set to `"false"` to disable                         | Enabled                               |
 | `RELIC_POSTHOG_KEY`   | PostHog API key                                     | Empty (disables telemetry)            |
-| `RELIC_TELEMETRY_URL` | PostHog proxy host                                  | `https://telemetry.withrelic.com`          |
+| `RELIC_TELEMETRY_URL` | PostHog proxy host                                  | `https://telemetry.withrelic.com`     |
 | `DEV`                 | Dev mode                                            | `"true"` enables                      |
 | `CI`                  | CI mode                                             | Disables telemetry and console output |
 
