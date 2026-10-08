@@ -2,15 +2,15 @@ export { SITE_DESCRIPTION, SITE_SLOGAN, SITE_TITLE } from "./site-copy";
 
 export const SITE_NAME = "relic";
 export const SITE_BRAND_NAME = "Relic";
-export const SITE_URL = "https://relic.so";
+export const SITE_URL = "https://withrelic.com";
 export const SITE_AUTHOR = "Cupola";
 export const SITE_AUTHOR_URL = "https://cupo.la";
 export const SITE_TWITTER_HANDLE = "@heycupola";
 export const SITE_GITHUB_URL = "https://github.com/heycupola/relic";
 export const SITE_RELEASES_URL = `${SITE_GITHUB_URL}/releases`;
-export const SITE_DOCS_URL = "https://docs.relic.so";
+export const SITE_DOCS_URL = "https://docs.withrelic.com";
 export const SITE_X_URL = "https://x.com/heycupola";
-export const SITE_STATUS_URL = "https://status.relic.so";
+export const SITE_STATUS_URL = "https://status.withrelic.com";
 export const ENTERPRISE_URL =
   process.env.NEXT_PUBLIC_ENTERPRISE_URL || "https://form.typeform.com/to/JJ4KTKd7";
 export const BLOG_PATH = "/blog";

@@ -16,7 +16,7 @@ interface GracePeriodStartedEmailProps {
   upgradeUrl?: string;
 }
 
-const SITE_URL = process.env.SITE_URL || "https://relic.so";
+const SITE_URL = process.env.SITE_URL || "https://withrelic.com";
 
 export const GracePeriodStartedEmail = ({
   userName = "there",

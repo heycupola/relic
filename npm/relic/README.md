@@ -85,6 +85,6 @@ Use API keys for non-interactive environments:
 
 ## Links
 
-- [Website](https://heyrelic.com)
-- [Documentation](https://docs.heyrelic.com)
+- [Website](https://withrelic.com)
+- [Documentation](https://docs.withrelic.com)
 - [GitHub](https://github.com/heycupola/relic)

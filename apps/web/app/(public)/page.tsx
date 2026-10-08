@@ -36,7 +36,7 @@ const structuredData = {
       sameAs: [
         "https://github.com/heycupola/relic",
         "https://x.com/heycupola",
-        "https://docs.relic.so",
+        "https://docs.withrelic.com",
       ],
     },
     {

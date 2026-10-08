@@ -41,8 +41,8 @@ vi.mock("../convex/resend", () => ({
     sendEmailManually: vi.fn().mockResolvedValue("mock-email-id"),
   },
   sendEmail: vi.fn().mockResolvedValue({ emailId: "mock-email-id" }),
-  getUpgradeUrl: vi.fn().mockReturnValue("https://relic.so/upgrade"),
-  getDashboardUrl: vi.fn().mockReturnValue("https://relic.so/dashboard"),
+  getUpgradeUrl: vi.fn().mockReturnValue("https://withrelic.com/upgrade"),
+  getDashboardUrl: vi.fn().mockReturnValue("https://withrelic.com/dashboard"),
 }));
 
 // Create the mock autumn in a hoisted block so it's available before vi.mock runs
@@ -184,7 +184,7 @@ const { _mockAutumn } = vi.hoisted(() => {
     ) {
       return {
         data: {
-          url: `https://checkout.relic.so/session/mock-${args.productId}-${Date.now()}`,
+          url: `https://checkout.withrelic.com/session/mock-${args.productId}-${Date.now()}`,
         },
         error: null,
       };
@@ -194,7 +194,7 @@ const { _mockAutumn } = vi.hoisted(() => {
       billingPortal: async (ctx: GenericActionCtx<DataModel>, args: { returnUrl?: string }) => {
         return {
           data: {
-            url: `https://billing.relic.so/portal/mock-${Date.now()}`,
+            url: `https://billing.withrelic.com/portal/mock-${Date.now()}`,
           },
           error: null,
         };

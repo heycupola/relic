@@ -69,7 +69,7 @@ export function getConfig(): LoggerConfig {
     isDev: isDev(),
     isCI: isCI(),
     telemetryEnabled: isTelemetryEnabled(),
-    telemetryProxyUrl: process.env.RELIC_TELEMETRY_URL || "https://telemetry.relic.so",
+    telemetryProxyUrl: process.env.RELIC_TELEMETRY_URL || "https://telemetry.withrelic.com",
     posthogApiKey: process.env.RELIC_POSTHOG_KEY || "",
   };
 }

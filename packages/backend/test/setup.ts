@@ -39,7 +39,7 @@ const createTestUser = async (
   },
 ): Promise<TestUser> => {
   const name = "name".concat(randomString());
-  const email = name.concat("@relic.so");
+  const email = name.concat("@withrelic.com");
 
   const now = Date.now();
   const userId = await t.run(async (ctx) => {

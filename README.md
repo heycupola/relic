@@ -14,11 +14,11 @@
 <p align="center">
   <a href="https://github.com/heycupola/relic/stargazers"><img src="https://img.shields.io/github/stars/heycupola/relic?style=flat" alt="GitHub Stars"></a>
   <a href="https://github.com/heycupola/relic/blob/canary/LICENSE"><img src="https://img.shields.io/github/license/heycupola/relic" alt="License"></a>
-  <a href="https://docs.relic.so"><img src="https://img.shields.io/badge/docs-relic.so-blue" alt="Docs"></a>
+  <a href="https://docs.withrelic.com"><img src="https://img.shields.io/badge/docs-withrelic.com-blue" alt="Docs"></a>
 </p>
 
 <p align="center">
-  <a href="https://relic.so"><img src="./apps/docs/assets/tui-overview.png" alt="Relic Terminal UI" width="800"></a>
+  <a href="https://withrelic.com"><img src="./apps/docs/assets/tui-overview.png" alt="Relic Terminal UI" width="800"></a>
 </p>
 
 ---
@@ -35,7 +35,7 @@ Relic is a CLI-first secret layer built for developers and teams.
 ### Install
 
 ```bash
-curl -fsSL https://relic.so/install | bash
+curl -fsSL https://withrelic.com/install | bash
 brew install heycupola/tap/relic
 npm install -g relic
 bun add -g relic
@@ -58,14 +58,14 @@ Relic encrypts and decrypts secrets on the client using AES-256 and Argon2id. Th
 
 When you run `relic run`, the CLI fetches encrypted secrets, decrypts them locally, and injects them into the target process through a Rust runner that clears memory after use. No secrets are written to disk.
 
-Learn more in the [documentation](https://docs.relic.so).
+Learn more in the [documentation](https://docs.withrelic.com).
 
 ### Contributing
 
 If you're interested in contributing to Relic, please read our [contributing guide](./CONTRIBUTING.md) before submitting a pull request.
 
-For security issues, email [can@relic.so](mailto:can@relic.so) directly. Do not open public issues.
+For security issues, email [can@withrelic.com](mailto:can@withrelic.com) directly. Do not open public issues.
 
 ---
 
-[Website](https://relic.so) | [Documentation](https://docs.relic.so) | [Changelog](https://relic.so/changelog) | [X](https://x.com/icanvardar)
+[Website](https://withrelic.com) | [Documentation](https://docs.withrelic.com) | [Changelog](https://withrelic.com/changelog) | [X](https://x.com/icanvardar)

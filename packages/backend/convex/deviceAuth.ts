@@ -11,7 +11,7 @@ const log = createLogger("deviceAuth");
 
 const SITE_URL =
   process.env.SITE_URL ||
-  (process.env.ENVIRONMENT === "development" ? "http://localhost:3000" : "https://relic.so");
+  (process.env.ENVIRONMENT === "development" ? "http://localhost:3000" : "https://withrelic.com");
 
 export const requestDeviceCode = mutation({
   args: {
