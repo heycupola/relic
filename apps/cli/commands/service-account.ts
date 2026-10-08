@@ -1,10 +1,10 @@
 import { getPasswordFromStorage, SITE_URL, validateSession } from "@repo/auth";
 import { trackEvent } from "@repo/logger";
-import { ConvexError } from "convex/values";
 import ora from "ora";
 import pc from "picocolors";
 import { getApi } from "../lib/api";
 import { findConfig } from "../lib/config";
+import { parseConvexError } from "../lib/errors";
 
 function resolveProjectId(projectId?: string): string | null {
   if (projectId) return projectId;
@@ -13,24 +13,6 @@ function resolveProjectId(projectId?: string): string | null {
 }
 
 const UPGRADE_URL = `${SITE_URL}/dashboard?action=upgrade`;
-
-function parseConvexError(err: unknown): { code?: string; message: string } {
-  if (err instanceof ConvexError) {
-    let data = err.data;
-    while (typeof data === "string") {
-      try {
-        data = JSON.parse(data);
-      } catch {
-        break;
-      }
-    }
-    if (typeof data === "object" && data !== null) {
-      const d = data as { code?: string; message?: string };
-      return { code: d.code, message: d.message ?? err.message };
-    }
-  }
-  return { message: err instanceof Error ? err.message : String(err) };
-}
 
 async function handleProUpgradePrompt(spinner: ReturnType<typeof ora>, message: string) {
   spinner.fail(pc.red(message));
