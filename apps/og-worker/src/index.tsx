@@ -1,5 +1,4 @@
 import { cache, ImageResponse } from "@cf-wasm/og/workerd";
-import geistMono400 from "../assets/geist-mono-400.bin";
 import geistSans400 from "../assets/geist-sans-400.bin";
 import geistSans600 from "../assets/geist-sans-600.bin";
 
@@ -11,16 +10,13 @@ const OG_SIZE = {
 const BG = "#0e0e0e";
 const FG = "#fafaf9";
 const MUTED = "rgba(250, 250, 249, 0.52)";
-const SUBTLE = "rgba(250, 250, 249, 0.38)";
 const HAIRLINE = "rgba(250, 250, 249, 0.08)";
-const SITE_HOST = "withrelic.com";
 const CACHE_CONTROL = "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800";
-const CACHE_NAME = "relic-og-v2";
+const CACHE_NAME = "relic-og-v3";
 
 const FONTS = [
   { name: "Geist", data: geistSans400, weight: 400, style: "normal" },
   { name: "Geist", data: geistSans600, weight: 600, style: "normal" },
-  { name: "Geist Mono", data: geistMono400, weight: 400, style: "normal" },
 ] as const;
 
 type StaticPageType = "home" | "blog-index" | "changelog-index";
@@ -49,14 +45,6 @@ const STATIC_IMAGES: Record<StaticPageType, OgImageOptions> = {
     title: "Changelog",
     description: "Release notes, product improvements, and shipping updates from relic.",
   },
-};
-
-const EYEBROWS: Record<OgImageOptions["type"], string> = {
-  home: "Secrets manager",
-  "blog-index": "Blog",
-  "blog-entry": "Blog",
-  "changelog-index": "Changelog",
-  "changelog-entry": "Changelog",
 };
 
 function stripControlCharacters(value: string): string {
@@ -137,7 +125,7 @@ function Wordmark({ height }: { height: number }) {
   );
 }
 
-function renderCard({ type, title, description }: OgImageOptions) {
+function renderCard({ title, description }: OgImageOptions) {
   return (
     <div
       style={{
@@ -153,25 +141,8 @@ function renderCard({ type, title, description }: OgImageOptions) {
         color: FG,
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
+      <div style={{ display: "flex" }}>
         <Wordmark height={30} />
-        <div
-          style={{
-            display: "flex",
-            fontFamily: "Geist Mono",
-            fontSize: "16px",
-            letterSpacing: "0.02em",
-            color: SUBTLE,
-          }}
-        >
-          {SITE_HOST}
-        </div>
       </div>
 
       <div
@@ -182,30 +153,6 @@ function renderCard({ type, title, description }: OgImageOptions) {
           flexGrow: 1,
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            marginBottom: "28px",
-            fontFamily: "Geist Mono",
-            fontSize: "15px",
-            letterSpacing: "0.16em",
-            textTransform: "uppercase",
-            color: SUBTLE,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              width: "24px",
-              height: "1px",
-              marginRight: "16px",
-              backgroundColor: SUBTLE,
-            }}
-          />
-          {EYEBROWS[type]}
-        </div>
-
         <div
           style={{
             display: "block",
