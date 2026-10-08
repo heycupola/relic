@@ -28,7 +28,7 @@ const lines = [
   `    ${dim("$")} ${cyan("relic init")}        ${dim("Initialize in your project")}`,
   `    ${dim("$")} ${cyan("relic --help")}      ${dim("See all commands")}`,
   "",
-  `  ${dim("https://withrelic.com/docs")}`,
+  `  ${dim("https://docs.withrelic.com")}`,
   "",
 ];
 

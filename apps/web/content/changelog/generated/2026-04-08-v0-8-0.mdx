@@ -1,0 +1,28 @@
+---
+title: "v0.8.0"
+description: "Add machine identity with service accounts and OIDC trust policies."
+date: "2026-04-08T23:25:26Z"
+version: "v0.8.0"
+releaseUrl: "https://github.com/heycupola/relic/releases/tag/v0.8.0"
+githubTag: "v0.8.0"
+tags:
+  - release
+  - stable
+published: true
+---
+
+### Minor Changes
+
+- Add machine identity with service accounts and OIDC trust policies.
+
+  - **Service accounts** for passwordless CI/CD — single `RELIC_SERVICE_TOKEN` replaces `RELIC_API_KEY` + `RELIC_PASSWORD`
+  - **OIDC trust policies** for GitHub Actions and GitLab CI — verify CI platform identity with `--github org/repo` or `--gitlab group/project`
+  - **Dashboard management** — list, revoke service accounts, and configure OIDC policies from the web
+  - **CLI commands** — `relic service-account create`, `list`, `revoke`
+  - **MCP server** — service token support and tool annotations (`readOnlyHint`, `destructiveHint`)
+  - **HKDF-SHA256** key derivation for service account tokens (no master password needed)
+  - API key + master password in CI is now deprecated — use service accounts instead
+
+---
+
+[View release on GitHub](https://github.com/heycupola/relic/releases/tag/v0.8.0)
