@@ -98,7 +98,7 @@ function formatCustomHelp(): string {
   lines.push(`    ${pc.dim("$")} relic run -e production -- npm start`);
   lines.push("");
 
-  lines.push(`  ${pc.dim("https://withrelic.com/docs")}`);
+  lines.push(`  ${pc.dim("https://docs.withrelic.com")}`);
   lines.push("");
 
   return lines.join("\n");
