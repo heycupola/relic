@@ -8,7 +8,7 @@ import { InstallSection } from "@/components/install-section";
 
 export function QuickActionsCard() {
   const [isContactExpanded, setIsContactExpanded] = useState(false);
-  const docsUrl = "https://docs.relic.so";
+  const docsUrl = "https://docs.withrelic.com";
 
   return (
     <div className="border-2 border-border bg-card p-4 sm:p-5">
@@ -78,14 +78,14 @@ export function QuickActionsCard() {
                     assistance, please email:
                   </p>
                   <a
-                    href="mailto:support@relic.so"
+                    href="mailto:support@withrelic.com"
                     className="flex items-center gap-2 text-sm text-foreground hover:text-foreground/80 transition-colors group"
                   >
                     <Mail
                       className="h-4 w-4 text-foreground/40 group-hover:text-foreground transition-colors"
                       aria-hidden="true"
                     />
-                    <span className="font-mono">support@relic.so</span>
+                    <span className="font-mono">support@withrelic.com</span>
                   </a>
                 </div>
               </div>

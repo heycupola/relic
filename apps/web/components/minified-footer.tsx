@@ -33,7 +33,10 @@ export function MinifiedFooter() {
               </Link>
             ),
           )}
-          <a href="mailto:support@relic.so" className="transition-colors hover:text-foreground">
+          <a
+            href="mailto:support@withrelic.com"
+            className="transition-colors hover:text-foreground"
+          >
             Support
           </a>
           <Link href="/privacy-policy" className="transition-colors hover:text-foreground">

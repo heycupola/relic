@@ -1,5 +1,11 @@
 # @repo/cli
 
+## 0.9.3
+
+### Patch Changes
+
+- Use withrelic.com for docs links, install URLs, and production fallbacks.
+
 ## 0.9.2
 
 ### Patch Changes

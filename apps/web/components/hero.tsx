@@ -41,7 +41,7 @@ export function Hero() {
             asChild
             className="gap-2 rounded-none border-2 border-border bg-foreground text-background hover:bg-foreground/90 h-12 px-6 font-medium justify-center sm:h-auto sm:py-2.5 sm:w-auto"
           >
-            <Link href="https://docs.relic.so" target="_blank" rel="noopener noreferrer">
+            <Link href="https://docs.withrelic.com" target="_blank" rel="noopener noreferrer">
               Get Started <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
           </Button>

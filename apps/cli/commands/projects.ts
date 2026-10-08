@@ -19,7 +19,7 @@ const TREE = {
 function renderProjectTree(projects: ProjectWithDetails[]): void {
   if (projects.length === 0) {
     console.log(pc.dim("No projects found"));
-    console.log(pc.dim("Create one at app.relic.so"));
+    console.log(pc.dim("Create one at https://withrelic.com"));
     return;
   }
 

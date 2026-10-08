@@ -11,7 +11,7 @@ type InstallMethod = {
 };
 
 const installMethods: InstallMethod[] = [
-  { name: "curl", command: "curl -fsSL https://relic.so/install | bash" },
+  { name: "curl", command: "curl -fsSL https://withrelic.com/install | bash" },
   { name: "brew", command: "brew install heycupola/tap/relic" },
   { name: "npm", command: "npm install -g relic" },
   { name: "bun", command: "bun add -g relic" },

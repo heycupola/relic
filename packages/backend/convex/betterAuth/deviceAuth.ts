@@ -5,7 +5,7 @@ import { internalMutation, mutation, query } from "./_generated/server";
 
 const SITE_URL =
   process.env.SITE_URL ||
-  (process.env.ENVIRONMENT === "development" ? "http://localhost:3000" : "https://relic.so");
+  (process.env.ENVIRONMENT === "development" ? "http://localhost:3000" : "https://withrelic.com");
 
 function generateSecureDeviceCode(): string {
   const bytes = new Uint8Array(32);

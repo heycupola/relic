@@ -91,4 +91,4 @@ Set `GITHUB_TOKEN` before running the sync script if the repository is private.
 
 ## Reporting security issues
 
-Do not open public issues for security vulnerabilities. Email `can@relic.so` directly.
+Do not open public issues for security vulnerabilities. Email `can@withrelic.com` directly.
