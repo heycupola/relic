@@ -458,7 +458,7 @@ async function runWithApiKey(
       pc.yellow(
         "  ⚠ Using RELIC_API_KEY + RELIC_PASSWORD in CI is deprecated.\n" +
           "    Use RELIC_SERVICE_TOKEN with OIDC trust policies instead.\n" +
-          "    See: https://docs.relic.so/guides/oidc\n",
+          "    See: https://docs.withrelic.com/guides/oidc\n",
       ),
     );
   }

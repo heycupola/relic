@@ -6,7 +6,7 @@ interface AccountDeletedEmailProps {
   sharesRevoked?: number;
 }
 
-const SITE_URL = process.env.SITE_URL || "https://relic.so";
+const SITE_URL = process.env.SITE_URL || "https://withrelic.com";
 
 export const AccountDeletedEmail = ({
   userName = "there",

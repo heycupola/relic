@@ -413,8 +413,8 @@ export default function TermsOfServicePage() {
               <h2 className="text-lg font-semibold">Contact</h2>
               <p className="mt-4 text-sm text-foreground/70 leading-relaxed">
                 For questions about these Terms, please contact us at{" "}
-                <a href="mailto:support@relic.so" className="text-foreground underline">
-                  support@relic.so
+                <a href="mailto:support@withrelic.com" className="text-foreground underline">
+                  support@withrelic.com
                 </a>
                 .
               </p>

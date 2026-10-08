@@ -28,12 +28,12 @@ export function getResendSdk(): Resend {
 
 export const resend: ResendComponent = new ResendComponent(components.resend, {});
 
-const FROM_EMAIL_ADDRESS = process.env.FROM_EMAIL_ADDRESS || "Relic <notifications@relic.so>";
+const FROM_EMAIL_ADDRESS = process.env.FROM_EMAIL_ADDRESS || "Relic <notifications@withrelic.com>";
 const FROM_EMAIL_ADDRESS_PERSONAL =
-  process.env.FROM_EMAIL_ADDRESS_PERSONAL || "Can from Relic <can@relic.so>";
+  process.env.FROM_EMAIL_ADDRESS_PERSONAL || "Can from Relic <can@withrelic.com>";
 const SITE_URL =
   process.env.SITE_URL ||
-  (process.env.ENVIRONMENT === "development" ? "http://localhost:3000" : "https://relic.so");
+  (process.env.ENVIRONMENT === "development" ? "http://localhost:3000" : "https://withrelic.com");
 
 export const getUpgradeUrl = () => `${SITE_URL}/upgrade`;
 export const getDashboardUrl = () => `${SITE_URL}/dashboard`;

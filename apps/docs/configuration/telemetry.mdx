@@ -11,7 +11,7 @@ Relic collects anonymous usage telemetry to help us understand how the product i
 
 ### CLI & TUI (Server-Side)
 
-The CLI and TUI send anonymous events through a first-party telemetry proxy (`telemetry.relic.so`) to PostHog.
+The CLI and TUI send anonymous events through a first-party telemetry proxy (`telemetry.withrelic.com`) to PostHog.
 
 **Events collected:**
 
@@ -44,7 +44,7 @@ The CLI and TUI send anonymous events through a first-party telemetry proxy (`te
 
 ### Web (Client-Side)
 
-The website (`relic.so`) uses PostHog client-side analytics for page views, navigation patterns, and feature usage (login, onboarding, dashboard interactions, upgrade flow).
+The website (`withrelic.com`) uses PostHog client-side analytics for page views, navigation patterns, and feature usage (login, onboarding, dashboard interactions, upgrade flow).
 
 Web telemetry uses `person_profiles: "anonymous"`, meaning no personally identifiable information is tied to events.
 
@@ -63,7 +63,7 @@ EU/EEA countries include all EU member states plus Iceland, Liechtenstein, Norwa
 
 ### CCPA (California)
 
-Web analytics use anonymous profiles only. No personal information is sold or shared with third parties. See the [Privacy Policy](https://relic.so/privacy-policy) for details.
+Web analytics use anonymous profiles only. No personal information is sold or shared with third parties. See the [Privacy Policy](https://withrelic.com/privacy-policy) for details.
 
 ### CLI & TUI
 
@@ -73,7 +73,7 @@ Telemetry is automatically disabled in CI environments and dev mode.
 
 ## Telemetry Proxy
 
-CLI and TUI events are routed through a first-party proxy at `telemetry.relic.so` (a Cloudflare Worker) before reaching PostHog. This prevents ad blockers from interfering and keeps the data flow under our control.
+CLI and TUI events are routed through a first-party proxy at `telemetry.withrelic.com` (a Cloudflare Worker) before reaching PostHog. This prevents ad blockers from interfering and keeps the data flow under our control.
 
 The proxy:
 

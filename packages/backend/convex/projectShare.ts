@@ -127,13 +127,13 @@ export const shareProject = protectedAction({
     if (!canShare.data?.allowed) {
       const checkoutResult = await ctx.autumn.checkout(ctx, {
         productId: "pro_plan",
-        successUrl: `${process.env.SITE_URL || "https://relic.so"}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+        successUrl: `${process.env.SITE_URL || "https://withrelic.com"}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
         customerData: {
           name: ctx.name,
           email: ctx.email,
         },
         checkoutSessionParams: {
-          cancel_url: `${process.env.SITE_URL || "https://relic.so"}/subscription/cancel`,
+          cancel_url: `${process.env.SITE_URL || "https://withrelic.com"}/subscription/cancel`,
           metadata: {
             userId: ctx.userId,
           },

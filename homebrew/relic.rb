@@ -6,7 +6,7 @@
 
 class Relic < Formula
   desc "End-to-end encrypted secret layer for developers"
-  homepage "https://relic.so"
+  homepage "https://withrelic.com"
   version "0.1.0"
   license "MIT"
 

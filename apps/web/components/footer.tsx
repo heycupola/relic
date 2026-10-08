@@ -32,7 +32,7 @@ const communityLinks = [
 
 const supportLinks = [
   { href: SITE_STATUS_URL, label: "System Status", external: true },
-  { href: "mailto:support@relic.so", label: "Contact Us" },
+  { href: "mailto:support@withrelic.com", label: "Contact Us" },
 ] as const;
 
 function CcpaBadge() {

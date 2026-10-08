@@ -210,7 +210,7 @@ describe("prepareSecretsWithApiKey", () => {
       Promise.reject(
         new ProPlanRequiredError(
           "API keys require a Pro plan.",
-          "https://relic.so/dashboard?action=upgrade",
+          "https://withrelic.com/dashboard?action=upgrade",
         ),
       ),
     );
@@ -219,7 +219,7 @@ describe("prepareSecretsWithApiKey", () => {
 
     expect(err).toBeInstanceOf(ProPlanRequiredError);
     expect(err.message).toBe("API keys require a Pro plan.");
-    expect(err.upgradeUrl).toBe("https://relic.so/dashboard?action=upgrade");
+    expect(err.upgradeUrl).toBe("https://withrelic.com/dashboard?action=upgrade");
   });
 
   test("propagates ProPlanRequiredError from user keys fetch", async () => {
@@ -227,7 +227,7 @@ describe("prepareSecretsWithApiKey", () => {
       Promise.reject(
         new ProPlanRequiredError(
           "API keys require a Pro plan.",
-          "https://relic.so/dashboard?action=upgrade",
+          "https://withrelic.com/dashboard?action=upgrade",
         ),
       ),
     );
@@ -235,6 +235,6 @@ describe("prepareSecretsWithApiKey", () => {
     const err = await prepareSecretsWithApiKey("project_123", DEFAULT_OPTIONS).catch((e) => e);
 
     expect(err).toBeInstanceOf(ProPlanRequiredError);
-    expect(err.upgradeUrl).toBe("https://relic.so/dashboard?action=upgrade");
+    expect(err.upgradeUrl).toBe("https://withrelic.com/dashboard?action=upgrade");
   });
 });

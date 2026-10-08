@@ -15,4 +15,4 @@ If someone violates these rules, maintainers may warn, mute, or ban them at thei
 
 ## Reporting
 
-Report issues to `can@relic.so`. Reports are handled privately.
+Report issues to `can@withrelic.com`. Reports are handled privately.

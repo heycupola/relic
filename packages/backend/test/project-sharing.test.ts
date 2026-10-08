@@ -211,7 +211,7 @@ describe("Project Sharing", () => {
       expect(shareResult2.success).toBe(false);
       expect(shareResult2.paymentFailed).toBe(true);
       expect(shareResult2.billingPortalUrl).toBeDefined();
-      expect(shareResult2.billingPortalUrl).toContain("billing.relic.so");
+      expect(shareResult2.billingPortalUrl).toContain("billing.withrelic.com");
     });
 
     test("should share a project to a collaborator", async () => {

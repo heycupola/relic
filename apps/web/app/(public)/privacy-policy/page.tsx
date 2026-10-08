@@ -221,8 +221,8 @@ export default function PrivacyPolicyPage() {
                 </li>
                 <li>
                   Request information about what data we hold about you by contacting us at{" "}
-                  <a href="mailto:support@relic.so" className="text-foreground underline">
-                    support@relic.so
+                  <a href="mailto:support@withrelic.com" className="text-foreground underline">
+                    support@withrelic.com
                   </a>
                 </li>
               </ul>
@@ -271,8 +271,8 @@ export default function PrivacyPolicyPage() {
               </ul>
               <p className="mt-4 text-sm text-foreground/70 leading-relaxed">
                 To exercise any of these rights, contact us at{" "}
-                <a href="mailto:support@relic.so" className="text-foreground underline">
-                  support@relic.so
+                <a href="mailto:support@withrelic.com" className="text-foreground underline">
+                  support@withrelic.com
                 </a>
                 . We will respond within 30 days.
               </p>
@@ -366,8 +366,8 @@ export default function PrivacyPolicyPage() {
               </ul>
               <p className="mt-4 text-sm text-foreground/70 leading-relaxed">
                 To exercise your rights, delete your account from the dashboard or contact us at{" "}
-                <a href="mailto:support@relic.so" className="text-foreground underline">
-                  support@relic.so
+                <a href="mailto:support@withrelic.com" className="text-foreground underline">
+                  support@withrelic.com
                 </a>
                 . We will respond within 45 days as required by the CCPA.
               </p>
@@ -396,8 +396,8 @@ export default function PrivacyPolicyPage() {
               <h2 className="text-lg font-semibold">Contact</h2>
               <p className="mt-4 text-sm text-foreground/70 leading-relaxed">
                 For privacy-related questions or concerns, please contact us at{" "}
-                <a href="mailto:support@relic.so" className="text-foreground underline">
-                  support@relic.so
+                <a href="mailto:support@withrelic.com" className="text-foreground underline">
+                  support@withrelic.com
                 </a>
                 .
               </p>

@@ -297,7 +297,7 @@ export const _validateApiKey = internalMutation({
           "CI/CD integration requires a Pro plan. Consider using service accounts for passwordless access.",
         severity: ErrorSeverity.Medium,
         metadata: {
-          upgradeUrl: `${process.env.SITE_URL || "https://relic.so"}/dashboard?action=upgrade`,
+          upgradeUrl: `${process.env.SITE_URL || "https://withrelic.com"}/dashboard?action=upgrade`,
         },
       });
     }
