@@ -3,8 +3,12 @@ import { trackEvent } from "@repo/logger";
 import ora from "ora";
 import pc from "picocolors";
 import pkg from "../package.json";
-
-type InstallMethod = "homebrew" | "npm" | "bun" | "unknown";
+import {
+  detectInstallMethodFromExecutablePath,
+  type InstallMethod,
+  resolveExecutablePath,
+  resolveRealPath,
+} from "./upgrade.install-method";
 
 function tryExec(cmd: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -16,6 +20,12 @@ function tryExec(cmd: string): Promise<string> {
 }
 
 async function detectInstallMethod(): Promise<InstallMethod> {
+  const exePath = resolveExecutablePath();
+  if (exePath) {
+    const fromExecutable = detectInstallMethodFromExecutablePath(exePath);
+    if (fromExecutable) return fromExecutable;
+  }
+
   try {
     await tryExec("brew list relic 2>/dev/null");
     return "homebrew";
@@ -38,6 +48,41 @@ async function detectInstallMethod(): Promise<InstallMethod> {
   }
 
   return "unknown";
+}
+
+async function warnAboutDuplicateInstallations(currentExe: string | null): Promise<void> {
+  if (!currentExe) return;
+
+  try {
+    const stdout = await tryExec("which -a relic 2>/dev/null");
+    const paths = [...new Set(stdout.trim().split("\n").filter(Boolean))];
+    if (paths.length <= 1) return;
+
+    const currentResolved = resolveRealPath(currentExe);
+    const others = paths
+      .map((p) => resolveRealPath(p))
+      .filter((resolved) => resolved !== currentResolved);
+
+    if (others.length === 0) return;
+
+    console.log();
+    console.log(
+      pc.yellow(
+        "  Multiple relic installs on PATH — you may still run an older copy in new shells.",
+      ),
+    );
+    console.log(pc.dim(`  Upgraded via this binary: ${currentResolved}`));
+    for (const other of others) {
+      console.log(pc.dim(`  Also on PATH: ${other}`));
+    }
+    console.log(
+      pc.dim(
+        "  Remove the extra install (e.g. bun remove -g relic) or reorder PATH, then run relic version.",
+      ),
+    );
+  } catch {
+    // ignore
+  }
 }
 
 async function getLatestVersion(): Promise<string | null> {
@@ -64,6 +109,7 @@ const UPGRADE_COMMANDS: Record<Exclude<InstallMethod, "unknown">, string> = {
 
 export default async function upgrade() {
   const spinner = ora("Checking for updates...").start();
+  const runningExe = resolveExecutablePath();
 
   const [method, latestVersion] = await Promise.all([detectInstallMethod(), getLatestVersion()]);
 
@@ -120,6 +166,7 @@ export default async function upgrade() {
       from: currentVersion,
       to: latestVersion,
     });
+    await warnAboutDuplicateInstallations(runningExe);
   } catch {
     spinner.fail(pc.red(`Failed to upgrade via ${method}`));
     console.log(pc.dim(`  Try manually: ${upgradeCmd}`));
