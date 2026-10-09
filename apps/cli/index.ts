@@ -10,6 +10,7 @@ import login from "./commands/login";
 import logout from "./commands/logout";
 import projects, { type ProjectsOptions } from "./commands/projects";
 import push from "./commands/push";
+import { rotationClear, rotationSet, rotationStatus } from "./commands/rotation";
 import run, { type RunOptions } from "./commands/run";
 import secrets, { type SecretsOptions } from "./commands/secrets";
 import {
@@ -72,6 +73,7 @@ const COMMAND_GROUPS = [
       "secrets",
       "history",
       "rollback",
+      "rotation",
       "service-account",
     ],
   },
@@ -218,6 +220,61 @@ saCmd
   .option("--id <id>", "Service account ID to revoke (use when several share a name)")
   .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
   .action((options: ServiceAccountRevokeOptions) => serviceAccountRevoke(options));
+
+const rotationCmd = program
+  .command("rotation")
+  .description("Track secret value age and rotation policies");
+
+rotationCmd
+  .command("status")
+  .description("Show secret ages and rotation status")
+  .option("-e, --environment <name>", "Environment name (optional, defaults to all)")
+  .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
+  .option("--json", "Output as JSON")
+  .option("--fail-on-overdue", "Exit with code 1 when any secret is overdue")
+  .action(
+    (options: {
+      environment?: string;
+      project?: string;
+      json?: boolean;
+      failOnOverdue?: boolean;
+    }) => {
+      rotationStatus(options);
+    },
+  );
+
+rotationCmd
+  .command("set")
+  .description("Set a rotation policy for a secret, or for an environment when KEY is omitted")
+  .argument("[key]", "Secret key (omit to set the environment policy)")
+  .requiredOption("--every <days>", "Rotation interval in days")
+  .option("-e, --environment <name>", "Environment name (required)")
+  .option("-f, --folder <name>", "Folder name (optional, only with KEY)")
+  .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
+  .action(
+    (
+      key: string | undefined,
+      options: { every: string; environment?: string; folder?: string; project?: string },
+    ) => {
+      rotationSet(key, options);
+    },
+  );
+
+rotationCmd
+  .command("clear")
+  .description("Clear a rotation policy for a secret, or for an environment when KEY is omitted")
+  .argument("[key]", "Secret key (omit to clear the environment policy)")
+  .option("-e, --environment <name>", "Environment name (required)")
+  .option("-f, --folder <name>", "Folder name (optional, only with KEY)")
+  .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
+  .action(
+    (
+      key: string | undefined,
+      options: { environment?: string; folder?: string; project?: string },
+    ) => {
+      rotationClear(key, options);
+    },
+  );
 
 program
   .command("mcp")
