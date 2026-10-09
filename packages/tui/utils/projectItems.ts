@@ -8,7 +8,7 @@ import type {
 } from "../types/models";
 
 export type ProjectItem =
-  | { type: "env" | "folder"; id: string; name: string }
+  | { type: "env" | "folder"; id: string; name: string; rotateEveryDays?: number }
   | {
       type: "secret";
       id: string;
@@ -16,6 +16,8 @@ export type ProjectItem =
       value: string | null;
       secretType: SecretValueType;
       secretScope: SecretScope;
+      valueChangedAt?: number;
+      rotateEveryDays?: number;
     };
 
 export interface ProjectLocation {
@@ -42,6 +44,8 @@ function toSecretItem(secret: Secret, values: ReadonlyMap<string, string> | null
     value: values?.get(secret.id) ?? null,
     secretType: secret.type || "string",
     secretScope: secret.scope || "shared",
+    valueChangedAt: secret.valueChangedAt,
+    rotateEveryDays: secret.rotateEveryDays,
   };
 }
 
@@ -53,7 +57,12 @@ export function buildProjectItems(
   values: ReadonlyMap<string, string> | null = null,
 ): ProjectItem[] {
   if (location.viewLevel === "environments") {
-    return environments.map((e) => ({ type: "env", id: e.id, name: e.name }));
+    return environments.map((e) => ({
+      type: "env",
+      id: e.id,
+      name: e.name,
+      rotateEveryDays: e.rotateEveryDays,
+    }));
   }
   const folderItems: ProjectItem[] =
     location.viewLevel === "environment"

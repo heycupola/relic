@@ -75,6 +75,7 @@ export interface Environment {
   description?: string;
   color?: string;
   sortOrder: number;
+  rotateEveryDays?: number;
   createdBy: string;
   createdAt: number;
   updatedAt: number;
@@ -110,6 +111,8 @@ export interface Secret {
   encryptionKeyVersion: number;
   tags?: string[];
   isDeleted: boolean;
+  valueChangedAt?: number;
+  rotateEveryDays?: number;
   createdBy: string;
   createdAt: number;
   updatedBy: string;

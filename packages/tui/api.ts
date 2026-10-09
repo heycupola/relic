@@ -440,6 +440,27 @@ export class ProtectedApi {
     );
   }
 
+  async setSecretRotationPolicy(secretId: string, rotateEveryDays: number | null): Promise<void> {
+    await this.withAuth(() =>
+      this.client.mutation(api.rotation.setSecretRotationPolicy, {
+        secretId: toId<"secret">(secretId),
+        rotateEveryDays,
+      }),
+    );
+  }
+
+  async setEnvironmentRotationPolicy(
+    environmentId: string,
+    rotateEveryDays: number | null,
+  ): Promise<void> {
+    await this.withAuth(() =>
+      this.client.mutation(api.rotation.setEnvironmentRotationPolicy, {
+        environmentId: toId<"environment">(environmentId),
+        rotateEveryDays,
+      }),
+    );
+  }
+
   async shareProject(args: {
     projectId: string;
     userEmail: string;
