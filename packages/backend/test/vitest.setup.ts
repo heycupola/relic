@@ -39,6 +39,7 @@ vi.mock("../convex/resend", () => ({
     sendEmailManually: vi.fn().mockResolvedValue("mock-email-id"),
   },
   sendEmail: vi.fn().mockResolvedValue({ emailId: "mock-email-id" }),
+  sendEmailDirect: vi.fn().mockResolvedValue({ emailId: "mock-email-id" }),
   getUpgradeUrl: vi.fn().mockReturnValue("https://withrelic.com/upgrade"),
   getDashboardUrl: vi.fn().mockReturnValue("https://withrelic.com/dashboard"),
 }));
@@ -49,6 +50,7 @@ const { _mockBilling } = vi.hoisted(() => {
   class MockBilling {
     customers = new Map<string, Customer>();
     tracked: { customerId: string; featureId: string; value: number }[] = [];
+    failCancellation = false;
 
     private customer(id: string): Customer {
       let customer = this.customers.get(id);
@@ -70,6 +72,7 @@ const { _mockBilling } = vi.hoisted(() => {
     reset() {
       this.customers.clear();
       this.tracked = [];
+      this.failCancellation = false;
     }
 
     api = {
@@ -87,6 +90,9 @@ const { _mockBilling } = vi.hoisted(() => {
       createPortalUrl: async (customerId: string) =>
         `https://billing.withrelic.com/mock/${customerId}`,
       cancelProImmediately: async (customerId: string) => {
+        if (this.failCancellation) {
+          throw new Error("Autumn unavailable");
+        }
         this.customer(customerId).hasActivePro = false;
       },
     };

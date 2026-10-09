@@ -11,6 +11,8 @@ const LIMITS = {
   delete: "deleteOperation",
   bulk: "bulkOperation",
   keyRotation: "keyRotation",
+  deviceCodeRequest: "deviceCodeRequest",
+  deviceAuthDecision: "deviceAuthDecision",
   apiKeyExport: "apiKeyExport",
   serviceAccountExport: "serviceAccountExport",
 } as const;

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, components, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { getWebhookCustomerId } from "../convex/billing";
+import { ErrorCode } from "../convex/lib/errors";
 import {
   GRACE_PERIOD_MS,
   getAccessibleProjectIds,
@@ -14,6 +15,7 @@ import { verifySvixSignature } from "../convex/lib/svix";
 import schema from "../convex/schema";
 import {
   betterAuthModules,
+  expectConvexError,
   getTestUsers,
   mockBilling,
   modules,
@@ -267,6 +269,109 @@ describe("billing integration", () => {
       projectId: created.projectId,
     });
     expect(limits).toMatchObject({ totalSharesCount: 6, purchasedSharesCount: 1 });
+  });
+
+  describe("account deletion", () => {
+    test("is aborted while the Pro subscription cannot be cancelled", async () => {
+      await setPlan(t, owner.userId, "pro");
+      mockBilling.failCancellation = true;
+
+      await expectConvexError(
+        () => owner.asUser.action(api.user.deleteAccount, {}),
+        ErrorCode.EXTERNAL_SERVICE_ERROR,
+        "your account was not deleted",
+      );
+
+      const user = await loadUser(owner.userId);
+      expect(user.hasPro).toBe(true);
+      const deleted = await t.run((ctx) => ctx.db.query("deletedAccount").collect());
+      expect(deleted).toHaveLength(0);
+    });
+
+    test("proceeds when cancellation fails but Autumn shows no active subscription", async () => {
+      vi.useFakeTimers();
+      await setPlan(t, owner.userId, "pro");
+      mockBilling.failCancellation = true;
+      mockBilling.setPro(owner.userId, false);
+
+      await owner.asUser.action(api.user.deleteAccount, {});
+      await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+      await expect(loadUser(owner.userId)).rejects.toThrow();
+    });
+
+    test("deletes owned data in batches and revokes shares", async () => {
+      vi.useFakeTimers();
+      await setPlan(t, owner.userId, "pro");
+      await setPlan(t, other.userId, "pro");
+
+      const owned = await owner.asUser.action(api.project.createProject, {
+        name: "owned",
+        encryptedProjectKey: "epk",
+      });
+      if (owned.status !== "success") throw new Error("expected success");
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        projectId: owned.projectId,
+        name: "production",
+      });
+      await t.run(async (ctx) => {
+        const now = Date.now();
+        for (let i = 0; i < 450; i++) {
+          await ctx.db.insert("secret", {
+            projectId: owned.projectId,
+            environmentId,
+            key: `K_${i}`,
+            encryptedValue: "x",
+            valueType: "string",
+            scope: "shared",
+            encryptionKeyVersion: 1,
+            isDeleted: false,
+            createdBy: owner.userId,
+            createdAt: now,
+            updatedBy: owner.userId,
+            updatedAt: now,
+          });
+        }
+      });
+      await owner.asUser.action(api.projectShare.shareProject, {
+        projectId: owned.projectId,
+        userEmail: third.email,
+        encryptedProjectKey: "shared-epk",
+      });
+
+      const foreign = await other.asUser.action(api.project.createProject, {
+        name: "foreign",
+        encryptedProjectKey: "epk",
+      });
+      if (foreign.status !== "success") throw new Error("expected success");
+      await other.asUser.action(api.projectShare.shareProject, {
+        projectId: foreign.projectId,
+        userEmail: owner.email,
+        encryptedProjectKey: "shared-epk",
+      });
+
+      const result = await owner.asUser.action(api.user.deleteAccount, {});
+      expect(result).toEqual({ success: true });
+      await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+      await expect(loadUser(owner.userId)).rejects.toThrow();
+
+      await t.run(async (ctx) => {
+        expect(await ctx.db.get(owned.projectId)).toBeNull();
+        expect(await ctx.db.get(foreign.projectId)).not.toBeNull();
+        const secrets = await ctx.db
+          .query("secret")
+          .withIndex("by_project", (q) => q.eq("projectId", owned.projectId))
+          .collect();
+        expect(secrets).toHaveLength(0);
+        const shares = await ctx.db.query("projectShare").collect();
+        expect(shares.filter((s) => s.userId === owner.userId)).toHaveLength(0);
+        expect(shares.filter((s) => s.projectId === owned.projectId)).toHaveLength(0);
+
+        const [record] = await ctx.db.query("deletedAccount").collect();
+        expect(record).toMatchObject({ hadProPlan: true, projectsDeleted: 1, sharesRevoked: 2 });
+      });
+    });
   });
 });
 

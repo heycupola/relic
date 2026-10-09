@@ -1,12 +1,11 @@
 import { httpRouter } from "convex/server";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
 import { type ActionCtx, httpAction } from "./_generated/server";
 import { authComponent, createAuth } from "./auth";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
 import { getWebhookCustomerId } from "./billing";
 import { hashKey } from "./lib/crypto";
-import { toHttpErrorResponse } from "./lib/errors";
+import { credentialFailureResponse, toHttpErrorResponse } from "./lib/errors";
 import { createLogger, type Logger } from "./lib/logger";
 import { verifySvixSignature } from "./lib/svix";
 import { EmailKind } from "./lib/types";
@@ -25,16 +24,20 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
 }
 
 function getBearerToken(request: Request): string | null {
-  const header = request.headers.get("Authorization");
-  return header?.startsWith("Bearer ") ? header.slice(7) : null;
+  const match = request.headers.get("Authorization")?.match(/^Bearer\s+(\S+)\s*$/i);
+  return match?.[1] ?? null;
 }
 
+// The leftmost X-Forwarded-For entry is client-controlled; the rightmost one was appended by our edge.
 function getClientIp(request: Request): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("cf-connecting-ip") ??
-    "unknown"
-  );
+  const cfIp = request.headers.get("cf-connecting-ip")?.trim();
+  if (cfIp) return cfIp;
+  const forwarded = request.headers
+    .get("x-forwarded-for")
+    ?.split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return forwarded?.at(-1) ?? "unknown";
 }
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown> | null> {
@@ -125,8 +128,10 @@ http.route({
 
 type ResendPayload = {
   type?: string;
-  data?: { email_id?: string; tags?: Record<string, string> };
+  data?: { email_id?: string; tags?: Record<string, unknown> };
 };
+
+const EMAIL_KINDS = new Set<unknown>(Object.values(EmailKind));
 
 http.route({
   path: "/webhook/resend",
@@ -134,17 +139,19 @@ http.route({
   handler: svixWebhook("resend", "RESEND_WEBHOOK_SECRET", async (ctx, raw, log) => {
     const payload = raw as ResendPayload;
     const tags = payload.data?.tags ?? {};
-    const { userId, emailId } = tags;
-    const emailKind = tags.kind as EmailKind | undefined;
+    const userId = typeof tags.userId === "string" ? tags.userId : undefined;
+    const emailId = typeof tags.emailId === "string" ? tags.emailId : undefined;
+    const emailKind = EMAIL_KINDS.has(tags.kind) ? (tags.kind as EmailKind) : undefined;
     log.info("Event received", { eventType: payload.type });
 
-    if (!userId || !emailKind) return;
+    if (!userId || userId.length > 64 || !emailKind) return;
 
     if (payload.type === "email.delivered" && emailKind !== EmailKind.AccountDeleted) {
       await ctx.runMutation(internal.user._handleEmailDelivered, {
         userId: userId as BetterAuthId<"user">,
         emailKind,
-        emailId: emailId || payload.data?.email_id || "",
+        emailId:
+          emailId || (typeof payload.data?.email_id === "string" ? payload.data.email_id : ""),
         deliveredAt: Date.now(),
       });
     } else if (payload.type === "email.bounced" || payload.type === "email.delivery_delayed") {
@@ -189,21 +196,34 @@ http.route({
     if (!projectId) return json({ error: "projectId is required" }, 400);
 
     try {
-      const { userId, apiKeyId } = await ctx.runMutation(internal.apiKey._validateApiKey, {
+      const auth = await ctx.runMutation(internal.apiKey._validateApiKey, {
         hashedApiKey: await hashKey(token),
         requiredScopes: ["secrets.read"],
         clientIp: getClientIp(request),
         requestedProjectId: projectId,
       });
+      if (!auth.ok) return credentialFailureResponse(auth);
+
+      const ids = await ctx.runQuery(internal.secret._normalizeExportIds, {
+        projectId,
+        environmentId: optionalString(body.environmentId),
+        folderId: optionalString(body.folderId),
+      });
+      if (!ids) {
+        return json(
+          { error: "Invalid projectId, environmentId or folderId", code: "INVALID_ARGUMENTS" },
+          400,
+        );
+      }
 
       const result = await ctx.runMutation(internal.secret._exportSecretsCore, {
-        userId,
-        apiKeyId,
-        projectId: projectId as Id<"project">,
+        userId: auth.userId,
+        apiKeyId: auth.apiKeyId,
+        projectId: ids.projectId,
         environmentName: optionalString(body.environmentName),
-        environmentId: optionalString(body.environmentId) as Id<"environment"> | undefined,
+        environmentId: ids.environmentId,
         folderName: optionalString(body.folderName),
-        folderId: optionalString(body.folderId) as Id<"folder"> | undefined,
+        folderId: ids.folderId,
         scope: optionalScope(body.scope),
       });
 
@@ -222,13 +242,14 @@ http.route({
     if (!token) return missingAuth();
 
     try {
-      const { userId } = await ctx.runMutation(internal.apiKey._validateApiKey, {
+      const auth = await ctx.runMutation(internal.apiKey._validateApiKey, {
         hashedApiKey: await hashKey(token),
         requiredScopes: ["user.keys.read"],
         clientIp: getClientIp(request),
       });
+      if (!auth.ok) return credentialFailureResponse(auth);
 
-      return json(await ctx.runQuery(internal.apiKey._getUserCryptoKeys, { userId }));
+      return json(await ctx.runQuery(internal.apiKey._getUserCryptoKeys, { userId: auth.userId }));
     } catch (error) {
       return toHttpErrorResponse(error);
     }
@@ -250,6 +271,7 @@ http.route({
         hashedToken: await hashKey(token),
         clientIp: getClientIp(request),
       });
+      if (!sa.ok) return credentialFailureResponse(sa);
 
       if (sa.oidcIssuer && sa.oidcSubjectPattern) {
         const oidcToken = request.headers.get("X-Oidc-Token");

@@ -22,6 +22,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_project", ["projectId"])
+    .index("by_project_revoked", ["projectId", "revokedAt"])
     .index("by_hashedToken", ["hashedToken"])
     .index("by_createdBy", ["createdBy"]),
   project: defineTable({
@@ -103,9 +104,12 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_project", ["projectId"])
+    .index("by_project_deleted", ["projectId", "isDeleted"])
     .index("by_environment", ["environmentId"])
+    .index("by_environment_deleted", ["environmentId", "isDeleted"])
     .index("by_folder", ["folderId"])
     .index("by_env_and_key", ["environmentId", "key"])
+    .index("by_env_folder_key", ["environmentId", "folderId", "key", "isDeleted"])
     .index("by_created_by", ["createdBy"])
     .index("by_updated_by", ["updatedBy"]),
   keyRotation: defineTable({

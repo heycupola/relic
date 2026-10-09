@@ -130,6 +130,22 @@ export const _shareProject = internalMutation({
     confirmPayment: v.boolean(),
   },
   handler: async (ctx, args): Promise<ShareGateResult> => {
+    const actor = { ...ctx, userId: args.userId };
+    const project = await getProjectOrThrow(ctx, args.projectId);
+    await assertProjectAccess(actor, project);
+    assertProjectOwner(actor, project, "share this project");
+
+    // Free users get the upgrade prompt before any payload validation, so clients can probe with an empty key.
+    const owner = await loadUser(ctx, args.userId);
+    const { limits } = getPlanState(owner);
+    if (!limits.canShare) {
+      return {
+        success: false as const,
+        requiresProPlan: true as const,
+        message: "Pro plan required to share projects",
+      };
+    }
+
     const email = args.userEmail.trim();
     if (!EMAIL_PATTERN.test(email)) {
       createError({
@@ -147,29 +163,15 @@ export const _shareProject = internalMutation({
       });
     }
 
-    const actor = { ...ctx, userId: args.userId };
-    const project = await getProjectOrThrow(ctx, args.projectId);
-    await assertProjectAccess(actor, project);
-    assertProjectOwner(actor, project, "share this project");
-
-    const owner = await loadUser(ctx, args.userId);
-    const { limits } = getPlanState(owner);
-    if (!limits.canShare) {
-      return {
-        success: false as const,
-        requiresProPlan: true as const,
-        message: "Pro plan required to share projects",
-      };
-    }
-
     const target: User | null = await ctx.runQuery(components.betterAuth.user.loadUserByEmail, {
       email,
     });
 
-    if (!target) {
+    // Same answer for unknown users and users without keys, so this can't be used to enumerate accounts.
+    if (!target || !target.publicKey) {
       createError({
         code: ErrorCode.USER_NOT_FOUND,
-        message: `User with email ${email} not found`,
+        message: "No Relic user with encryption keys was found for this email",
         severity: ErrorSeverity.Medium,
       });
     }
@@ -177,13 +179,6 @@ export const _shareProject = internalMutation({
       createError({
         code: ErrorCode.INVALID_OPERATION,
         message: "Cannot share project with yourself",
-        severity: ErrorSeverity.Medium,
-      });
-    }
-    if (!target.publicKey) {
-      createError({
-        code: ErrorCode.INVALID_OPERATION,
-        message: "Target user has not set up encryption keys yet",
         severity: ErrorSeverity.Medium,
       });
     }
@@ -356,13 +351,13 @@ export const _revokeShareWithRotation = internalMutation({
     );
     const serviceAccounts = await ctx.db
       .query("serviceAccount")
-      .withIndex("by_project", (q) => q.eq("projectId", project._id))
-      .filter((q) => q.eq(q.field("revokedAt"), undefined))
+      .withIndex("by_project_revoked", (q) =>
+        q.eq("projectId", project._id).eq("revokedAt", undefined),
+      )
       .collect();
     const secrets = await ctx.db
       .query("secret")
-      .withIndex("by_project", (q) => q.eq("projectId", project._id))
-      .filter((q) => q.eq(q.field("isDeleted"), false))
+      .withIndex("by_project_deleted", (q) => q.eq("projectId", project._id).eq("isDeleted", false))
       .collect();
 
     const rewrappedServiceAccounts = args.rewrappedServiceAccounts ?? [];
@@ -525,7 +520,8 @@ export const listActiveSharedProjectsForCurrentUser = protectedQuery({
           ownerEmail: owner?.email || "Unknown",
           ownerName: owner?.name || "Unknown",
           sharedAt: share.sharedAt,
-          encryptedProjectKey: share.encryptedProjectKey,
+          encryptedProjectKey:
+            isRestricted || project.isArchived ? null : share.encryptedProjectKey,
           isRestricted,
           isArchived: project.isArchived,
           status: project.isArchived

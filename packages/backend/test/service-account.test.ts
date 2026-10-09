@@ -10,6 +10,11 @@ import { api, components } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { hashKey } from "../convex/lib/crypto";
 import { ErrorCode } from "../convex/lib/errors.ts";
+import {
+  matchSubjectPattern,
+  validateIssuerUrl,
+  validateSubjectPattern,
+} from "../convex/lib/oidc.ts";
 import schema from "../convex/schema";
 import {
   betterAuthModules,
@@ -595,6 +600,78 @@ describe("Service Account Management", () => {
         "issuer is required",
       );
     });
+
+    test("should reject overly broad subject patterns and non-https issuers", async () => {
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
+        owner.publicKey!,
+        owner.encryptedPrivateKey!,
+        owner.password!,
+        owner.salt!,
+        encryptedProjectKey,
+      );
+
+      const create = (oidcIssuer: string, oidcSubjectPattern: string) =>
+        owner.asUser.mutation(api.serviceAccount.createServiceAccount, {
+          projectId,
+          name: "Broad OIDC",
+          ...saArgs,
+          oidcIssuer,
+          oidcSubjectPattern,
+        });
+
+      const github = "https://token.actions.githubusercontent.com";
+      for (const pattern of ["*", "repo:*", "repo:org*", " repo:org/repo:*"]) {
+        await expectConvexError(() => create(github, pattern), ErrorCode.INVALID_ARGUMENTS);
+      }
+      await expectConvexError(
+        () => create("http://token.actions.githubusercontent.com", "repo:org/repo:*"),
+        ErrorCode.INVALID_ARGUMENTS,
+        "https",
+      );
+    });
+  });
+
+  describe("OIDC subject matching", () => {
+    test("trailing wildcards admit any remainder, interior wildcards one segment", () => {
+      expect(matchSubjectPattern("repo:org/app:ref:refs/heads/main", "repo:org/app:*")).toBe(true);
+      expect(matchSubjectPattern("repo:org/app:environment:prod", "repo:org/*")).toBe(true);
+      expect(
+        matchSubjectPattern("repo:org/app:ref:refs/heads/main", "repo:org/*:ref:refs/heads/main"),
+      ).toBe(true);
+      expect(
+        matchSubjectPattern(
+          "repo:org/app:ref:refs/heads/main",
+          "repo:org/app*:ref:refs/heads/main",
+        ),
+      ).toBe(true);
+      expect(matchSubjectPattern("repo:org/app-evil:ref:refs/heads/main", "repo:org/app:*")).toBe(
+        false,
+      );
+      expect(
+        matchSubjectPattern("repo:org/a/b:ref:refs/heads/main", "repo:org/*:ref:refs/heads/main"),
+      ).toBe(false);
+      expect(
+        matchSubjectPattern(
+          "repo:org/app:ref:refs/heads/main-x",
+          "repo:org/app:ref:refs/heads/main",
+        ),
+      ).toBe(false);
+      expect(matchSubjectPattern("repo:other/app:ref:x", "repo:org/*")).toBe(false);
+    });
+
+    test("subject pattern validation requires a literal owner before wildcards", () => {
+      expect(validateSubjectPattern("repo:org/app:ref:refs/heads/main")).toBeNull();
+      expect(validateSubjectPattern("repo:org/app:*")).toBeNull();
+      expect(validateSubjectPattern("repo:org/*")).toBeNull();
+      expect(validateSubjectPattern("*")).not.toBeNull();
+      expect(validateSubjectPattern("repo:*")).not.toBeNull();
+      expect(validateSubjectPattern("repo:org*")).not.toBeNull();
+      expect(validateSubjectPattern("")).not.toBeNull();
+      expect(validateIssuerUrl("https://token.actions.githubusercontent.com")).toBeNull();
+      expect(validateIssuerUrl("http://token.actions.githubusercontent.com")).not.toBeNull();
+      expect(validateIssuerUrl("https://user:pw@issuer.example.com")).not.toBeNull();
+      expect(validateIssuerUrl("not a url")).not.toBeNull();
+    });
   });
 
   describe("updateOidcPolicy", () => {
@@ -663,6 +740,19 @@ describe("Service Account Management", () => {
             oidcIssuer: "https://token.actions.githubusercontent.com",
           }),
         ErrorCode.INVALID_ARGUMENTS,
+      );
+    });
+
+    test("should reject an overly broad subject pattern on update", async () => {
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.serviceAccount.updateOidcPolicy, {
+            serviceAccountId: serviceAccountId as Id<"serviceAccount">,
+            oidcIssuer: "https://token.actions.githubusercontent.com",
+            oidcSubjectPattern: "repo:*",
+          }),
+        ErrorCode.INVALID_ARGUMENTS,
+        "too broad",
       );
     });
 

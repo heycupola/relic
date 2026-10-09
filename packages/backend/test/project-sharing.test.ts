@@ -8,7 +8,7 @@ import {
 } from "@repo/crypto";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { api, internal } from "../convex/_generated/api";
+import { api, components, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { ErrorCode } from "../convex/lib/errors.ts";
 import schema from "../convex/schema";
@@ -91,6 +91,73 @@ describe("Project Sharing", () => {
 
       expect(shareResult.success).toBe(false);
       expect(shareResult.requiresProPlan).toBe(true);
+    });
+
+    test("free users are told to upgrade before the share key is validated", async () => {
+      await setPlan(t, owner.userId, "free");
+
+      const projectId = assertProjectCreated(
+        await owner.asUser.action(api.project.createProject, {
+          encryptedProjectKey: "epk",
+          name: "project-name",
+        }),
+      );
+
+      const shareResult = await owner.asUser.action(api.projectShare.shareProject, {
+        encryptedProjectKey: "",
+        projectId,
+        userEmail: collaborator.email,
+      });
+
+      expect(shareResult.success).toBe(false);
+      expect(shareResult.requiresProPlan).toBe(true);
+      expect(shareResult.checkoutUrl).toBeDefined();
+    });
+
+    test("sharing to a user without keys reports the same error as an unknown user", async () => {
+      const keyless = await t.run(async (ctx) => {
+        const now = Date.now();
+        return (await ctx.runMutation(components.betterAuth.adapter.create, {
+          input: {
+            model: "user",
+            data: {
+              email: "keyless@withrelic.com",
+              name: "keyless",
+              createdAt: now,
+              updatedAt: now,
+              hasPro: false,
+              emailVerified: true,
+            },
+          },
+        })) as unknown;
+      });
+      expect(keyless).toBeDefined();
+
+      const projectId = assertProjectCreated(
+        await owner.asUser.action(api.project.createProject, {
+          encryptedProjectKey: "epk",
+          name: "project-name",
+        }),
+      );
+
+      const share = (userEmail: string) =>
+        owner.asUser.action(api.projectShare.shareProject, {
+          encryptedProjectKey: "epk",
+          projectId,
+          userEmail,
+        });
+
+      const message = "No Relic user with encryption keys was found for this email";
+      await expectConvexError(
+        () => share("keyless@withrelic.com"),
+        ErrorCode.USER_NOT_FOUND,
+        message,
+      );
+      await expectConvexError(
+        () => share("ghost@withrelic.com"),
+        ErrorCode.USER_NOT_FOUND,
+        message,
+      );
     });
 
     test("should share a project to a collaborator", async () => {

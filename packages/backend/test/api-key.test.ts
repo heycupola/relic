@@ -1,6 +1,6 @@
 import { createProjectKey } from "@repo/crypto";
 import { convexTest, type TestConvex } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, components } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { API_KEY_PREFIX } from "../convex/lib/crypto";
@@ -19,6 +19,16 @@ import {
 
 function futureExpiry(days = 30): number {
   return Date.now() + days * 24 * 60 * 60 * 1000;
+}
+
+async function afterGracePeriod<T>(fn: () => Promise<T>): Promise<T> {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(Date.now() + 8 * 24 * 60 * 60 * 1000);
+  try {
+    return await fn();
+  } finally {
+    vi.useRealTimers();
+  }
 }
 
 function assertProjectCreated(result: {
@@ -819,15 +829,67 @@ describe("API Key Management", () => {
         userId: owner.userId,
       });
 
-      const response = await exportViaHttp(apiKey, {
+      const inGrace = await exportViaHttp(apiKey, {
         projectId,
         environmentName: "production",
       });
+      expect(inGrace.status).toBe(200);
+
+      const response = await afterGracePeriod(() =>
+        exportViaHttp(apiKey, {
+          projectId,
+          environmentName: "production",
+        }),
+      );
 
       expect(response.status).toBe(402);
       const result = await response.json();
       expect(result.code).toBe("PRO_PLAN_REQUIRED");
       expect(result.upgradeUrl).toBeDefined();
+    });
+
+    test("should return 400 for malformed ids instead of a server error", async () => {
+      const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
+        name: "Malformed Ids",
+        scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
+      });
+
+      const response = await exportViaHttp(apiKey, {
+        projectId: "not-a-real-id",
+        environmentName: "production",
+      });
+
+      expect(response.status).toBe(400);
+      const result = await response.json();
+      expect(result.code).toBe("INVALID_ARGUMENTS");
+    });
+
+    test("should accept a lowercase bearer scheme", async () => {
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+      const projectId = assertProjectCreated(
+        await owner.asUser.action(api.project.createProject, {
+          encryptedProjectKey,
+          name: "project_" + randomString(),
+        }),
+      );
+      await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "production",
+        projectId,
+      });
+      const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
+        name: "Lowercase Bearer",
+        scopes: ["secrets.read"],
+        expiresAt: futureExpiry(),
+      });
+
+      const response = await t.fetch("/api/secrets/export", {
+        method: "POST",
+        headers: { Authorization: `bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, environmentName: "production" }),
+      });
+
+      expect(response.status).toBe(200);
     });
 
     test("should not access another user's project with API key", async () => {
@@ -898,7 +960,9 @@ describe("API Key Management", () => {
         userId: owner.userId,
       });
 
-      const response = await fetchKeysViaHttp(apiKey);
+      expect((await fetchKeysViaHttp(apiKey)).status).toBe(200);
+
+      const response = await afterGracePeriod(() => fetchKeysViaHttp(apiKey));
 
       expect(response.status).toBe(402);
       const result = await response.json();

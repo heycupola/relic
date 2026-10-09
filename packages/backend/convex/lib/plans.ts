@@ -84,6 +84,12 @@ export function getPlanState(user: PlanFields, now = Date.now()): PlanState {
   };
 }
 
+/** Paid integrations (API keys, service accounts) keep working through the downgrade grace period. */
+export function hasPaidAccess(user: PlanFields, now = Date.now()): boolean {
+  const state = getPlanState(user, now);
+  return state.isPro || state.inGracePeriod;
+}
+
 type ProjectLike<Id extends string> = { _id: Id; createdAt: number };
 
 /** When restricted, only the newest projects within the free allowance stay accessible. */

@@ -1,5 +1,5 @@
 import { MINUTE } from "@convex-dev/rate-limiter";
-import { ConvexError } from "convex/values";
+import { ConvexError, type Infer, v } from "convex/values";
 import { EXPORT_RATE_LIMIT_POLICIES } from "../rateLimiter";
 import { ErrorSeverity } from "./types";
 
@@ -280,6 +280,44 @@ function policyHeaders(type: string): Record<string, string> {
   };
 }
 
+/** A credential check that failed without throwing, so its mutation (and rate-limit use) commits. */
+export const credentialFailureValidator = v.object({
+  ok: v.literal(false),
+  code: v.string(),
+  message: v.string(),
+  upgradeUrl: v.optional(v.string()),
+});
+
+export type CredentialFailure = Infer<typeof credentialFailureValidator>;
+
+export function credentialFailure(
+  code: ErrorCode,
+  message: string,
+  upgradeUrl?: string,
+): CredentialFailure {
+  return { ok: false, code, message, ...(upgradeUrl ? { upgradeUrl } : {}) };
+}
+
+export function credentialFailureResponse(failure: CredentialFailure): Response {
+  return errorResponse(failure.code as ErrorCode, failure.message, failure.upgradeUrl);
+}
+
+function errorResponse(
+  code: ErrorCode,
+  message: string,
+  upgradeUrl?: string,
+  headers: Record<string, string> = {},
+): Response {
+  const body: Record<string, string> = { error: message, code };
+  if (upgradeUrl) {
+    body.upgradeUrl = upgradeUrl;
+  }
+  return new Response(JSON.stringify(body), {
+    status: HTTP_STATUS_MAP[code] ?? 500,
+    headers: { "Content-Type": "application/json", ...headers },
+  });
+}
+
 export function toHttpErrorResponse(error: unknown): Response {
   let code = ErrorCode.SERVER_ERROR;
   let message = "Internal server error";
@@ -305,18 +343,12 @@ export function toHttpErrorResponse(error: unknown): Response {
       retryAfterSeconds = (errorData as { retryAfterSeconds?: number }).retryAfterSeconds;
       rateLimitType = (errorData as { type?: string }).type;
     }
-  } else if (error instanceof Error) {
-    message = error.message;
+  } else {
+    // Non-Convex errors can carry internals (validator dumps, stack details); never echo them.
+    console.error("Unhandled error in HTTP action", error);
   }
 
-  const status = HTTP_STATUS_MAP[code] ?? 500;
-
-  const body: Record<string, string> = { error: message, code };
-  if (upgradeUrl) {
-    body.upgradeUrl = upgradeUrl;
-  }
-
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {};
 
   if (code === ErrorCode.RATE_LIMIT_EXCEEDED) {
     if (typeof retryAfterSeconds === "number" && retryAfterSeconds > 0) {
@@ -328,8 +360,5 @@ export function toHttpErrorResponse(error: unknown): Response {
     }
   }
 
-  return new Response(JSON.stringify(body), {
-    status,
-    headers,
-  });
+  return errorResponse(code, message, upgradeUrl, headers);
 }

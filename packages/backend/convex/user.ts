@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { type Infer, v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import type { Id, TableNames } from "./_generated/dataModel";
 import { internalAction, internalMutation } from "./_generated/server";
@@ -6,6 +6,7 @@ import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
 import { refreshPlan, requestUsageSync, toBillingCustomer } from "./billing";
 import { autumnApi } from "./lib/autumn";
 import {
+  findUser,
   insertActionLog,
   listActiveOwnedProjects,
   listActiveSharesByProject,
@@ -164,6 +165,9 @@ export const _handleEmailDelivered = internalMutation({
   },
   returns: v.object({ success: v.boolean() }),
   handler: async (ctx, args) => {
+    // Webhook tags are untrusted input; unknown or malformed user ids are ignored.
+    if (!(await findUser(ctx, args.userId))) return { success: false };
+
     await ctx.runMutation(components.betterAuth.user.updateUserAfterEmailSent, {
       emailKind: args.emailKind,
       userId: args.userId as BetterAuthId<"user">,
@@ -252,149 +256,261 @@ export const _sendWelcomeEmail = internalAction({
   },
 });
 
+const CASCADE_BATCH_SIZE = 200;
+
+const deletionPhase = v.union(
+  v.literal("ownedProjects"),
+  v.literal("sharedProjects"),
+  v.literal("accountRecords"),
+  v.literal("ownLogs"),
+);
+
+type DeletionPhase = Infer<typeof deletionPhase>;
+
+const cascadeArgs = {
+  userId: v.string(),
+  anonymousId: v.string(),
+  reason: v.union(v.literal("user_request"), v.literal("gdpr"), v.literal("admin")),
+  hadProPlan: v.boolean(),
+  email: v.string(),
+  userName: v.string(),
+  phase: v.optional(deletionPhase),
+  cursor: v.optional(v.union(v.string(), v.null())),
+  projectsDeleted: v.optional(v.number()),
+  sharesRevoked: v.optional(v.number()),
+};
+
+/**
+ * Deletes a user's data in bounded batches, rescheduling itself until nothing is left.
+ * Auth records go last so a failed batch never leaves data without an owner who can retry.
+ */
 export const _cascadeDeleteUserData = internalMutation({
-  args: {
-    userId: v.string(),
-    anonymousId: v.string(),
-    reason: v.union(v.literal("user_request"), v.literal("gdpr"), v.literal("admin")),
-    hadProPlan: v.boolean(),
-  },
+  args: cascadeArgs,
   returns: v.object({
-    success: v.boolean(),
+    done: v.boolean(),
     projectsDeleted: v.number(),
     sharesRevoked: v.number(),
   }),
   handler: async (ctx, args) => {
-    let projectsDeleted = 0;
-    let sharesRevoked = 0;
+    const { userId, anonymousId } = args;
+    let budget = CASCADE_BATCH_SIZE;
+    let phase: DeletionPhase = args.phase ?? "ownedProjects";
+    let cursor = args.cursor ?? null;
+    let projectsDeleted = args.projectsDeleted ?? 0;
+    let sharesRevoked = args.sharesRevoked ?? 0;
 
-    const deleteAll = async (docs: { _id: Id<TableNames> }[]) => {
-      await Promise.all(docs.map((d) => ctx.db.delete(d._id)));
-      return docs.length;
+    const deleteDocs = async (docs: { _id: Id<TableNames> }[]) => {
+      for (const d of docs) await ctx.db.delete(d._id);
+      budget -= docs.length;
     };
 
-    const ownedProjects = await ctx.db
-      .query("project")
-      .withIndex("by_owner", (q) => q.eq("ownerId", args.userId))
-      .collect();
+    const continueLater = async () => {
+      await ctx.scheduler.runAfter(0, internal.user._cascadeDeleteUserData, {
+        ...args,
+        phase,
+        cursor,
+        projectsDeleted,
+        sharesRevoked,
+      });
+      return { done: false, projectsDeleted, sharesRevoked };
+    };
 
-    for (const project of ownedProjects) {
-      const projectId = project._id;
-      const [secrets, folders, environments, rotations, serviceAccounts, shares] =
-        await Promise.all([
-          ctx.db
-            .query("secret")
-            .withIndex("by_project", (q) => q.eq("projectId", projectId))
-            .collect(),
-          ctx.db
-            .query("folder")
-            .withIndex("by_project", (q) => q.eq("projectId", projectId))
-            .collect(),
-          ctx.db
-            .query("environment")
-            .withIndex("by_project", (q) => q.eq("projectId", projectId))
-            .collect(),
-          ctx.db
-            .query("keyRotation")
-            .withIndex("by_project", (q) => q.eq("projectId", projectId))
-            .collect(),
-          ctx.db
-            .query("serviceAccount")
-            .withIndex("by_project", (q) => q.eq("projectId", projectId))
-            .collect(),
-          ctx.db
+    if (phase === "ownedProjects") {
+      while (budget > 0) {
+        const project = await ctx.db
+          .query("project")
+          .withIndex("by_owner", (q) => q.eq("ownerId", userId))
+          .first();
+        if (!project) break;
+
+        const projectId = project._id;
+        const children = [
+          (n: number) =>
+            ctx.db
+              .query("secret")
+              .withIndex("by_project", (q) => q.eq("projectId", projectId))
+              .take(n),
+          (n: number) =>
+            ctx.db
+              .query("folder")
+              .withIndex("by_project", (q) => q.eq("projectId", projectId))
+              .take(n),
+          (n: number) =>
+            ctx.db
+              .query("environment")
+              .withIndex("by_project", (q) => q.eq("projectId", projectId))
+              .take(n),
+          (n: number) =>
+            ctx.db
+              .query("keyRotation")
+              .withIndex("by_project", (q) => q.eq("projectId", projectId))
+              .take(n),
+          (n: number) =>
+            ctx.db
+              .query("serviceAccount")
+              .withIndex("by_project", (q) => q.eq("projectId", projectId))
+              .take(n),
+        ];
+
+        let drained = true;
+        for (const load of children) {
+          const docs = await load(budget);
+          await deleteDocs(docs);
+          if (budget <= 0) {
+            drained = false;
+            break;
+          }
+        }
+        if (drained) {
+          const shares = await ctx.db
             .query("projectShare")
             .withIndex("by_project", (q) => q.eq("projectId", projectId))
-            .collect(),
-        ]);
-
-      await deleteAll([...secrets, ...folders, ...environments, ...rotations, ...serviceAccounts]);
-      sharesRevoked += await deleteAll(shares);
-
-      await ctx.db.delete(projectId);
-      projectsDeleted++;
-    }
-
-    const sharedWithMe = await ctx.db
-      .query("projectShare")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .collect();
-    sharesRevoked += await deleteAll(sharedWithMe);
-
-    const affectedProjectIds = [...new Set(sharedWithMe.map((s) => s.projectId))];
-    const affectedOwners = new Set<string>();
-    for (const projectId of affectedProjectIds) {
-      const project = await ctx.db.get(projectId);
-      if (!project) continue;
-      const remaining = await listActiveSharesByProject(ctx, projectId);
-      await ctx.db.patch(projectId, { shareUsageCount: remaining.length });
-      affectedOwners.add(project.ownerId);
-    }
-    for (const ownerId of affectedOwners) {
-      await requestUsageSync(ctx, ownerId);
-    }
-
-    const onboarding = await ctx.db
-      .query("onboarding")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .first();
-    if (onboarding) await ctx.db.delete(onboarding._id);
-
-    await deleteAll(
-      await ctx.db
-        .query("apiKey")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId))
-        .collect(),
-    );
-
-    const billingSync = await ctx.db
-      .query("billingSync")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .unique();
-    if (billingSync) await ctx.db.delete(billingSync._id);
-
-    const actionLogs = await ctx.db
-      .query("actionLog")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .collect();
-    for (const logEntry of actionLogs) {
-      await ctx.db.patch(logEntry._id, {
-        userId: args.anonymousId,
-        metadata: logEntry.metadata
-          ? { ...logEntry.metadata, sharedUserEmail: undefined }
-          : undefined,
-      });
-    }
-
-    for (const projectId of affectedProjectIds) {
-      const projectLogs = await ctx.db
-        .query("actionLog")
-        .withIndex("by_project", (q) => q.eq("projectId", projectId))
-        .collect();
-
-      for (const logEntry of projectLogs) {
-        if (logEntry.metadata?.sharedUserId === args.userId) {
-          await ctx.db.patch(logEntry._id, {
-            metadata: {
-              ...logEntry.metadata,
-              sharedUserEmail: undefined,
-              sharedUserId: args.anonymousId,
-            },
-          });
+            .take(budget);
+          await deleteDocs(shares);
+          sharesRevoked += shares.length;
+          drained = budget > 0;
         }
+        if (!drained) return await continueLater();
+
+        await ctx.db.delete(projectId);
+        projectsDeleted++;
+        budget--;
       }
+      if (budget <= 0) return await continueLater();
+      phase = "sharedProjects";
+      cursor = null;
+    }
+
+    if (phase === "sharedProjects") {
+      // Anonymize the owner-written logs that mention this user, then drop the share itself.
+      // Convex allows a single paginated query per function, so each run handles one page.
+      const share = await ctx.db
+        .query("projectShare")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .first();
+
+      if (share) {
+        const page = await ctx.db
+          .query("actionLog")
+          .withIndex("by_project", (q) => q.eq("projectId", share.projectId))
+          .paginate({ cursor, numItems: budget });
+        for (const logEntry of page.page) {
+          if (logEntry.metadata?.sharedUserId === userId) {
+            await ctx.db.patch(logEntry._id, {
+              metadata: {
+                ...logEntry.metadata,
+                sharedUserEmail: undefined,
+                sharedUserId: anonymousId,
+              },
+            });
+          }
+        }
+
+        if (page.isDone) {
+          cursor = null;
+          await ctx.db.delete(share._id);
+          sharesRevoked++;
+
+          const project = await ctx.db.get(share.projectId);
+          if (project) {
+            const remaining = await listActiveSharesByProject(ctx, share.projectId);
+            await ctx.db.patch(share.projectId, { shareUsageCount: remaining.length });
+            await requestUsageSync(ctx, project.ownerId);
+          }
+        } else {
+          cursor = page.continueCursor;
+        }
+        return await continueLater();
+      }
+
+      phase = "accountRecords";
+    }
+
+    if (phase === "accountRecords") {
+      const apiKeys = await ctx.db
+        .query("apiKey")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .take(budget);
+      await deleteDocs(apiKeys);
+      if (budget <= 0) return await continueLater();
+
+      const onboarding = await ctx.db
+        .query("onboarding")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .first();
+      if (onboarding) await ctx.db.delete(onboarding._id);
+
+      const billingSync = await ctx.db
+        .query("billingSync")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .unique();
+      if (billingSync) await ctx.db.delete(billingSync._id);
+
+      phase = "ownLogs";
+    }
+
+    if (phase === "ownLogs") {
+      // Re-pointing userId moves each entry out of this index range, so re-reading the head is enough.
+      const actionLogs = await ctx.db
+        .query("actionLog")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .take(budget);
+      for (const logEntry of actionLogs) {
+        await ctx.db.patch(logEntry._id, {
+          userId: anonymousId,
+          metadata: logEntry.metadata
+            ? { ...logEntry.metadata, sharedUserEmail: undefined }
+            : undefined,
+        });
+      }
+      budget -= actionLogs.length;
+      if (budget <= 0) return await continueLater();
     }
 
     await ctx.db.insert("deletedAccount", {
-      anonymousId: args.anonymousId,
+      anonymousId,
       deletedAt: Date.now(),
       reason: args.reason,
       hadProPlan: args.hadProPlan,
       projectsDeleted,
       sharesRevoked,
     });
+    await insertActionLog(ctx, { userId: anonymousId, action: "account.deleted" });
+    await ctx.runMutation(components.betterAuth.user.deleteUserAndAuthRecords, {
+      userId: userId as BetterAuthId<"user">,
+    });
+    await ctx.scheduler.runAfter(0, internal.user._sendAccountDeletedEmail, {
+      to: args.email,
+      userName: args.userName,
+      projectsDeleted,
+      sharesRevoked,
+    });
 
-    return { success: true, projectsDeleted, sharesRevoked };
+    log.info("Account deleted", { anonymousId, projectsDeleted, sharesRevoked });
+    return { done: true, projectsDeleted, sharesRevoked };
+  },
+});
+
+export const _sendAccountDeletedEmail = internalAction({
+  args: {
+    to: v.string(),
+    userName: v.string(),
+    projectsDeleted: v.number(),
+    sharesRevoked: v.number(),
+  },
+  returns: v.null(),
+  handler: async (_ctx, args) => {
+    try {
+      await sendEmailDirect(args.to, {
+        kind: EmailKind.AccountDeleted,
+        userName: args.userName,
+        projectsDeleted: args.projectsDeleted,
+        sharesRevoked: args.sharesRevoked,
+      });
+    } catch (error) {
+      log.error("Failed to send account deletion email", { error: String(error) });
+    }
+    return null;
   },
 });
 
@@ -417,37 +533,36 @@ export const deleteAccount = protectedAction({
         log.error("Failed to cancel subscription during account deletion", {
           error: String(error),
         });
+
+        // A stale local flag shouldn't block deletion once Autumn confirms nothing is billing.
+        let stillBilling = true;
+        try {
+          stillBilling = (await autumnApi.getSnapshot(toBillingCustomer(user))).hasActivePro;
+        } catch (snapshotError) {
+          log.error("Failed to verify subscription during account deletion", {
+            error: String(snapshotError),
+          });
+        }
+
+        if (stillBilling) {
+          createError({
+            code: ErrorCode.EXTERNAL_SERVICE_ERROR,
+            message:
+              "We couldn't cancel your Pro subscription, so your account was not deleted. Please try again in a few minutes, or cancel the subscription from the billing portal first.",
+            severity: ErrorSeverity.High,
+          });
+        }
       }
     }
 
-    const cascadeResult = await ctx.runMutation(internal.user._cascadeDeleteUserData, {
+    await ctx.runMutation(internal.user._cascadeDeleteUserData, {
       userId: ctx.userId,
       anonymousId,
       reason: "user_request",
       hadProPlan: user.hasPro,
+      email: user.email,
+      userName: user.name || "there",
     });
-
-    try {
-      await sendEmailDirect(user.email, {
-        kind: EmailKind.AccountDeleted,
-        userName: user.name || "there",
-        projectsDeleted: cascadeResult.projectsDeleted,
-        sharesRevoked: cascadeResult.sharesRevoked,
-      });
-    } catch (error) {
-      log.error("Failed to send account deletion email", { error: String(error) });
-    }
-
-    await ctx.runMutation(internal.actionLog._insertActionLog, {
-      userId: anonymousId,
-      action: "account.deleted",
-    });
-
-    await ctx.runMutation(components.betterAuth.user.deleteUserAndAuthRecords, {
-      userId: ctx.userId,
-    });
-
-    log.info("Account deleted", { anonymousId });
 
     return { success: true };
   },

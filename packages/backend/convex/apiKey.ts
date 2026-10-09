@@ -1,13 +1,19 @@
 import { v } from "convex/values";
-import { MAX_API_KEYS_PER_USER } from "./lib/plans";
-import { getProjectOrThrow } from "./lib/data";
+import { hasPaidAccess, MAX_API_KEYS_PER_USER } from "./lib/plans";
+import { findUser, getProjectOrThrow } from "./lib/data";
 import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
 import { isProjectAccessible, ProjectAccessReason } from "./lib/access";
 import { extractPrefix, generateRawKey, hashKey } from "./lib/crypto";
-import { createError, ErrorCode } from "./lib/errors";
+import {
+  type CredentialFailure,
+  createError,
+  credentialFailure,
+  credentialFailureValidator,
+  ErrorCode,
+} from "./lib/errors";
 import { createLogger } from "./lib/logger";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
@@ -216,11 +222,16 @@ export const _validateApiKey = internalMutation({
     clientIp: v.optional(v.string()),
     requestedProjectId: v.optional(v.string()),
   },
-  returns: v.object({
-    userId: v.string(),
-    apiKeyId: v.id("apiKey"),
-    projectId: v.optional(v.id("project")),
-  }),
+  // Failures are returned rather than thrown so the rate-limit consumption above commits.
+  returns: v.union(
+    credentialFailureValidator,
+    v.object({
+      ok: v.literal(true),
+      userId: v.string(),
+      apiKeyId: v.id("apiKey"),
+      projectId: v.optional(v.id("project")),
+    }),
+  ),
   handler: async (
     ctx,
     args: {
@@ -229,7 +240,10 @@ export const _validateApiKey = internalMutation({
       clientIp?: string;
       requestedProjectId?: string;
     },
-  ): Promise<{ userId: string; apiKeyId: Id<"apiKey">; projectId?: Id<"project"> }> => {
+  ): Promise<
+    | CredentialFailure
+    | { ok: true; userId: string; apiKeyId: Id<"apiKey">; projectId?: Id<"project"> }
+  > => {
     const rateLimitKey = args.clientIp ?? "unknown";
     await checkRateLimit(ctx, "read", `apikey:${rateLimitKey}`);
 
@@ -239,27 +253,15 @@ export const _validateApiKey = internalMutation({
       .unique();
 
     if (!keyDoc) {
-      throw createError({
-        code: ErrorCode.UNAUTHORIZED,
-        message: "Invalid API key",
-        severity: ErrorSeverity.Medium,
-      });
+      return credentialFailure(ErrorCode.UNAUTHORIZED, "Invalid API key");
     }
 
     if (keyDoc.revokedAt) {
-      throw createError({
-        code: ErrorCode.UNAUTHORIZED,
-        message: "API key has been revoked",
-        severity: ErrorSeverity.Medium,
-      });
+      return credentialFailure(ErrorCode.UNAUTHORIZED, "API key has been revoked");
     }
 
     if (keyDoc.expiresAt && keyDoc.expiresAt < Date.now()) {
-      throw createError({
-        code: ErrorCode.UNAUTHORIZED,
-        message: "API key has expired",
-        severity: ErrorSeverity.Medium,
-      });
+      return credentialFailure(ErrorCode.UNAUTHORIZED, "API key has expired");
     }
 
     const keyScopes = keyDoc.scopes as ApiKeyScope[];
@@ -267,11 +269,10 @@ export const _validateApiKey = internalMutation({
 
     if (!hasScopes(keyScopes, required)) {
       const missing = required.filter((r) => !keyScopes.includes(r));
-      throw createError({
-        code: ErrorCode.INSUFFICIENT_PERMISSION,
-        message: `API key missing required scope(s): ${missing.join(", ")}`,
-        severity: ErrorSeverity.High,
-      });
+      return credentialFailure(
+        ErrorCode.INSUFFICIENT_PERMISSION,
+        `API key missing required scope(s): ${missing.join(", ")}`,
+      );
     }
 
     if (
@@ -279,31 +280,29 @@ export const _validateApiKey = internalMutation({
       args.requestedProjectId &&
       keyDoc.projectId !== args.requestedProjectId
     ) {
-      throw createError({
-        code: ErrorCode.INSUFFICIENT_PERMISSION,
-        message: "API key is scoped to a different project",
-        severity: ErrorSeverity.High,
-      });
+      return credentialFailure(
+        ErrorCode.INSUFFICIENT_PERMISSION,
+        "API key is scoped to a different project",
+      );
     }
 
-    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
-      userId: keyDoc.userId as BetterAuthId<"user">,
-    });
-    if (!user?.hasPro) {
-      throw createError({
-        code: ErrorCode.PRO_PLAN_REQUIRED,
-        message:
-          "CI/CD integration requires a Pro plan. Consider using service accounts for passwordless access.",
-        severity: ErrorSeverity.Medium,
-        metadata: {
-          upgradeUrl: `${process.env.SITE_URL || "https://withrelic.com"}/dashboard?action=upgrade`,
-        },
-      });
+    const user = await findUser(ctx, keyDoc.userId);
+    if (!user || !hasPaidAccess(user)) {
+      return credentialFailure(
+        ErrorCode.PRO_PLAN_REQUIRED,
+        "CI/CD integration requires a Pro plan. Consider using service accounts for passwordless access.",
+        `${process.env.SITE_URL || "https://withrelic.com"}/dashboard?action=upgrade`,
+      );
     }
 
     await ctx.db.patch(keyDoc._id, { lastUsedAt: Date.now() });
 
-    return { userId: keyDoc.userId, apiKeyId: keyDoc._id, projectId: keyDoc.projectId };
+    return {
+      ok: true as const,
+      userId: keyDoc.userId,
+      apiKeyId: keyDoc._id,
+      projectId: keyDoc.projectId,
+    };
   },
 });
 

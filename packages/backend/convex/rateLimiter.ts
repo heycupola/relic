@@ -52,5 +52,20 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
     period: HOUR,
     capacity: 3,
   },
+  // Unauthenticated and IP-less, so this is one global ceiling for all CLI logins. Codes live
+  // 30 minutes, so it also caps outstanding codes at capacity + 30 * rate (~3.7k).
+  deviceCodeRequest: {
+    kind: "token bucket",
+    rate: 120,
+    period: MINUTE,
+    capacity: 60,
+    shards: 4,
+  },
+  deviceAuthDecision: {
+    kind: "token bucket",
+    rate: 10,
+    period: MINUTE,
+    capacity: 5,
+  },
   ...EXPORT_RATE_LIMIT_POLICIES,
 });

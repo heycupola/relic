@@ -1,13 +1,20 @@
 import { v } from "convex/values";
-import { MAX_SERVICE_ACCOUNTS_PER_PROJECT } from "./lib/plans";
-import { getProjectOrThrow } from "./lib/data";
+import { hasPaidAccess, MAX_SERVICE_ACCOUNTS_PER_PROJECT } from "./lib/plans";
+import { findUser, getProjectOrThrow } from "./lib/data";
 import { doc } from "convex-helpers/validators";
 import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { assertProjectAccess } from "./lib/access";
-import { createError, ErrorCode, permissionError } from "./lib/errors";
+import {
+  createError,
+  credentialFailure,
+  credentialFailureValidator,
+  ErrorCode,
+  permissionError,
+} from "./lib/errors";
 import { createLogger } from "./lib/logger";
+import { validateIssuerUrl, validateSubjectPattern } from "./lib/oidc";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
 import { ErrorSeverity, type ProtectedMutationCtx, type ProtectedQueryCtx } from "./lib/types";
@@ -16,6 +23,19 @@ import schema from "./schema";
 const log = createLogger("serviceAccount");
 
 const MAX_EXPIRATION_MS = 365 * 24 * 60 * 60 * 1000;
+
+function assertValidOidcPolicy(issuer?: string, subjectPattern?: string): void {
+  const problem =
+    (issuer !== undefined ? validateIssuerUrl(issuer) : null) ??
+    (subjectPattern !== undefined ? validateSubjectPattern(subjectPattern) : null);
+  if (problem) {
+    createError({
+      code: ErrorCode.INVALID_ARGUMENTS,
+      message: problem,
+      severity: ErrorSeverity.Low,
+    });
+  }
+}
 
 export const createServiceAccount = protectedMutation({
   args: {
@@ -92,6 +112,8 @@ export const createServiceAccount = protectedMutation({
         severity: ErrorSeverity.Low,
       });
     }
+
+    assertValidOidcPolicy(args.oidcIssuer, args.oidcSubjectPattern);
 
     const now = Date.now();
 
@@ -243,6 +265,12 @@ export const updateOidcPolicy = protectedMutation({
       });
     }
 
+    // Only newly supplied values are checked, so legacy policies stay editable piecemeal.
+    assertValidOidcPolicy(
+      typeof args.oidcIssuer === "string" ? args.oidcIssuer : undefined,
+      typeof args.oidcSubjectPattern === "string" ? args.oidcSubjectPattern : undefined,
+    );
+
     await ctx.db.replace(sa._id, {
       ...sa,
       oidcIssuer: newIssuer,
@@ -358,17 +386,22 @@ export const _validateServiceToken = internalMutation({
     hashedToken: v.string(),
     clientIp: v.optional(v.string()),
   },
-  returns: v.object({
-    serviceAccountId: v.id("serviceAccount"),
-    projectId: v.id("project"),
-    encryptedPrivateKey: v.string(),
-    salt: v.string(),
-    encryptedProjectKey: v.string(),
-    publicKey: v.string(),
-    oidcIssuer: v.optional(v.string()),
-    oidcSubjectPattern: v.optional(v.string()),
-    oidcAudience: v.optional(v.string()),
-  }),
+  // Failures are returned rather than thrown so the rate-limit consumption above commits.
+  returns: v.union(
+    credentialFailureValidator,
+    v.object({
+      ok: v.literal(true),
+      serviceAccountId: v.id("serviceAccount"),
+      projectId: v.id("project"),
+      encryptedPrivateKey: v.string(),
+      salt: v.string(),
+      encryptedProjectKey: v.string(),
+      publicKey: v.string(),
+      oidcIssuer: v.optional(v.string()),
+      oidcSubjectPattern: v.optional(v.string()),
+      oidcAudience: v.optional(v.string()),
+    }),
+  ),
   handler: async (ctx, args) => {
     const rateLimitKey = args.clientIp ?? "unknown";
     await checkRateLimit(ctx, "read", `sa:${rateLimitKey}`);
@@ -379,53 +412,38 @@ export const _validateServiceToken = internalMutation({
       .unique();
 
     if (!sa) {
-      throw createError({
-        code: ErrorCode.UNAUTHORIZED,
-        message: "Invalid service token",
-        severity: ErrorSeverity.Medium,
-      });
+      return credentialFailure(ErrorCode.UNAUTHORIZED, "Invalid service token");
     }
 
     if (sa.revokedAt) {
-      throw createError({
-        code: ErrorCode.UNAUTHORIZED,
-        message: "Service account has been revoked",
-        severity: ErrorSeverity.Medium,
-      });
+      return credentialFailure(ErrorCode.UNAUTHORIZED, "Service account has been revoked");
     }
 
     if (sa.expiresAt && sa.expiresAt < Date.now()) {
-      throw createError({
-        code: ErrorCode.UNAUTHORIZED,
-        message: "Service account token has expired",
-        severity: ErrorSeverity.Medium,
-      });
+      return credentialFailure(ErrorCode.UNAUTHORIZED, "Service account token has expired");
     }
 
-    const project = await getProjectOrThrow(ctx, sa.projectId);
+    const project = await ctx.db.get(sa.projectId);
+    if (!project) {
+      return credentialFailure(ErrorCode.PROJECT_NOT_FOUND, "Project not found");
+    }
 
     if (project.isArchived) {
-      throw createError({
-        code: ErrorCode.PROJECT_INACCESSIBLE,
-        message: "Project is archived",
-        severity: ErrorSeverity.Medium,
-      });
+      return credentialFailure(ErrorCode.PROJECT_INACCESSIBLE, "Project is archived");
     }
 
-    const owner = await ctx.runQuery(components.betterAuth.user.loadUserById, {
-      userId: project.ownerId,
-    });
-    if (!owner?.hasPro) {
-      throw createError({
-        code: ErrorCode.PRO_PLAN_REQUIRED,
-        message: "Service accounts require the project owner to have a Pro plan.",
-        severity: ErrorSeverity.Medium,
-      });
+    const owner = await findUser(ctx, project.ownerId);
+    if (!owner || !hasPaidAccess(owner)) {
+      return credentialFailure(
+        ErrorCode.PRO_PLAN_REQUIRED,
+        "Service accounts require the project owner to have a Pro plan.",
+      );
     }
 
     await ctx.db.patch(sa._id, { lastUsedAt: Date.now() });
 
     return {
+      ok: true as const,
       serviceAccountId: sa._id,
       projectId: sa.projectId,
       encryptedPrivateKey: sa.encryptedPrivateKey,
@@ -447,8 +465,9 @@ export const _loadActiveServiceAccountsByProject = internalQuery({
   handler: async (ctx, args) => {
     return await ctx.db
       .query("serviceAccount")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .filter((q) => q.eq(q.field("revokedAt"), undefined))
+      .withIndex("by_project_revoked", (q) =>
+        q.eq("projectId", args.projectId).eq("revokedAt", undefined),
+      )
       .collect();
   },
 });

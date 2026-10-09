@@ -24,6 +24,8 @@ import {
   type TestUser,
 } from "./setup";
 
+const STALE_PROJECT_KEY_MESSAGE = "The project key changed. Reload the project and try again.";
+
 function assertProjectCreated(result: {
   status: string;
   projectId?: string;
@@ -868,6 +870,215 @@ describe("Secret Management", () => {
         collaboratorResult.secrets[0].encryptedValue,
       );
       expect(decryptedValue).toBe("shared-secret-value");
+    });
+  });
+
+  describe("Integrity Checks", () => {
+    let projectId: Id<"project">;
+    let environmentId: Id<"environment">;
+
+    beforeEach(async () => {
+      await setPlan(t, owner.userId, "pro");
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+      projectId = assertProjectCreated(
+        await owner.asUser.action(api.project.createProject, {
+          encryptedProjectKey,
+          name: "project_" + randomString(),
+        }),
+      );
+      ({ id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "environment_" + randomString(),
+        projectId,
+      }));
+    });
+
+    const create = (
+      key: string,
+      extra: { folderId?: Id<"folder">; expectedKeyVersion?: number } = {},
+    ) =>
+      owner.asUser.mutation(api.secret.createSecret, {
+        environmentId,
+        key,
+        encryptedValue: "cipher-" + key,
+        valueType: "string",
+        ...extra,
+      });
+
+    test("should reject writes made with a stale project key version", async () => {
+      const { id: secretId } = await create("FRESH", { expectedKeyVersion: 1 });
+      const { id: legacyId } = await create("LEGACY");
+      expect(legacyId).toBeDefined();
+
+      await expectConvexError(
+        () => create("STALE", { expectedKeyVersion: 0 }),
+        ErrorCode.INVALID_RESOURCE_STATE,
+        STALE_PROJECT_KEY_MESSAGE,
+      );
+
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.secret.updateSecret, {
+            secretId,
+            updates: { encryptedValue: "new", valueType: SecretValueType.String },
+            expectedKeyVersion: 2,
+          }),
+        ErrorCode.INVALID_RESOURCE_STATE,
+        STALE_PROJECT_KEY_MESSAGE,
+      );
+
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.secret.updateSecretBulk, {
+            environmentId,
+            secrets: [{ key: "BULK", encryptedValue: "x", valueType: "string" }],
+            expectedKeyVersion: 2,
+          }),
+        ErrorCode.INVALID_RESOURCE_STATE,
+        STALE_PROJECT_KEY_MESSAGE,
+      );
+
+      await owner.asUser.mutation(api.secret.updateSecret, {
+        secretId,
+        updates: { encryptedValue: "new", valueType: SecretValueType.String },
+        expectedKeyVersion: 1,
+      });
+      const bulk = await owner.asUser.mutation(api.secret.updateSecretBulk, {
+        environmentId,
+        secrets: [{ key: "BULK", encryptedValue: "x", valueType: "string" }],
+      });
+      expect(bulk.createdCount).toBe(1);
+    });
+
+    test("should reject a folder from another environment", async () => {
+      const { id: otherEnvironmentId } = await owner.asUser.mutation(
+        api.environment.createEnvironment,
+        { name: "other_" + randomString(), projectId },
+      );
+      const { id: foreignFolderId } = await owner.asUser.mutation(api.folder.createFolder, {
+        environmentId: otherEnvironmentId,
+        name: "foreign",
+      });
+
+      await expectConvexError(
+        () => create("KEY", { folderId: foreignFolderId }),
+        ErrorCode.INVALID_ARGUMENTS,
+        "Folder does not belong to this environment",
+      );
+
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.secret.updateSecretBulk, {
+            environmentId,
+            folderId: foreignFolderId,
+            secrets: [{ key: "KEY", encryptedValue: "x", valueType: "string" }],
+          }),
+        ErrorCode.INVALID_ARGUMENTS,
+        "Folder does not belong to this environment",
+      );
+    });
+
+    test("should enforce the per-environment secret limit on create", async () => {
+      await t.run(async (ctx) => {
+        const now = Date.now();
+        for (let i = 0; i < 1024; i++) {
+          await ctx.db.insert("secret", {
+            projectId,
+            environmentId,
+            key: `SEED_${i}`,
+            encryptedValue: "x",
+            valueType: "string",
+            scope: "shared",
+            encryptionKeyVersion: 1,
+            isDeleted: false,
+            createdBy: owner.userId,
+            createdAt: now,
+            updatedBy: owner.userId,
+            updatedAt: now,
+          });
+        }
+      });
+
+      await expectConvexError(() => create("ONE_TOO_MANY"), ErrorCode.ENVIRONMENT_LIMIT_REACHED);
+    });
+
+    test("should reject renaming a secret to an existing key", async () => {
+      const { id: firstId } = await create("FIRST");
+      const { id: secondId } = await create("SECOND");
+
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.secret.updateSecret, {
+            secretId: secondId,
+            updates: { key: "FIRST", valueType: SecretValueType.String },
+          }),
+        ErrorCode.RESOURCE_ALREADY_EXISTS,
+      );
+
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.secret.updateSecretBulk, {
+            environmentId,
+            secrets: [
+              { secretId: secondId, key: "FIRST", encryptedValue: "x", valueType: "string" },
+            ],
+            mode: "overwrite",
+          }),
+        ErrorCode.RESOURCE_ALREADY_EXISTS,
+      );
+
+      const skipped = await owner.asUser.mutation(api.secret.updateSecretBulk, {
+        environmentId,
+        secrets: [{ secretId: secondId, key: "FIRST", encryptedValue: "x", valueType: "string" }],
+        mode: "skip",
+      });
+      expect(skipped.skippedCount).toBe(1);
+
+      const first = await owner.asUser.query(api.secret.getSecret, { secretId: firstId });
+      const second = await owner.asUser.query(api.secret.getSecret, { secretId: secondId });
+      expect(first.key).toBe("FIRST");
+      expect(second.key).toBe("SECOND");
+
+      await owner.asUser.mutation(api.secret.updateSecret, {
+        secretId: secondId,
+        updates: { key: "RENAMED", valueType: SecretValueType.String },
+      });
+      expect((await owner.asUser.query(api.secret.getSecret, { secretId: secondId })).key).toBe(
+        "RENAMED",
+      );
+    });
+
+    test("should hide soft-deleted secrets and purge them with their folder", async () => {
+      const { id: folderId } = await owner.asUser.mutation(api.folder.createFolder, {
+        environmentId,
+        name: "purge",
+      });
+      const { id: secretId } = await create("GONE", { folderId });
+
+      await owner.asUser.mutation(api.secret.deleteSecret, { secretId });
+
+      await expectConvexError(
+        () => owner.asUser.query(api.secret.getSecret, { secretId }),
+        ErrorCode.SECRET_NOT_FOUND,
+      );
+
+      await owner.asUser.mutation(api.folder.deleteFolder, { folderId });
+
+      await t.run(async (ctx) => {
+        expect(await ctx.db.get(secretId)).toBeNull();
+        expect(await ctx.db.get(folderId)).toBeNull();
+      });
+    });
+
+    test("should purge soft-deleted secrets when the environment is deleted", async () => {
+      const { id: secretId } = await create("GONE");
+      await owner.asUser.mutation(api.secret.deleteSecret, { secretId });
+
+      await owner.asUser.mutation(api.environment.deleteEnvironment, { environmentId });
+
+      await t.run(async (ctx) => {
+        expect(await ctx.db.get(secretId)).toBeNull();
+        expect(await ctx.db.get(environmentId)).toBeNull();
+      });
     });
   });
 });

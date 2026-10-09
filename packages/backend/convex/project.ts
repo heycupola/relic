@@ -8,6 +8,7 @@ import { requestUsageSync, toBillingCustomer } from "./billing";
 import { assertProjectAccess, assertProjectOwner } from "./lib/access";
 import { autumnApi } from "./lib/autumn";
 import {
+  findActiveShare,
   getProjectOrThrow,
   insertActionLog,
   listActiveOwnedProjects,
@@ -266,6 +267,13 @@ export const getProject = protectedQuery({
     const project = await getProjectOrThrow(ctx, args.projectId);
     await assertProjectAccess(ctx, project);
 
+    // Each member gets the project key wrapped for their own RSA key; the owner's copy is useless to others.
+    let encryptedProjectKey = project.encryptedProjectKey;
+    if (project.ownerId !== ctx.userId) {
+      const share = await findActiveShare(ctx, project._id, ctx.userId);
+      if (share) encryptedProjectKey = share.encryptedProjectKey;
+    }
+
     return {
       id: project._id,
       name: project.name,
@@ -274,7 +282,7 @@ export const getProject = protectedQuery({
       ownerId: project.ownerId,
       isArchived: project.isArchived,
       keyVersion: project.keyVersion,
-      encryptedProjectKey: project.encryptedProjectKey,
+      encryptedProjectKey,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
     };
@@ -310,9 +318,30 @@ export const updateProject = protectedMutation({
   },
 });
 
+const unarchiveProjectResult = v.union(
+  v.object({ status: v.literal("success") }),
+  v.object({
+    status: v.literal("requiresConfirmation"),
+    balance: v.number(),
+    freeLimit: v.number(),
+    message: v.optional(v.string()),
+  }),
+);
+
+type SetArchivedResult = Infer<typeof unarchiveProjectResult>;
+
 export const _setArchived = internalMutation({
-  args: { userId: v.string(), projectId: v.id("project"), archived: v.boolean() },
-  handler: async (ctx, { userId, projectId, archived }) => {
+  args: {
+    userId: v.string(),
+    projectId: v.id("project"),
+    archived: v.boolean(),
+    confirmPayment: v.optional(v.boolean()),
+  },
+  returns: unarchiveProjectResult,
+  handler: async (
+    ctx,
+    { userId, projectId, archived, confirmPayment },
+  ): Promise<SetArchivedResult> => {
     const project = await getProjectOrThrow(ctx, projectId);
     const actor = { ...ctx, userId };
     const verb = archived ? "archive projects" : "unarchive projects";
@@ -340,8 +369,9 @@ export const _setArchived = internalMutation({
 
       const serviceAccounts = await ctx.db
         .query("serviceAccount")
-        .withIndex("by_project", (q) => q.eq("projectId", projectId))
-        .filter((q) => q.eq(q.field("revokedAt"), undefined))
+        .withIndex("by_project_revoked", (q) =>
+          q.eq("projectId", projectId).eq("revokedAt", undefined),
+        )
         .collect();
       if (serviceAccounts.length > 0) {
         createError({
@@ -354,10 +384,20 @@ export const _setArchived = internalMutation({
       const user = await loadUser(ctx, userId);
       const { isPro, limits } = getPlanState(user);
       const count = (await listActiveOwnedProjects(ctx, userId)).length;
-      if (!isPro && count >= limits.includedProjects) {
+      const isPaidProject = count >= limits.includedProjects;
+      if (isPaidProject && !isPro) {
         limitReachedError("projects", count, limits.includedProjects, ErrorSeverity.High);
       }
       await assertUniqueSlug(ctx, userId, project.slug, projectId);
+
+      if (isPaidProject && confirmPayment !== true) {
+        return {
+          status: "requiresConfirmation" as const,
+          balance: 0,
+          freeLimit: limits.includedProjects,
+          message: `Unarchiving this project adds a paid project ($${ADD_ON_PRICES_USD.project}/month). Confirm to proceed.`,
+        };
+      }
     }
 
     await ctx.db.patch(projectId, { isArchived: archived, updatedAt: Date.now() });
@@ -370,7 +410,7 @@ export const _setArchived = internalMutation({
     await requestUsageSync(ctx, userId);
 
     log.info(archived ? "Project archived" : "Project unarchived", { projectId, userId });
-    return { success: true };
+    return { status: "success" as const };
   },
 });
 
@@ -378,22 +418,25 @@ export const archiveProject = protectedAction({
   args: { projectId: v.id("project") },
   handler: async (ctx, { projectId }): Promise<{ success: boolean }> => {
     await checkRateLimit(ctx, "write");
-    return await ctx.runMutation(internal.project._setArchived, {
+    await ctx.runMutation(internal.project._setArchived, {
       userId: ctx.userId,
       projectId,
       archived: true,
     });
+    return { success: true };
   },
 });
 
 export const unarchiveProject = protectedAction({
-  args: { projectId: v.id("project") },
-  handler: async (ctx, { projectId }): Promise<{ success: boolean }> => {
+  args: { projectId: v.id("project"), confirmPayment: v.optional(v.boolean()) },
+  returns: unarchiveProjectResult,
+  handler: async (ctx, { projectId, confirmPayment }): Promise<SetArchivedResult> => {
     await checkRateLimit(ctx, "write");
     return await ctx.runMutation(internal.project._setArchived, {
       userId: ctx.userId,
       projectId,
       archived: false,
+      confirmPayment,
     });
   },
 });

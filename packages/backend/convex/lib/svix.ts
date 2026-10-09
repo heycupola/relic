@@ -20,11 +20,11 @@ export async function verifySvixSignature(
     return false;
   }
 
-  const timestampNum = Number.parseInt(svixTimestamp, 10);
+  const timestampNum = /^\d+$/.test(svixTimestamp) ? Number(svixTimestamp) : Number.NaN;
   const now = Math.floor(Date.now() / 1000);
   const toleranceSeconds = 300;
 
-  if (Math.abs(now - timestampNum) > toleranceSeconds) {
+  if (!Number.isFinite(timestampNum) || Math.abs(now - timestampNum) > toleranceSeconds) {
     log.error("Timestamp outside tolerance window");
     return false;
   }
@@ -53,17 +53,31 @@ export async function verifySvixSignature(
   const expectedSignatureBase64 = btoa(String.fromCharCode(...Array.from(signatureArray)));
 
   const signatures = svixSignature.split(" ");
+  let matched = false;
 
   for (const versionedSig of signatures) {
     const [version, signature] = versionedSig.split(",");
 
-    if (version === "v1" && signature === expectedSignatureBase64) {
-      return true;
+    if (version === "v1" && signature !== undefined) {
+      matched = timingSafeEqual(signature, expectedSignatureBase64) || matched;
     }
   }
 
+  if (matched) return true;
+
   log.error("Signature verification failed - no match");
   return false;
+}
+
+function timingSafeEqual(a: string, b: string): boolean {
+  const encoder = new TextEncoder();
+  const left = encoder.encode(a);
+  const right = encoder.encode(b);
+  let diff = left.length ^ right.length;
+  for (let i = 0; i < right.length; i++) {
+    diff |= (left[i] ?? 0) ^ (right[i] ?? 0);
+  }
+  return diff === 0;
 }
 
 function base64ToBytes(base64: string): Uint8Array {

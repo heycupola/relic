@@ -19,6 +19,7 @@ export type MockBilling = {
   getUsage(customerId: string, featureId: string): number;
   reset(): void;
   tracked: { customerId: string; featureId: string; value: number }[];
+  failCancellation: boolean;
 };
 
 // biome-ignore lint/suspicious/noExplicitAny: Test mock accessed via globalThis

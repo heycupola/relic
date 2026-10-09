@@ -296,6 +296,59 @@ describe("Project Lifecycle", () => {
       );
     });
 
+    test("pro users must confirm unarchiving past their included projects", async () => {
+      const archivedId = assertProjectCreated(
+        await owner.asUser.action(api.project.createProject, {
+          encryptedProjectKey: "epk",
+          name: "archived-first",
+        }),
+      );
+      await owner.asUser.action(api.project.archiveProject, { projectId: archivedId });
+
+      for (let i = 0; i < 5; i++) {
+        assertProjectCreated(
+          await owner.asUser.action(api.project.createProject, {
+            encryptedProjectKey: "epk",
+            name: `active-${i}`,
+          }),
+        );
+      }
+
+      const pending = await owner.asUser.action(api.project.unarchiveProject, {
+        projectId: archivedId,
+      });
+      expect(pending).toMatchObject({ status: "requiresConfirmation", freeLimit: 5, balance: 0 });
+      if (pending.status === "requiresConfirmation") {
+        expect(pending.message).toBeTruthy();
+      }
+
+      const stillArchived = await t.run(async (ctx) => ctx.db.get(archivedId));
+      expect(stillArchived?.isArchived).toBe(true);
+
+      const confirmed = await owner.asUser.action(api.project.unarchiveProject, {
+        projectId: archivedId,
+        confirmPayment: true,
+      });
+      expect(confirmed).toEqual({ status: "success" });
+
+      const unarchived = await t.run(async (ctx) => ctx.db.get(archivedId));
+      expect(unarchived?.isArchived).toBe(false);
+    });
+
+    test("unarchiving within the included projects needs no confirmation", async () => {
+      const projectId = assertProjectCreated(
+        await owner.asUser.action(api.project.createProject, {
+          encryptedProjectKey: "epk",
+          name: "solo",
+        }),
+      );
+      await owner.asUser.action(api.project.archiveProject, { projectId });
+
+      expect(await owner.asUser.action(api.project.unarchiveProject, { projectId })).toEqual({
+        status: "success",
+      });
+    });
+
     test("should not fetch a project of other user", async () => {
       const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
 
@@ -487,6 +540,73 @@ describe("Project Lifecycle", () => {
       expect(collaboratorEnvironment).toBeDefined();
       expect(collaboratorEnvironment.length).toBe(1);
       expect(collaboratorEnvironment[0].name).toBe("environment-name");
+    });
+
+    test("should reject blank environment names and duplicate renames", async () => {
+      const projectId = assertProjectCreated(
+        await owner.asUser.action(api.project.createProject, {
+          encryptedProjectKey: "epk",
+          name: "project-name",
+        }),
+      );
+
+      for (const name of ["", "   ", "!!!"]) {
+        await expectConvexError(
+          () => owner.asUser.mutation(api.environment.createEnvironment, { projectId, name }),
+          ErrorCode.INVALID_ARGUMENTS,
+        );
+      }
+
+      await owner.asUser.mutation(api.environment.createEnvironment, {
+        projectId,
+        name: "  production  ",
+      });
+      const { id: stagingId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        projectId,
+        name: "staging",
+      });
+
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.environment.updateEnvironment, {
+            environmentId: stagingId,
+            name: "Production",
+          }),
+        ErrorCode.RESOURCE_ALREADY_EXISTS,
+      );
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.environment.updateEnvironment, {
+            environmentId: stagingId,
+            name: "  ",
+          }),
+        ErrorCode.INVALID_ARGUMENTS,
+      );
+
+      await owner.asUser.mutation(api.environment.updateEnvironment, {
+        environmentId: stagingId,
+        name: "staging",
+      });
+
+      const environments = await owner.asUser.query(api.environment.getProjectEnvironments, {
+        projectId,
+      });
+      expect(environments.map((e) => e.name).sort()).toEqual(["production", "staging"]);
+    });
+
+    test("should require project access for secrets cache validation", async () => {
+      const projectId = assertProjectCreated(
+        await owner.asUser.action(api.project.createProject, {
+          encryptedProjectKey: "epk",
+          name: "project-name",
+        }),
+      );
+
+      await expectConvexError(
+        () =>
+          nonCollaborator.asUser.query(api.environment.getSecretsCacheValidation, { projectId }),
+        ErrorCode.INSUFFICIENT_PERMISSION,
+      );
     });
   });
 

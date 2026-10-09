@@ -281,6 +281,87 @@ describe("User Key Lifecycle", () => {
         );
         expect(updatedShare3.encryptedProjectKey).toBe(rewrappedShare3Key);
       });
+
+      test("should accept archived owned projects and require every active key", async () => {
+        const { encryptedProjectKey: activeKey } = await createProjectKey(owner.publicKey!);
+        const { encryptedProjectKey: archivedKey } = await createProjectKey(owner.publicKey!);
+        const { encryptedProjectKey: sharedKey, projectKey: sharedProjectKey } =
+          await createProjectKey(owner2.publicKey!);
+
+        const activeId = assertProjectCreated(
+          await owner.asUser.action(api.project.createProject, {
+            name: "active-" + randomString(),
+            encryptedProjectKey: activeKey,
+          }),
+        );
+        const archivedId = assertProjectCreated(
+          await owner.asUser.action(api.project.createProject, {
+            name: "archived-" + randomString(),
+            encryptedProjectKey: archivedKey,
+          }),
+        );
+        await owner.asUser.action(api.project.archiveProject, { projectId: archivedId });
+
+        const sharedId = assertProjectCreated(
+          await owner2.asUser.action(api.project.createProject, {
+            name: "shared-" + randomString(),
+            encryptedProjectKey: sharedKey,
+          }),
+        );
+        const { shareId } = await owner2.asUser.action(api.projectShare.shareProject, {
+          encryptedProjectKey: await wrapAESKeyWithRSA(
+            sharedProjectKey,
+            await importPublicKey(owner.publicKey!),
+          ),
+          projectId: sharedId,
+          userEmail: owner.email,
+        });
+
+        const next = await createUserKeys(owner.password!);
+        const base = {
+          newEncryptedPrivateKey: next.encryptedPrivateKey,
+          newPublicKey: next.publicKey,
+          newSalt: next.salt,
+        };
+
+        await expectConvexError(
+          () =>
+            owner.asUser.mutation(api.userKey.rotateUserKeys, {
+              ...base,
+              rewrappedOwnedProjects: [{ projectId: activeId, newEncryptedProjectKey: "a" }],
+              rewrappedShares: [],
+            }),
+          ErrorCode.INVALID_OPERATION,
+        );
+
+        await expectConvexError(
+          () =>
+            owner.asUser.mutation(api.userKey.rotateUserKeys, {
+              ...base,
+              rewrappedOwnedProjects: [],
+              rewrappedShares: [{ shareId: shareId!, newEncryptedProjectKey: "s" }],
+            }),
+          ErrorCode.INVALID_OPERATION,
+        );
+
+        const unchanged = await owner.asUser.query(api.user.getCurrentUser, {});
+        expect(unchanged.publicKey).toBe(owner.publicKey);
+
+        const result = await owner.asUser.mutation(api.userKey.rotateUserKeys, {
+          ...base,
+          rewrappedOwnedProjects: [
+            { projectId: activeId, newEncryptedProjectKey: "a" },
+            { projectId: archivedId, newEncryptedProjectKey: "b" },
+          ],
+          rewrappedShares: [{ shareId: shareId!, newEncryptedProjectKey: "s" }],
+        });
+        expect(result).toMatchObject({ success: true, sharesUpdated: 1, ownedProjectsUpdated: 2 });
+
+        const archived = await owner.asUser.query(internal.project._loadProjectById, {
+          projectId: archivedId,
+        });
+        expect(archived.encryptedProjectKey).toBe("b");
+      });
     });
 
     test("should update master password successfully", async () => {

@@ -3,6 +3,8 @@ import { deviceAuthError, notFoundError } from "../lib/errors";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query } from "./_generated/server";
 
+const EXPIRED_CLEANUP_BATCH = 20;
+
 const SITE_URL =
   process.env.SITE_URL ||
   (process.env.ENVIRONMENT === "development" ? "http://localhost:3000" : "https://withrelic.com");
@@ -51,6 +53,15 @@ export const requestDeviceCode = mutation({
     const now = Date.now();
     const expiresIn = 30 * 60 * 1_000;
     const pollingInterval = 5 * 1_000;
+
+    // The daily cron is the main cleanup; trimming a few here keeps the table bounded between runs.
+    const expired = await ctx.db
+      .query("deviceCode")
+      .withIndex("by_expiresAt", (q) => q.lt("expiresAt", now))
+      .take(EXPIRED_CLEANUP_BATCH);
+    for (const code of expired) {
+      await ctx.db.delete(code._id);
+    }
 
     await ctx.db.insert("deviceCode", {
       deviceCode,
@@ -252,6 +263,11 @@ export const denyDeviceCode = mutation({
     if (now > deviceCodeEntry.expiresAt) {
       await ctx.db.delete(deviceCodeEntry._id);
       throw deviceAuthError("expired");
+    }
+
+    // An approved code must not be flipped to denied before the CLI collects its session.
+    if (deviceCodeEntry.status !== "pending") {
+      throw deviceAuthError("already_used");
     }
 
     await ctx.db.patch(deviceCodeEntry._id, {

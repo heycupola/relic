@@ -129,13 +129,22 @@ export const _finishUsageSync = internalMutation({
         return;
       }
       const backoffMs = Math.min(30_000 * 2 ** attempts, 60 * 60 * 1000);
-      await ctx.db.patch(state._id, { attempts, lastError: error });
+      // Backoff can exceed STALE_SYNC_MS; dating the run to its retry keeps a second chain from starting.
+      await ctx.db.patch(state._id, {
+        attempts,
+        lastError: error,
+        startedAt: Date.now() + backoffMs,
+      });
       await ctx.scheduler.runAfter(backoffMs, internal.billing._syncUsage, { userId });
       return;
     }
 
     if (state.dirty) {
-      await ctx.db.patch(state._id, { attempts: 0, lastSyncedAt: Date.now() });
+      await ctx.db.patch(state._id, {
+        attempts: 0,
+        lastSyncedAt: Date.now(),
+        startedAt: Date.now(),
+      });
       await ctx.scheduler.runAfter(0, internal.billing._syncUsage, { userId });
       return;
     }
