@@ -123,6 +123,21 @@ export interface BulkUpdateResult {
   secretIds: string[];
 }
 
+export interface SecretNamesRequest {
+  environmentName: string;
+  folderName?: string;
+  scope?: "client" | "server" | "shared";
+}
+
+export interface SecretNames {
+  secrets: {
+    key: string;
+    scope: "client" | "server" | "shared";
+    valueType: "string" | "number" | "boolean";
+  }[];
+  count: number;
+}
+
 export interface FullUser extends User {
   publicKey?: string;
   encryptedPrivateKey?: string;
@@ -399,6 +414,18 @@ export class ProtectedApi {
     };
   }
 
+  async listSecretNames(args: SecretNamesRequest & { projectId: string }): Promise<SecretNames> {
+    const result = await this.withAuth(() =>
+      this.client.query(api.secret.listSecretNames, {
+        projectId: toId<"project">(args.projectId),
+        environmentName: args.environmentName,
+        folderName: args.folderName,
+        scope: args.scope,
+      }),
+    );
+    return { secrets: result.secrets, count: result.count };
+  }
+
   async createServiceAccount(args: {
     projectId: string;
     name: string;
@@ -563,6 +590,66 @@ export async function exportSecretsViaServiceToken(
     headers: oidcToken ? { "X-Oidc-Token": oidcToken } : undefined,
     proPlanMessage: "Service accounts require a Pro plan.",
   });
+}
+
+async function postSecretNames(
+  url: string,
+  headers: Record<string, string>,
+  body: Record<string, unknown>,
+  proPlanMessage: string,
+): Promise<SecretNames> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    const parsed = errorBody as { error?: string; code?: string; upgradeUrl?: string } | null;
+
+    if (response.status === 402 || parsed?.code === "PRO_PLAN_REQUIRED") {
+      throw new ProPlanRequiredError(
+        parsed?.error || proPlanMessage,
+        parsed?.upgradeUrl || `${SITE_URL}/dashboard?action=upgrade`,
+      );
+    }
+
+    throw new Error(parsed?.error ?? `HTTP ${response.status}`);
+  }
+
+  const result = (await response.json()) as SecretNames;
+  return { secrets: result.secrets, count: result.count };
+}
+
+export async function listSecretNamesViaApiKey(
+  apiKey: string,
+  body: SecretNamesRequest & { projectId: string },
+): Promise<SecretNames> {
+  return postSecretNames(
+    `${CONVEX_SITE_URL}/api/secrets/names`,
+    { Authorization: `Bearer ${apiKey}` },
+    { ...body },
+    "API keys require a Pro plan.",
+  );
+}
+
+export async function listSecretNamesViaServiceToken(
+  serviceToken: string,
+  body: SecretNamesRequest,
+  oidcToken?: string,
+): Promise<SecretNames> {
+  const headers: Record<string, string> = { Authorization: `Bearer ${serviceToken}` };
+  if (oidcToken) {
+    headers["X-Oidc-Token"] = oidcToken;
+  }
+
+  return postSecretNames(
+    `${CONVEX_SITE_URL}/api/sa/secrets/names`,
+    headers,
+    { ...body },
+    "Service accounts require a Pro plan.",
+  );
 }
 
 export async function fetchUserKeysViaApiKey(apiKey: string): Promise<UserCryptoKeysResponse> {

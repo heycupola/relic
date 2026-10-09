@@ -1,6 +1,7 @@
 import { initLogger, isFirstRun, saveTelemetryPreference } from "@repo/logger";
 import { Command, CommanderError, Help } from "commander";
 import pc from "picocolors";
+import check, { type CheckOptions } from "./commands/check";
 import importSecrets, { type ImportOptions } from "./commands/import";
 import init from "./commands/init";
 import login from "./commands/login";
@@ -58,7 +59,7 @@ const COMMAND_GROUPS = [
   },
   {
     label: "Secrets",
-    commands: ["run", "shell", "import", "push", "service-account"],
+    commands: ["run", "shell", "import", "push", "check", "service-account"],
   },
   {
     label: "Tools",
@@ -103,6 +104,7 @@ function formatCustomHelp(): string {
   lines.push(`    ${pc.dim("$")} relic run -e production -- npm start`);
   lines.push(`    ${pc.dim("$")} relic shell -e development`);
   lines.push(`    ${pc.dim("$")} relic push -e production --target vercel --dry-run`);
+  lines.push(`    ${pc.dim("$")} relic check -e production --scan`);
   lines.push("");
 
   lines.push(`  ${pc.dim("https://docs.withrelic.com")}`);
@@ -307,6 +309,33 @@ program
   .option("--fly-stage", "Stage Fly secrets without restarting machines")
   .action((options: PushOptions) => {
     push(options);
+  });
+
+program
+  .command("check")
+  .description("Check that required env keys exist in an environment (names only)")
+  .requiredOption("-e, --environment <name>", "Environment name (required)")
+  .option("-f, --folder <name>", "Folder name (optional)")
+  .option("-s, --scope <scope>", "Scope filter: client, server, or shared (optional)")
+  .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
+  .option(
+    "--from <file>",
+    "Read required keys from this file instead of .env.example/.sample/.template (repeatable)",
+    collect,
+    [],
+  )
+  .option("--scan [paths...]", "Also scan source files for env reads (defaults to project root)")
+  .option(
+    "--ignore <keys>",
+    "Keys to skip, comma-separated, * wildcards allowed (repeatable)",
+    collect,
+    [],
+  )
+  .option("--compare <environment>", "Compare key names with another environment")
+  .option("--strict", "Also fail on unused keys and differences from --compare")
+  .option("--json", "Print the result as JSON")
+  .action((options: CheckOptions) => {
+    check(options);
   });
 
 program

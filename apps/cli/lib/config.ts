@@ -8,6 +8,9 @@ const CACHE_DB = "cache.db";
 
 export interface RelicConfig {
   project_id: string;
+  check?: {
+    ignore?: string[];
+  };
 }
 
 export interface ConfigResult {
