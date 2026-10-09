@@ -8,19 +8,16 @@
     "./globals.css": "./src/styles/globals.css",
     "./postcss.config": "./postcss.config.mjs",
     "./lib/*": "./src/lib/*.ts",
-    "./components/*": "./src/components/*.tsx",
-    "./hooks/*": "./src/hooks/*.ts"
+    "./components/*": "./src/components/*.tsx"
   },
   "scripts": {
     "lint": "oxlint .",
     "format": "oxfmt .",
-    "generate:component": "turbo gen react-component",
     "check-types": "tsc --noEmit",
     "lint:fix": "oxlint . --fix",
     "format:check": "oxfmt --check ."
   },
   "dependencies": {
-    "@radix-ui/react-alert-dialog": "^1.1.24",
     "@radix-ui/react-slot": "^1.4.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

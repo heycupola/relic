@@ -48,3 +48,6 @@ target
 
 # Lefthook
 .husky
+
+# Wrangler local state
+.wrangler
