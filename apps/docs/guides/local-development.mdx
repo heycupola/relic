@@ -39,7 +39,7 @@ relic shell -e development -s server  # Only server-scoped secrets
 
 - Secret values are decrypted locally and never written to disk.
 - On macOS and Linux, the shell starts from a cleared environment with only a small set of system variables (`PATH`, `HOME`, `USER`, `SHELL`, `TERM`, locale, `TMPDIR`, `TZ`), plus your secrets. Your shell's startup files (`.zshrc`, `.bashrc`, `config.fish`) run as usual and restore the rest of your setup. Relic credentials such as `RELIC_SERVICE_TOKEN`, `RELIC_API_KEY`, and `RELIC_PASSWORD` are not passed into the shell.
-- Variables set outside your startup files, such as `SSH_AUTH_SOCK` from an SSH agent, are not inherited on macOS and Linux. Export them from your startup file if you need them inside the shell.
+- Variables set outside your startup files, such as `SSH_AUTH_SOCK` from an SSH agent, are not inherited on macOS and Linux. Export them from your startup file if you need them inside the shell. Or pass `--inherit-env` to bring your current environment (minus `RELIC_*` variables) into the shell; secrets win on conflicts.
 - `Ctrl+C` interrupts the command running inside the shell, not the shell itself. The exit code of the shell becomes the exit code of `relic shell`.
 
 <Warning>

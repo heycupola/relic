@@ -84,6 +84,14 @@ function isApiKeyMode(): boolean {
   return !!process.env.RELIC_API_KEY;
 }
 
+export type AuthMode = "service_token" | "api_key" | "session";
+
+export function getAuthMode(): AuthMode {
+  if (isServiceTokenMode()) return "service_token";
+  if (isApiKeyMode()) return "api_key";
+  return "session";
+}
+
 function isCiEnvironment(): boolean {
   return !!(
     process.env.CI ||
@@ -95,7 +103,7 @@ function isCiEnvironment(): boolean {
   );
 }
 
-function injectedMessage(count: number): string {
+export function injectedMessage(count: number): string {
   return `Injected ${count} secret${count !== 1 ? "s" : ""}`;
 }
 
@@ -464,6 +472,47 @@ async function prepareWithSession(
   return prepareSecrets(projectId, options, db, userKeyDb, getApi());
 }
 
+export function loadSecrets(
+  spinner: Ora,
+  options: RunOptions,
+  mode: AuthMode,
+): Promise<PrepareSecretsResult> {
+  switch (mode) {
+    case "service_token":
+      return prepareWithServiceToken(spinner, options);
+    case "api_key":
+      return prepareWithApiKey(spinner, options);
+    case "session":
+      return prepareWithSession(spinner, options);
+  }
+}
+
+/** Exits with 1 when `--environment` is missing or `--scope` is invalid; normalizes the scope. */
+export async function validateRunOptions(options: RunOptions): Promise<void> {
+  if (!options.environment) {
+    console.error(pc.red("Error: -e, --environment is required"));
+    await exitWithTelemetry(1);
+  }
+
+  if (options.scope) {
+    const scope = options.scope.toLowerCase() as SecretScope;
+    if (!SECRET_SCOPES.includes(scope)) {
+      console.error(pc.red("Error: --scope must be: client, server, or shared"));
+      await exitWithTelemetry(1);
+    }
+    options.scope = scope;
+  }
+}
+
+export async function failRun(spinner: Ora, err: unknown): Promise<never> {
+  if (err instanceof ProPlanRequiredError) {
+    await failWithUpgradePrompt(spinner, err.message, err.upgradeUrl);
+  }
+
+  spinner.fail(pc.red(getErrorMessage(err)));
+  return exitWithTelemetry(1);
+}
+
 /** Resolves like the runner does: the child's PATH (secrets may override it) or a direct path. */
 export function commandExists(program: string, path: string | undefined): boolean {
   if (program.includes("/") || program.includes("\\")) {
@@ -480,12 +529,11 @@ export function toProcessExitCode(runnerExitCode: number): number {
   return runnerExitCode === RUNNER_ERROR ? COMMAND_NOT_FOUND_EXIT_CODE : runnerExitCode;
 }
 
-async function executeCommand(
+/** Runs `command` through the runner with `childEnv`; returns the process exit code. */
+export async function runWithEnv(
   command: string[],
   childEnv: Record<string, string>,
-  count: number,
-  startTime: number,
-): Promise<never> {
+): Promise<number> {
   const runner = await RunnerBridge.getInstance();
 
   const commandBuffer = Buffer.from(`${JSON.stringify(command)}\0`, "utf-8");
@@ -499,10 +547,19 @@ async function executeCommand(
     secretsBuffer.fill(0);
   }
 
-  const processExitCode = toProcessExitCode(exitCode);
   if (exitCode === RUNNER_ERROR) {
     console.error(pc.red(`✖ Failed to start \`${command[0]}\``));
   }
+  return toProcessExitCode(exitCode);
+}
+
+async function executeCommand(
+  command: string[],
+  childEnv: Record<string, string>,
+  count: number,
+  startTime: number,
+): Promise<never> {
+  const processExitCode = await runWithEnv(command, childEnv);
 
   trackEvent("cli_run_completed", {
     secret_count: count,
@@ -514,26 +571,14 @@ async function executeCommand(
 }
 
 export default async function run(command: string[], options: RunOptions) {
-  if (!options.environment) {
-    console.error(pc.red("Error: -e, --environment is required"));
-    await exitWithTelemetry(1);
-  }
+  await validateRunOptions(options);
 
   if (command.length === 0) {
     console.error(pc.red("Error: No command specified"));
     await exitWithTelemetry(1);
   }
 
-  if (options.scope) {
-    const scope = options.scope.toLowerCase() as SecretScope;
-    if (!SECRET_SCOPES.includes(scope)) {
-      console.error(pc.red("Error: --scope must be: client, server, or shared"));
-      await exitWithTelemetry(1);
-    }
-    options.scope = scope;
-  }
-
-  const mode = isServiceTokenMode() ? "service_token" : isApiKeyMode() ? "api_key" : "session";
+  const mode = getAuthMode();
   const startTime = Date.now();
   trackEvent("cli_run_started", {
     has_folder: !!options.folder,
@@ -545,12 +590,7 @@ export default async function run(command: string[], options: RunOptions) {
   const spinner = ora();
 
   try {
-    const { secrets, count } =
-      mode === "service_token"
-        ? await prepareWithServiceToken(spinner, options)
-        : mode === "api_key"
-          ? await prepareWithApiKey(spinner, options)
-          : await prepareWithSession(spinner, options);
+    const { secrets, count } = await loadSecrets(spinner, options, mode);
 
     const childEnv = options.inheritEnv ? buildChildEnv(process.env, secrets) : secrets;
     const program = command[0]!;
@@ -569,12 +609,6 @@ export default async function run(command: string[], options: RunOptions) {
   } catch (err) {
     log.error("Run failed", err);
     trackEvent("cli_run_completed", { success: false, duration_ms: Date.now() - startTime });
-
-    if (err instanceof ProPlanRequiredError) {
-      await failWithUpgradePrompt(spinner, err.message, err.upgradeUrl);
-    }
-
-    spinner.fail(pc.red(getErrorMessage(err)));
-    await exitWithTelemetry(1);
+    await failRun(spinner, err);
   }
 }

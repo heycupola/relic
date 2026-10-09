@@ -30,7 +30,9 @@ mock.module("ora", () => ({
   }),
 }));
 
+const realApi = { ...(await import("../lib/api")) };
 mock.module("../lib/api", () => ({
+  ...realApi,
   getApi: mock(() => ({})),
   exportSecretsViaApiKey: mock(),
   exportSecretsViaServiceToken: mock(() => Promise.reject(new Error("export failed"))),
@@ -225,6 +227,7 @@ describe("shell command", () => {
     expect(mockTrackEvent).toHaveBeenCalledWith("cli_shell_started", {
       has_folder: false,
       has_scope: false,
+      inherit_env: false,
       nested: true,
       mode: "service_token",
     });

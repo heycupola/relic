@@ -1,13 +1,18 @@
 import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { createLogger, trackEvent } from "@repo/logger";
+import ora from "ora";
 import pc from "picocolors";
+import { resolveProjectIdWithConfig } from "../lib/cli";
+import { buildChildEnv } from "../lib/env";
+import { exitWithTelemetry } from "../lib/telemetry";
 import {
-  executeWithSecrets,
+  failRun,
   getAuthMode,
-  handleRunError,
+  injectedMessage,
   loadSecrets,
   type RunOptions,
+  runWithEnv,
   validateRunOptions,
 } from "./run";
 
@@ -61,7 +66,7 @@ export function buildShellEnv(
 }
 
 export default async function shell(options: ShellOptions) {
-  validateRunOptions(options);
+  await validateRunOptions(options);
 
   if (isInsideRelicShell() && !options.force) {
     const current = process.env.RELIC_ENVIRONMENT;
@@ -76,7 +81,7 @@ export default async function shell(options: ShellOptions) {
       ),
     );
     console.error();
-    process.exit(1);
+    await exitWithTelemetry(1);
   }
 
   const mode = getAuthMode();
@@ -84,21 +89,27 @@ export default async function shell(options: ShellOptions) {
   trackEvent("cli_shell_started", {
     has_folder: !!options.folder,
     has_scope: !!options.scope,
+    inherit_env: !!options.inheritEnv,
     nested: isInsideRelicShell(),
     mode,
   });
 
   const shellPath = resolveShell();
+  const spinner = ora();
 
   let secretCount: number;
   let exitCode: number;
   try {
-    const { secrets, count, projectId } = await loadSecrets(options, mode);
+    const { secrets, count } = await loadSecrets(spinner, options, mode);
     secretCount = count;
+    spinner.succeed(pc.green(injectedMessage(count)));
 
-    const env = buildShellEnv(secrets, {
+    const projectId =
+      mode === "service_token" ? undefined : await resolveProjectIdWithConfig(options.project);
+    const childEnv = options.inheritEnv ? buildChildEnv(process.env, secrets) : secrets;
+    const env = buildShellEnv(childEnv, {
       environment: options.environment,
-      projectId,
+      projectId: projectId ?? undefined,
       folder: options.folder,
       scope: options.scope,
     });
@@ -110,11 +121,11 @@ export default async function shell(options: ShellOptions) {
     );
     console.error();
 
-    exitCode = await executeWithSecrets([shellPath], env);
+    exitCode = await runWithEnv([shellPath], env);
   } catch (err) {
     log.error("Shell failed", err);
     trackEvent("cli_shell_completed", { success: false, duration_ms: Date.now() - startTime });
-    return handleRunError(err);
+    return failRun(spinner, err);
   }
 
   console.error();
@@ -126,5 +137,5 @@ export default async function shell(options: ShellOptions) {
     duration_ms: Date.now() - startTime,
   });
 
-  process.exit(exitCode);
+  return exitWithTelemetry(exitCode);
 }

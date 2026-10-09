@@ -13,7 +13,7 @@ import {
   serviceAccountList,
   serviceAccountRevoke,
 } from "./commands/service-account";
-import shell from "./commands/shell";
+import shell, { type ShellOptions } from "./commands/shell";
 import { telemetryDisable, telemetryEnable, telemetryStatus } from "./commands/telemetry";
 import upgrade from "./commands/upgrade";
 import whoami from "./commands/whoami";
@@ -239,18 +239,12 @@ program
   .option("-f, --folder <name>", "Folder name (optional)")
   .option("-s, --scope <scope>", "Scope filter: client, server, or shared (optional)")
   .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
+  .option(
+    "--inherit-env",
+    "Pass the current environment (except RELIC_* variables) to the shell; secrets take precedence",
+  )
   .option("--force", "Open a nested shell even if already inside a relic shell")
-  .action(
-    (options: {
-      environment: string;
-      folder?: string;
-      scope?: SecretScope;
-      project?: string;
-      force?: boolean;
-    }) => {
-      shell(options);
-    },
-  );
+  .action((options: ShellOptions) => shell(options));
 
 program
   .command("version")
