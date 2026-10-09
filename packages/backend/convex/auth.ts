@@ -37,48 +37,48 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) =>
       additionalFields: {
         hasPro: {
           type: "boolean",
-          input: true,
+          input: false,
           required: true,
           defaultValue: false,
         },
         planDowngradedAt: {
           type: "number",
-          input: true,
+          input: false,
           required: false,
         },
         gracePeriodEmailSent: {
           type: "boolean",
-          input: true,
+          input: false,
           required: false,
         },
         accessRestrictedEmailSent: {
           type: "boolean",
-          input: true,
+          input: false,
           required: false,
         },
         publicKey: {
           type: "string",
-          input: true,
+          input: false,
           required: false,
         },
         encryptedPrivateKey: {
           type: "string",
-          input: true,
+          input: false,
           required: false,
         },
         salt: {
           type: "string",
-          input: true,
+          input: false,
           required: false,
         },
         keysUpdatedAt: {
           type: "date",
-          input: true,
+          input: false,
           required: false,
         },
         hasCompletedOnboarding: {
           type: "boolean",
-          input: true,
+          input: false,
           required: false,
           defaultValue: false,
         },
