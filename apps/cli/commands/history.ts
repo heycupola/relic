@@ -1,11 +1,15 @@
 import * as p from "@clack/prompts";
-import { validateSession } from "@repo/auth";
 import { createLogger, trackEvent } from "@repo/logger";
-import { ConvexError } from "convex/values";
 import ora from "ora";
 import pc from "picocolors";
 import { getApi, type ProtectedApi, type SecretHistory } from "../lib/api";
-import { findConfig } from "../lib/config";
+import {
+  hasActiveSession,
+  NOT_LOGGED_IN_MESSAGE,
+  PROJECT_ID_REQUIRED_MESSAGE,
+  parseConvexError,
+  resolveProjectIdWithConfig,
+} from "../lib/cli";
 import { decryptSecretValue, getProjectKey } from "../lib/crypto";
 import {
   buildHistoryRows,
@@ -14,6 +18,7 @@ import {
   renderHistoryTable,
   toHistoryJson,
 } from "../lib/history";
+import { exitWithTelemetry } from "../lib/telemetry";
 
 const log = createLogger("cli");
 
@@ -36,39 +41,14 @@ export interface RollbackOptions {
 
 class CommandError extends Error {}
 
-function errorMessage(err: unknown): string {
-  if (err instanceof ConvexError) {
-    let data = err.data;
-    while (typeof data === "string") {
-      try {
-        data = JSON.parse(data);
-      } catch {
-        break;
-      }
-    }
-    if (typeof data === "object" && data !== null && "message" in data) {
-      return String((data as { message: unknown }).message);
-    }
-  }
-  return err instanceof Error ? err.message : String(err);
-}
-
 async function resolveProjectId(options: { project?: string }): Promise<string> {
-  if (options.project) return options.project;
-  if (process.env.RELIC_PROJECT_ID) return process.env.RELIC_PROJECT_ID;
-
-  const configResult = await findConfig();
-  if (!configResult) {
-    throw new CommandError("No relic.toml found. Run 'relic init' or pass --project <id>.");
-  }
-  return configResult.config.project_id;
+  const projectId = await resolveProjectIdWithConfig(options.project);
+  if (!projectId) throw new CommandError(PROJECT_ID_REQUIRED_MESSAGE);
+  return projectId;
 }
 
 async function ensureSession(): Promise<void> {
-  const sessionValidation = await validateSession();
-  if (!sessionValidation.isValid || sessionValidation.isExpired) {
-    throw new CommandError("Not logged in. Run 'relic login' first.");
-  }
+  if (!(await hasActiveSession())) throw new CommandError(NOT_LOGGED_IN_MESSAGE);
 }
 
 async function confirmOrExit(message: string, yes: boolean | undefined): Promise<void> {
@@ -81,7 +61,7 @@ async function confirmOrExit(message: string, yes: boolean | undefined): Promise
   const confirmed = await p.confirm({ message, initialValue: false });
   if (p.isCancel(confirmed) || !confirmed) {
     p.cancel("Cancelled");
-    process.exit(0);
+    await exitWithTelemetry(0);
   }
 }
 
@@ -173,11 +153,11 @@ export async function history(key: string, options: HistoryOptions): Promise<voi
   } catch (err) {
     log.error("History failed", err);
     if (spinner) {
-      spinner.fail(pc.red(errorMessage(err)));
+      spinner.fail(pc.red(parseConvexError(err).message));
     } else {
-      console.error(pc.red(errorMessage(err)));
+      console.error(pc.red(parseConvexError(err).message));
     }
-    process.exit(1);
+    await exitWithTelemetry(1);
   }
 }
 
@@ -185,7 +165,7 @@ export async function rollback(key: string, options: RollbackOptions): Promise<v
   const version = parseVersion(options.to);
   if (version === null) {
     console.error(pc.red("Error: --to must be a version number, e.g. --to 3"));
-    process.exit(1);
+    return exitWithTelemetry(1);
   }
 
   const spinner = ora("Checking authentication...").start();
@@ -242,7 +222,7 @@ export async function rollback(key: string, options: RollbackOptions): Promise<v
     );
   } catch (err) {
     log.error("Rollback failed", err);
-    spinner.fail(pc.red(errorMessage(err)));
-    process.exit(1);
+    spinner.fail(pc.red(parseConvexError(err).message));
+    await exitWithTelemetry(1);
   }
 }

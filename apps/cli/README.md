@@ -27,6 +27,8 @@ bun install
 | `relic guard install`          | Add a pre-commit hook that runs the guard                       |
 | `relic guard uninstall`        | Remove the guard pre-commit hook                                |
 | `relic secrets`                | List secret names in an environment                             |
+| `relic history`                | List previous versions of a secret (values masked)              |
+| `relic rollback`               | Restore a previous version or a deleted secret                  |
 | `relic service-account create` | Create a service account (CI/CD token, optional OIDC policy)    |
 | `relic service-account list`   | List service accounts for a project                             |
 | `relic service-account revoke` | Revoke a service account by `--name` or `--id`                  |

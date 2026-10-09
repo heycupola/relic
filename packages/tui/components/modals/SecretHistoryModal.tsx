@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 import { useKeyboard } from "@opentui/react";
 import { trackEvent } from "@repo/logger";
 import { useEffect, useState } from "react";

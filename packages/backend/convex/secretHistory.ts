@@ -2,7 +2,7 @@ import { paginationOptsValidator } from "convex/server";
 import { type Infer, v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
+import { internalMutation, type MutationCtx } from "./_generated/server";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
 import { assertProjectAccess } from "./lib/access";
 import { alreadyExistsError, createError, ErrorCode, notFoundError } from "./lib/errors";

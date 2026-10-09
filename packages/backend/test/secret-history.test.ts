@@ -8,7 +8,7 @@ import {
 } from "@repo/crypto";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { api, components } from "../convex/_generated/api";
+import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { ErrorCode } from "../convex/lib/errors.ts";
 import { SecretValueType } from "../convex/lib/types.ts";
@@ -18,9 +18,10 @@ import {
   betterAuthModules,
   expectConvexError,
   getTestUsers,
-  mockAutumn,
+  mockBilling,
   modules,
   randomString,
+  setPlan,
   type TestUser,
 } from "./setup";
 
@@ -54,10 +55,6 @@ describe("Secret History", () => {
     collaborator = testUsers[1]!;
     nonCollaborator = testUsers[2]!;
 
-    mockAutumn.setFeature(owner.userId, "projects", 5);
-    mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
-    mockAutumn.setFeature(owner.userId, "additional_shares", 5);
-
     const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
     const result = await owner.asUser.action(api.project.createProject, {
       encryptedProjectKey,
@@ -75,10 +72,11 @@ describe("Secret History", () => {
   });
 
   afterEach(() => {
-    mockAutumn.reset();
+    mockBilling.reset();
   });
 
   async function shareWithCollaborator() {
+    await setPlan(t, owner.userId, "pro");
     const collaboratorPublicKey = await importPublicKey(collaborator.publicKey!);
     const result = await owner.asUser.action(api.projectShare.shareProject, {
       projectId,
@@ -279,9 +277,7 @@ describe("Secret History", () => {
     });
 
     test("uses the owner's Pro retention limit", async () => {
-      await t.run(async (ctx) => {
-        await ctx.runMutation(components.betterAuth.user.upgradeToPro, { userId: owner.userId });
-      });
+      await setPlan(t, owner.userId, "pro");
 
       const secretId = await createSecret("API_KEY", "value-0");
       for (let i = 1; i <= historyRetention.free + 2; i++) {
@@ -315,7 +311,7 @@ describe("Secret History", () => {
       expect(history.versions[0]?.changeType).toBe("restored");
       expect(await decryptSecret(projectKey, history.versions[0]!.encryptedValue)).toBe("third");
 
-      const logs = await owner.asUser.action(api.actionLog.loadActionLogsByProject, {
+      const logs = await owner.asUser.query(api.actionLog.loadActionLogsByProject, {
         projectId,
         paginationOpts: { numItems: 10, cursor: null },
       });
@@ -370,7 +366,7 @@ describe("Secret History", () => {
       expect(history.secret.isDeleted).toBe(false);
       expect(history.secret.currentVersion).toBe(2);
 
-      const logs = await owner.asUser.action(api.actionLog.loadActionLogsByProject, {
+      const logs = await owner.asUser.query(api.actionLog.loadActionLogsByProject, {
         projectId,
         paginationOpts: { numItems: 10, cursor: null },
       });
@@ -634,7 +630,7 @@ describe("Secret History", () => {
       expect(remaining).toHaveLength(1);
       expect(remaining[0]?.encryptionKeyVersion).toBe(2);
 
-      const logs = await owner.asUser.action(api.actionLog.loadActionLogsByProject, {
+      const logs = await owner.asUser.query(api.actionLog.loadActionLogsByProject, {
         projectId,
         paginationOpts: { numItems: 5, cursor: null },
       });

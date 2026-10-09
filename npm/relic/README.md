@@ -66,6 +66,9 @@ relic guard scan --staged
 | `relic guard scan` | Scan files, staged changes, or commits for leaked secrets |
 | `relic guard install` | Add a pre-commit hook that blocks leaks |
 | `relic guard uninstall` | Remove the guard pre-commit hook |
+| `relic secrets` | List secret names in an environment (never values) |
+| `relic history` | List previous versions of a secret |
+| `relic rollback` | Restore a previous version or a deleted secret |
 | `relic service-account` | Create, list, and revoke service accounts for CI/CD |
 | `relic mcp` | Start the MCP server for AI assistants |
 | `relic upgrade` | Upgrade to the latest version |

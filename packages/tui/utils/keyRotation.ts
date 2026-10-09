@@ -61,29 +61,29 @@ export async function buildRotationPayload({
 
   const [reEncryptedSecrets, rewrappedShares, rewrappedServiceAccounts, reEncryptedHistory] =
     await Promise.all([
-    Promise.all(
-      secrets.map(async (secret) => ({
-        secretId: secret.id,
-        newEncryptedValue: await encryptSecret(
-          newProjectKey,
-          await decryptSecret(currentProjectKey, secret.encryptedValue),
-        ),
-      })),
-    ),
-    Promise.all(
-      sharesWithKeys.map(async (s) => ({
-        shareId: s.id,
-        newEncryptedProjectKey: await wrapProjectKeyFor(newProjectKey, s.publicKey),
-      })),
-    ),
-    Promise.all(
-      serviceAccounts
-        .filter((sa) => sa.revokedAt === undefined)
-        .map(async (sa) => ({
-          serviceAccountId: sa.id,
-          newEncryptedProjectKey: await wrapProjectKeyFor(newProjectKey, sa.publicKey),
+      Promise.all(
+        secrets.map(async (secret) => ({
+          secretId: secret.id,
+          newEncryptedValue: await encryptSecret(
+            newProjectKey,
+            await decryptSecret(currentProjectKey, secret.encryptedValue),
+          ),
         })),
-    ),
+      ),
+      Promise.all(
+        sharesWithKeys.map(async (s) => ({
+          shareId: s.id,
+          newEncryptedProjectKey: await wrapProjectKeyFor(newProjectKey, s.publicKey),
+        })),
+      ),
+      Promise.all(
+        serviceAccounts
+          .filter((sa) => sa.revokedAt === undefined)
+          .map(async (sa) => ({
+            serviceAccountId: sa.id,
+            newEncryptedProjectKey: await wrapProjectKeyFor(newProjectKey, sa.publicKey),
+          })),
+      ),
       reEncryptHistoryEntries(history, currentProjectKey, newProjectKey),
     ]);
 
