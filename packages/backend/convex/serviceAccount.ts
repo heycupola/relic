@@ -290,6 +290,7 @@ export const listServiceAccounts = protectedQuery({
     return accounts.map((sa) => ({
       id: sa._id,
       name: sa.name,
+      publicKey: sa.publicKey,
       tokenPrefix: sa.tokenPrefix,
       oidcIssuer: sa.oidcIssuer,
       oidcSubjectPattern: sa.oidcSubjectPattern,
