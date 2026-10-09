@@ -35,6 +35,7 @@ import type * as lib_logger from "../lib/logger.js";
 import type * as lib_middleware from "../lib/middleware.js";
 import type * as lib_oidc from "../lib/oidc.js";
 import type * as lib_plans from "../lib/plans.js";
+import type * as lib_push from "../lib/push.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
 import type * as lib_site from "../lib/site.js";
 import type * as lib_svix from "../lib/svix.js";
@@ -83,6 +84,7 @@ declare const fullApi: ApiFromModules<{
   "lib/middleware": typeof lib_middleware;
   "lib/oidc": typeof lib_oidc;
   "lib/plans": typeof lib_plans;
+  "lib/push": typeof lib_push;
   "lib/rateLimit": typeof lib_rateLimit;
   "lib/site": typeof lib_site;
   "lib/svix": typeof lib_svix;

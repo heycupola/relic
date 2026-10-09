@@ -1,4 +1,4 @@
-import type { SecretScope } from "lib/types";
+import type { SecretScope } from "../types";
 import pc from "picocolors";
 import { findAdapterFactory, supportedTargets } from "./index";
 import {
