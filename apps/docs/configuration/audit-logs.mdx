@@ -60,15 +60,16 @@ Logs can be queried by:
 
 ### Secrets
 
-| Action                  | Description                       |
-| ----------------------- | --------------------------------- |
-| `secret.created`        | New secret created                |
-| `secret.updated`        | Secret value or metadata updated  |
-| `secret.deleted`        | Secret soft-deleted               |
-| `secret.exported`       | Secret exported via CLI or API    |
-| `secrets.bulk.updated`  | Multiple secrets updated at once  |
-| `secrets.bulk_deleted`  | Multiple secrets deleted at once  |
-| `secrets.bulk_exported` | Multiple secrets exported at once |
+| Action                  | Description                                                     |
+| ----------------------- | --------------------------------------------------------------- |
+| `secret.created`        | New secret created                                              |
+| `secret.updated`        | Secret value or metadata updated                                |
+| `secret.deleted`        | Secret deleted (restorable from [history](/guides/secret-history)) |
+| `secret.restored`       | Previous version restored, or deleted secret brought back       |
+| `secret.exported`       | Secret exported via CLI or API                                  |
+| `secrets.bulk.updated`  | Multiple secrets updated at once                                |
+| `secrets.bulk_deleted`  | Multiple secrets deleted at once                                |
+| `secrets.bulk_exported` | Multiple secrets exported at once                               |
 | `secrets.pushed`        | Secrets decrypted for `relic push` to a deploy platform, including dry runs |
 
 <Note>
@@ -107,6 +108,8 @@ Each log entry includes contextual metadata depending on the action type:
 | `sharedUserEmail`                      | Collaborator add/revoke                 |
 | `oldKeyVersion` / `newKeyVersion`      | Key rotation                            |
 | `secretsReEncrypted` / `sharesUpdated` | Key rotation stats                      |
+| `historyReEncrypted` / `historyPurged` | Key rotation stats for secret history   |
+| `restoredVersion` / `wasDeleted`       | Secret restore                          |
 | `reason`                               | Key rotation, collaborator revocation   |
 | `apiKeyPrefix`                         | API key create/revoke                   |
 | `pushTarget` / `pushDestination`       | Platform push (`vercel`, `cloudflare`, `github`, `fly`) and its project, Worker, repository, or app |

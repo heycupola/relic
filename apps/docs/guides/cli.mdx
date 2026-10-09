@@ -336,6 +336,56 @@ With `--json`, errors are printed as `{"error": {"code": "...", "message": "..."
   `RELIC_SERVICE_TOKEN`.
 </Info>
 
+### `relic history`
+
+List previous versions of a secret. Values are masked unless you pass `--reveal`, which decrypts them locally after a confirmation.
+
+```bash
+relic history <KEY> -e <environment> [options]
+```
+
+| Flag                | Description                                        |
+| ------------------- | -------------------------------------------------- |
+| `-e, --environment` | Environment name (required)                        |
+| `-f, --folder`      | Folder name                                        |
+| `-p, --project`     | Project ID (overrides `relic.toml`)                |
+| `--reveal`          | Decrypt and print values                           |
+| `--json`            | Print JSON. Values are included only with `--reveal` |
+| `-y, --yes`         | Skip the `--reveal` confirmation                   |
+
+**Examples:**
+
+```bash
+relic history DATABASE_URL -e production
+relic history STRIPE_KEY -e staging -f payments --reveal
+relic history API_KEY -e production --json
+```
+
+### `relic rollback`
+
+Restore a previous version of a secret as its current value. Also restores deleted secrets.
+
+```bash
+relic rollback <KEY> -e <environment> --to <version> [options]
+```
+
+| Flag                | Description                                       |
+| ------------------- | ------------------------------------------------- |
+| `-e, --environment` | Environment name (required)                       |
+| `--to`              | Version to restore, e.g. `3` or `v3` (required)   |
+| `-f, --folder`      | Folder name                                       |
+| `-p, --project`     | Project ID (overrides `relic.toml`)               |
+| `-y, --yes`         | Skip the confirmation (required in non-TTY shells) |
+
+**Examples:**
+
+```bash
+relic rollback DATABASE_URL -e production --to 2
+relic rollback OLD_TOKEN -e staging --to 4 --yes
+```
+
+See [Secret History](/guides/secret-history) for how versions, retention, and access work.
+
 ### `relic telemetry`
 
 Manage anonymous usage telemetry.
