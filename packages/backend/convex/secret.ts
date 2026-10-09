@@ -45,7 +45,7 @@ type ServiceAccountExportResult = {
   folderId: Id<"folder"> | null;
 };
 
-const MAX_SECRETS_PER_ENVIRONMENT = 1024;
+export const MAX_SECRETS_PER_ENVIRONMENT = 1024;
 
 export const STALE_PROJECT_KEY_MESSAGE =
   "The project key changed. Reload the project and try again.";
@@ -523,6 +523,12 @@ export const updateSecretBulk = protectedMutation({
         continue;
       }
 
+      await ctx.runMutation(internal.secretHistory._recordSecretVersion, {
+        secretId: secret._id,
+        changeType: "updated",
+        changedBy: ctx.userId,
+      });
+
       await ctx.runMutation(internal.secret._updateSecret, {
         secretId: secret._id,
         updates: {
@@ -619,6 +625,20 @@ export const updateSecret = protectedMutation({
 
     assertExpectedKeyVersion(project, args.expectedKeyVersion);
     await assertRenameAvailable(ctx, secret, args.updates.key);
+    const isChanged =
+      (args.updates.encryptedValue !== undefined &&
+        args.updates.encryptedValue !== secret.encryptedValue) ||
+      (args.updates.key !== undefined && args.updates.key !== secret.key) ||
+      (args.updates.valueType !== undefined && args.updates.valueType !== secret.valueType) ||
+      (args.updates.scope !== undefined && args.updates.scope !== secret.scope);
+
+    if (isChanged) {
+      await ctx.runMutation(internal.secretHistory._recordSecretVersion, {
+        secretId: args.secretId,
+        changeType: "updated",
+        changedBy: ctx.userId,
+      });
+    }
 
     // update secret here, using project's current key version when value is updated
     await ctx.runMutation(internal.secret._updateSecret, {
@@ -692,10 +712,18 @@ export const deleteSecret = protectedMutation({
 
     await checkRateLimit(ctx, "delete");
 
+    await ctx.runMutation(internal.secretHistory._recordSecretVersion, {
+      secretId: args.secretId,
+      changeType: "deleted",
+      changedBy: ctx.userId,
+    });
+
+    // NOTE: secretHistory keeps the restorable copy; ciphertext left here would escape key rotation.
     await ctx.runMutation(internal.secret._updateSecret, {
       secretId: args.secretId,
       updates: {
         isDeleted: true,
+        encryptedValue: "",
         updatedBy: ctx.userId,
       },
     });

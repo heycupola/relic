@@ -618,8 +618,9 @@ describe("Project Sharing", () => {
       expect(project.encryptedProjectKey).toBe(encryptedProjectKey);
       expect(project.keyVersion).toBe(1);
 
-      const secret = await owner.asUser.query(internal.secret._loadSecretById, { secretId });
-      const decryptedValue = await decryptSecret(projectKey, secret!.encryptedValue);
+      const history = await owner.asUser.query(api.secretHistory.getSecretHistory, { secretId });
+      expect(history.secret.isDeleted).toBe(true);
+      const decryptedValue = await decryptSecret(projectKey, history.versions[0]!.encryptedValue);
       expect(decryptedValue).toBe("value1");
 
       const share = await collaborator.asUser.query(

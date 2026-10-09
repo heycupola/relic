@@ -128,10 +128,13 @@ const createTestUser = async (
   }
 };
 
-export async function getTestUsers(t: ReturnType<typeof convexTest>): Promise<TestUser[]> {
+export async function getTestUsers(
+  t: ReturnType<typeof convexTest>,
+  count = 10,
+): Promise<TestUser[]> {
   const testUsers: TestUser[] = [];
 
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < count; i++) {
     const user = await createTestUser(t, { hasKeys: true });
 
     testUsers.push(user);
