@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "@repo/typescript-config": "*",
-    "@types/bun": "latest"
+    "@types/bun": "^1.4.2"
   },
   "peerDependencies": {
     "typescript": "^5"

@@ -14,7 +14,7 @@
     "test:watch": "vitest",
     "test:debug": "vitest --inspect-brk",
     "test:coverage": "vitest --coverage",
-    "betterAuth:generate-schema": "cd ./convex/betterAuth && better-auth generate -y --output generatedSchema.ts",
+    "betterAuth:generate-schema": "cd ./convex/betterAuth && auth generate -y --output generatedSchema.ts",
     "deploy": "bunx convex deploy",
     "deploy:dry-run": "bunx convex deploy --dry-run",
     "lint:fix": "oxlint . --fix",
@@ -22,30 +22,30 @@
   },
   "dependencies": {
     "@convex-dev/better-auth": "catalog:",
-    "@convex-dev/rate-limiter": "^0.2.14",
-    "@convex-dev/resend": "^0.2.3",
-    "@react-email/components": "^1.0.2",
-    "@react-email/render": "^2.0.0",
+    "@convex-dev/rate-limiter": "^0.4.1",
+    "@convex-dev/resend": "^0.2.8",
+    "@react-email/components": "^1.0.12",
+    "@react-email/render": "^2.1.0",
     "@repo/crypto": "*",
-    "@useautumn/convex": "^0.0.12",
     "better-auth": "catalog:",
     "convex": "catalog:",
     "convex-helpers": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "react-email": "^5.1.0",
-    "resend": "^6.6.0"
+    "react-email": "^6.11.1",
+    "resend": "^6.32.1",
+    "autumn-js": "catalog:"
   },
   "devDependencies": {
-    "@better-auth/cli": "catalog:",
     "@edge-runtime/vm": "^5.0.0",
     "@repo/typescript-config": "*",
-    "@types/bun": "latest",
-    "@types/react": "^19.2.7",
-    "@types/react-dom": "^19.2.3",
-    "@vitest/coverage-v8": "4.0.16",
-    "convex-test": "^0.0.38",
-    "vitest": "^4.0.16"
+    "@types/bun": "^1.4.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitest/coverage-v8": "^5.0.3",
+    "convex-test": "^0.0.60",
+    "vitest": "^5.0.3",
+    "auth": "catalog:"
   },
   "peerDependencies": {
     "typescript": "^5"

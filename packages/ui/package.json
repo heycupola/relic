@@ -20,24 +20,24 @@
     "format:check": "oxfmt --check ."
   },
   "dependencies": {
-    "@radix-ui/react-alert-dialog": "^1.1.15",
-    "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-alert-dialog": "^1.1.24",
+    "@radix-ui/react-slot": "^1.4.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lucide-react": "^0.545.0",
+    "lucide-react": "^1.54.0",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "tailwind-merge": "^3.3.1",
+    "tailwind-merge": "^3.7.0",
     "tw-animate-css": "catalog:"
   },
   "devDependencies": {
     "@repo/typescript-config": "*",
     "@tailwindcss/postcss": "catalog:",
-    "@types/node": "^22.15.3",
-    "@types/react": "19.1.0",
-    "@types/react-dom": "19.1.1",
+    "@types/node": "^24.19.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "postcss": "catalog:",
     "tailwindcss": "catalog:",
-    "typescript": "5.9.2"
+    "typescript": "6.0.3"
   }
 }
