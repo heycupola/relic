@@ -1,0 +1,8 @@
+{
+  "extends": "@repo/typescript-config/bundler.json",
+  "compilerOptions": {
+    "types": ["bun", "vscode"]
+  },
+  "include": ["src", "test"],
+  "exclude": ["node_modules", "dist"]
+}
