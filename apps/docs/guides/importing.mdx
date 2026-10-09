@@ -1,0 +1,217 @@
+---
+title: Migrating to Relic
+sidebarTitle: Importing Secrets
+description: Import secrets from .env files, JSON, Doppler, Infisical, Vercel, or 1Password with relic import.
+keywords: ["import", "migrate", "dotenv", "doppler", "infisical", "vercel", "1password"]
+---
+
+`relic import` moves existing secrets into a Relic environment in one command. Values are read into memory, encrypted on your device with the project key, and uploaded as ciphertext. Relic never writes plaintext to temporary files and never prints values. The plan and summary show secret names only.
+
+## Prerequisites
+
+- Sign in with `relic login` and unlock your master password in the TUI at least once.
+- Select a project with `relic init`, `--project`, or `RELIC_PROJECT_ID`.
+- The target environment, and folder if you use `-f`, must already exist. Create them in the [TUI](/guides/tui).
+
+## Usage
+
+```bash
+relic import [source] -e <environment> [options]
+```
+
+`source` defaults to `.env` in the current directory.
+
+| Source            | What it reads                                                         |
+| ----------------- | --------------------------------------------------------------------- |
+| `path/to/.env`    | A dotenv file                                                         |
+| `path/to/*.json`  | A JSON file in the TUI bulk import format or a flat `{ "KEY": "value" }` object |
+| `-`               | stdin, as dotenv or JSON (auto-detected, or set `--format`)           |
+| `doppler`         | The Doppler CLI                                                       |
+| `infisical`       | The Infisical CLI                                                     |
+| `vercel`          | The Vercel REST API                                                   |
+| `1password`, `op` | A 1Password item, through the `op` CLI                                |
+
+To import a file whose name matches a provider, prefix it with `./`, for example `./doppler`.
+
+| Flag                | Description                                                              |
+| ------------------- | ------------------------------------------------------------------------ |
+| `-e, --environment` | Target environment (required)                                            |
+| `-f, --folder`      | Target folder                                                            |
+| `-p, --project`     | Project ID (overrides `relic.toml`)                                      |
+| `-s, --scope`       | Default scope for imported secrets: `client`, `server`, or `shared`      |
+| `--format`          | `env` or `json` for files and stdin                                      |
+| `--overwrite`       | Replace existing secrets that have different values                      |
+| `--skip-existing`   | Keep existing secrets and import only new ones                           |
+| `--dry-run`         | Print the plan and exit without importing                                |
+| `-y, --yes`         | Skip confirmation prompts                                                |
+| `--delete-source`   | Delete the source file after a successful import (asks first)            |
+
+## The Import Plan
+
+Before anything is uploaded, Relic compares the source with the target environment and prints a plan:
+
+```text
+  Import plan  .env → my-app / production
+
+  New (2)
+    + DATABASE_URL  shared
+    + STRIPE_KEY    shared
+
+  Existing with different values (1)
+    ~ API_URL       shared
+
+  Unchanged (1)
+    = NODE_ENV
+
+  Invalid (1)
+    ! my-key        Invalid key: must contain only letters, numbers, and underscores (1-100 chars)
+```
+
+- **New** secrets are created.
+- **Existing with different values** are only written if you choose to overwrite them.
+- **Unchanged** secrets already hold the same value, scope, and type, so they are not rewritten.
+- **Skipped** entries could not be read from the source. Each one lists the reason.
+- **Invalid** entries break Relic's naming rules and are not imported.
+
+Keys must start with a letter or underscore, contain only letters, numbers, and underscores, and be at most 100 characters. Values can be up to 10,000 characters. These are the same rules the TUI bulk import editor uses. If a key appears twice, the first occurrence is imported and the duplicate is reported.
+
+### Handling Existing Secrets
+
+In a terminal, Relic asks whether to overwrite the existing secrets, keep them, or cancel. With no conflicts, it asks you to confirm the import. Use `--dry-run` to see the plan without being prompted.
+
+When stdin or stdout is not a terminal (scripts, CI, or piping into `relic import -`), there is no prompt. New secrets are imported directly. If any existing secret would change, the import stops unless you pass `--overwrite` or `--skip-existing`.
+
+```bash
+relic import -e production --dry-run
+relic import -e production --overwrite
+relic import .env.staging -e staging --skip-existing
+```
+
+### Scopes
+
+Each imported secret gets its scope from, in order:
+
+1. The `scope` field of a JSON entry
+2. `--scope`
+3. The existing secret's scope, when overwriting
+4. `shared`
+
+## Dotenv Files
+
+The dotenv parser supports:
+
+- `#` comments, and inline comments after unquoted values (`KEY=value # comment`)
+- `export KEY=value`
+- Single, double, and backtick quotes, including values that span multiple lines
+- `\n`, `\r`, `\t`, `\"`, and `\\` escapes inside double quotes. Single and backtick quotes are literal.
+- Empty values (`KEY=`)
+
+Lines that are not `KEY=value` are reported in the plan by line number.
+
+```bash
+relic import -e development
+relic import .env.production -e production -s server
+cat .env | relic import - -e development
+```
+
+## JSON
+
+JSON files can use the TUI bulk import format:
+
+```json
+[
+  { "key": "DATABASE_URL", "value": "postgres://localhost/app", "scope": "server" },
+  { "key": "PUBLIC_API_URL", "value": "https://api.example.com", "scope": "client" }
+]
+```
+
+Or a flat object:
+
+```json
+{ "DATABASE_URL": "postgres://localhost/app", "PORT": "3000" }
+```
+
+## Doppler
+
+Install the [Doppler CLI](https://docs.doppler.com/docs/install-cli) and sign in. Relic runs `doppler secrets download --no-file --format json` and reads the output from stdout.
+
+```bash
+relic import doppler -e production --doppler-project web --doppler-config prd
+```
+
+| Flag                | Description                                      |
+| ------------------- | ------------------------------------------------ |
+| `--doppler-project` | Doppler project (defaults to the Doppler setup in the current directory) |
+| `--doppler-config`  | Doppler config                                   |
+
+Doppler's own `DOPPLER_PROJECT`, `DOPPLER_CONFIG`, and `DOPPLER_ENVIRONMENT` keys are skipped.
+
+## Infisical
+
+Install the [Infisical CLI](https://infisical.com/docs/cli/overview) and sign in. Relic runs `infisical export --format=json`.
+
+```bash
+relic import infisical -e production --infisical-env prod --infisical-path /api
+```
+
+| Flag                  | Description                                          |
+| --------------------- | ---------------------------------------------------- |
+| `--infisical-env`     | Infisical environment slug                           |
+| `--infisical-path`    | Secret path                                          |
+| `--infisical-project` | Project ID (defaults to `.infisical.json`)           |
+
+If a key has both a shared value and a personal override, Relic imports the shared value.
+
+## Vercel
+
+Relic reads environment variables for one target through the [Vercel REST API](https://vercel.com/docs/rest-api).
+
+```bash
+relic import vercel -e production
+relic import vercel -e staging --vercel-target preview
+```
+
+| Flag               | Description                                                                         |
+| ------------------ | ----------------------------------------------------------------------------------- |
+| `--vercel-project` | Project ID or name. Defaults to `VERCEL_PROJECT_ID`, then `.vercel/project.json`.   |
+| `--vercel-team`    | Team ID. Defaults to `VERCEL_ORG_ID`, then `.vercel/project.json`.                  |
+| `--vercel-target`  | `production`, `preview`, or `development`. Defaults to the `-e` value when it matches one. |
+
+The token comes from `VERCEL_TOKEN`, or from the Vercel CLI's login if you have run `vercel login`.
+
+The following variables are skipped and listed by name:
+
+- **Sensitive** variables. Vercel never returns their values, so add them to Relic manually.
+- Preview variables scoped to a single Git branch
+- Vercel system variables
+
+## 1Password
+
+Install the [1Password CLI](https://developer.1password.com/docs/cli/get-started) and sign in. Relic runs `op item get <item> --format json` and imports each field of the item, using the field label as the key.
+
+```bash
+relic import 1password -e production --op-item "web production" --op-vault Engineering
+```
+
+| Flag         | Description                     |
+| ------------ | ------------------------------- |
+| `--op-item`  | Item name or ID (required)      |
+| `--op-vault` | Vault name or ID                |
+
+Name the fields after your environment variables, such as `DATABASE_URL`. Labels with spaces or dashes are reported as invalid. Empty fields and the notes field are skipped.
+
+## After Importing
+
+Once your secrets are in Relic, run your app with them injected instead of reading a local file:
+
+```bash
+relic run -e production -- npm start
+```
+
+After a dotenv import, Relic reminds you to delete the file so plaintext secrets don't stay on disk. To delete it as part of the import, pass `--delete-source`. Relic asks for confirmation first, or requires `--yes` when there is no terminal. It refuses to delete the file if any entry was skipped, invalid, or kept at its existing value, so nothing in the file is lost.
+
+```bash
+relic import -e development --delete-source
+```
+
+Imports are recorded in the project's [audit log](/configuration/audit-logs) as `secret.created` and `secret.updated` events, the same events the TUI bulk import editor records.

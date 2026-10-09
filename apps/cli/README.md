@@ -20,6 +20,7 @@ bun install
 | `relic init`                   | Create `relic.toml` and `.relic/` (with its own `.gitignore`)   |
 | `relic run`                    | Run a command with secrets injected                             |
 | `relic shell`                  | Open a subshell with secrets loaded                             |
+| `relic import`                 | Import secrets from a file or provider                          |
 | `relic service-account create` | Create a service account (CI/CD token, optional OIDC policy)    |
 | `relic service-account list`   | List service accounts for a project                             |
 | `relic service-account revoke` | Revoke a service account by `--name` or `--id`                  |
@@ -67,6 +68,32 @@ Accepts the same flags as `relic run`, plus `--force` to open a nested shell. St
 ```bash
 relic shell -e development
 ```
+
+### `relic import`
+
+```bash
+relic import [source] -e <environment> [options]
+```
+
+`source` is a `.env` or `.json` path (default `.env`), `-` for stdin, or `doppler`, `infisical`, `vercel`, `1password`. Values are encrypted locally and uploaded through the same bulk mutation as the TUI editor. The plan lists names only.
+
+| Flag                | Description                                    |
+| ------------------- | ---------------------------------------------- |
+| `-e, --environment` | Environment name (required)                    |
+| `-f, --folder`      | Folder name                                    |
+| `-s, --scope`       | Default scope: `client`, `server`, or `shared` |
+| `-p, --project`     | Project ID (overrides `relic.toml`)            |
+| `--overwrite`       | Replace existing secrets                       |
+| `--skip-existing`   | Keep existing secrets                          |
+| `--dry-run`         | Print the plan only                            |
+
+```bash
+relic import -e development --dry-run
+relic import doppler -e production --doppler-project web --doppler-config prd
+cat secrets.json | relic import - -e staging --skip-existing
+```
+
+See the [importing guide](https://docs.withrelic.com/guides/importing) for all sources and flags.
 
 ## Configuration
 
@@ -161,14 +188,17 @@ deploy:
 │   ├── service-account.ts # relic service-account
 │   ├── upgrade.ts      # relic upgrade
 │   ├── shell.ts        # relic shell
+│   ├── import.ts       # relic import
 │   └── telemetry.ts    # relic telemetry
 ├── lib/
 │   ├── api.ts          # Convex API client, secret export
 │   ├── cli.ts          # Shared messages, auth/error helpers
 │   ├── config.ts       # relic.toml loading/saving
-│   ├── crypto.ts       # Secret decryption helpers
 │   ├── env.ts          # Child environment helpers (RELIC_* stripping)
 │   ├── telemetry.ts    # Sanitized error tracking, flush-before-exit
+│   ├── crypto.ts       # Secret encryption/decryption helpers
+│   ├── import-plan.ts  # Import plan, conflict handling, batched upload
+│   ├── import-sources.ts # File, stdin, and provider readers for relic import
 │   └── types.ts        # SecretScope type
 ├── mcp/
 │   ├── server.ts       # relic mcp (MCP tools)

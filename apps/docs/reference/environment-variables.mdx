@@ -52,6 +52,16 @@ Relic reads the following environment variables. None of them are required for n
 | ------------------- | --------------------------------------------------------------------------------------------------- | ---------- |
 | `RELIC_INSTALL_DIR` | Install location for the `curl` install script. `relic upgrade` reuses the running binary's folder. | `~/.relic` |
 
+## Importing
+
+Read by [`relic import vercel`](/guides/importing#vercel). Flags take precedence over these variables.
+
+| Variable            | Description                                                         | Default                               |
+| ------------------- | ------------------------------------------------------------------- | ------------------------------------- |
+| `VERCEL_TOKEN`      | Vercel access token used to read project environment variables.     | Token from `vercel login`             |
+| `VERCEL_PROJECT_ID` | Vercel project ID or name. Overridden by `--vercel-project`.        | Read from `.vercel/project.json`      |
+| `VERCEL_ORG_ID`     | Vercel team ID. Overridden by `--vercel-team`.                      | Read from `.vercel/project.json`      |
+
 ## Runtime
 
 | Variable | Description                                                                                                                                   | Default |

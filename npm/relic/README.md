@@ -30,6 +30,9 @@ relic login
 # Initialize a project
 relic init
 
+# Import an existing .env file
+relic import -e production
+
 # Run a command with secrets injected
 relic run -e production -- npm run deploy
 relic run -e staging -f database -- ./migrate.sh
@@ -51,6 +54,7 @@ relic shell -e development
 | `relic init` | Create `relic.toml` for the current project |
 | `relic run` | Run a command with secrets injected |
 | `relic shell` | Open a subshell with secrets loaded |
+| `relic import` | Import secrets from a `.env`/JSON file, Doppler, Infisical, Vercel, or 1Password |
 | `relic service-account` | Create, list, and revoke service accounts for CI/CD |
 | `relic mcp` | Start the MCP server for AI assistants |
 | `relic upgrade` | Upgrade to the latest version |
