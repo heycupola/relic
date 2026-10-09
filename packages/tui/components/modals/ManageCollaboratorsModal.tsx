@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useState } from "react";
 import { useTaskQueue } from "../../hooks/useTaskQueue";

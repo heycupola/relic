@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useState } from "react";
 import { THEME_COLORS } from "../../utils/constants";

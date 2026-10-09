@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 import { initLogger, isFirstRun, saveTelemetryPreference, trackEvent } from "@repo/logger";
 
 await initLogger();

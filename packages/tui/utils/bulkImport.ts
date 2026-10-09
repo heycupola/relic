@@ -75,19 +75,6 @@ export function parseEnvContent(content: string): BulkImportSecret[] {
   return secrets;
 }
 
-export function isEnvFormat(content: string): boolean {
-  const trimmed = content.trim();
-  if (trimmed.startsWith("[") || trimmed.startsWith("{")) return false;
-
-  const lines = trimmed.split("\n");
-  for (const line of lines) {
-    const l = line.trim();
-    if (l === "" || l.startsWith("#")) continue;
-    if (l.match(/^[A-Za-z_][A-Za-z0-9_]*=/)) return true;
-  }
-  return false;
-}
-
 export function envToJson(envContent: string, scopeMap?: Map<string, string>): string {
   const secrets = parseEnvContent(envContent).map((s) => ({
     key: s.key,
@@ -130,29 +117,6 @@ export function jsonToEnv(jsonContent: string): string {
   } catch {
     return "";
   }
-}
-
-export function detectFormat(content: string): "env" | "json" | "unknown" {
-  const trimmed = content.trim();
-  if (trimmed === "") return "unknown";
-
-  if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
-    try {
-      JSON.parse(trimmed);
-      return "json";
-    } catch {
-      return "unknown";
-    }
-  }
-
-  const lines = trimmed.split("\n");
-  for (const line of lines) {
-    const l = line.trim();
-    if (l === "" || l.startsWith("#")) continue;
-    if (l.match(/^[A-Za-z_][A-Za-z0-9_]*=/)) return "env";
-  }
-
-  return "unknown";
 }
 
 const MAX_KEY_LENGTH = 100;

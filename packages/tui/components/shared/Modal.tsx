@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 import { useTerminalDimensions } from "@opentui/react";
 import { Fragment, type ReactNode } from "react";
 import type { Shortcut } from "../../types/keyboard";

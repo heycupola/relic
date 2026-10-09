@@ -19,6 +19,7 @@ import type {
   Secret,
   SecretScope,
   SecretValueType,
+  ServiceAccount,
   SharedUser,
   ShareLimits,
   ShareProjectResult,
@@ -172,7 +173,7 @@ export class ProtectedApi {
     encryptedProjectKey: string;
     confirmPayment?: boolean;
   }): Promise<CreateProjectResult> {
-    return this.withAuth(() => this.client.action(api.project.createProject, args));
+    return await this.withAuth(() => this.client.action(api.project.createProject, args));
   }
 
   async updateProject(args: { projectId: string; name: string }): Promise<void> {
@@ -490,6 +491,7 @@ export class ProtectedApi {
     newEncryptedProjectKey: string;
     rewrappedShares: Array<{ shareId: string; newEncryptedProjectKey: string }>;
     reEncryptedSecrets: Array<{ secretId: string; newEncryptedValue: string }>;
+    rewrappedServiceAccounts: Array<{ serviceAccountId: string; newEncryptedProjectKey: string }>;
   }): Promise<void> {
     await this.withAuth(() =>
       this.client.action(api.projectShare.revokeShareWithRotation, {
@@ -503,8 +505,26 @@ export class ProtectedApi {
           secretId: toId<"secret">(s.secretId),
           newEncryptedValue: s.newEncryptedValue,
         })),
+        rewrappedServiceAccounts: args.rewrappedServiceAccounts.map((s) => ({
+          serviceAccountId: toId<"serviceAccount">(s.serviceAccountId),
+          newEncryptedProjectKey: s.newEncryptedProjectKey,
+        })),
       }),
     );
+  }
+
+  async listServiceAccounts(projectId: string): Promise<ServiceAccount[]> {
+    const result = await this.withAuth(() =>
+      this.client.query(api.serviceAccount.listServiceAccounts, {
+        projectId: toId<"project">(projectId),
+      }),
+    );
+    return result.map((sa) => ({
+      id: String(sa.id),
+      name: sa.name,
+      publicKey: sa.publicKey,
+      revokedAt: sa.revokedAt,
+    }));
   }
 
   async getProPlan(): Promise<{ url: string }> {

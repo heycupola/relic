@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 import { useKeyboard } from "@opentui/react";
 import { useTaskQueue } from "../../hooks/useTaskQueue";
 import { PRICING, THEME_COLORS } from "../../utils/constants";

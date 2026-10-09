@@ -10,6 +10,7 @@
     "log:watch": "bun run ../../packages/logger/scripts/watch.ts",
     "lint": "oxlint .",
     "format": "oxfmt .",
+    "check-types": "tsc --noEmit",
     "test": "bun test",
     "lint:fix": "oxlint . --fix",
     "format:check": "oxfmt --check ."

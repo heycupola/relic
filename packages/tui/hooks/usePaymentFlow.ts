@@ -1,232 +1,108 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { PaymentConfirmationType } from "../components/modals/ConfirmPaymentModal";
-import type { CheckoutReason } from "../components/modals/UrlOpenModal";
+import type { CreateProjectResult, ShareProjectResult } from "../types/api";
 import { useTaskQueue } from "./useTaskQueue";
 
-type PaymentResult =
-  | {
-      success?: boolean;
-      requiresConfirmation?: boolean;
-      requiresProPlan?: boolean;
-      requiresAdditionalProject?: boolean;
-      requiresAdditionalShare?: boolean;
-      requiresRemoval?: boolean;
-      currentUsage?: number;
-      includedUsage?: number;
-      excessCount?: number;
-      paymentFailed?: boolean;
-      checkoutUrl?: string | null;
-      billingPortalUrl?: string | null;
-      balance?: number;
-      freeLimit?: number;
-      message?: string;
-    }
-  | {
-      status: "success";
-      message?: string;
-    }
-  | {
-      status: "paymentFailed";
-      billingPortalUrl: string | null;
-      message?: string;
-    }
-  | {
-      status: "requiresProPlan";
-      checkoutUrl: string | null;
-      message?: string;
-    }
-  | {
-      status: "requiresConfirmation";
-      balance: number;
-      freeLimit: number;
-      message?: string;
-    }
-  | {
-      status: "requiresRemoval";
-      currentUsage: number;
-      includedUsage: number;
-      excessCount: number;
-      message?: string;
-    };
+type PaymentResult = CreateProjectResult | ShareProjectResult;
 
-interface UsePaymentFlowOptions {
-  onSuccess?: (message: string) => void;
-  onProRequired?: (url: string) => void;
-  onPaymentFailed?: (url: string) => void;
+export type PaymentOutcome =
+  | { kind: "success" }
+  | { kind: "requiresConfirmation"; balance: number }
+  | { kind: "requiresProPlan"; checkoutUrl: string | null; message?: string }
+  | { kind: "failed"; message?: string };
+
+interface ConfirmationState {
+  visible: boolean;
+  type: PaymentConfirmationType;
+  itemName?: string;
+  balance: number;
 }
 
-export function usePaymentFlow(options: UsePaymentFlowOptions = {}) {
+const CLOSED_CONFIRMATION: ConfirmationState = { visible: false, type: "project", balance: 0 };
+
+function toOutcome(result: PaymentResult): PaymentOutcome {
+  if ("status" in result) {
+    switch (result.status) {
+      case "success":
+        return { kind: "success" };
+      case "requiresConfirmation":
+        return { kind: "requiresConfirmation", balance: result.balance };
+      case "requiresProPlan":
+        return {
+          kind: "requiresProPlan",
+          checkoutUrl: result.checkoutUrl,
+          message: result.message,
+        };
+    }
+  }
+  if (result.success) return { kind: "success" };
+  if ("requiresConfirmation" in result) return { kind: "requiresConfirmation", balance: 0 };
+  if ("requiresProPlan" in result) {
+    return { kind: "requiresProPlan", checkoutUrl: result.checkoutUrl, message: result.message };
+  }
+  return { kind: "failed", message: result.message };
+}
+
+function successMessage(type: PaymentConfirmationType, itemName?: string): string {
+  const name = itemName ? `"${itemName}" ` : "";
+  return type === "project" ? `Project ${name}created` : `Collaborator ${name}added`;
+}
+
+export function usePaymentFlow() {
   const { cancelTask, showSuccess, showError } = useTaskQueue();
+  const [confirmationModal, setConfirmationModal] =
+    useState<ConfirmationState>(CLOSED_CONFIRMATION);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
 
-  const [confirmationModal, setConfirmationModal] = useState<{
-    visible: boolean;
-    type: PaymentConfirmationType;
-    itemName?: string;
-    balance: number;
-  }>({ visible: false, type: "project", balance: 0 });
-
-  const [checkoutModal, setCheckoutModal] = useState<{
-    visible: boolean;
-    url: string;
-    reason: CheckoutReason;
-  }>({ visible: false, url: "", reason: "pro_required" });
-
-  const [billingPortalModal, setBillingPortalModal] = useState<{
-    visible: boolean;
-    url: string;
-  }>({ visible: false, url: "" });
-
-  const [removalModal, setRemovalModal] = useState<{
-    visible: boolean;
-    currentUsage: number;
-    includedUsage: number;
-    excessCount: number;
-  }>({ visible: false, currentUsage: 0, includedUsage: 0, excessCount: 0 });
-
+  const closeConfirmation = useCallback(() => setConfirmationModal(CLOSED_CONFIRMATION), []);
+  const closeCheckout = useCallback(() => setCheckoutUrl(null), []);
   const closeAll = useCallback(() => {
-    setConfirmationModal({ visible: false, type: "project", balance: 0 });
-    setCheckoutModal({ visible: false, url: "", reason: "pro_required" });
-    setBillingPortalModal({ visible: false, url: "" });
-    setRemovalModal({ visible: false, currentUsage: 0, includedUsage: 0, excessCount: 0 });
+    setConfirmationModal(CLOSED_CONFIRMATION);
+    setCheckoutUrl(null);
   }, []);
 
   const handleResult = useCallback(
-    (result: PaymentResult, type: PaymentConfirmationType, itemName?: string) => {
-      const normalized =
-        "status" in result
-          ? result.status === "success"
-            ? {
-                success: true,
-                message: result.message,
-              }
-            : result.status === "paymentFailed"
-              ? {
-                  success: false,
-                  paymentFailed: true,
-                  billingPortalUrl: result.billingPortalUrl,
-                  message: result.message,
-                }
-              : result.status === "requiresProPlan"
-                ? {
-                    success: false,
-                    requiresProPlan: true,
-                    checkoutUrl: result.checkoutUrl,
-                    message: result.message,
-                  }
-                : result.status === "requiresRemoval"
-                  ? {
-                      success: false,
-                      requiresRemoval: true,
-                      currentUsage: result.currentUsage,
-                      includedUsage: result.includedUsage,
-                      excessCount: result.excessCount,
-                      message: result.message,
-                    }
-                  : {
-                      success: false,
-                      requiresConfirmation: true,
-                      balance: result.balance,
-                      freeLimit: result.freeLimit,
-                      message: result.message,
-                    }
-          : result;
-
-      if (normalized.paymentFailed) {
-        cancelTask();
-        setConfirmationModal({ visible: false, type: "project", balance: 0 });
-        setCheckoutModal({ visible: false, url: "", reason: "pro_required" });
-        if (normalized.billingPortalUrl && normalized.billingPortalUrl !== null) {
-          setBillingPortalModal({ visible: true, url: normalized.billingPortalUrl });
-          options.onPaymentFailed?.(normalized.billingPortalUrl);
-        } else {
-          setBillingPortalModal({ visible: false, url: "" });
-          showError(normalized.message || "Payment failed");
-        }
-        return;
+    (
+      result: PaymentResult,
+      type: PaymentConfirmationType,
+      itemName?: string,
+    ): PaymentOutcome["kind"] => {
+      const outcome = toOutcome(result);
+      switch (outcome.kind) {
+        case "success":
+          closeAll();
+          showSuccess(successMessage(type, itemName));
+          break;
+        case "requiresConfirmation":
+          setConfirmationModal({ visible: true, type, itemName, balance: outcome.balance });
+          break;
+        case "requiresProPlan":
+          cancelTask();
+          closeAll();
+          if (outcome.checkoutUrl) setCheckoutUrl(outcome.checkoutUrl);
+          else showError(outcome.message || "Pro plan required");
+          break;
+        case "failed":
+          cancelTask();
+          closeAll();
+          if (outcome.message) showError(outcome.message);
+          break;
       }
-
-      if (normalized.success) {
-        closeAll();
-        const successMsg =
-          normalized.message ||
-          `${type === "project" ? "Project" : "Collaborator"} ${itemName ? `"${itemName}" ` : ""}created`;
-        showSuccess(successMsg);
-        options.onSuccess?.(successMsg);
-        return;
-      }
-
-      if (normalized.requiresConfirmation) {
-        setConfirmationModal({
-          visible: true,
-          type,
-          itemName,
-          balance: normalized.balance ?? 0,
-        });
-        return;
-      }
-
-      if (
-        normalized.requiresRemoval ||
-        (normalized.currentUsage &&
-          normalized.includedUsage &&
-          normalized.currentUsage > normalized.includedUsage)
-      ) {
-        cancelTask();
-        setConfirmationModal({ visible: false, type: "project", balance: 0 });
-        setBillingPortalModal({ visible: false, url: "" });
-        setCheckoutModal({ visible: false, url: "", reason: "pro_required" });
-        setRemovalModal({
-          visible: true,
-          currentUsage: normalized.currentUsage ?? 0,
-          includedUsage: normalized.includedUsage ?? 0,
-          excessCount: normalized.excessCount ?? 0,
-        });
-        return;
-      }
-
-      if (
-        normalized.requiresProPlan ||
-        normalized.requiresAdditionalProject ||
-        normalized.requiresAdditionalShare
-      ) {
-        cancelTask();
-        setConfirmationModal({ visible: false, type: "project", balance: 0 });
-        setBillingPortalModal({ visible: false, url: "" });
-        if (normalized.checkoutUrl && normalized.checkoutUrl !== null) {
-          const reason: CheckoutReason = normalized.requiresProPlan
-            ? "pro_required"
-            : normalized.requiresAdditionalProject
-              ? "project_limit"
-              : "share_limit";
-          setCheckoutModal({ visible: true, url: normalized.checkoutUrl, reason });
-          options.onProRequired?.(normalized.checkoutUrl);
-        } else {
-          setCheckoutModal({ visible: false, url: "", reason: "pro_required" });
-          showError(normalized.message || "Upgrade required");
-        }
-        return;
-      }
-
-      if (normalized.message) {
-        cancelTask();
-        showError(normalized.message);
-        closeAll();
-      }
+      return outcome.kind;
     },
-    [cancelTask, showSuccess, showError, closeAll, options],
+    [cancelTask, showSuccess, showError, closeAll],
   );
 
-  return {
-    confirmationModal,
-    checkoutModal,
-    billingPortalModal,
-    removalModal,
-    handleResult,
-    closeConfirmation: () => setConfirmationModal({ visible: false, type: "project", balance: 0 }),
-    closeCheckout: () => setCheckoutModal({ visible: false, url: "", reason: "pro_required" }),
-    closeBilling: () => setBillingPortalModal({ visible: false, url: "" }),
-    closeRemoval: () =>
-      setRemovalModal({ visible: false, currentUsage: 0, includedUsage: 0, excessCount: 0 }),
-    closeAll,
-  };
+  return useMemo(
+    () => ({
+      confirmationModal,
+      checkoutUrl,
+      isModalOpen: confirmationModal.visible || checkoutUrl !== null,
+      handleResult,
+      closeConfirmation,
+      closeCheckout,
+      closeAll,
+    }),
+    [confirmationModal, checkoutUrl, handleResult, closeConfirmation, closeCheckout, closeAll],
+  );
 }

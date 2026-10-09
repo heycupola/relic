@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { verifyPasswordWithExistingKeys } from "@repo/auth";
 import {

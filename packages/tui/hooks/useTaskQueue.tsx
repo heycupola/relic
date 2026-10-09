@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 import { extractErrorMessage } from "@repo/auth";
 import { createContext, type ReactNode, useCallback, useContext, useState } from "react";
 
@@ -14,6 +15,7 @@ interface TaskContextValue {
   isRunning: boolean;
   isPending: boolean;
   runTask: <T>(message: string, taskFn: () => Promise<T>) => Promise<T | undefined>;
+  attemptTask: (message: string, taskFn: () => Promise<unknown>) => Promise<boolean>;
   setTaskPending: (message: string) => void;
   continueTask: <T>(taskFn: () => Promise<T>) => Promise<T | undefined>;
   cancelTask: () => void;
@@ -62,6 +64,17 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       }
     },
     [clearHideTimeout, hideAfterDelay],
+  );
+
+  const attemptTask = useCallback(
+    async (message: string, taskFn: () => Promise<unknown>): Promise<boolean> => {
+      const result = await runTask(message, async () => {
+        await taskFn();
+        return true;
+      });
+      return result === true;
+    },
+    [runTask],
   );
 
   const setTaskPending = useCallback(
@@ -127,6 +140,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         isRunning,
         isPending,
         runTask,
+        attemptTask,
         setTaskPending,
         continueTask,
         cancelTask,

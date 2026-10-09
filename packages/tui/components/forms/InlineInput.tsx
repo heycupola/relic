@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useRef } from "react";
 import { useCursorBlink } from "../../hooks/useCursorBlink";

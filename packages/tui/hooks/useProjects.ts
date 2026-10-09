@@ -88,17 +88,13 @@ export function useProjects() {
       encryptedProjectKey: string,
       confirmPayment?: boolean,
     ): Promise<CreateProjectResult> => {
-      try {
-        const apiClient = getProtectedApi();
-        await apiClient.ensureAuth();
-        const result = await apiClient.createProject({ name, encryptedProjectKey, confirmPayment });
-        if (result.status === "success") {
-          fetchLimits();
-        }
-        return result;
-      } catch (err) {
-        throw err instanceof Error ? err : new Error("Failed to create project");
+      const apiClient = getProtectedApi();
+      await apiClient.ensureAuth();
+      const result = await apiClient.createProject({ name, encryptedProjectKey, confirmPayment });
+      if (result.status === "success") {
+        fetchLimits();
       }
+      return result;
     },
     [fetchLimits],
   );

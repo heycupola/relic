@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 import type { Shortcut, ShortcutGroup } from "../../types/keyboard";
 import { THEME_COLORS } from "../../utils/constants";
 

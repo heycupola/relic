@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 import { THEME_COLORS } from "../../utils/constants";
 
 interface LoginButtonProps {

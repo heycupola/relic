@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 import { useMemo } from "react";
 import { useTaskQueue } from "../../hooks/useTaskQueue";
 import type { CursorPosition } from "../../types/keyboard";

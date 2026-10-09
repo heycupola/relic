@@ -140,23 +140,18 @@ export interface SharedUser {
   sharedAt: number;
 }
 
-export interface ShareProjectResult {
-  success: boolean;
-  shareId?: string;
-  requiresProPlan?: boolean;
-  requiresAdditionalShare?: boolean;
-  requiresConfirmation?: boolean;
-  requiresRemoval?: boolean;
-  currentUsage?: number;
-  includedUsage?: number;
-  excessCount?: number;
-  balance?: number;
-  freeLimit?: number;
-  paymentFailed?: boolean;
-  checkoutUrl?: string | null;
-  billingPortalUrl?: string | null;
-  message?: string;
+export interface ServiceAccount {
+  id: string;
+  name: string;
+  publicKey: string;
+  revokedAt?: number;
 }
+
+export type ShareProjectResult =
+  | { success: true; shareId: string }
+  | { success: false; requiresProPlan: true; checkoutUrl: string | null; message: string }
+  | { success: false; requiresConfirmation: true; freeLimit: number; message: string }
+  | { success: false; message: string };
 
 export interface ShareLimits {
   hasPro: boolean;
@@ -173,11 +168,6 @@ export type CreateProjectResult =
       message?: string;
     }
   | {
-      status: "paymentFailed";
-      billingPortalUrl: string | null;
-      message?: string;
-    }
-  | {
       status: "requiresProPlan";
       checkoutUrl: string | null;
       message?: string;
@@ -186,13 +176,6 @@ export type CreateProjectResult =
       status: "requiresConfirmation";
       balance: number;
       freeLimit: number;
-      message?: string;
-    }
-  | {
-      status: "requiresRemoval";
-      currentUsage: number;
-      includedUsage: number;
-      excessCount: number;
       message?: string;
     };
 

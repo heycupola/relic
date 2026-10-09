@@ -1,4 +1,5 @@
-import { useKeyboard, useTerminalDimensions } from "@opentui/react";
+/** @jsxImportSource @opentui/react */
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
 import { createLogger, trackEvent } from "@repo/logger";
 import open from "open";
 import { useEffect, useRef, useState } from "react";
@@ -72,6 +73,7 @@ function getStatusColor(
 
 export function LoginPage({ onLogin }: LoginPageProps) {
   const { width, height } = useTerminalDimensions();
+  const renderer = useRenderer();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const { status, userCode, verificationUri, isLoading, error, startAuth, cancel } = useDeviceAuth({
@@ -137,7 +139,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     if (key.name === "return") {
       handleLogin();
     } else if (key.name === "q") {
-      process.exit(0);
+      renderer.destroy();
     }
   });
 

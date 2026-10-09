@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 import { useTerminalDimensions } from "@opentui/react";
 import { useEffect, useState } from "react";
 import { type TaskStatus, useTaskQueue } from "../../hooks/useTaskQueue";
