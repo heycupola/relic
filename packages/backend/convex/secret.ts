@@ -1077,6 +1077,116 @@ export const _normalizeExportIds = internalQuery({
 
     if (!projectId || environmentId === null || folderId === null) return null;
     return { projectId, environmentId, folderId };
+type SecretNamesArgs = {
+  projectId: Id<"project">;
+  environmentName: string;
+  folderName?: string;
+  scope?: "client" | "server" | "shared";
+};
+
+type SecretNamesResult = {
+  secrets: {
+    key: string;
+    scope: "client" | "server" | "shared";
+    valueType: "string" | "number" | "boolean";
+  }[];
+  count: number;
+  environmentId: Id<"environment">;
+  folderId: Id<"folder"> | null;
+};
+
+const secretNamesArgs = {
+  projectId: v.id("project"),
+  environmentName: v.string(),
+  folderName: v.optional(v.string()),
+  scope: v.optional(v.union(v.literal("client"), v.literal("server"), v.literal("shared"))),
+};
+
+const secretNamesResult = v.object({
+  secrets: v.array(
+    v.object({
+      key: v.string(),
+      scope: v.union(v.literal("client"), v.literal("server"), v.literal("shared")),
+      valueType: v.union(v.literal("string"), v.literal("number"), v.literal("boolean")),
+    }),
+  ),
+  count: v.number(),
+  environmentId: v.id("environment"),
+  folderId: v.union(v.id("folder"), v.null()),
+});
+
+async function loadSecretNames(ctx: QueryCtx, args: SecretNamesArgs): Promise<SecretNamesResult> {
+  const { environmentId, folderId } = await ctx.runQuery(
+    internal.secret._loadSecretLocationIdsPair,
+    {
+      projectId: args.projectId,
+      environmentName: args.environmentName,
+      folderName: args.folderName,
+    },
+  );
+
+  const secrets: Doc<"secret">[] = await ctx.runQuery(internal.secret._loadSecrets, {
+    environmentId,
+    projectId: args.projectId,
+    folderId: folderId ?? undefined,
+  });
+
+  const filteredSecrets = args.scope
+    ? secrets.filter((secret) => secret.scope === args.scope)
+    : secrets;
+
+  return {
+    secrets: filteredSecrets.map((s) => ({
+      key: s.key,
+      scope: s.scope,
+      valueType: s.valueType,
+    })),
+    count: filteredSecrets.length,
+    environmentId,
+    folderId,
+  };
+}
+
+export const listSecretNames = protectedQuery({
+  args: secretNamesArgs,
+  returns: secretNamesResult,
+  handler: async (ctx: ProtectedQueryCtx, args: SecretNamesArgs): Promise<SecretNamesResult> => {
+    const project = await getProjectOrThrow(ctx, args.projectId);
+
+    await assertProjectAccess(ctx, project);
+
+    return await loadSecretNames(ctx, args);
+  },
+});
+
+export const _listSecretNamesForUser = internalQuery({
+  args: { userId: v.string(), ...secretNamesArgs },
+  returns: secretNamesResult,
+  handler: async (
+    ctx,
+    { userId, ...args }: SecretNamesArgs & { userId: string },
+  ): Promise<SecretNamesResult> => {
+    const authCtx = {
+      ...ctx,
+      userId,
+      email: undefined,
+      name: undefined,
+    } as unknown as ProtectedQueryCtx;
+
+    const project = await getProjectOrThrow(ctx, args.projectId);
+
+    await assertProjectAccess(authCtx, project);
+
+    return await loadSecretNames(ctx, args);
+  },
+});
+
+// NOTE: callers must validate the service token first; it already pins the project and rejects archived ones.
+export const _listSecretNamesForServiceAccount = internalQuery({
+  args: secretNamesArgs,
+  returns: secretNamesResult,
+  handler: async (ctx, args: SecretNamesArgs): Promise<SecretNamesResult> => {
+    return await loadSecretNames(ctx, args);
   },
 });
 
