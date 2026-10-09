@@ -1,6 +1,4 @@
-import { validateSession } from "@repo/auth";
 import { trackEvent } from "@repo/logger";
-import { ConvexError } from "convex/values";
 import ora from "ora";
 import pc from "picocolors";
 import {
@@ -18,9 +16,18 @@ import {
   readCheckIgnore,
 } from "../lib/check";
 import { findConfig } from "../lib/config";
+import {
+  hasActiveSession,
+  NOT_LOGGED_IN_MESSAGE,
+  PROJECT_ID_REQUIRED_MESSAGE,
+  parseConvexError,
+  resolveProjectIdFromEnv,
+} from "../lib/cli";
 import { compileIgnore } from "../lib/env-keys";
 import { resolveOidcToken } from "../lib/oidc";
+import { exitWithTelemetry } from "../lib/telemetry";
 import type { SecretScope } from "../lib/types";
+import type { AuthMode } from "./run";
 
 export interface CheckOptions {
   environment: string;
@@ -33,25 +40,6 @@ export interface CheckOptions {
   compare?: string;
   strict?: boolean;
   json?: boolean;
-}
-
-type AuthMode = "service_token" | "api_key" | "session";
-
-function errorMessage(err: unknown): string {
-  if (err instanceof ConvexError) {
-    let data = err.data;
-    while (typeof data === "string") {
-      try {
-        data = JSON.parse(data);
-      } catch {
-        break;
-      }
-    }
-    if (typeof data === "object" && data !== null) {
-      return (data as { message?: string }).message ?? err.message;
-    }
-  }
-  return err instanceof Error ? err.message : String(err);
 }
 
 async function createNameFetcher(
@@ -80,11 +68,9 @@ async function createNameFetcher(
     };
   }
 
-  const projectId = options.project ?? process.env.RELIC_PROJECT_ID ?? configProjectId;
+  const projectId = resolveProjectIdFromEnv(options.project) ?? configProjectId;
   if (!projectId) {
-    throw new Error(
-      "Project ID is required. Use --project <id>, set RELIC_PROJECT_ID, or run 'relic init'.",
-    );
+    throw new Error(PROJECT_ID_REQUIRED_MESSAGE);
   }
 
   const apiKey = process.env.RELIC_API_KEY;
@@ -101,9 +87,8 @@ async function createNameFetcher(
     };
   }
 
-  const session = await validateSession();
-  if (!session.isValid || session.isExpired) {
-    throw new Error("Not logged in. Run 'relic login' first.");
+  if (!(await hasActiveSession())) {
+    throw new Error(NOT_LOGGED_IN_MESSAGE);
   }
 
   const api = getApi();
@@ -166,29 +151,29 @@ async function runCheck(
   return { report, mode };
 }
 
-function exitWithError(options: CheckOptions, message: string): never {
+async function exitWithError(options: CheckOptions, message: string): Promise<never> {
   if (options.json) {
     console.log(JSON.stringify({ ok: false, error: message }, null, 2));
   } else {
     console.error(pc.red(`Error: ${message}`));
   }
-  process.exit(1);
+  return exitWithTelemetry(1);
 }
 
 export default async function check(options: CheckOptions) {
   if (!options.environment) {
-    exitWithError(options, "--environment is required");
+    await exitWithError(options, "--environment is required");
   }
 
   if (options.scope && !["client", "server", "shared"].includes(options.scope.toLowerCase())) {
-    exitWithError(options, "--scope must be: client, server, or shared");
+    await exitWithError(options, "--scope must be: client, server, or shared");
   }
   if (options.scope) {
     options.scope = options.scope.toLowerCase() as SecretScope;
   }
 
   if (options.compare && options.compare.toLowerCase() === options.environment.toLowerCase()) {
-    exitWithError(options, "--compare must name a different environment");
+    await exitWithError(options, "--compare must name a different environment");
   }
 
   const startTime = Date.now();
@@ -200,16 +185,16 @@ export default async function check(options: CheckOptions) {
   } catch (err) {
     trackEvent("cli_check_completed", { success: false, duration_ms: Date.now() - startTime });
 
-    const message = errorMessage(err);
+    const message = parseConvexError(err).message;
     if (options.json) {
-      exitWithError(options, message);
+      return exitWithError(options, message);
     }
 
     spinner?.fail(pc.red(message));
     if (err instanceof ProPlanRequiredError) {
       console.error(pc.dim("  Upgrade at: ") + pc.underline(err.upgradeUrl));
     }
-    process.exit(1);
+    return exitWithTelemetry(1);
   }
 
   spinner?.stop();
@@ -231,5 +216,5 @@ export default async function check(options: CheckOptions) {
   });
 
   console.log(options.json ? JSON.stringify(report, null, 2) : formatCheckReport(report));
-  process.exit(report.ok ? 0 : 1);
+  await exitWithTelemetry(report.ok ? 0 : 1);
 }

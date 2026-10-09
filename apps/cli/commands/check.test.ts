@@ -74,7 +74,7 @@ describe("relic check", () => {
         HOME: homeDir,
         NO_COLOR: "1",
         RELIC_TELEMETRY: "false",
-        CONVEX_SITE_URL: server.url.origin,
+        RELIC_CONVEX_SITE_URL: server.url.origin,
         ...env,
       },
       stdout: "pipe",

@@ -126,13 +126,13 @@ export interface BulkUpdateResult {
 export interface SecretNamesRequest {
   environmentName: string;
   folderName?: string;
-  scope?: "client" | "server" | "shared";
+  scope?: SecretScope;
 }
 
 export interface SecretNames {
   secrets: {
     key: string;
-    scope: "client" | "server" | "shared";
+    scope: SecretScope;
     valueType: "string" | "number" | "boolean";
   }[];
   count: number;
@@ -592,33 +592,11 @@ export async function exportSecretsViaServiceToken(
   });
 }
 
-async function postSecretNames(
-  url: string,
-  headers: Record<string, string>,
-  body: Record<string, unknown>,
-  proPlanMessage: string,
+async function requestSecretNames(
+  path: string,
+  options: Parameters<typeof requestSiteApi>[1],
 ): Promise<SecretNames> {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { ...headers, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    const parsed = errorBody as { error?: string; code?: string; upgradeUrl?: string } | null;
-
-    if (response.status === 402 || parsed?.code === "PRO_PLAN_REQUIRED") {
-      throw new ProPlanRequiredError(
-        parsed?.error || proPlanMessage,
-        parsed?.upgradeUrl || `${SITE_URL}/dashboard?action=upgrade`,
-      );
-    }
-
-    throw new Error(parsed?.error ?? `HTTP ${response.status}`);
-  }
-
-  const result = (await response.json()) as SecretNames;
+  const result = await requestSiteApi<SecretNames>(path, options);
   return { secrets: result.secrets, count: result.count };
 }
 
@@ -626,12 +604,11 @@ export async function listSecretNamesViaApiKey(
   apiKey: string,
   body: SecretNamesRequest & { projectId: string },
 ): Promise<SecretNames> {
-  return postSecretNames(
-    `${CONVEX_SITE_URL}/api/secrets/names`,
-    { Authorization: `Bearer ${apiKey}` },
-    { ...body },
-    "API keys require a Pro plan.",
-  );
+  return requestSecretNames("/api/secrets/names", {
+    token: apiKey,
+    body,
+    proPlanMessage: "API keys require a Pro plan.",
+  });
 }
 
 export async function listSecretNamesViaServiceToken(
@@ -639,17 +616,12 @@ export async function listSecretNamesViaServiceToken(
   body: SecretNamesRequest,
   oidcToken?: string,
 ): Promise<SecretNames> {
-  const headers: Record<string, string> = { Authorization: `Bearer ${serviceToken}` };
-  if (oidcToken) {
-    headers["X-Oidc-Token"] = oidcToken;
-  }
-
-  return postSecretNames(
-    `${CONVEX_SITE_URL}/api/sa/secrets/names`,
-    headers,
-    { ...body },
-    "Service accounts require a Pro plan.",
-  );
+  return requestSecretNames("/api/sa/secrets/names", {
+    token: serviceToken,
+    body,
+    headers: oidcToken ? { "X-Oidc-Token": oidcToken } : undefined,
+    proPlanMessage: "Service accounts require a Pro plan.",
+  });
 }
 
 export async function fetchUserKeysViaApiKey(apiKey: string): Promise<UserCryptoKeysResponse> {
