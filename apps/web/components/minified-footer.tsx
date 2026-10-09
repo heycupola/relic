@@ -10,7 +10,7 @@ export function MinifiedFooter() {
   return (
     <footer className="border-t border-border">
       <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5 lg:px-12">
-        <p>© {new Date().getFullYear()} relic</p>
+        <p>© {new Date().getFullYear()} Relic</p>
         <nav aria-label="Footer navigation" className="flex flex-wrap items-center gap-x-4 gap-y-2">
           {footerLinks.map((link) =>
             link.external ? (
@@ -19,7 +19,7 @@ export function MinifiedFooter() {
                 href={link.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="transition-colors hover:text-foreground"
+                className="transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
               >
                 {link.label}
               </Link>
@@ -27,7 +27,7 @@ export function MinifiedFooter() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="transition-colors hover:text-foreground"
+                className="transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
               >
                 {link.label}
               </Link>
@@ -35,14 +35,20 @@ export function MinifiedFooter() {
           )}
           <a
             href="mailto:support@withrelic.com"
-            className="transition-colors hover:text-foreground"
+            className="transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
           >
             Support
           </a>
-          <Link href="/privacy-policy" className="transition-colors hover:text-foreground">
+          <Link
+            href="/privacy-policy"
+            className="transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+          >
             Privacy
           </Link>
-          <Link href="/terms-of-service" className="transition-colors hover:text-foreground">
+          <Link
+            href="/terms-of-service"
+            className="transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+          >
             Terms
           </Link>
         </nav>

@@ -10,7 +10,7 @@ import { OAuthButton } from "@/components/oauth-button";
 import { authClient } from "@/lib/auth";
 import { trackWebEvent } from "@/lib/posthog";
 import { authHeadingStyle } from "@/lib/styles";
-import { isValidReturnUrl } from "@/lib/url";
+import { getSafeReturnPath } from "@/lib/url";
 
 export default function LoginPage() {
   const searchParams = useSearchParams();
@@ -23,7 +23,7 @@ export default function LoginPage() {
     setLastMethod(authClient.getLastUsedLoginMethod());
   }, []);
 
-  const callbackURL = isValidReturnUrl(returnUrl) ? returnUrl : "/dashboard";
+  const callbackURL = getSafeReturnPath(returnUrl) ?? "/dashboard";
 
   const signIn = async (provider: "google" | "github") => {
     setIsLoading(true);
@@ -45,7 +45,10 @@ export default function LoginPage() {
       <div className="w-full max-w-md px-4 py-10 sm:px-6 sm:py-16">
         <div className="flex flex-col gap-8">
           <div className="flex flex-col gap-6">
-            <Link href="/" className="flex items-center">
+            <Link
+              href="/"
+              className="flex w-fit items-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+            >
               <Image
                 src="/relic-logo-dark.svg"
                 alt="Relic"
@@ -105,7 +108,7 @@ export default function LoginPage() {
               Continue with GitHub
             </OAuthButton>
             {error && (
-              <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+              <p role="alert" className="text-sm text-red-700 dark:text-red-400">
                 {error}
               </p>
             )}

@@ -5,6 +5,7 @@ import { ArrowRight, Star } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { SITE_DESCRIPTION, SITE_SLOGAN } from "@/lib/site-copy";
+import { primaryButton, secondaryButton } from "@/lib/styles";
 import { SectionWrapper } from "./section-wrapper";
 
 function formatStars(count: number): string {
@@ -29,7 +30,7 @@ export function Hero() {
   return (
     <SectionWrapper label="Introduction">
       <div className="mx-auto max-w-5xl px-4 py-14 sm:px-6 sm:py-16 md:py-20 lg:px-12">
-        <p className="mb-4 font-mono text-xs text-foreground/50 sm:text-sm">{"Now open source"}</p>
+        <p className="mb-4 font-mono text-xs text-foreground/60 sm:text-sm">{"Now open source"}</p>
         <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl md:text-5xl lg:text-6xl">
           {SITE_SLOGAN}
         </h1>
@@ -39,7 +40,7 @@ export function Hero() {
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
           <Button
             asChild
-            className="gap-2 rounded-none border-2 border-border bg-foreground text-background hover:bg-foreground/90 h-12 px-6 font-medium justify-center sm:h-auto sm:py-2.5 sm:w-auto"
+            className={`gap-2 rounded-none h-12 px-6 justify-center sm:h-auto sm:py-2.5 sm:w-auto ${primaryButton}`}
           >
             <Link href="https://docs.withrelic.com" target="_blank" rel="noopener noreferrer">
               Get Started <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -49,7 +50,7 @@ export function Hero() {
           <Button
             asChild
             variant="ghost"
-            className="group gap-2 rounded-none border-2 border-border bg-background text-foreground hover:bg-muted/50 h-12 px-6 font-medium justify-center sm:h-auto sm:py-2.5 sm:w-auto"
+            className={`group gap-2 rounded-none h-12 px-6 font-medium justify-center sm:h-auto sm:py-2.5 sm:w-auto ${secondaryButton}`}
           >
             <Link
               href="https://github.com/heycupola/relic"

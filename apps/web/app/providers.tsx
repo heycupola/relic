@@ -5,9 +5,9 @@ import { api } from "@repo/backend";
 import { ConvexReactClient, useQuery } from "convex/react";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
+import { AnalyticsConsentBanner, useCookieConsent } from "@/components/analytics-consent";
 import { authClient } from "@/lib/auth";
-import { getCookieValue } from "@/lib/cookies";
-import { initPostHog } from "@/lib/posthog";
+import { discardPendingEvents, initPostHog } from "@/lib/posthog";
 
 const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
 
@@ -20,16 +20,31 @@ const convex = new ConvexReactClient(convexUrl, {
 });
 
 export function PostHogProvider({ children }: { children: ReactNode }) {
-  useEffect(() => {
-    const geo = getCookieValue("relic-geo");
-    const isEU = geo === "eu" || geo == null;
-    initPostHog(isEU);
-  }, []);
+  const { ready, region, consentState, accept, reject } = useCookieConsent();
 
-  return <>{children}</>;
+  useEffect(() => {
+    if (!ready) return;
+    if (region === "eu") {
+      if (consentState === "accepted") initPostHog("full");
+      else if (consentState === "rejected") discardPendingEvents();
+      return;
+    }
+    // Without a geo cookie (e.g. local dev) analytics stays cookieless.
+    initPostHog(region === "other" ? "full" : "anonymous");
+  }, [ready, region, consentState]);
+
+  return (
+    <>
+      {children}
+      {ready && region === "eu" && consentState === null && (
+        <AnalyticsConsentBanner onAccept={accept} onReject={reject} />
+      )}
+    </>
+  );
 }
 
-const ONBOARDING_GATED_PATHS = ["/dashboard", "/terms-of-service", "/privacy-policy"];
+/** Legal pages stay reachable so users can read them before finishing onboarding. */
+const ONBOARDING_GATED_PATHS = ["/dashboard"];
 
 function OnboardingGuard() {
   const pathname = usePathname();
@@ -41,7 +56,8 @@ function OnboardingGuard() {
     if (!session?.user) return;
     if (userData === undefined) return;
     const isGatedPath =
-      pathname === "/" || ONBOARDING_GATED_PATHS.some((p) => pathname.startsWith(p));
+      pathname === "/" ||
+      ONBOARDING_GATED_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
     if (!isGatedPath) return;
     if (userData.hasCompletedOnboarding === false) {
       router.replace("/onboarding");

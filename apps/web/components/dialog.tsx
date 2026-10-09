@@ -7,6 +7,7 @@ interface DialogProps {
   open: boolean;
   onClose: () => void;
   children: ReactNode;
+  /** When false, neither the backdrop nor Escape dismisses the dialog (e.g. while a request is in flight). */
   closeOnBackdrop?: boolean;
   /** Id of the element that names the dialog, usually its heading. */
   labelledBy?: string;
@@ -30,6 +31,9 @@ export function Dialog({
   const fallbackHeadingId = useId();
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  // Read through a ref so toggling dismissibility mid-request doesn't re-run the focus setup.
+  const dismissibleRef = useRef(closeOnBackdrop);
+  dismissibleRef.current = closeOnBackdrop;
 
   useEffect(() => {
     setMounted(true);
@@ -53,8 +57,8 @@ export function Dialog({
     (focusables()[0] ?? panel)?.focus();
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && closeOnBackdrop) {
-        onCloseRef.current();
+      if (e.key === "Escape") {
+        if (!e.defaultPrevented && dismissibleRef.current) onCloseRef.current();
         return;
       }
       if (e.key !== "Tab" || !panel) return;
@@ -84,7 +88,7 @@ export function Dialog({
       document.body.style.overflow = overflow;
       previouslyFocused?.focus?.();
     };
-  }, [open, mounted, closeOnBackdrop, labelledBy, label, fallbackHeadingId]);
+  }, [open, mounted, labelledBy, label, fallbackHeadingId]);
 
   if (!mounted || !open) return null;
 
@@ -93,7 +97,7 @@ export function Dialog({
       <div
         className="fixed inset-0 bg-black/50"
         onClick={() => {
-          if (closeOnBackdrop) onClose();
+          if (dismissibleRef.current) onClose();
         }}
         aria-hidden="true"
       />

@@ -26,7 +26,7 @@ export function OAuthButton({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "relative grid w-full py-3 border-2 border-border bg-background text-foreground font-medium transition-colors hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed",
+        "relative grid w-full py-3 border-2 border-border bg-background text-foreground font-medium transition-colors hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground",
       )}
     >
       <span className="col-start-1 row-start-1 inline-flex items-center justify-center gap-3">
@@ -35,7 +35,7 @@ export function OAuthButton({
       </span>
       {lastUsed && (
         <span className="col-start-1 row-start-1 flex items-center justify-end pr-3">
-          <span className="text-[10px] font-mono font-normal px-1.5 py-0.5 border border-border bg-black text-white dark:bg-white dark:text-black">
+          <span className="text-[10px] font-mono font-normal px-1.5 py-0.5 bg-foreground text-background">
             last used
           </span>
         </span>

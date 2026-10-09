@@ -73,7 +73,7 @@ export function ArticleLayout({
               <div className="flex flex-wrap gap-2">
                 <Link
                   href={backHref}
-                  className="inline-flex border border-border px-3 py-2 font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:bg-foreground hover:text-background"
+                  className="inline-flex border border-border px-3 py-2 font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:bg-foreground hover:text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
                 >
                   {backLabel}
                 </Link>
@@ -82,7 +82,7 @@ export function ArticleLayout({
                     href={externalHref}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex border border-border px-3 py-2 font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:bg-foreground hover:text-background"
+                    className="inline-flex border border-border px-3 py-2 font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:bg-foreground hover:text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
                   >
                     {externalLabel}
                   </Link>
@@ -96,7 +96,7 @@ export function ArticleLayout({
                     </div>
                     <Link
                       href={previousHref}
-                      className="text-foreground/70 transition-colors hover:text-foreground"
+                      className="text-foreground/70 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
                     >
                       {previousLabel}
                     </Link>
@@ -109,7 +109,7 @@ export function ArticleLayout({
                     </div>
                     <Link
                       href={nextHref}
-                      className="text-foreground/70 transition-colors hover:text-foreground"
+                      className="text-foreground/70 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
                     >
                       {nextLabel}
                     </Link>

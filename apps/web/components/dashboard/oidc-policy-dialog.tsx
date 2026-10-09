@@ -5,6 +5,7 @@ import { api } from "@repo/backend";
 import { useMutation } from "convex/react";
 import { useEffect, useState } from "react";
 import { Dialog } from "@/components/dialog";
+import { focusRing, primaryButton, secondaryButton } from "@/lib/styles";
 
 interface OidcPolicyDialogProps {
   open: boolean;
@@ -103,6 +104,10 @@ export function OidcPolicyDialog({
     }
   }, [open, currentIssuer, currentSubjectPattern]);
 
+  const handleClose = () => {
+    if (!isSaving) onClose();
+  };
+
   const handleSave = async () => {
     if (!provider || !isValid) return;
     setIsSaving(true);
@@ -146,12 +151,12 @@ export function OidcPolicyDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onClose={handleClose} closeOnBackdrop={!isSaving}>
       <div className="p-5 space-y-4">
         <div className="space-y-2">
-          <h3 className="text-base font-semibold text-foreground">
-            {hasExisting ? "Edit" : "Add"} OIDC Policy
-          </h3>
+          <h2 className="text-base font-semibold text-foreground">
+            {hasExisting ? "Edit" : "Add"} OIDC policy
+          </h2>
           <p className="text-sm text-foreground/70 leading-relaxed">
             Configure OIDC trust for{" "}
             <span className="font-medium text-foreground">&ldquo;{serviceAccountName}&rdquo;</span>.
@@ -160,25 +165,26 @@ export function OidcPolicyDialog({
         </div>
 
         <div className="space-y-3">
-          <div className="space-y-1.5">
-            <span className="text-xs text-foreground/60">Provider</span>
+          <fieldset className="space-y-1.5">
+            <legend className="text-xs text-foreground/60 mb-1.5">Provider</legend>
             <div className="flex gap-2">
               {PROVIDERS.map((p) => (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => setProvider(p.id)}
-                  className={`flex-1 px-3 py-2 text-xs font-medium border transition-all ${
+                  aria-pressed={provider === p.id}
+                  className={`flex-1 px-3 py-2 text-xs font-medium border transition-colors ${focusRing} ${
                     provider === p.id
                       ? "border-foreground bg-foreground text-background"
-                      : "border-border text-foreground/60 hover:border-foreground hover:text-foreground"
+                      : "border-border text-foreground/70 hover:border-foreground hover:text-foreground"
                   }`}
                 >
                   {p.label}
                 </button>
               ))}
             </div>
-          </div>
+          </fieldset>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -191,7 +197,7 @@ export function OidcPolicyDialog({
                 value={org}
                 onChange={(e) => setOrg(e.target.value)}
                 placeholder={provider === "gitlab" ? "my-group" : "my-org"}
-                className="w-full p-2.5 border border-border bg-background text-sm text-foreground placeholder:text-foreground/30 focus:outline-none focus:border-foreground"
+                className="w-full p-2.5 border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground"
               />
             </div>
             <div className="space-y-1.5">
@@ -204,14 +210,14 @@ export function OidcPolicyDialog({
                 value={repo}
                 onChange={(e) => setRepo(e.target.value)}
                 placeholder={provider === "gitlab" ? "my-project" : "my-repo"}
-                className="w-full p-2.5 border border-border bg-background text-sm text-foreground placeholder:text-foreground/30 focus:outline-none focus:border-foreground"
+                className="w-full p-2.5 border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground"
               />
             </div>
           </div>
 
           <div className="space-y-1.5">
             <label htmlFor="oidc-branch" className="text-xs text-foreground/60">
-              Branch <span className="text-foreground/30">(use * for all branches)</span>
+              Branch <span className="text-muted-foreground">(use * for all branches)</span>
             </label>
             <input
               id="oidc-branch"
@@ -219,21 +225,25 @@ export function OidcPolicyDialog({
               value={branch}
               onChange={(e) => setBranch(e.target.value)}
               placeholder="main"
-              className="w-full p-2.5 border border-border bg-background text-sm text-foreground placeholder:text-foreground/30 focus:outline-none focus:border-foreground"
+              className="w-full p-2.5 border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground"
             />
           </div>
 
           {provider && org && repo && (
-            <div className="px-3 py-2 bg-muted/30 border border-border/50">
-              <p className="text-[11px] text-foreground/40 mb-1">Trust policy</p>
-              <p className="text-xs font-mono text-foreground/60 break-all">
+            <div className="px-3 py-2 bg-muted/30 border border-border">
+              <p className="text-[11px] text-muted-foreground mb-1">Trust policy</p>
+              <p className="text-xs font-mono text-foreground/70 break-all">
                 {buildPattern(provider, org, repo, branch || "*")}
               </p>
             </div>
           )}
         </div>
 
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && (
+          <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+            {error}
+          </p>
+        )}
 
         <div className="flex gap-3 pt-1">
           {hasExisting && (
@@ -241,16 +251,16 @@ export function OidcPolicyDialog({
               type="button"
               onClick={handleRemove}
               disabled={isSaving}
-              className="p-2.5 border border-red-500/30 text-red-600 dark:text-red-400 text-sm hover:bg-red-500/10 transition-colors disabled:opacity-50"
+              className={`p-2.5 border-2 border-red-600/40 text-red-700 dark:text-red-400 text-sm hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${focusRing}`}
             >
               Remove
             </button>
           )}
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             disabled={isSaving}
-            className="flex-1 p-2.5 border border-border text-sm text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
+            className={`flex-1 p-2.5 text-sm ${secondaryButton}`}
           >
             Cancel
           </button>
@@ -258,7 +268,8 @@ export function OidcPolicyDialog({
             type="button"
             onClick={handleSave}
             disabled={isSaving || !isValid}
-            className="flex-1 p-2.5 border border-border bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-busy={isSaving}
+            className={`flex-1 p-2.5 text-sm ${primaryButton}`}
           >
             {isSaving ? "Saving…" : "Save"}
           </button>

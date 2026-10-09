@@ -11,7 +11,7 @@ import {
 export async function GET() {
   const entries = await getChangelogEntries();
   const xml = createRssFeed({
-    title: `relic ${CHANGELOG_TITLE}`,
+    title: `Relic ${CHANGELOG_TITLE}`,
     description: CHANGELOG_DESCRIPTION,
     siteUrl: getAbsoluteUrl("/changelog"),
     feedUrl: getAbsoluteUrl(CHANGELOG_FEED_PATH),

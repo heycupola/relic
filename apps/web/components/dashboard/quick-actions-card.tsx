@@ -1,98 +1,77 @@
-"use client";
-
-import { cn } from "@repo/ui/lib/utils";
-import { ChevronDown, ExternalLink, Mail } from "lucide-react";
-import Link from "next/link";
-import { useState } from "react";
+import { ArrowUpRight, BookOpen, Download, Mail, Radio } from "lucide-react";
 import { InstallSection } from "@/components/install-section";
+import { SITE_DOCS_URL, SITE_RELEASES_URL, SITE_STATUS_URL } from "@/lib/site";
+import { focusRing } from "@/lib/styles";
+import { CommandLine, DashboardCard } from "./primitives";
+
+const COMMANDS = [
+  { command: "relic init", hint: "Link the current directory to a project" },
+  { command: "relic run -e production -- npm start", hint: "Run with secrets injected" },
+  { command: "relic upgrade", hint: "Update the CLI" },
+] as const;
+
+const LINKS = [
+  { href: SITE_DOCS_URL, label: "Documentation", icon: BookOpen, external: true },
+  { href: SITE_RELEASES_URL, label: "Download binaries", icon: Download, external: true },
+  { href: SITE_STATUS_URL, label: "System status", icon: Radio, external: true },
+  { href: "mailto:support@withrelic.com", label: "Email support", icon: Mail, external: false },
+] as const;
 
 export function QuickActionsCard() {
-  const [isContactExpanded, setIsContactExpanded] = useState(false);
-  const docsUrl = "https://docs.withrelic.com";
-
   return (
-    <div className="border-2 border-border bg-card p-4 sm:p-5">
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium text-foreground/60">Quick Actions</h3>
+    <DashboardCard
+      eyebrow="cli"
+      title="Command line"
+      description={
+        <>
+          Run <code className="font-mono text-foreground">relic</code> to open the TUI and manage
+          projects and secrets.
+        </>
+      }
+    >
+      <div className="space-y-5">
+        <InstallSection showWrapper={false} compact />
 
         <div className="space-y-2">
-          <InstallSection showWrapper={false} compact />
-
-          <Link
-            href="https://github.com/heycupola/relic/releases"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-between gap-2 p-3 border border-border hover:border-foreground hover:bg-muted/50 transition-all group"
-          >
-            <span className="text-sm text-foreground">Download binaries</span>
-            <ExternalLink
-              className="h-4 w-4 text-foreground/40 group-hover:text-foreground transition-colors"
-              aria-hidden="true"
-            />
-          </Link>
-
-          <Link
-            href={docsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-between gap-2 p-3 border border-border hover:border-foreground hover:bg-muted/50 transition-all group"
-          >
-            <span className="text-sm text-foreground">Documentation</span>
-            <ExternalLink
-              className="h-4 w-4 text-foreground/40 group-hover:text-foreground transition-colors"
-              aria-hidden="true"
-            />
-          </Link>
-
-          <div className="border border-border">
-            <button
-              type="button"
-              onClick={() => setIsContactExpanded(!isContactExpanded)}
-              className={cn(
-                "w-full text-left p-3 transition-colors",
-                isContactExpanded ? "bg-foreground/5" : "hover:bg-muted/50",
-              )}
-              aria-expanded={isContactExpanded}
-              aria-controls="contact-content"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm text-foreground">Contact Us</span>
-                <ChevronDown
-                  className={cn(
-                    "h-4 w-4 shrink-0 text-foreground/40 transition-transform duration-200",
-                    isContactExpanded && "rotate-180",
-                  )}
-                  aria-hidden="true"
-                />
-              </div>
-              <div
-                id="contact-content"
-                className={cn(
-                  "overflow-hidden transition-all duration-200",
-                  isContactExpanded ? "mt-3 max-h-40" : "max-h-0",
-                )}
-              >
-                <div className="space-y-3">
-                  <p className="text-xs text-foreground/60 leading-relaxed text-pretty">
-                    For all support inquiries, including billing issues, receipts, and general
-                    assistance, please email:
-                  </p>
-                  <a
-                    href="mailto:support@withrelic.com"
-                    className="flex items-center gap-2 text-sm text-foreground hover:text-foreground/80 transition-colors group"
-                  >
-                    <Mail
-                      className="h-4 w-4 text-foreground/40 group-hover:text-foreground transition-colors"
-                      aria-hidden="true"
-                    />
-                    <span className="font-mono">support@withrelic.com</span>
-                  </a>
-                </div>
-              </div>
-            </button>
-          </div>
+          <h3 className="text-xs font-medium text-foreground/70">Common commands</h3>
+          <ul className="space-y-2">
+            {COMMANDS.map(({ command, hint }) => (
+              <li key={command} className="space-y-1">
+                <CommandLine command={command} />
+                <p className="text-[11px] text-muted-foreground">{hint}</p>
+              </li>
+            ))}
+          </ul>
         </div>
+
+        <nav
+          aria-label="Help and resources"
+          className="-mx-4 -mb-4 border-t border-border sm:-mx-5 sm:-mb-5"
+        >
+          <ul className="divide-y divide-border">
+            {LINKS.map(({ href, label, icon: Icon, external }) => (
+              <li key={href}>
+                <a
+                  href={href}
+                  target={external ? "_blank" : undefined}
+                  rel={external ? "noopener noreferrer" : undefined}
+                  className={`group flex items-center gap-3 px-4 py-2.5 text-sm text-foreground/80 transition-colors hover:bg-muted/40 hover:text-foreground sm:px-5 ${focusRing}`}
+                >
+                  <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+                  <span className="flex-1">
+                    {label}
+                    {external && <span className="sr-only"> (opens in a new tab)</span>}
+                  </span>
+                  <ArrowUpRight
+                    className="size-3.5 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground"
+                    aria-hidden="true"
+                  />
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
       </div>
-    </div>
+    </DashboardCard>
   );
 }

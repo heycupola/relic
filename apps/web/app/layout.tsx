@@ -26,12 +26,9 @@ export const metadata: Metadata = {
   applicationName: SITE_NAME,
   title: {
     default: SITE_TITLE,
-    template: "%s - relic",
+    template: "%s - Relic",
   },
   description: SITE_DESCRIPTION,
-  alternates: {
-    canonical: "/",
-  },
   keywords: [...SITE_KEYWORDS],
   authors: [{ name: SITE_AUTHOR, url: SITE_AUTHOR_URL }],
   creator: SITE_AUTHOR,
@@ -87,19 +84,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${geist.variable} ${geistMono.variable} ${spaceGrotesk.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <link rel="manifest" href="/manifest.webmanifest" />
         <link
           rel="alternate"
           type="application/rss+xml"
-          title="relic Blog RSS Feed"
+          title="Relic Blog RSS Feed"
           href={BLOG_FEED_PATH}
         />
         <link
           rel="alternate"
           type="application/rss+xml"
-          title="relic Changelog RSS Feed"
+          title="Relic Changelog RSS Feed"
           href={CHANGELOG_FEED_PATH}
         />
         <link rel="icon" href="/icon.svg" sizes="any" type="image/svg+xml" />
@@ -125,9 +126,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body
-        className={`${geist.variable} ${geistMono.variable} ${spaceGrotesk.variable} font-sans antialiased`}
-      >
+      <body className="font-sans antialiased" suppressHydrationWarning>
         <PostHogProvider>
           <ConvexClientProvider>
             <ThemeProvider>{children}</ThemeProvider>

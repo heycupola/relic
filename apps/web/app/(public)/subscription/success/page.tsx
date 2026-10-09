@@ -5,11 +5,12 @@ import { useAction, useConvexAuth } from "convex/react";
 import { Check } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { PRO_FEATURES } from "@/lib/plans";
 import { trackWebEvent } from "@/lib/posthog";
-import { authHeadingStyle, authSubtitleStyle } from "@/lib/styles";
+import { authHeadingStyle, authSubtitleStyle, focusRing, primaryButton } from "@/lib/styles";
 
-type Activation = "pending" | "active" | "delayed";
+type Activation = "pending" | "active" | "delayed" | "signed_out";
 
 const RETRY_DELAYS_MS = [0, 1500, 3000, 6000];
 
@@ -22,10 +23,11 @@ function usePlanActivation(): Activation {
   useEffect(() => {
     if (isLoading) return;
     if (!isAuthenticated) {
-      setState("delayed");
+      setState("signed_out");
       return;
     }
 
+    setState("pending");
     let cancelled = false;
     void (async () => {
       for (const delay of RETRY_DELAYS_MS) {
@@ -51,24 +53,45 @@ function usePlanActivation(): Activation {
   return state;
 }
 
-const ACTIVATION_COPY: Record<Activation, string> = {
-  pending: "Activating your plan…",
-  active: "Your Pro plan is active.",
-  delayed: "Your payment went through. Pro features will unlock in a moment.",
+const COPY: Record<Activation, { title: string; subtitle: string; status?: string }> = {
+  pending: {
+    title: "Finishing your upgrade",
+    subtitle: "Thanks for upgrading. Here's what you get with Pro.",
+    status: "Activating your plan…",
+  },
+  active: {
+    title: "Welcome to Relic Pro",
+    subtitle: "Your upgrade is complete. Here's what you can do now.",
+    status: "Your Pro plan is active.",
+  },
+  delayed: {
+    title: "Payment received",
+    subtitle: "Thanks for upgrading. Here's what you get with Pro.",
+    status: "Your payment went through. Pro features will unlock in a moment.",
+  },
+  signed_out: {
+    title: "Check your subscription",
+    subtitle: "Sign in to see your plan and manage your subscription.",
+  },
 };
 
 export default function SubscriptionSuccessPage() {
   const activation = usePlanActivation();
+  const tracked = useRef(false);
+  const copy = COPY[activation];
+  const signedOut = activation === "signed_out";
 
   useEffect(() => {
+    if (activation !== "active" || tracked.current) return;
+    tracked.current = true;
     trackWebEvent("web_subscription_completed");
-  }, []);
+  }, [activation]);
 
   return (
     <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
       <div className="w-full max-w-md px-4 py-10 sm:px-6 sm:py-16">
         <div className="flex flex-col gap-8">
-          <Link href="/" className="flex items-center">
+          <Link href="/" className={`flex w-fit items-center ${focusRing}`}>
             <Image
               src="/relic-logo-dark.svg"
               alt="Relic"
@@ -87,36 +110,37 @@ export default function SubscriptionSuccessPage() {
 
           <div className="space-y-3">
             <h1 className="text-2xl font-medium text-foreground" style={authHeadingStyle}>
-              Welcome to Relic Pro
+              {copy.title}
             </h1>
             <p className="text-sm text-muted-foreground" style={authSubtitleStyle}>
-              Your upgrade is complete. Here's what you can do now.
+              {copy.subtitle}
             </p>
-            <p role="status" className="text-xs text-foreground/60">
-              {ACTIVATION_COPY[activation]}
-            </p>
+            {copy.status && (
+              <p role="status" className="text-xs text-foreground/60">
+                {copy.status}
+              </p>
+            )}
           </div>
 
-          <ul className="space-y-3 text-sm">
-            <li className="flex items-start gap-2">
-              <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
-              <span className="text-foreground">Share projects with your team</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
-              <span className="text-foreground">5 projects included</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
-              <span className="text-foreground">Early access to new features</span>
-            </li>
-          </ul>
+          {!signedOut && (
+            <ul className="space-y-3 text-sm">
+              {PRO_FEATURES.map((feature) => (
+                <li key={feature.id} className="flex items-start gap-2">
+                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
+                  <span className="text-foreground">
+                    <strong>{feature.highlight}</strong>
+                    {feature.rest}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
 
           <Link
-            href="/dashboard"
-            className="w-full p-3 text-sm font-medium text-center border-2 border-border bg-foreground text-background hover:bg-foreground/90 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+            href={signedOut ? "/login?returnUrl=/dashboard" : "/dashboard"}
+            className={`w-full p-3 text-sm text-center ${primaryButton}`}
           >
-            Go to Dashboard
+            {signedOut ? "Sign in" : "Go to dashboard"}
           </Link>
         </div>
       </div>

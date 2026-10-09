@@ -17,13 +17,13 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: "/privacy-policy",
     siteName: SITE_NAME,
-    title: "Privacy Policy - relic",
+    title: "Privacy Policy - Relic",
     description:
       "Privacy Policy for Relic, a zero-knowledge secrets management platform by Cupola Labs, LLC.",
   },
   twitter: {
     card: "summary",
-    title: "Privacy Policy - relic",
+    title: "Privacy Policy - Relic",
     description:
       "Privacy Policy for Relic, a zero-knowledge secrets management platform by Cupola Labs, LLC.",
     creator: SITE_TWITTER_HANDLE,

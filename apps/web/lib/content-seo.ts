@@ -41,20 +41,20 @@ export function getCollectionMetadata({
       locale: "en_US",
       url: path,
       siteName: SITE_NAME,
-      title: `${title} - relic`,
+      title: `${title} - Relic`,
       description,
       images: [
         {
           url: getAbsoluteUrl(imagePath),
           width: 1200,
           height: 630,
-          alt: `${title} - relic`,
+          alt: `${title} - Relic`,
         },
       ],
     },
     twitter: {
       card: "summary_large_image",
-      title: `${title} - relic`,
+      title: `${title} - Relic`,
       description,
       creator: SITE_TWITTER_HANDLE,
       site: SITE_TWITTER_HANDLE,
@@ -95,7 +95,7 @@ export function getEntryMetadata(entry: ContentEntry): Metadata {
       locale: "en_US",
       url: entry.href,
       siteName: SITE_NAME,
-      title: `${entry.title} - relic`,
+      title: `${entry.title} - Relic`,
       description: entry.description,
       publishedTime: entry.isoDate,
       images: [
@@ -109,7 +109,7 @@ export function getEntryMetadata(entry: ContentEntry): Metadata {
     },
     twitter: {
       card: "summary_large_image",
-      title: `${entry.title} - relic`,
+      title: `${entry.title} - Relic`,
       description: entry.description,
       creator: SITE_TWITTER_HANDLE,
       site: SITE_TWITTER_HANDLE,

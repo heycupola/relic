@@ -5,6 +5,7 @@ import { api } from "@repo/backend";
 import { useMutation } from "convex/react";
 import { useState } from "react";
 import { Dialog } from "@/components/dialog";
+import { dangerButton, secondaryButton } from "@/lib/styles";
 
 interface RevokeServiceAccountDialogProps {
   open: boolean;
@@ -23,6 +24,10 @@ export function RevokeServiceAccountDialog({
   const [isRevoking, setIsRevoking] = useState(false);
   const [error, setError] = useState("");
 
+  const handleClose = () => {
+    if (!isRevoking) onClose();
+  };
+
   const handleRevoke = async () => {
     setIsRevoking(true);
     setError("");
@@ -38,10 +43,10 @@ export function RevokeServiceAccountDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onClose={handleClose} closeOnBackdrop={!isRevoking}>
       <div className="p-5 space-y-4">
         <div className="space-y-2">
-          <h3 className="text-base font-semibold text-foreground">Revoke Service Account</h3>
+          <h2 className="text-base font-semibold text-foreground">Revoke service account</h2>
           <p className="text-sm text-foreground/70 leading-relaxed">
             Are you sure you want to revoke{" "}
             <span className="font-medium text-foreground">&ldquo;{serviceAccountName}&rdquo;</span>?
@@ -50,14 +55,18 @@ export function RevokeServiceAccountDialog({
           </p>
         </div>
 
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && (
+          <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+            {error}
+          </p>
+        )}
 
         <div className="flex gap-3 pt-1">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             disabled={isRevoking}
-            className="flex-1 p-2.5 border border-border text-sm text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
+            className={`flex-1 p-2.5 text-sm ${secondaryButton}`}
           >
             Cancel
           </button>
@@ -65,7 +74,8 @@ export function RevokeServiceAccountDialog({
             type="button"
             onClick={handleRevoke}
             disabled={isRevoking}
-            className="flex-1 p-2.5 border border-red-500/30 bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-busy={isRevoking}
+            className={`flex-1 p-2.5 text-sm ${dangerButton}`}
           >
             {isRevoking ? "Revoking…" : "Revoke"}
           </button>

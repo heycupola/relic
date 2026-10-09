@@ -1,6 +1,11 @@
 @import "@repo/ui/globals.css";
 @source "../**/*.{ts,tsx}";
 
+/* The next/font variables live on <html>, so this resolves at :root. */
+:root {
+  --font-heading: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+}
+
 @utility scrollbar-none {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -90,7 +95,7 @@
   margin-top: 0.75rem;
   font-size: 0.875rem;
   line-height: 1.6;
-  color: color-mix(in oklab, var(--foreground) 56%, transparent);
+  color: color-mix(in oklab, var(--foreground) 65%, transparent);
 }
 
 .content-prose hr {

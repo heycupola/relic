@@ -6,12 +6,18 @@ import { Check, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useProCheckout } from "@/hooks/useProCheckout";
+import {
+  ADD_ONS,
+  FREE_EXCLUSIONS,
+  FREE_FEATURES,
+  FREE_PRICE_USD,
+  PRO_FEATURES,
+  PRO_PRICE_USD,
+} from "@/lib/plans";
+import { primaryButton, secondaryButton } from "@/lib/styles";
 import { SectionWrapper } from "./section-wrapper";
 
 const UPGRADE_LOGIN_URL = `/login?returnUrl=${encodeURIComponent("/dashboard?action=upgrade")}`;
-
-const buttonFocus =
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground";
 
 function Feature({ included = true, children }: { included?: boolean; children: ReactNode }) {
   return (
@@ -19,17 +25,17 @@ function Feature({ included = true, children }: { included?: boolean; children: 
       {included ? (
         <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
       ) : (
-        <X className="h-4 w-4 text-foreground/30 shrink-0 mt-0.5" aria-hidden="true" />
+        <X className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" aria-hidden="true" />
       )}
-      <span className={included ? "text-foreground" : "text-foreground/50"}>{children}</span>
+      <span className={included ? "text-foreground" : "text-muted-foreground"}>{children}</span>
     </li>
   );
 }
 
-function Price({ amount }: { amount: string }) {
+function Price({ amount }: { amount: number }) {
   return (
     <p className="flex items-baseline gap-1">
-      <span className="text-3xl font-bold text-foreground tabular-nums sm:text-4xl">{amount}</span>
+      <span className="text-3xl font-bold text-foreground tabular-nums sm:text-4xl">${amount}</span>
       <span className="text-foreground/60 text-sm sm:text-base">/month</span>
     </p>
   );
@@ -83,16 +89,18 @@ export function Pricing() {
                 <h3 id="plan-free" className="text-lg font-semibold text-foreground sm:text-xl">
                   Free
                 </h3>
-                <Price amount="$0" />
+                <Price amount={FREE_PRICE_USD} />
               </div>
 
               <ul className="space-y-3 text-sm">
-                <Feature>1 project</Feature>
-                <Feature>Activity logs & analytics</Feature>
-                <Feature>Fully encrypted</Feature>
-                <Feature>CLI & TUI access</Feature>
-                <Feature included={false}>No project sharing</Feature>
-                <Feature included={false}>No CI/CD integration</Feature>
+                {FREE_FEATURES.map((feature) => (
+                  <Feature key={feature}>{feature}</Feature>
+                ))}
+                {FREE_EXCLUSIONS.map((feature) => (
+                  <Feature key={feature} included={false}>
+                    {feature}
+                  </Feature>
+                ))}
               </ul>
             </div>
 
@@ -102,7 +110,7 @@ export function Pricing() {
                   type="button"
                   onClick={handleFreeClick}
                   disabled={isLoading}
-                  className={`block w-full text-center p-3 border-2 border-border bg-background text-foreground font-medium hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${buttonFocus}`}
+                  className={`block w-full text-center p-3 font-medium ${secondaryButton}`}
                 >
                   {isLoading ? "Loading…" : "Get started"}
                 </button>
@@ -123,34 +131,25 @@ export function Pricing() {
                 <h3 id="plan-pro" className="text-lg font-semibold text-foreground sm:text-xl">
                   Pro
                 </h3>
-                <Price amount="$9" />
+                <Price amount={PRO_PRICE_USD} />
               </div>
 
               <ul className="space-y-3 text-sm">
-                <Feature>
-                  <strong>Collaborate on projects</strong>, 5 collaborators per project included
-                </Feature>
-                <Feature>
-                  <strong>5 projects</strong> included
-                </Feature>
-                <Feature>
-                  <strong>Service accounts & OIDC</strong> for CI/CD
-                </Feature>
-                <Feature>
-                  <strong>API keys</strong> for programmatic access
-                </Feature>
-                <Feature>Activity logs & analytics</Feature>
-                <Feature>
-                  <strong>Early access</strong> to new features
-                </Feature>
+                {PRO_FEATURES.map((feature) => (
+                  <Feature key={feature.id}>
+                    <strong>{feature.highlight}</strong>
+                    {feature.rest}
+                  </Feature>
+                ))}
                 <Feature>Everything in Free</Feature>
               </ul>
 
-              <div className="pt-2 border-t border-border/50">
-                <p className="text-xs font-medium text-foreground/50 mb-1.5">Need more?</p>
+              <div className="pt-2 border-t border-border">
+                <p className="text-xs font-medium text-foreground/60 mb-1.5">Need more?</p>
                 <ul className="text-xs text-foreground/60 space-y-0.5 tabular-nums list-disc list-inside">
-                  <li>Additional projects: $2 each</li>
-                  <li>Additional collaborators: $1 each</li>
+                  {ADD_ONS.map((addOn) => (
+                    <li key={addOn}>{addOn}</li>
+                  ))}
                 </ul>
               </div>
             </div>
@@ -161,12 +160,12 @@ export function Pricing() {
                 onClick={() => void handleProClick()}
                 disabled={isLoading || hasPro || checkout.isPending}
                 aria-busy={checkout.isPending}
-                className={`block w-full text-center p-3 border-2 border-foreground bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${buttonFocus}`}
+                className={`block w-full text-center p-3 ${primaryButton}`}
               >
                 {proButtonText}
               </button>
               {checkout.error && (
-                <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+                <p role="alert" className="text-xs text-red-700 dark:text-red-400">
                   {checkout.error}
                 </p>
               )}

@@ -122,7 +122,7 @@ export function LogoContextMenu({ x, y, onClose }: LogoContextMenuProps) {
   return (
     <div
       ref={menuRef}
-      className="fixed z-50 min-w-[200px] rounded-lg border border-border bg-popover py-1 shadow-lg"
+      className="fixed z-50 min-w-[200px] border-2 border-border bg-popover py-1 shadow-md"
       style={{ left: position.x, top: position.y }}
       role="menu"
       aria-label="Logo actions"

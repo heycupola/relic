@@ -5,7 +5,7 @@ import { Header } from "@/components/header";
 import { MinifiedFooter } from "@/components/minified-footer";
 
 export const metadata: Metadata = {
-  title: "Page Not Found",
+  title: "Page not found",
   robots: { index: false, follow: false },
 };
 
@@ -28,13 +28,13 @@ export default function NotFound() {
             <div className="flex flex-col items-center justify-center gap-3 pt-4 sm:flex-row sm:gap-4">
               <Link
                 href="/"
-                className="w-full px-6 py-3 border-2 border-foreground bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors text-center sm:w-auto"
+                className="w-full px-6 py-3 border-2 border-foreground bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors text-center sm:w-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
               >
                 Go home
               </Link>
               <Link
                 href="/dashboard"
-                className="w-full px-6 py-3 border-2 border-border bg-background text-foreground font-medium hover:bg-muted/50 transition-colors text-center sm:w-auto"
+                className="w-full px-6 py-3 border-2 border-border bg-background text-foreground font-medium hover:bg-muted/50 transition-colors text-center sm:w-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
               >
                 Dashboard
               </Link>

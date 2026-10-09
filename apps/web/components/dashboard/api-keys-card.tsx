@@ -1,10 +1,14 @@
 "use client";
 
 import type { Id } from "@repo/backend";
-import { Badge } from "@repo/ui/components/badge";
-import { KeyRound, Plus } from "lucide-react";
-import { useState } from "react";
+import { cn } from "@repo/ui/lib/utils";
+import { KeyRound, Lock, Plus } from "lucide-react";
+import { useId, useState } from "react";
+import { formatDate, formatTimeAgo } from "@/lib/format";
+import { MAX_API_KEYS } from "@/lib/plans";
+import { primaryButton, rowActionButton, rowDangerButton } from "@/lib/styles";
 import { CreateApiKeyDialog } from "./create-api-key-dialog";
+import { CardSkeleton, DashboardCard, EmptyState, StatusLabel } from "./primitives";
 import { RevokeApiKeyDialog } from "./revoke-api-key-dialog";
 import { UpgradeToProDialog } from "./upgrade-pro-dialog";
 
@@ -27,168 +31,154 @@ interface ApiKeysCardProps {
   hasPro: boolean;
 }
 
-const MAX_KEYS = 5;
+const EXPIRING_SOON_MS = 7 * 86_400_000;
 
-function getKeyStatus(key: ApiKeyItem): "active" | "revoked" | "expired" {
-  if (key.revokedAt) return "revoked";
-  if (key.expiresAt && key.expiresAt < Date.now()) return "expired";
-  return "active";
-}
-
-function getStatusColor(status: ReturnType<typeof getKeyStatus>) {
-  switch (status) {
-    case "active":
-      return "text-green-600 dark:text-green-400";
-    case "revoked":
-      return "text-red-600 dark:text-red-400";
-    case "expired":
-      return "text-yellow-600 dark:text-yellow-400";
-  }
-}
-
-function formatTimeAgo(timestamp: number): string {
-  const now = Date.now();
-  const diff = now - timestamp;
-  const seconds = Math.floor(diff / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-
-  if (days > 0) return `${days}d ago`;
-  if (hours > 0) return `${hours}h ago`;
-  if (minutes > 0) return `${minutes}m ago`;
-  return "just now";
+function isExpired(key: ApiKeyItem) {
+  return !!key.expiresAt && key.expiresAt < Date.now();
 }
 
 export function ApiKeysCard({ apiKeys, projectNames, isLoading, hasPro }: ApiKeysCardProps) {
+  const limitHintId = useId();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
   const [keyToRevoke, setKeyToRevoke] = useState<ApiKeyItem | null>(null);
 
-  const activeKeyCount = apiKeys.filter((k) => getKeyStatus(k) === "active").length;
-  const visibleKeys = [...apiKeys].filter((k) => !k.revokedAt).reverse();
+  if (isLoading) return <CardSkeleton label="API keys" rows={2} />;
 
-  if (isLoading) {
-    return (
-      <div className="border-2 border-border bg-card p-5">
-        <div className="animate-pulse space-y-3">
-          <div className="h-4 bg-muted rounded w-1/4" />
-          <div className="space-y-2">
-            <div className="h-12 bg-muted rounded w-full" />
-            <div className="h-12 bg-muted rounded w-full" />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const visibleKeys = apiKeys.filter((k) => !k.revokedAt).sort((a, b) => b.createdAt - a.createdAt);
+  const activeKeyCount = visibleKeys.filter((k) => !isExpired(k)).length;
+  const atLimit = hasPro && activeKeyCount >= MAX_API_KEYS;
+
+  const openCreate = () => (hasPro ? setShowCreateDialog(true) : setShowUpgradeDialog(true));
 
   return (
     <>
-      <div className="border-2 border-border bg-card p-4 sm:p-5">
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-medium text-foreground/60">API Keys</h3>
-            <button
-              type="button"
-              onClick={() => (hasPro ? setShowCreateDialog(true) : setShowUpgradeDialog(true))}
-              disabled={hasPro && activeKeyCount >= MAX_KEYS}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-border hover:border-foreground hover:bg-muted/50 transition-all text-foreground disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:bg-transparent"
+      <DashboardCard
+        eyebrow="api keys"
+        title="API keys"
+        description="Personal tokens for scripts and integrations that read secrets over the API."
+        action={
+          <button
+            type="button"
+            onClick={openCreate}
+            disabled={atLimit}
+            aria-describedby={atLimit ? limitHintId : undefined}
+            className={rowActionButton}
+          >
+            {hasPro ? (
+              <Plus className="size-3" aria-hidden="true" />
+            ) : (
+              <Lock className="size-3" aria-hidden="true" />
+            )}
+            New key
+          </button>
+        }
+        footer={
+          hasPro ? (
+            <span id={limitHintId} className="tabular-nums">
+              {activeKeyCount} of {MAX_API_KEYS} active keys
+              {atLimit && " · revoke one to create another"}
+            </span>
+          ) : undefined
+        }
+        bodyClassName={visibleKeys.length > 0 ? "p-0 sm:p-0" : undefined}
+      >
+        {visibleKeys.length === 0 ? (
+          hasPro ? (
+            <EmptyState
+              icon={KeyRound}
+              title="No API keys yet"
+              action={
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  className={`px-3 py-1.5 text-xs ${primaryButton}`}
+                >
+                  Create your first key
+                </button>
+              }
             >
-              <Plus className="h-3 w-3" aria-hidden="true" />
-              Create
-            </button>
-          </div>
-
-          {visibleKeys.length === 0 ? (
-            <div className="py-6 text-center">
-              <KeyRound className="h-5 w-5 text-foreground/20 mx-auto mb-2" aria-hidden="true" />
-              <p className="text-sm text-foreground/50">No API keys yet</p>
-              <p className="text-xs text-foreground/40 mt-1">
-                {hasPro
-                  ? "Create a key for programmatic access"
-                  : "Upgrade to Pro to create API keys"}
-              </p>
-            </div>
+              Keys can be limited to one project, scoped to read-only, and set to expire.
+            </EmptyState>
           ) : (
-            <div className={`space-y-0 divide-y divide-border/50 ${!hasPro ? "opacity-50" : ""}`}>
-              {visibleKeys.map((key) => {
-                const status = getKeyStatus(key);
-                const statusColor = getStatusColor(status);
-                const isActive = status === "active";
+            <EmptyState
+              icon={Lock}
+              title="API keys are a Pro feature"
+              action={
+                <button
+                  type="button"
+                  onClick={() => setShowUpgradeDialog(true)}
+                  className={`px-3 py-1.5 text-xs ${primaryButton}`}
+                >
+                  See Pro plan
+                </button>
+              }
+            >
+              Read secrets programmatically from your own tools and scripts.
+            </EmptyState>
+          )
+        ) : (
+          <ul className={cn("divide-y divide-border", !hasPro && "opacity-60")}>
+            {visibleKeys.map((key) => {
+              const expired = isExpired(key);
+              const expiringSoon =
+                !expired && !!key.expiresAt && key.expiresAt - Date.now() < EXPIRING_SOON_MS;
+              const meta = [
+                key.projectId ? (projectNames?.[key.projectId] ?? "one project") : "all projects",
+                `created ${formatDate(key.createdAt)}`,
+                key.lastUsedAt ? `used ${formatTimeAgo(key.lastUsedAt)}` : "never used",
+              ];
 
-                return (
-                  <div key={key.id} className="py-2.5 first:pt-0 last:pb-0 sm:py-3">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-foreground truncate">
-                            {key.name}
-                          </span>
-                          <span className={`text-xs ${statusColor}`}>{status}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          <span className="font-mono text-xs text-foreground/40">
-                            {key.prefix}...
-                          </span>
-                          <span className="text-foreground/20">·</span>
-                          {key.scopes.map((scope) => (
-                            <Badge
-                              key={scope}
-                              className="bg-muted text-foreground/60 border-transparent text-[10px] px-1.5 py-0"
-                            >
-                              {scope}
-                            </Badge>
-                          ))}
-                          {key.projectId && (
-                            <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-transparent text-[10px] px-1.5 py-0">
-                              {projectNames?.[key.projectId] ?? "scoped"}
-                            </Badge>
-                          )}
-                          <span className="text-foreground/20">·</span>
-                          <span className="text-xs text-foreground/40">
-                            {formatTimeAgo(key.createdAt)}
-                          </span>
-                          {key.lastUsedAt && (
-                            <>
-                              <span className="text-foreground/20">·</span>
-                              <span className="text-xs text-foreground/40">
-                                used {formatTimeAgo(key.lastUsedAt)}
-                              </span>
-                            </>
-                          )}
-                          {key.expiresAt && status !== "expired" && (
-                            <>
-                              <span className="text-foreground/20">·</span>
-                              <span className="text-xs text-foreground/40">
-                                expires {new Date(key.expiresAt).toLocaleDateString()}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      {isActive && (
-                        <button
-                          type="button"
-                          onClick={() => setKeyToRevoke(key)}
-                          className="self-start px-3 py-1.5 text-xs font-medium border border-border text-foreground/60 hover:border-red-600 hover:text-red-600 dark:hover:border-red-400 dark:hover:text-red-400 transition-all shrink-0 sm:self-auto"
-                        >
-                          Revoke
-                        </button>
+              return (
+                <li
+                  key={key.id}
+                  className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-5"
+                >
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="truncate text-sm font-medium text-foreground">
+                        {key.name}
+                      </span>
+                      <code className="font-mono text-xs text-muted-foreground">{key.prefix}…</code>
+                      {expired ? (
+                        <StatusLabel status="expired" toneName="warning" />
+                      ) : expiringSoon ? (
+                        <StatusLabel
+                          status={`expires ${formatDate(key.expiresAt!)}`}
+                          toneName="warning"
+                        />
+                      ) : (
+                        <StatusLabel status="active" toneName="success" />
                       )}
                     </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {key.scopes.map((scope) => (
+                        <span
+                          key={scope}
+                          className="border border-border bg-muted/30 px-1.5 py-px font-mono text-[10px] text-foreground/70"
+                        >
+                          {scope}
+                        </span>
+                      ))}
+                      <span className="text-xs text-muted-foreground">{meta.join(" · ")}</span>
+                    </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-
-          {visibleKeys.length > 0 && (
-            <p className="text-xs text-foreground/40 tabular-nums">
-              {activeKeyCount}/{MAX_KEYS} active keys
-            </p>
-          )}
-        </div>
-      </div>
+                  {!expired && (
+                    <button
+                      type="button"
+                      onClick={() => setKeyToRevoke(key)}
+                      aria-label={`Revoke ${key.name}`}
+                      className={`self-start sm:self-auto ${rowDangerButton}`}
+                    >
+                      Revoke
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </DashboardCard>
 
       <CreateApiKeyDialog
         open={showCreateDialog}

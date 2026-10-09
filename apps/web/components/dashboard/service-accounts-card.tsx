@@ -2,11 +2,16 @@
 
 import type { Id } from "@repo/backend";
 import { api } from "@repo/backend";
-import { Badge } from "@repo/ui/components/badge";
+import { cn } from "@repo/ui/lib/utils";
 import { useQuery } from "convex/react";
-import { Bot, Check, Copy, Plus, Shield } from "lucide-react";
-import { useState } from "react";
+import { Bot, ExternalLink, FolderKanban, Lock, Plus, Shield, X } from "lucide-react";
+import { useId, useState } from "react";
+import { Select } from "@/components/select";
+import { formatDate, formatTimeAgo } from "@/lib/format";
+import { SITE_DOCS_URL } from "@/lib/site";
+import { focusRing, primaryButton, rowActionButton, rowDangerButton } from "@/lib/styles";
 import { OidcPolicyDialog } from "./oidc-policy-dialog";
+import { CommandLine, DashboardCard, EmptyState, StatusLabel } from "./primitives";
 import { RevokeServiceAccountDialog } from "./revoke-service-account-dialog";
 import { UpgradeToProDialog } from "./upgrade-pro-dialog";
 
@@ -24,227 +29,241 @@ export interface ServiceAccountItem {
 }
 
 interface ServiceAccountsCardProps {
-  projectId: string;
-  isOwner: boolean;
+  /** Active projects the user owns; service accounts belong to exactly one of them. */
+  projects: { id: string; name: string }[];
   hasPro: boolean;
 }
 
-function getStatus(sa: ServiceAccountItem): "active" | "revoked" | "expired" {
-  if (sa.revokedAt) return "revoked";
-  if (sa.expiresAt && sa.expiresAt < Date.now()) return "expired";
-  return "active";
-}
-
-function getStatusColor(status: ReturnType<typeof getStatus>) {
-  switch (status) {
-    case "active":
-      return "text-green-600 dark:text-green-400";
-    case "revoked":
-      return "text-red-600 dark:text-red-400";
-    case "expired":
-      return "text-yellow-600 dark:text-yellow-400";
+function issuerLabel(issuer: string) {
+  if (issuer.includes("token.actions.githubusercontent.com")) return "GitHub Actions";
+  if (issuer.includes("gitlab")) return "GitLab CI";
+  try {
+    return new URL(issuer).host;
+  } catch {
+    return issuer;
   }
 }
 
-function formatTimeAgo(timestamp: number): string {
-  const diff = Date.now() - timestamp;
-  const seconds = Math.floor(diff / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-
-  if (days > 0) return `${days}d ago`;
-  if (hours > 0) return `${hours}h ago`;
-  if (minutes > 0) return `${minutes}m ago`;
-  return "just now";
-}
-
-export function ServiceAccountsCard({ projectId, isOwner, hasPro }: ServiceAccountsCardProps) {
-  const accounts = useQuery(
-    api.serviceAccount.listServiceAccounts,
-    hasPro && projectId ? { projectId: projectId as Id<"project"> } : "skip",
-  );
+export function ServiceAccountsCard({ projects, hasPro }: ServiceAccountsCardProps) {
+  const selectId = useId();
+  const [selectedId, setSelectedId] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
   const [saToRevoke, setSaToRevoke] = useState<ServiceAccountItem | null>(null);
   const [saToConfigOidc, setSaToConfigOidc] = useState<ServiceAccountItem | null>(null);
-  const [copied, setCopied] = useState(false);
 
-  const copyCommand = async () => {
-    try {
-      await navigator.clipboard.writeText('relic service-account create --name "my-sa"');
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // clipboard not available
-    }
-  };
+  const project = projects.find((p) => p.id === selectedId) ?? projects[0];
+  const accounts = useQuery(
+    api.serviceAccount.listServiceAccounts,
+    hasPro && project ? { projectId: project.id as Id<"project"> } : "skip",
+  );
 
-  const isLoading = accounts === undefined;
-  const visibleAccounts = (accounts ?? []).filter((sa) => !sa.revokedAt) as ServiceAccountItem[];
+  const visibleAccounts = ((accounts ?? []) as ServiceAccountItem[])
+    .filter((sa) => !sa.revokedAt)
+    .sort((a, b) => b.createdAt - a.createdAt);
 
-  if (!hasPro) {
-    return (
-      <>
-        <div className="border-2 border-border bg-card p-4 sm:p-5">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-medium text-foreground/60">Service Accounts</h3>
-              <button
-                type="button"
-                onClick={() => setShowUpgradeDialog(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-border hover:border-foreground hover:bg-muted/50 transition-all text-foreground"
-              >
-                <Plus className="h-3 w-3" aria-hidden="true" />
-                Create
-              </button>
-            </div>
-            <div className="py-6 text-center">
-              <Bot className="h-5 w-5 text-foreground/20 mx-auto mb-2" aria-hidden="true" />
-              <p className="text-sm text-foreground/50">No service accounts yet</p>
-              <p className="text-xs text-foreground/40 mt-1">
-                Upgrade to Pro for passwordless CI/CD integration
-              </p>
-            </div>
-          </div>
-        </div>
-        <UpgradeToProDialog open={showUpgradeDialog} onClose={() => setShowUpgradeDialog(false)} />
-      </>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="border-2 border-border bg-card p-5">
-        <div className="animate-pulse space-y-3">
-          <div className="h-4 bg-muted rounded w-1/3" />
-          <div className="space-y-2">
-            <div className="h-12 bg-muted rounded w-full" />
-            <div className="h-12 bg-muted rounded w-full" />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const canCreate = hasPro && !!project;
 
   return (
     <>
-      <div className="border-2 border-border bg-card p-4 sm:p-5">
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-medium text-foreground/60">Service Accounts</h3>
-            <div className="relative group">
-              <button
-                type="button"
-                onClick={copyCommand}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-border hover:border-foreground hover:bg-muted/50 transition-all text-foreground"
-              >
-                <Plus className="h-3 w-3" aria-hidden="true" />
-                Create via CLI
-              </button>
-              <div className="absolute right-0 top-full mt-1 hidden group-hover:block z-10">
-                <div className="flex items-center gap-2 bg-foreground text-background text-xs font-mono px-3 py-2 whitespace-nowrap">
-                  <span>relic service-account create --name &quot;my-sa&quot;</span>
-                  {copied ? (
-                    <Check className="h-3 w-3 shrink-0" aria-hidden="true" />
-                  ) : (
-                    <Copy className="h-3 w-3 shrink-0" aria-hidden="true" />
-                  )}
-                </div>
-              </div>
-            </div>
+      <DashboardCard
+        eyebrow="service accounts"
+        title="Service accounts"
+        description="Passwordless access for CI/CD pipelines, optionally locked to an OIDC identity."
+        action={
+          <button
+            type="button"
+            onClick={() => (canCreate ? setShowCreate((v) => !v) : setShowUpgradeDialog(true))}
+            disabled={hasPro && !project}
+            aria-expanded={canCreate ? showCreate : undefined}
+            className={rowActionButton}
+          >
+            {!hasPro ? (
+              <Lock className="size-3" aria-hidden="true" />
+            ) : showCreate ? (
+              <X className="size-3" aria-hidden="true" />
+            ) : (
+              <Plus className="size-3" aria-hidden="true" />
+            )}
+            {showCreate ? "Close" : "New"}
+          </button>
+        }
+        bodyClassName="p-0 sm:p-0"
+      >
+        {!hasPro ? (
+          <div className="p-4 sm:p-5">
+            <EmptyState
+              icon={Lock}
+              title="Service accounts are a Pro feature"
+              action={
+                <button
+                  type="button"
+                  onClick={() => setShowUpgradeDialog(true)}
+                  className={`px-3 py-1.5 text-xs ${primaryButton}`}
+                >
+                  See Pro plan
+                </button>
+              }
+            >
+              Inject secrets into GitHub Actions, GitLab CI, and other pipelines without sharing
+              your password.
+            </EmptyState>
           </div>
-
-          {visibleAccounts.length === 0 ? (
-            <div className="py-6 text-center">
-              <Bot className="h-5 w-5 text-foreground/20 mx-auto mb-2" aria-hidden="true" />
-              <p className="text-sm text-foreground/50">No service accounts</p>
-              <p className="text-xs text-foreground/40 mt-1">
-                Create one with <span className="font-mono">relic service-account create</span>
-              </p>
+        ) : !project ? (
+          <div className="p-4 sm:p-5">
+            <EmptyState icon={FolderKanban} title="Create a project first">
+              Service accounts belong to a project you own. Run{" "}
+              <code className="font-mono text-foreground">relic</code> to create one.
+            </EmptyState>
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:gap-3 sm:px-5">
+              <label htmlFor={selectId} className="shrink-0 text-xs text-muted-foreground">
+                Project
+              </label>
+              {projects.length > 1 ? (
+                <Select
+                  id={selectId}
+                  value={project.id}
+                  onChange={(value) => {
+                    setSelectedId(value);
+                    setShowCreate(false);
+                  }}
+                  options={projects.map((p) => ({ value: p.id, label: p.name }))}
+                  className="sm:w-64"
+                />
+              ) : (
+                <span id={selectId} className="text-sm font-medium text-foreground">
+                  {project.name}
+                </span>
+              )}
             </div>
-          ) : (
-            <div className="space-y-0 divide-y divide-border/50">
-              {visibleAccounts.map((sa) => {
-                const status = getStatus(sa);
-                const statusColor = getStatusColor(status);
-                const isActive = status === "active";
 
-                return (
-                  <div key={sa.id} className="py-2.5 first:pt-0 last:pb-0 sm:py-3">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-foreground truncate">
+            {showCreate && (
+              <div className="space-y-3 border-b border-border bg-muted/20 px-4 py-4 sm:px-5">
+                <div className="space-y-0.5">
+                  <h3 className="text-sm font-medium text-foreground">
+                    Create a service account from the CLI
+                  </h3>
+                  <p className="text-xs text-muted-foreground text-pretty">
+                    The token is generated and encrypted on your machine, so creation happens in the
+                    terminal. It appears here once created.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[11px] text-muted-foreground">Basic token</p>
+                  <CommandLine
+                    command={`relic service-account create --name "ci" --project ${project.id}`}
+                  />
+                  <p className="pt-1 text-[11px] text-muted-foreground">
+                    Locked to a GitHub repo with OIDC (recommended)
+                  </p>
+                  <CommandLine
+                    command={`relic service-account create --name "github-ci" --project ${project.id} --github my-org/my-repo`}
+                  />
+                </div>
+                <a
+                  href={`${SITE_DOCS_URL}/guides/service-accounts`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground ${focusRing}`}
+                >
+                  Service account guide
+                  <ExternalLink className="size-3" aria-hidden="true" />
+                  <span className="sr-only"> (opens in a new tab)</span>
+                </a>
+              </div>
+            )}
+
+            {accounts === undefined ? (
+              <div
+                className="space-y-2 p-4 animate-pulse motion-reduce:animate-none sm:p-5"
+                aria-busy="true"
+              >
+                <span className="sr-only">Loading service accounts…</span>
+                <div className="h-10 bg-muted/70" aria-hidden="true" />
+                <div className="h-10 bg-muted/70" aria-hidden="true" />
+              </div>
+            ) : visibleAccounts.length === 0 ? (
+              <div className="p-4 sm:p-5">
+                <EmptyState icon={Bot} title={`No service accounts in ${project.name}`}>
+                  Use <span className="font-medium text-foreground">New</span> to see the command
+                  for creating one.
+                </EmptyState>
+              </div>
+            ) : (
+              <ul className="divide-y divide-border">
+                {visibleAccounts.map((sa) => {
+                  const expired = !!sa.expiresAt && sa.expiresAt < Date.now();
+                  const meta = [
+                    `created ${formatDate(sa.createdAt)}`,
+                    sa.lastUsedAt ? `used ${formatTimeAgo(sa.lastUsedAt)}` : "never used",
+                  ];
+                  if (sa.expiresAt && !expired) meta.push(`expires ${formatDate(sa.expiresAt)}`);
+
+                  return (
+                    <li
+                      key={sa.id}
+                      className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-5"
+                    >
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="truncate text-sm font-medium text-foreground">
                             {sa.name}
                           </span>
-                          <span className={`text-xs ${statusColor}`}>{status}</span>
-                          {sa.oidcIssuer && (
-                            <Badge className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border-transparent text-[10px] px-1.5 py-0">
-                              <Shield className="h-2.5 w-2.5 mr-0.5 inline" aria-hidden="true" />
-                              OIDC
-                            </Badge>
-                          )}
+                          <code className="font-mono text-xs text-muted-foreground">
+                            {sa.tokenPrefix}…
+                          </code>
+                          <StatusLabel
+                            status={expired ? "expired" : "active"}
+                            toneName={expired ? "warning" : "success"}
+                          />
                         </div>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          <span className="font-mono text-xs text-foreground/40">
-                            {sa.tokenPrefix}...
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1 border px-1.5 py-px font-mono text-[10px]",
+                              sa.oidcIssuer
+                                ? "border-electric-ink/30 bg-electric-ink/5 text-electric-ink"
+                                : "border-border text-foreground/60",
+                            )}
+                            title={sa.oidcSubjectPattern}
+                          >
+                            <Shield className="size-2.5" aria-hidden="true" />
+                            {sa.oidcIssuer ? `OIDC · ${issuerLabel(sa.oidcIssuer)}` : "token only"}
                           </span>
-                          {sa.oidcIssuer && (
-                            <>
-                              <span className="text-foreground/20">·</span>
-                              <span className="text-xs text-foreground/40 truncate max-w-[200px]">
-                                {sa.oidcIssuer}
-                              </span>
-                            </>
-                          )}
-                          <span className="text-foreground/20">·</span>
-                          <span className="text-xs text-foreground/40">
-                            {formatTimeAgo(sa.createdAt)}
-                          </span>
-                          {sa.lastUsedAt && (
-                            <>
-                              <span className="text-foreground/20">·</span>
-                              <span className="text-xs text-foreground/40">
-                                used {formatTimeAgo(sa.lastUsedAt)}
-                              </span>
-                            </>
-                          )}
-                          {sa.expiresAt && status !== "expired" && (
-                            <>
-                              <span className="text-foreground/20">·</span>
-                              <span className="text-xs text-foreground/40">
-                                expires {new Date(sa.expiresAt).toLocaleDateString()}
-                              </span>
-                            </>
-                          )}
+                          <span>{meta.join(" · ")}</span>
                         </div>
                       </div>
-                      {isActive && isOwner && (
-                        <div className="flex gap-2 self-start shrink-0 sm:self-auto">
+                      {!expired && (
+                        <div className="flex shrink-0 gap-2 self-start sm:self-auto">
                           <button
                             type="button"
                             onClick={() => setSaToConfigOidc(sa)}
-                            className="px-3 py-1.5 text-xs font-medium border border-border text-foreground/60 hover:border-purple-600 hover:text-purple-600 dark:hover:border-purple-400 dark:hover:text-purple-400 transition-all"
+                            aria-label={`${sa.oidcIssuer ? "Edit" : "Add"} OIDC policy for ${sa.name}`}
+                            className={rowActionButton}
                           >
                             {sa.oidcIssuer ? "Edit OIDC" : "Add OIDC"}
                           </button>
                           <button
                             type="button"
                             onClick={() => setSaToRevoke(sa)}
-                            className="px-3 py-1.5 text-xs font-medium border border-border text-foreground/60 hover:border-red-600 hover:text-red-600 dark:hover:border-red-400 dark:hover:text-red-400 transition-all"
+                            aria-label={`Revoke ${sa.name}`}
+                            className={rowDangerButton}
                           >
                             Revoke
                           </button>
                         </div>
                       )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </>
+        )}
+      </DashboardCard>
 
       {saToRevoke && (
         <RevokeServiceAccountDialog
@@ -266,6 +285,8 @@ export function ServiceAccountsCard({ projectId, isOwner, hasPro }: ServiceAccou
           currentAudience={saToConfigOidc.oidcAudience}
         />
       )}
+
+      <UpgradeToProDialog open={showUpgradeDialog} onClose={() => setShowUpgradeDialog(false)} />
     </>
   );
 }

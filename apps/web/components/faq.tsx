@@ -2,12 +2,14 @@
 
 import { cn } from "@repo/ui/lib/utils";
 import { ChevronDown } from "lucide-react";
-import { useState } from "react";
-import { SITE_FAQS } from "@/lib/site";
+import { useId, useState } from "react";
+import { SITE_FAQS, SITE_X_URL } from "@/lib/site";
+import { focusRing } from "@/lib/styles";
 import { SectionWrapper } from "./section-wrapper";
 
 export function FAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const baseId = useId();
 
   return (
     <SectionWrapper label="FAQ" id="faq">
@@ -18,54 +20,67 @@ export function FAQ() {
         </p>
 
         <div className="mt-6 border-2 border-border divide-y-2 divide-border sm:mt-8">
-          {SITE_FAQS.map((faq, index) => (
-            <button
-              key={faq.question}
-              type="button"
-              onClick={() => setOpenIndex(openIndex === index ? null : index)}
-              className={cn(
-                "w-full text-left px-4 py-4 transition-colors sm:px-6 sm:py-5",
-                openIndex === index ? "bg-foreground/5" : "hover:bg-muted/50",
-              )}
-            >
-              <div className="flex items-center justify-between gap-3 sm:gap-4">
-                <span className="font-medium text-foreground text-sm sm:text-base">
-                  {faq.question}
-                </span>
-                <ChevronDown
-                  className={cn(
-                    "h-5 w-5 shrink-0 text-foreground/50 transition-transform duration-200",
-                    openIndex === index && "rotate-180",
-                  )}
-                  aria-hidden="true"
-                />
-              </div>
-              <div
-                className={cn(
-                  "grid transition-[grid-template-rows] duration-200",
-                  openIndex === index ? "grid-rows-[1fr] mt-3" : "grid-rows-[0fr]",
-                )}
-              >
-                <div className="overflow-hidden">
-                  <p className="text-foreground/60 text-sm leading-relaxed text-pretty sm:pr-8">
+          {SITE_FAQS.map((faq, index) => {
+            const isOpen = openIndex === index;
+            const buttonId = `${baseId}-question-${index}`;
+            const panelId = `${baseId}-answer-${index}`;
+
+            return (
+              <div key={faq.question} className={cn(isOpen && "bg-foreground/5")}>
+                <h3>
+                  <button
+                    id={buttonId}
+                    type="button"
+                    onClick={() => setOpenIndex(isOpen ? null : index)}
+                    aria-expanded={isOpen}
+                    aria-controls={panelId}
+                    className={cn(
+                      "flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition-colors focus-visible:outline-offset-[-2px] sm:gap-4 sm:px-6 sm:py-5",
+                      focusRing,
+                      !isOpen && "hover:bg-muted/50",
+                    )}
+                  >
+                    <span className="font-medium text-foreground text-sm sm:text-base">
+                      {faq.question}
+                    </span>
+                    <ChevronDown
+                      className={cn(
+                        "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200",
+                        isOpen && "rotate-180",
+                      )}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </h3>
+                <section
+                  id={panelId}
+                  aria-labelledby={buttonId}
+                  hidden={!isOpen}
+                  className="px-4 pb-4 sm:px-6 sm:pb-5"
+                >
+                  <p className="text-foreground/70 text-sm leading-relaxed text-pretty sm:pr-8">
                     {faq.answer}
                   </p>
-                </div>
+                </section>
               </div>
-            </button>
-          ))}
+            );
+          })}
         </div>
 
         <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-foreground/60 sm:mt-8 sm:text-base">
           <span>Have more questions?</span>
           <a
-            href="https://x.com/heycupola"
+            href={SITE_X_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-foreground hover:text-foreground/80 transition-colors font-medium"
+            className={`inline-flex items-center gap-2 text-foreground hover:text-foreground/80 transition-colors font-medium ${focusRing}`}
           >
-            <span>DMs open</span>
-            <span className="text-lg">𝕏</span>
+            <span>
+              DMs open<span className="sr-only"> on X (Twitter)</span>
+            </span>
+            <span className="text-lg" aria-hidden="true">
+              𝕏
+            </span>
           </a>
         </div>
       </div>

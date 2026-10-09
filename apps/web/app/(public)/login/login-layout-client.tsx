@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect } from "react";
 import { authClient } from "@/lib/auth";
-import { isValidReturnUrl } from "@/lib/url";
+import { getSafeReturnPath } from "@/lib/url";
 
 function LayoutContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -11,14 +11,16 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
   const returnUrl = searchParams.get("returnUrl");
 
   useEffect(() => {
-    authClient.getSession().then((session) => {
-      if (session?.data?.user.id) {
-        const redirectTo = isValidReturnUrl(returnUrl) ? returnUrl : "/dashboard";
-        if (redirectTo) {
-          router.replace(redirectTo);
+    authClient
+      .getSession()
+      .then((session) => {
+        if (session?.data?.user.id) {
+          router.replace(getSafeReturnPath(returnUrl) ?? "/dashboard");
         }
-      }
-    });
+      })
+      .catch(() => {
+        // Stay on the login page; signing in again will establish a session.
+      });
   }, [router, returnUrl]);
 
   return <>{children}</>;

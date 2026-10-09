@@ -17,13 +17,13 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: "/terms-of-service",
     siteName: SITE_NAME,
-    title: "Terms of Service - relic",
+    title: "Terms of Service - Relic",
     description:
       "Terms of Service for Relic, a zero-knowledge secrets management platform by Cupola Labs, LLC.",
   },
   twitter: {
     card: "summary",
-    title: "Terms of Service - relic",
+    title: "Terms of Service - Relic",
     description:
       "Terms of Service for Relic, a zero-knowledge secrets management platform by Cupola Labs, LLC.",
     creator: SITE_TWITTER_HANDLE,

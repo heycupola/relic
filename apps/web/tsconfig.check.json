@@ -18,5 +18,5 @@
     "types/**/*.d.ts",
     "proxy.ts"
   ],
-  "exclude": ["node_modules", ".next"]
+  "exclude": ["node_modules", ".next", "**/*.test.ts"]
 }

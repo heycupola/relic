@@ -1,21 +1,36 @@
 "use client";
 
+import { cn } from "@repo/ui/lib/utils";
 import {
+  Activity,
   Archive,
   Bot,
   Check,
+  FileDown,
   FolderPlus,
   Key,
-  LogOut,
+  KeyRound,
+  Layers,
+  type LucideIcon,
   Pencil,
   Plus,
   Shield,
   Trash2,
-  Upload,
+  UserMinus,
   UserPlus,
-  X,
+  UserX,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { formatClockTime, formatDateTime, formatDayLabel, formatTimeAgo } from "@/lib/format";
+import { focusRing } from "@/lib/styles";
+import {
+  DashboardCard,
+  EmptyState,
+  SegmentedTabs,
+  type Tone,
+  thinScrollbar,
+  tone,
+} from "./primitives";
 
 interface ActionLog {
   _id: string;
@@ -47,184 +62,213 @@ interface ActivityLogsCardProps {
   onLoadMore?: () => void;
 }
 
-function formatTimeAgo(timestamp: number): string {
-  const now = Date.now();
-  const diff = now - timestamp;
-  const seconds = Math.floor(diff / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
+type Category = "all" | "secrets" | "projects" | "team" | "access";
 
-  if (days > 0) return `${days}d ago`;
-  if (hours > 0) return `${hours}h ago`;
-  if (minutes > 0) return `${minutes}m ago`;
-  return "just now";
+interface Described {
+  text: string;
+  /** Rendered in mono after the text, e.g. a secret key or an email. */
+  subject?: string;
+  icon: LucideIcon;
+  tone: Tone;
+  category: Exclude<Category, "all">;
 }
 
-function getActionColor(action: string): string {
-  if (action.includes("deleted") || action.includes("revoked") || action === "account.deleted")
-    return "text-red-600 dark:text-red-400";
-  if (action.includes("archived")) return "text-orange-600 dark:text-orange-400";
-  if (action.includes("created") || action.includes("unarchived"))
-    return "text-green-600 dark:text-green-400";
-  if (action.includes("updated") || action.includes("rotated") || action.includes("changed"))
-    return "text-yellow-600 dark:text-yellow-400";
-  if (action.includes("added")) return "text-blue-600 dark:text-blue-400";
-  if (action.includes("exported")) return "text-purple-600 dark:text-purple-400";
-  return "text-foreground";
+function count(n: number | undefined, noun: string) {
+  return n ? `${n} ${noun}${n === 1 ? "" : "s"}` : undefined;
 }
 
-function getActionIcon(action: string) {
-  if (action === "account.deleted") return LogOut;
-  if (action === "serviceaccount.oidc_updated") return Shield;
-  if (action.startsWith("serviceaccount.")) return Bot;
-  if (action.includes("folder.created")) return FolderPlus;
-  if (action.includes("archived")) return Archive;
-  if (action.includes("created") || action.includes("unarchived")) return Plus;
-  if (action.includes("updated") || action.includes("changed")) return Pencil;
-  if (action.includes("deleted")) return Trash2;
-  if (action.includes("revoked")) return X;
-  if (action.includes("added")) return UserPlus;
-  if (action.includes("exported")) return Upload;
-  if (action.includes("rotated")) return Key;
-  if (action === "share.key_updated") return Key;
-  if (action === "onboarding.completed") return Check;
-  if (action === "user.keys_created") return Key;
-  return null;
+function prefix(p: string | undefined) {
+  return p ? `${p}…` : undefined;
 }
 
-function formatActionDescription(log: ActionLog): string {
-  const parts: string[] = [];
-
+function describe(log: ActionLog): Described {
+  const m = log.metadata ?? {};
   switch (log.action) {
     case "secret.created":
-      parts.push("secret created");
-      if (log.metadata?.key) parts.push(`(${log.metadata.key})`);
-      if (log.metadata?.folderName) parts.push(`in ${log.metadata.folderName}/`);
-      break;
+      return {
+        text: "Secret created",
+        subject: m.key,
+        icon: Plus,
+        tone: "success",
+        category: "secrets",
+      };
     case "secret.updated":
-      parts.push("secret updated");
-      if (log.metadata?.key) parts.push(`(${log.metadata.key})`);
-      if (log.metadata?.folderName) parts.push(`in ${log.metadata.folderName}/`);
-      break;
+      return {
+        text: "Secret updated",
+        subject: m.newKey ?? m.key,
+        icon: Pencil,
+        tone: "warning",
+        category: "secrets",
+      };
     case "secret.deleted":
-      parts.push("secret deleted");
-      if (log.metadata?.key) parts.push(`(${log.metadata.key})`);
-      if (log.metadata?.folderName) parts.push(`in ${log.metadata.folderName}/`);
-      break;
+      return {
+        text: "Secret deleted",
+        subject: m.key,
+        icon: Trash2,
+        tone: "danger",
+        category: "secrets",
+      };
     case "secret.exported":
-      parts.push("secrets exported");
-      if (log.metadata?.exportCount) parts.push(`(${log.metadata.exportCount} items)`);
-      break;
-    case "secrets.bulk.updated":
-      parts.push("bulk update");
-      if (log.metadata?.affectedValueCount)
-        parts.push(`(${log.metadata.affectedValueCount} secrets)`);
-      break;
-    case "secrets.bulk_deleted":
-      parts.push("bulk delete");
-      if (log.metadata?.deleteCount) parts.push(`(${log.metadata.deleteCount} secrets)`);
-      break;
     case "secrets.bulk_exported":
-      parts.push("bulk export");
-      if (log.metadata?.exportCount) parts.push(`(${log.metadata.exportCount} items)`);
-      break;
+      return {
+        text: "Secrets exported",
+        subject: count(m.exportCount, "item"),
+        icon: FileDown,
+        tone: "accent",
+        category: "secrets",
+      };
+    case "secrets.bulk.updated":
+      return {
+        text: "Bulk update",
+        subject: count(m.affectedValueCount, "secret"),
+        icon: Layers,
+        tone: "warning",
+        category: "secrets",
+      };
+    case "secrets.bulk_deleted":
+      return {
+        text: "Bulk delete",
+        subject: count(m.deleteCount, "secret"),
+        icon: Trash2,
+        tone: "danger",
+        category: "secrets",
+      };
     case "share.added":
-      parts.push("collaborator added");
-      if (log.metadata?.sharedUserEmail) parts.push(`(${log.metadata.sharedUserEmail})`);
-      break;
+      return {
+        text: "Collaborator added",
+        subject: m.sharedUserEmail,
+        icon: UserPlus,
+        tone: "info",
+        category: "team",
+      };
     case "share.revoked":
-      parts.push("collaborator removed");
-      if (log.metadata?.sharedUserEmail) parts.push(`(${log.metadata.sharedUserEmail})`);
-      break;
+      return {
+        text: "Collaborator removed",
+        subject: m.sharedUserEmail,
+        icon: UserMinus,
+        tone: "danger",
+        category: "team",
+      };
     case "share.key_updated":
-      parts.push("share key updated");
-      break;
-    case "user.keys_created":
-      parts.push("encryption keys created");
-      break;
-    case "user.password_changed":
-      parts.push("password changed");
-      break;
+      return { text: "Collaborator key updated", icon: Key, tone: "warning", category: "team" };
     case "project.created":
-      parts.push("project created");
-      break;
+      return { text: "Project created", icon: Plus, tone: "success", category: "projects" };
     case "project.updated":
-      parts.push("project updated");
-      break;
+      return { text: "Project updated", icon: Pencil, tone: "warning", category: "projects" };
     case "project.archived":
-      parts.push("project archived");
-      break;
+      return { text: "Project archived", icon: Archive, tone: "muted", category: "projects" };
     case "project.unarchived":
-      parts.push("project unarchived");
-      break;
+      return { text: "Project restored", icon: Archive, tone: "success", category: "projects" };
     case "project.key_rotated":
     case "keys.rotated":
-      parts.push("keys rotated");
-      break;
+      return { text: "Keys rotated", icon: Key, tone: "warning", category: "projects" };
     case "environment.created":
-      parts.push("environment created");
-      break;
+      return { text: "Environment created", icon: Plus, tone: "success", category: "projects" };
     case "environment.updated":
-      parts.push("environment updated");
-      break;
+      return { text: "Environment updated", icon: Pencil, tone: "warning", category: "projects" };
     case "environment.deleted":
-      parts.push("environment deleted");
-      if (log.metadata?.environmentName) parts.push(`(${log.metadata.environmentName})`);
-      break;
+      return {
+        text: "Environment deleted",
+        subject: m.environmentName,
+        icon: Trash2,
+        tone: "danger",
+        category: "projects",
+      };
     case "folder.created":
-      parts.push("folder created");
-      if (log.metadata?.folderName) parts.push(`(${log.metadata.folderName}/)`);
-      break;
+      return {
+        text: "Folder created",
+        subject: m.folderName && `${m.folderName}/`,
+        icon: FolderPlus,
+        tone: "success",
+        category: "projects",
+      };
     case "folder.updated":
-      parts.push("folder updated");
-      if (log.metadata?.folderName) parts.push(`(${log.metadata.folderName}/)`);
-      break;
+      return {
+        text: "Folder updated",
+        subject: m.folderName && `${m.folderName}/`,
+        icon: Pencil,
+        tone: "warning",
+        category: "projects",
+      };
     case "folder.deleted":
-      parts.push("folder deleted");
-      if (log.metadata?.folderName) parts.push(`(${log.metadata.folderName}/)`);
-      break;
+      return {
+        text: "Folder deleted",
+        subject: m.folderName && `${m.folderName}/`,
+        icon: Trash2,
+        tone: "danger",
+        category: "projects",
+      };
     case "apikey.created":
-      parts.push("API key created");
-      if (log.metadata?.apiKeyPrefix) parts.push(`(${log.metadata.apiKeyPrefix}…)`);
-      break;
+      return {
+        text: "API key created",
+        subject: prefix(m.apiKeyPrefix),
+        icon: KeyRound,
+        tone: "success",
+        category: "access",
+      };
     case "apikey.revoked":
-      parts.push("API key revoked");
-      if (log.metadata?.apiKeyPrefix) parts.push(`(${log.metadata.apiKeyPrefix}…)`);
-      break;
+      return {
+        text: "API key revoked",
+        subject: prefix(m.apiKeyPrefix),
+        icon: KeyRound,
+        tone: "danger",
+        category: "access",
+      };
     case "serviceaccount.created":
-      parts.push("service account created");
-      if (log.metadata?.apiKeyPrefix) parts.push(`(${log.metadata.apiKeyPrefix}…)`);
-      break;
+      return {
+        text: "Service account created",
+        subject: prefix(m.apiKeyPrefix),
+        icon: Bot,
+        tone: "success",
+        category: "access",
+      };
     case "serviceaccount.revoked":
-      parts.push("service account revoked");
-      if (log.metadata?.apiKeyPrefix) parts.push(`(${log.metadata.apiKeyPrefix}…)`);
-      break;
+      return {
+        text: "Service account revoked",
+        subject: prefix(m.apiKeyPrefix),
+        icon: Bot,
+        tone: "danger",
+        category: "access",
+      };
     case "serviceaccount.oidc_updated":
-      parts.push("OIDC policy updated");
-      if (log.metadata?.apiKeyPrefix) parts.push(`(${log.metadata.apiKeyPrefix}…)`);
-      break;
+      return {
+        text: "OIDC policy updated",
+        subject: prefix(m.apiKeyPrefix),
+        icon: Shield,
+        tone: "accent",
+        category: "access",
+      };
+    case "user.keys_created":
+      return { text: "Encryption keys created", icon: Key, tone: "success", category: "access" };
+    case "user.password_changed":
+      return { text: "Password changed", icon: Key, tone: "warning", category: "access" };
     case "account.deleted":
-      parts.push("account deleted");
-      break;
+      return { text: "Account deleted", icon: UserX, tone: "danger", category: "access" };
     case "onboarding.completed":
-      parts.push("onboarding completed");
-      break;
-    default:
-      parts.push(log.action.replace(/[._]/g, " "));
+      return { text: "Onboarding completed", icon: Check, tone: "success", category: "access" };
+    default: {
+      const text = log.action.replace(/[._]/g, " ");
+      return {
+        text: text.charAt(0).toUpperCase() + text.slice(1),
+        icon: Activity,
+        tone: "muted",
+        category: "projects",
+      };
+    }
   }
-
-  return parts.join(" ");
 }
 
-function formatContext(log: ActionLog): string | null {
-  const segments: string[] = [];
-
-  if (log.projectName) segments.push(log.projectName);
-  if (log.environmentName) segments.push(log.environmentName);
-
-  return segments.length > 0 ? segments.join(" / ") : null;
+function contextOf(log: ActionLog) {
+  const parts = [log.projectName, log.environmentName ?? log.metadata?.environmentName];
+  const location = parts.filter(Boolean).join(" / ");
+  const folder = log.metadata?.folderName;
+  if (folder && !log.action.startsWith("folder.")) {
+    return location ? `${location} · ${folder}/` : `${folder}/`;
+  }
+  return location || null;
 }
+
+const DAY_MS = 86_400_000;
 
 export function ActivityLogsCard({
   logs,
@@ -233,101 +277,140 @@ export function ActivityLogsCard({
   isLoadingMore,
   onLoadMore,
 }: ActivityLogsCardProps) {
+  const [category, setCategory] = useState<Category>("all");
   const observerTarget = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!canLoadMore || !onLoadMore || !observerTarget.current) return;
-
+    const target = observerTarget.current;
+    if (!canLoadMore || !onLoadMore || !target) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting && canLoadMore && !isLoadingMore) {
-          onLoadMore();
-        }
+        if (entries[0]?.isIntersecting && !isLoadingMore) onLoadMore();
       },
       { threshold: 0.1 },
     );
-
-    observer.observe(observerTarget.current);
-
+    observer.observe(target);
     return () => observer.disconnect();
   }, [canLoadMore, isLoadingMore, onLoadMore]);
-  if (isLoading) {
-    return (
-      <div className="border-2 border-border bg-card p-5">
-        <div className="animate-pulse space-y-3">
-          {[...Array(5)].map((_, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: Static skeleton loading doesn't reorder
-            <div key={`skeleton-${i}`} className="h-4 bg-muted rounded w-full" />
-          ))}
-        </div>
-      </div>
-    );
-  }
 
-  if (logs.length === 0) {
-    return (
-      <div className="border-2 border-border bg-card p-5">
-        <div className="space-y-3">
-          <h3 className="text-sm font-medium text-foreground/60">Recent Activity</h3>
-          <p className="text-sm text-foreground/50">No activity yet</p>
-        </div>
-      </div>
-    );
-  }
+  const groups = useMemo(() => {
+    const now = Date.now();
+    const result: { label: string; items: { log: ActionLog; d: Described }[] }[] = [];
+    for (const log of logs) {
+      const d = describe(log);
+      if (category !== "all" && d.category !== category) continue;
+      const label = formatDayLabel(log.timestamp, now);
+      const last = result[result.length - 1];
+      if (last?.label === label) last.items.push({ log, d });
+      else result.push({ label, items: [{ log, d }] });
+    }
+    return result;
+  }, [logs, category]);
+
+  if (isLoading) return null;
 
   return (
-    <div className="border-2 border-border bg-card p-4 sm:p-5">
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium text-foreground/60">Recent Activity</h3>
-        <div className="relative max-h-[300px] overflow-y-auto sm:max-h-[400px] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-border/20 [&::-webkit-scrollbar-thumb]:bg-foreground/20 [&::-webkit-scrollbar-thumb]:hover:bg-foreground/30">
-          <ul className="space-y-0 divide-y divide-border/50">
-            {logs.map((log) => {
-              const ActionIcon = getActionIcon(log.action);
-              const context = formatContext(log);
-              return (
-                <li key={log._id} className="py-2 first:pt-0 sm:py-2.5">
-                  <div className="flex items-start gap-2 sm:gap-3">
-                    <span className="text-foreground/40 select-none shrink-0 text-[11px] font-mono mt-0.5 sm:text-xs">
-                      {formatTimeAgo(log.timestamp)}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start gap-2 flex-wrap text-sm">
-                        <span className={`flex items-center gap-1.5 ${getActionColor(log.action)}`}>
-                          {ActionIcon && (
-                            <ActionIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                          )}
-                          {formatActionDescription(log)}
-                        </span>
-                        {context && (
-                          <>
-                            <span className="text-foreground/30">·</span>
-                            <span className="text-foreground/60">{context}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-          {canLoadMore && (
-            <div ref={observerTarget} className="py-3 text-center border-t border-border/50">
-              {isLoadingMore ? (
-                <span className="text-xs text-foreground/40">Loading more…</span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onLoadMore}
-                  className="text-xs text-foreground/50 hover:text-foreground transition-colors cursor-pointer"
-                >
-                  Load more
-                </button>
-              )}
-            </div>
-          )}
+    <DashboardCard
+      eyebrow="activity"
+      title="Recent activity"
+      description="An audit trail of changes across your projects."
+      bodyClassName="p-0 sm:p-0"
+    >
+      {logs.length === 0 ? (
+        <div className="p-4 sm:p-5">
+          <EmptyState icon={Activity} title="No activity yet">
+            Changes to secrets, projects, collaborators, and keys will appear here.
+          </EmptyState>
         </div>
+      ) : (
+        <>
+          <div className="border-b border-border px-4 py-3 sm:px-5">
+            <SegmentedTabs
+              label="Filter activity"
+              value={category}
+              onChange={setCategory}
+              options={[
+                { value: "all", label: "All" },
+                { value: "secrets", label: "Secrets" },
+                { value: "projects", label: "Projects" },
+                { value: "team", label: "Team" },
+                { value: "access", label: "Keys & access" },
+              ]}
+            />
+          </div>
+          <div className={cn("max-h-[420px] overflow-y-auto", thinScrollbar)}>
+            {groups.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-muted-foreground sm:px-5">
+                No matching activity in what's loaded so far.
+              </p>
+            ) : (
+              groups.map((group) => (
+                <section key={group.label} aria-label={group.label}>
+                  <h3 className="sticky top-0 z-10 border-b border-border bg-card/95 px-4 py-1.5 font-mono text-[11px] text-muted-foreground backdrop-blur-sm sm:px-5">
+                    {group.label}
+                  </h3>
+                  <ul className="divide-y divide-border/70">
+                    {group.items.map(({ log, d }) => (
+                      <ActivityRow key={log._id} log={log} d={d} />
+                    ))}
+                  </ul>
+                </section>
+              ))
+            )}
+            {canLoadMore && (
+              <div ref={observerTarget} className="border-t border-border py-3 text-center">
+                {isLoadingMore ? (
+                  <span className="text-xs text-muted-foreground">Loading more…</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onLoadMore}
+                    className={`text-xs text-muted-foreground transition-colors hover:text-foreground ${focusRing}`}
+                  >
+                    Load older activity
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </DashboardCard>
+  );
+}
+
+function ActivityRow({ log, d }: { log: ActionLog; d: Described }) {
+  const Icon = d.icon;
+  const context = contextOf(log);
+  const isRecent = Date.now() - log.timestamp < DAY_MS;
+
+  return (
+    <li className="flex items-start gap-3 px-4 py-2.5 sm:px-5">
+      <span
+        className="mt-0.5 flex size-6 shrink-0 items-center justify-center border border-border bg-muted/20"
+        aria-hidden="true"
+      >
+        <Icon className={cn("size-3", tone[d.tone])} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-foreground">
+          {d.text}
+          {d.subject && (
+            <>
+              {" "}
+              <code className="break-all font-mono text-xs text-foreground/70">{d.subject}</code>
+            </>
+          )}
+        </p>
+        {context && <p className="truncate text-xs text-muted-foreground">{context}</p>}
       </div>
-    </div>
+      <time
+        dateTime={new Date(log.timestamp).toISOString()}
+        title={formatDateTime(log.timestamp)}
+        className="mt-0.5 shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground"
+      >
+        {isRecent ? formatTimeAgo(log.timestamp) : formatClockTime(log.timestamp)}
+      </time>
+    </li>
   );
 }

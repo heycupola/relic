@@ -39,10 +39,14 @@ export function Header({ showLogout = false }: HeaderProps) {
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [mobileMenuOpen]);
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     trackWebEvent("web_logout");
-    await authClient.signOut();
-    router.push("/");
+    authClient
+      .signOut()
+      .catch((error: unknown) => {
+        console.error("Sign out failed:", error);
+      })
+      .finally(() => router.push("/"));
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -76,7 +80,7 @@ export function Header({ showLogout = false }: HeaderProps) {
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4 sm:h-16 sm:px-6 lg:px-12">
           <Link
             href="/"
-            className="flex items-center gap-2 -mx-3 px-3 py-2 rounded-md transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="flex items-center gap-2 -mx-3 px-3 py-2 transition-colors hover:bg-accent/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
             onContextMenu={handleContextMenu}
           >
             <Image
@@ -102,20 +106,20 @@ export function Header({ showLogout = false }: HeaderProps) {
             <button
               type="button"
               onClick={handleLogout}
-              className="font-[family-name:var(--font-heading)] text-md text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm px-1"
+              className="font-[family-name:var(--font-heading)] text-base text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground px-1"
             >
-              Logout
+              Log out
             </button>
           ) : (
             <>
-              <nav className="hidden items-center gap-8 font-[family-name:var(--font-heading)] text-md text-muted-foreground md:flex">
+              <nav className="hidden items-center gap-8 font-[family-name:var(--font-heading)] text-base text-muted-foreground md:flex">
                 {publicNavLinks.map((link) => (
                   <Link
                     key={link.href}
                     href={link.href}
                     target={(link.external ?? false) ? "_blank" : undefined}
                     rel={(link.external ?? false) ? "noopener noreferrer" : undefined}
-                    className="transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm px-1"
+                    className="transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground px-1"
                   >
                     {link.label}
                   </Link>
@@ -123,7 +127,7 @@ export function Header({ showLogout = false }: HeaderProps) {
                 {!isLoading && isAuthenticated && (
                   <Link
                     href="/dashboard"
-                    className="transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm px-1"
+                    className="transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground px-1"
                   >
                     Dashboard
                   </Link>
@@ -132,7 +136,7 @@ export function Header({ showLogout = false }: HeaderProps) {
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden p-2 text-foreground hover:text-foreground/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm"
+                className="md:hidden p-2 text-foreground hover:text-foreground/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
                 aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
                 aria-expanded={mobileMenuOpen}
                 aria-controls="mobile-menu"
@@ -149,14 +153,14 @@ export function Header({ showLogout = false }: HeaderProps) {
         {/* Mobile menu */}
         {!showLogout && mobileMenuOpen && (
           <div id="mobile-menu" className="md:hidden border-t border-border bg-background">
-            <nav className="flex flex-col px-4 py-4 gap-4 font-[family-name:var(--font-heading)] text-md sm:px-6">
+            <nav className="flex flex-col px-4 py-4 gap-4 font-[family-name:var(--font-heading)] text-base sm:px-6">
               {publicNavLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
                   target={(link.external ?? false) ? "_blank" : undefined}
                   rel={(link.external ?? false) ? "noopener noreferrer" : undefined}
-                  className="text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm px-1 py-2"
+                  className="text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground px-1 py-2"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {link.label}
@@ -165,7 +169,7 @@ export function Header({ showLogout = false }: HeaderProps) {
               {!isLoading && isAuthenticated && (
                 <Link
                   href="/dashboard"
-                  className="text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm px-1 py-2"
+                  className="text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground px-1 py-2"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   Dashboard
