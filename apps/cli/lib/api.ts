@@ -70,7 +70,7 @@ export interface ProjectListItem {
 export interface Environment {
   id: string;
   name: string;
-  slug: string;
+  slug?: string;
   projectId: string;
   color?: string;
   rotateEveryDays?: number;

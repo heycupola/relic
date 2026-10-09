@@ -729,9 +729,8 @@ export function ProjectPage({
           {editingPolicy && (
             <box flexDirection="column" width={CONTENT_WIDTH}>
               <text fg={THEME_COLORS.textDim}>
-                {"  "}Rotate{" "}
-                <span fg={THEME_COLORS.text}>{truncate(editingPolicy.name, 30)}</span> every N days
-                · 0 clears
+                {"  "}Rotate <span fg={THEME_COLORS.text}>{truncate(editingPolicy.name, 30)}</span>{" "}
+                every N days · 0 clears
               </text>
               <InlineInput
                 active={!isSavingPolicy}

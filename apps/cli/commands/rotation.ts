@@ -377,7 +377,7 @@ export async function rotationSet(
     rotateEveryDays = parseRotationDays(options.every);
   } catch (err) {
     console.error(`\n  ${pc.red(errorMessage(err))}\n`);
-    await exitWithTelemetry(1);
+    return exitWithTelemetry(1);
   }
   await applyRotationPolicy(key, options, rotateEveryDays);
 }

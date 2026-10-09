@@ -54,8 +54,8 @@ export function RotationCard({ alerts }: RotationCardProps) {
         truncated && (
           <>
             Showing the first {items.length}. Run{" "}
-            <code className="font-mono text-foreground">relic rotation status</code> per project
-            for the full list.
+            <code className="font-mono text-foreground">relic rotation status</code> per project for
+            the full list.
           </>
         )
       }

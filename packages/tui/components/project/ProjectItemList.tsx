@@ -3,7 +3,11 @@ import type { ContainerKind, ItemRef } from "../../hooks/useProjectItemActions";
 import type { ViewLevel } from "../../types/models";
 import { THEME_COLORS } from "../../utils/constants";
 import type { ProjectItem } from "../../utils/projectItems";
-import { formatPolicyLabel, getSecretRotationBadge, type RotationBadge } from "../../utils/rotation";
+import {
+  formatPolicyLabel,
+  getSecretRotationBadge,
+  type RotationBadge,
+} from "../../utils/rotation";
 import { truncate } from "../../utils/ui";
 import { InlineInput } from "../forms/InlineInput";
 import { DeleteConfirmation } from "../shared/DeleteConfirmation";
@@ -90,7 +94,8 @@ function ItemRow({
   const badge: RotationBadge | null =
     item.type === "secret" ? getSecretRotationBadge(item, environmentRotateEveryDays) : null;
   const policyLabel = item.type === "env" ? formatPolicyLabel(item.rotateEveryDays) : null;
-  const trailing = badge ?? (policyLabel ? { text: policyLabel, color: THEME_COLORS.textDim } : null);
+  const trailing =
+    badge ?? (policyLabel ? { text: policyLabel, color: THEME_COLORS.textDim } : null);
   const trailingWidth = trailing ? trailing.text.length + 1 : 0;
 
   return (
