@@ -844,7 +844,7 @@ describe("Secret Management", () => {
       });
       expect(scoped.secrets.map((s) => s.key).sort()).toEqual(["CLIENT_KEY", "SHARED_KEY"]);
 
-      const logs = await owner.asUser.action(api.actionLog.loadActionLogsByProject, {
+      const logs = await owner.asUser.query(api.actionLog.loadActionLogsByProject, {
         projectId,
         paginationOpts: { numItems: 10, cursor: null },
       });
