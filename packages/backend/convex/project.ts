@@ -78,11 +78,6 @@ const createProjectResult = v.union(
     message: v.optional(v.string()),
   }),
   v.object({
-    status: v.literal("paymentFailed"),
-    billingPortalUrl: v.union(v.string(), v.null()),
-    message: v.optional(v.string()),
-  }),
-  v.object({
     status: v.literal("requiresProPlan"),
     checkoutUrl: v.union(v.string(), v.null()),
     message: v.optional(v.string()),
@@ -91,13 +86,6 @@ const createProjectResult = v.union(
     status: v.literal("requiresConfirmation"),
     balance: v.number(),
     freeLimit: v.number(),
-    message: v.optional(v.string()),
-  }),
-  v.object({
-    status: v.literal("requiresRemoval"),
-    currentUsage: v.number(),
-    includedUsage: v.number(),
-    excessCount: v.number(),
     message: v.optional(v.string()),
   }),
 );
