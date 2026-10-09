@@ -1,0 +1,179 @@
+---
+title: Platform Sync
+description: Push a Relic environment's secrets into Vercel, Cloudflare Workers, GitHub Actions, or Fly.io with relic push.
+keywords: ["relic push", "vercel", "cloudflare", "wrangler", "github actions", "fly.io", "sync"]
+---
+
+`relic push` copies the secrets of one Relic environment into a deploy platform's own secret store. Use it when a platform reads secrets at runtime and you can't wrap the process with [`relic run`](/guides/cli#relic-run).
+
+```bash
+relic push -e production --target vercel
+```
+
+Secrets are decrypted on your machine and sent only to the platform's API or CLI. Values never go back to Relic, are never written to disk, and are never printed. Values are passed to platform CLIs on stdin, not as arguments or temporary files.
+
+## How a push works
+
+<Steps>
+  <Step title="Connect to the platform">
+    Relic finds the platform credentials and target (project, Worker, repository, or app). If credentials are missing, the command stops with the exact login command to run, before anything is decrypted.
+  </Step>
+  <Step title="Read existing names">
+    Relic lists the secret names already on the platform. Values are read back only where the platform allows it (Vercel variables of the encrypted type), so unchanged values can be skipped.
+  </Step>
+  <Step title="Fetch and decrypt">
+    Relic fetches the environment from the server and decrypts it locally. This records a `secrets.pushed` [audit log](/configuration/audit-logs) entry with the target, destination, and count. It never contains values.
+  </Step>
+  <Step title="Show the plan">
+    The plan lists names only, grouped as added (`+`), updated (`~`), removed (`-`, only with `--prune`), and unchanged (`=`).
+  </Step>
+  <Step title="Confirm and write">
+    Production-like targets ask for confirmation. In CI and other non-interactive shells you must pass `--yes`.
+  </Step>
+</Steps>
+
+```text
+  Push plan → Vercel prj_8f2a (production)
+
+    + STRIPE_WEBHOOK_SECRET
+    ~ DATABASE_URL
+    - LEGACY_API_TOKEN
+    = NEXT_PUBLIC_APP_URL
+
+  1 to add, 1 to update, 1 unchanged, 1 to remove
+```
+
+## Options
+
+| Flag                | Description                                                                |
+| ------------------- | -------------------------------------------------------------------------- |
+| `-e, --environment` | Relic environment to push (required)                                       |
+| `-t, --target`      | `vercel`, `cloudflare`, `github`, or `fly` (required)                      |
+| `-f, --folder`      | Push only one folder                                                       |
+| `-s, --scope`       | Scopes to include, comma separated: `client`, `server`, `shared`           |
+| `-p, --project`     | Project ID (overrides `relic.toml`)                                        |
+| `--dry-run`         | Print the plan and exit without writing                                    |
+| `--prune`           | Delete platform secrets that are not in the pushed Relic environment       |
+| `-y, --yes`         | Skip the confirmation prompt. Required in CI and non-interactive shells    |
+
+Use `--scope` to push only what a target needs. For example, a frontend usually needs `client` and `shared` secrets but not `server` ones:
+
+```bash
+relic push -e production --target vercel --scope client,shared
+```
+
+<Warning>
+  `--prune` deletes every platform secret that isn't in the pushed set, including ones that were
+  added outside Relic. When combined with `--folder` or `--scope`, anything outside that selection
+  is also removed. Run with `--dry-run` first. Without `--prune`, `relic push` never deletes
+  anything.
+</Warning>
+
+## Vercel
+
+```bash
+relic push -e production --target vercel
+relic push -e staging --target vercel --vercel-target preview,development
+```
+
+| Flag               | Description                                                                                         |
+| ------------------ | --------------------------------------------------------------------------------------------------- |
+| `--vercel-project` | Project ID or name. Defaults to `projectId` in `.vercel/project.json` (created by `vercel link`)   |
+| `--vercel-team`    | Team ID (`team_...`) or slug. Defaults to `orgId` in `.vercel/project.json`                         |
+| `--vercel-target`  | `production`, `preview`, `development`. Repeatable or comma separated. Defaults to `production`     |
+
+**Authentication.** Relic uses `VERCEL_TOKEN` when set. Otherwise it reads the Vercel CLI login from `auth.json` in the Vercel CLI data directory:
+
+| OS      | Location                                                     |
+| ------- | ------------------------------------------------------------ |
+| macOS   | `~/Library/Application Support/com.vercel.cli/auth.json`     |
+| Linux   | `~/.local/share/com.vercel.cli/auth.json` (or `$XDG_DATA_HOME`) |
+| Windows | `%APPDATA%\xdg.data\com.vercel.cli\auth.json`                |
+
+If neither is available, run `vercel login` or create a token at [vercel.com/account/tokens](https://vercel.com/account/tokens).
+
+**Variable types.** New variables are created as **sensitive**, so their values can't be read back from the dashboard or API. Vercel doesn't allow sensitive variables in the development target, so pushes that include `development` create **encrypted** variables instead. Existing variables keep their current type and only have their value replaced.
+
+Because sensitive values can't be read back, existing sensitive variables always appear as updates in the plan.
+
+**Production-like:** any push that includes the `production` target.
+
+## Cloudflare Workers
+
+```bash
+relic push -e production --target cloudflare
+relic push -e staging --target cloudflare --wrangler-env staging
+```
+
+| Flag             | Description                                                                         |
+| ---------------- | ----------------------------------------------------------------------------------- |
+| `--worker`       | Worker name. Defaults to `name` in `wrangler.json`, `wrangler.jsonc`, or `wrangler.toml` |
+| `--wrangler-env` | Wrangler environment, as in `wrangler --env`                                        |
+
+Worker names follow wrangler's rules: with `--wrangler-env staging`, Relic targets `env.staging.name` when your config sets it, and `<name>-staging` otherwise.
+
+**Authentication.** When wrangler is installed (in `node_modules/.bin` or on your `PATH`), Relic runs `wrangler secret bulk` with JSON on stdin, using your existing `wrangler login`. Wrangler also honors `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` if you set them. If wrangler isn't installed, Relic calls the Workers API directly with `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (or `account_id` from your wrangler config). The token needs the **Workers Scripts: Edit** permission.
+
+If neither works, run `npx wrangler login`.
+
+**Production-like:** pushes without `--wrangler-env`, or to an environment whose name looks like production (for example `production`, `prod`, or `live`).
+
+## GitHub Actions
+
+```bash
+relic push -e production --target github --github-env production
+relic push -e ci --target github --github-repo acme/web
+```
+
+| Flag            | Description                                                                |
+| --------------- | -------------------------------------------------------------------------- |
+| `--github-repo` | `owner/repo`. Defaults to the repository of the current directory          |
+| `--github-env`  | Write [environment secrets](https://docs.github.com/actions/deployment/targeting-different-environments/using-environments-for-deployment) instead of repository secrets |
+
+Relic uses the [GitHub CLI](https://cli.github.com) and sends each value to `gh secret set` on stdin. Run `gh auth login` first, or set `GH_TOKEN`.
+
+GitHub rejects names that start with `GITHUB_`, names with characters other than letters, digits, and underscores, empty values, and values over 48 KB. Relic checks these before writing anything.
+
+**Production-like:** repository-level secrets, and environment secrets whose environment name looks like production.
+
+## Fly.io
+
+```bash
+relic push -e production --target fly
+relic push -e production --target fly --fly-app acme-api --fly-stage
+```
+
+| Flag          | Description                                                       |
+| ------------- | ----------------------------------------------------------------- |
+| `--fly-app`   | App name. Defaults to `app` in `fly.toml`                         |
+| `--fly-stage` | Stage secrets without restarting machines (`fly secrets --stage`) |
+
+Relic pipes secrets to `fly secrets import` on stdin. Run `fly auth login` first, or set `FLY_API_TOKEN`. Values that start or end with quotes or whitespace are rejected, because `fly secrets import` can't store them exactly.
+
+**Production-like:** always, because setting secrets restarts the app unless you pass `--fly-stage`.
+
+## CI/CD
+
+In CI, pass `--yes` after you've reviewed the plan. Without it, `relic push` exits with code `2` instead of writing.
+
+```yaml
+- name: Sync secrets to Vercel
+  env:
+    RELIC_SERVICE_TOKEN: ${{ secrets.RELIC_SERVICE_TOKEN }}
+    VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  run: relic push -e production --target vercel --vercel-project acme-web --yes
+```
+
+Service accounts work the same way as with `relic run`. See [Service Accounts](/guides/service-accounts).
+
+## Exit codes
+
+| Code | Meaning                                                                          |
+| ---- | -------------------------------------------------------------------------------- |
+| `0`  | Pushed, already in sync, or dry run finished                                     |
+| `1`  | A Relic or platform request failed. The error lists the names that failed       |
+| `2`  | Invalid option or configuration, names the platform can't accept, or `--yes` is missing in a non-interactive shell |
+| `3`  | Not logged in to the platform or to Relic. The error shows the command to run    |
+| `4`  | You declined the confirmation prompt                                             |
+
+Missing required flags such as `--environment` are reported by the argument parser and exit with code `1`.

@@ -18,6 +18,7 @@ import {
   Trash2,
   UserMinus,
   UserPlus,
+  Upload,
   UserX,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -51,6 +52,9 @@ interface ActionLog {
     exportFormat?: string;
     reason?: string;
     apiKeyPrefix?: string;
+    pushTarget?: string;
+    pushDestination?: string;
+    pushDryRun?: boolean;
   };
 }
 
@@ -80,6 +84,13 @@ function count(n: number | undefined, noun: string) {
 function prefix(p: string | undefined) {
   return p ? `${p}…` : undefined;
 }
+
+const PUSH_TARGET_LABELS: Record<string, string> = {
+  vercel: "Vercel",
+  cloudflare: "Cloudflare",
+  github: "GitHub Actions",
+  fly: "Fly.io",
+};
 
 function describe(log: ActionLog): Described {
   const m = log.metadata ?? {};
@@ -117,6 +128,17 @@ function describe(log: ActionLog): Described {
         tone: "accent",
         category: "secrets",
       };
+    case "secrets.pushed": {
+      const target = m.pushTarget && (PUSH_TARGET_LABELS[m.pushTarget] ?? m.pushTarget);
+      const verb = m.pushDryRun ? "Push planned (dry run)" : "Secrets pushed";
+      return {
+        text: target ? `${verb} to ${target}` : verb,
+        subject: m.pushDestination ?? count(m.exportCount, "item"),
+        icon: Upload,
+        tone: "accent",
+        category: "secrets",
+      };
+    }
     case "secrets.bulk.updated":
       return {
         text: "Bulk update",

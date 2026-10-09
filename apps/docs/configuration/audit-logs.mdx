@@ -69,6 +69,7 @@ Logs can be queried by:
 | `secrets.bulk.updated`  | Multiple secrets updated at once  |
 | `secrets.bulk_deleted`  | Multiple secrets deleted at once  |
 | `secrets.bulk_exported` | Multiple secrets exported at once |
+| `secrets.pushed`        | Secrets decrypted for `relic push` to a deploy platform, including dry runs |
 
 <Note>
   The naming inconsistency between `secrets.bulk.updated` (dot) and `secrets.bulk_deleted`
@@ -108,6 +109,8 @@ Each log entry includes contextual metadata depending on the action type:
 | `secretsReEncrypted` / `sharesUpdated` | Key rotation stats                      |
 | `reason`                               | Key rotation, collaborator revocation   |
 | `apiKeyPrefix`                         | API key create/revoke                   |
+| `pushTarget` / `pushDestination`       | Platform push (`vercel`, `cloudflare`, `github`, `fly`) and its project, Worker, repository, or app |
+| `pushDryRun`                           | Platform push run with `--dry-run`      |
 
 ## Log Entry Structure
 

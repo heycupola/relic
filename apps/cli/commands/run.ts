@@ -34,6 +34,7 @@ import {
   ProPlanRequiredError,
   REQUEST_TIMEOUT_MS,
   type ProtectedApi,
+  type PushAuditInfo,
   type SecretData,
 } from "../lib/api";
 import {
@@ -65,6 +66,12 @@ export interface RunOptions {
   inheritEnv?: boolean;
 }
 
+export interface SecretFetchOptions {
+  scopes?: SecretScope[];
+  /** Push exports always hit the server so the audit event is recorded, and never touch the cache. */
+  push?: PushAuditInfo;
+}
+
 export interface PrepareSecretsResult {
   secrets: Record<string, string>;
   count: number;
@@ -92,7 +99,7 @@ export function getAuthMode(): AuthMode {
   return "session";
 }
 
-function isCiEnvironment(): boolean {
+export function isCiEnvironment(): boolean {
   return !!(
     process.env.CI ||
     process.env.GITHUB_ACTIONS ||
@@ -152,6 +159,7 @@ async function fetchAndCacheUserKeysViaApiKey(
 export async function prepareSecretsWithApiKey(
   projectId: string,
   options: RunOptions,
+  fetchOptions: SecretFetchOptions = {},
 ): Promise<PrepareSecretsResult> {
   const apiKey = process.env.RELIC_API_KEY;
   if (!apiKey) {
@@ -172,6 +180,8 @@ export async function prepareSecretsWithApiKey(
     environmentName: options.environment,
     folderName: options.folder,
     scope: options.scope,
+    scopes: fetchOptions.scopes,
+    push: fetchOptions.push,
   });
 
   if (result.count === 0) {
@@ -229,6 +239,7 @@ async function resolveOidcToken(): Promise<string | undefined> {
 
 export async function prepareSecretsWithServiceToken(
   options: RunOptions,
+  fetchOptions: SecretFetchOptions = {},
 ): Promise<PrepareSecretsResult> {
   const serviceToken = process.env.RELIC_SERVICE_TOKEN;
   if (!serviceToken) {
@@ -243,6 +254,8 @@ export async function prepareSecretsWithServiceToken(
       environmentName: options.environment,
       folderName: options.folder,
       scope: options.scope,
+      scopes: fetchOptions.scopes,
+      push: fetchOptions.push,
     },
     oidcToken,
   );
@@ -301,7 +314,23 @@ async function resolveSecrets(
   projectId: string,
   options: RunOptions,
   api: ProtectedApi,
+  fetchOptions: SecretFetchOptions,
 ): Promise<{ secrets: SecretData[]; encryptedProjectKey: string }> {
+  if (fetchOptions.push) {
+    const result = await api.exportSecrets({
+      projectId,
+      environmentName: options.environment,
+      folderName: options.folder,
+      scope: options.scope,
+      scopes: fetchOptions.scopes,
+      push: fetchOptions.push,
+    });
+    if (result.count === 0) {
+      throw new Error("No secrets found");
+    }
+    return { secrets: result.secrets, encryptedProjectKey: result.encryptedProjectKey };
+  }
+
   const cachedEnvironmentId = getCachedEnvironmentId(db, projectId, options.environment);
 
   if (cachedEnvironmentId) {
@@ -393,9 +422,16 @@ export async function prepareSecrets(
   db: Database,
   userKeyDb: Database,
   api: ProtectedApi,
+  fetchOptions: SecretFetchOptions = {},
 ): Promise<PrepareSecretsResult> {
   const userKeys = readCachedUserKeys(userKeyDb) ?? (await fetchAndCacheUserKeys(userKeyDb, api));
-  const { secrets, encryptedProjectKey } = await resolveSecrets(db, projectId, options, api);
+  const { secrets, encryptedProjectKey } = await resolveSecrets(
+    db,
+    projectId,
+    options,
+    api,
+    fetchOptions,
+  );
   const projectKey = await resolveProjectKey(encryptedProjectKey, userKeys, userKeyDb, api);
 
   return { secrets: await decryptToEnv(projectKey, secrets), count: secrets.length };

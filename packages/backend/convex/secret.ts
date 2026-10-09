@@ -8,6 +8,7 @@ import { assertProjectAccess } from "./lib/access";
 import { alreadyExistsError, createError, ErrorCode, notFoundError } from "./lib/errors";
 import { generateSlug } from "./lib/helpers";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
+import { buildExportAudit, type PushAudit, pushAuditValidator } from "./lib/push";
 import { checkRateLimit } from "./lib/rateLimit";
 import {
   ErrorSeverity,
@@ -740,6 +741,10 @@ export const _exportSecretsCore = internalMutation({
     folderName: v.optional(v.string()),
     folderId: v.optional(v.id("folder")),
     scope: v.optional(v.union(v.literal("client"), v.literal("server"), v.literal("shared"))),
+    scopes: v.optional(
+      v.array(v.union(v.literal("client"), v.literal("server"), v.literal("shared"))),
+    ),
+    push: v.optional(pushAuditValidator),
   },
   returns: v.object({
     secrets: v.array(
@@ -767,8 +772,12 @@ export const _exportSecretsCore = internalMutation({
       folderName?: string;
       folderId?: Id<"folder">;
       scope?: "client" | "server" | "shared";
+      scopes?: Array<"client" | "server" | "shared">;
+      push?: PushAudit;
     },
   ): Promise<ExportSecretsResult> => {
+    const audit = buildExportAudit(args.push);
+
     if (args.apiKeyId) {
       await checkRateLimit(ctx, "apiKeyExport", `apiKeyExport:${args.apiKeyId}`);
     }
@@ -857,15 +866,16 @@ export const _exportSecretsCore = internalMutation({
       folderId: resolvedFolderId,
     });
 
-    const filteredSecrets = args.scope
-      ? secrets.filter((secret) => secret.scope === args.scope)
+    const scopeFilter = args.scopes ?? (args.scope ? [args.scope] : undefined);
+    const filteredSecrets = scopeFilter
+      ? secrets.filter((secret) => scopeFilter.includes(secret.scope))
       : secrets;
 
     await ctx.runMutation(internal.actionLog._insertActionLog, {
       projectId: project._id,
       projectName: project.name,
       userId: args.userId,
-      action: "secret.exported",
+      action: audit.action,
       environmentId: resolvedEnvironmentId,
       environmentName: environment.name,
       metadata: {
@@ -873,6 +883,7 @@ export const _exportSecretsCore = internalMutation({
         folderName: folder?.name,
         exportCount: filteredSecrets.length,
         exportFormat: "env",
+        ...audit.metadata,
       },
     });
 
@@ -899,6 +910,10 @@ export const _exportSecretsForServiceAccount = internalMutation({
     environmentName: v.optional(v.string()),
     folderName: v.optional(v.string()),
     scope: v.optional(v.union(v.literal("client"), v.literal("server"), v.literal("shared"))),
+    scopes: v.optional(
+      v.array(v.union(v.literal("client"), v.literal("server"), v.literal("shared"))),
+    ),
+    push: v.optional(pushAuditValidator),
   },
   returns: v.object({
     secrets: v.array(
@@ -922,8 +937,12 @@ export const _exportSecretsForServiceAccount = internalMutation({
       environmentName?: string;
       folderName?: string;
       scope?: "client" | "server" | "shared";
+      scopes?: Array<"client" | "server" | "shared">;
+      push?: PushAudit;
     },
   ): Promise<ServiceAccountExportResult> => {
+    const audit = buildExportAudit(args.push);
+
     await checkRateLimit(ctx, "serviceAccountExport", `saExport:${args.serviceAccountId}`);
 
     const project = await getProjectOrThrow(ctx, args.projectId);
@@ -975,15 +994,16 @@ export const _exportSecretsForServiceAccount = internalMutation({
       folderId: folderId ?? undefined,
     });
 
-    const filteredSecrets = args.scope
-      ? secrets.filter((secret) => secret.scope === args.scope)
+    const scopeFilter = args.scopes ?? (args.scope ? [args.scope] : undefined);
+    const filteredSecrets = scopeFilter
+      ? secrets.filter((secret) => scopeFilter.includes(secret.scope))
       : secrets;
 
     await ctx.runMutation(internal.actionLog._insertActionLog, {
       projectId: project._id,
       projectName: project.name,
       userId: args.serviceAccountId,
-      action: "secret.exported",
+      action: audit.action,
       environmentId,
       environmentName: environment.name,
       metadata: {
@@ -991,6 +1011,7 @@ export const _exportSecretsForServiceAccount = internalMutation({
         folderName: folder?.name,
         exportCount: filteredSecrets.length,
         exportFormat: "env",
+        ...audit.metadata,
       },
     });
 
@@ -1017,6 +1038,10 @@ export const exportSecrets = protectedMutation({
     folderName: v.optional(v.string()),
     folderId: v.optional(v.id("folder")),
     scope: v.optional(v.union(v.literal("client"), v.literal("server"), v.literal("shared"))),
+    scopes: v.optional(
+      v.array(v.union(v.literal("client"), v.literal("server"), v.literal("shared"))),
+    ),
+    push: v.optional(pushAuditValidator),
   },
   handler: async (ctx: ProtectedMutationCtx, args): Promise<ExportSecretsResult> => {
     return await ctx.runMutation(internal.secret._exportSecretsCore, {
