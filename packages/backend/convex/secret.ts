@@ -1077,6 +1077,9 @@ export const _normalizeExportIds = internalQuery({
 
     if (!projectId || environmentId === null || folderId === null) return null;
     return { projectId, environmentId, folderId };
+  },
+});
+
 type SecretNamesArgs = {
   projectId: Id<"project">;
   environmentName: string;
