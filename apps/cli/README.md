@@ -23,6 +23,9 @@ bun install
 | `relic import`                 | Import secrets from a file or provider                          |
 | `relic push`                   | Sync secrets to a deploy platform                               |
 | `relic check`                  | Check required keys exist (names only)                          |
+| `relic guard scan`             | Scan for leaked secrets and dotenv files                        |
+| `relic guard install`          | Add a pre-commit hook that runs the guard                       |
+| `relic guard uninstall`        | Remove the guard pre-commit hook                                |
 | `relic service-account create` | Create a service account (CI/CD token, optional OIDC policy)    |
 | `relic service-account list`   | List service accounts for a project                             |
 | `relic service-account revoke` | Revoke a service account by `--name` or `--id`                  |
@@ -148,6 +151,25 @@ relic check -e production --scan src
 relic check -e staging --compare production
 ```
 
+### `relic guard`
+
+```bash
+relic guard scan [paths...] [--staged | --range <rev-range>] [options]
+```
+
+| Flag                  | Description                                                  |
+| --------------------- | ------------------------------------------------------------ |
+| `--staged`            | Scan staged content from the git index                       |
+| `--range <rev-range>` | Scan lines added in a commit range                           |
+| `-e, --environment`   | Environment whose values to match (repeatable, default: all) |
+| `-p, --project`       | Project ID (overrides `relic.toml`)                          |
+| `--min-length`        | Skip secret values shorter than this (default: `8`)          |
+| `--no-values`         | Only check for dotenv files                                  |
+| `--require-values`    | Fail when secret values can't be loaded                      |
+| `--json`              | Print results as JSON                                        |
+
+Flags committed or staged dotenv files and exact occurrences of decrypted secret values. Matching runs locally with an Aho-Corasick automaton; findings show the key name, file, line, and a masked preview only. Exits `1` on findings and `2` on errors. Skip a line with a `relic-guard-ignore` comment or paths with `.relicguardignore` (gitignore syntax).
+
 ## Configuration
 
 `relic.toml` in project root:
@@ -158,6 +180,11 @@ project_id = "<uuid>"
 # Optional: keys relic check should skip
 [check]
 ignore = ["NODE_ENV", "PORT"]
+
+# Optional, used by relic guard
+[guard]
+allow = ["test/.env.test"]  # dotenv files that may be committed
+min_length = 8
 ```
 
 Created by `relic init`. The CLI walks up from the current directory to find it.
@@ -236,6 +263,7 @@ deploy:
 ```
 ├── index.ts            # Entry point (commander setup)
 ├── commands/
+│   ├── guard.ts        # relic guard scan/install/uninstall
 │   ├── init.ts         # relic init
 │   ├── login.ts        # relic login
 │   ├── logout.ts       # relic logout
@@ -256,6 +284,7 @@ deploy:
 │   ├── config.ts       # relic.toml loading/saving
 │   ├── env.ts          # Child environment helpers (RELIC_* stripping)
 │   ├── env-keys.ts     # Env template parsing and source scanning
+│   ├── guard/          # Leak guard: git sources, matcher, ignores, hooks
 │   ├── telemetry.ts    # Sanitized error tracking, flush-before-exit
 │   ├── crypto.ts       # Secret encryption/decryption helpers
 │   ├── import-plan.ts  # Import plan, conflict handling, batched upload

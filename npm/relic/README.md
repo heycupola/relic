@@ -43,6 +43,9 @@ relic shell -e development
 
 # Sync secrets to a deploy platform
 relic push -e production --target vercel --dry-run
+# Block commits that leak secrets or dotenv files
+relic guard install
+relic guard scan --staged
 ```
 
 ## Commands
@@ -60,6 +63,9 @@ relic push -e production --target vercel --dry-run
 | `relic import` | Import secrets from a `.env`/JSON file, Doppler, Infisical, Vercel, or 1Password |
 | `relic push` | Sync secrets to Vercel, Cloudflare Workers, GitHub Actions, or Fly.io |
 | `relic check` | Check that required keys exist in an environment (names only) |
+| `relic guard scan` | Scan files, staged changes, or commits for leaked secrets |
+| `relic guard install` | Add a pre-commit hook that blocks leaks |
+| `relic guard uninstall` | Remove the guard pre-commit hook |
 | `relic service-account` | Create, list, and revoke service accounts for CI/CD |
 | `relic mcp` | Start the MCP server for AI assistants |
 | `relic upgrade` | Upgrade to the latest version |
