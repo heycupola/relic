@@ -6,11 +6,17 @@ const CONFIG_FILE = "relic.toml";
 const RELIC_DIR = ".relic";
 const CACHE_DB = "cache.db";
 
+export interface GuardConfig {
+  allow?: string[];
+  min_length?: number;
+}
+
 export interface RelicConfig {
   project_id: string;
   check?: {
     ignore?: string[];
   };
+  guard?: GuardConfig;
 }
 
 export interface ConfigResult {
