@@ -15,6 +15,7 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  RefreshCw,
   Shield,
   Trash2,
   UserMinus,
@@ -58,6 +59,7 @@ interface ActionLog {
     pushDryRun?: boolean;
     restoredVersion?: number;
     wasDeleted?: boolean;
+    rotateEveryDays?: number;
   };
 }
 
@@ -133,6 +135,16 @@ function describe(log: ActionLog): Described {
         subject: m.key,
         icon: RotateCcw,
         tone: "success",
+        category: "secrets",
+      };
+    case "rotation.policy_updated":
+      return {
+        text: m.rotateEveryDays
+          ? `Rotation policy set to every ${m.rotateEveryDays}d`
+          : "Rotation policy cleared",
+        subject: m.key,
+        icon: RefreshCw,
+        tone: "info",
         category: "secrets",
       };
     case "secret.exported":
