@@ -1,6 +1,6 @@
 import { convexTest, type TestConvex } from "convex-test";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { api, components } from "../convex/_generated/api";
+import { api } from "../convex/_generated/api";
 import { internal as betterAuthInternal } from "../convex/betterAuth/_generated/api";
 import { ErrorCode } from "../convex/lib/errors.ts";
 import schema from "../convex/schema";

@@ -36,11 +36,7 @@ function assertProjectCreated(result: {
 describe("Project Sharing", () => {
   let t: TestConvex<typeof schema>;
   let testUsers: TestUser[] = [];
-  let owner: TestUser,
-    collaborator: TestUser,
-    collaborator2: TestUser,
-    collaborator3: TestUser,
-    nonCollaborator: TestUser;
+  let owner: TestUser, collaborator: TestUser, collaborator2: TestUser, nonCollaborator: TestUser;
 
   beforeEach(async () => {
     t = convexTest(schema, modules);
@@ -52,7 +48,6 @@ describe("Project Sharing", () => {
     owner = testUsers[0]!;
     collaborator = testUsers[1]!;
     collaborator2 = testUsers[2]!;
-    collaborator3 = testUsers[3]!;
     nonCollaborator = testUsers[4];
   });
 
@@ -172,8 +167,8 @@ describe("Project Sharing", () => {
       const projectKey = await unwrapAESKeyWithRSA(encryptedProjectKey, owner.privateKey!);
 
       const [collaboratorPublicKey1, collaboratorPublicKey2] = await Promise.all([
-        await importPublicKey(collaborator.publicKey!),
-        await importPublicKey(collaborator2.publicKey!),
+        importPublicKey(collaborator.publicKey!),
+        importPublicKey(collaborator2.publicKey!),
       ]);
 
       const [encryptedProjectKeyForCollaborator1, encryptedProjectKeyForCollaborator2] =

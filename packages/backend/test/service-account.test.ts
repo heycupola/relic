@@ -124,7 +124,7 @@ describe("Service Account Management", () => {
 
   describe("createServiceAccount", () => {
     test("should create a service account", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -144,7 +144,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject for free users", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -181,7 +181,7 @@ describe("Service Account Management", () => {
         encryptedProjectKey: collabEncryptedProjectKey,
       });
 
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         collaborator.publicKey!,
         collaborator.encryptedPrivateKey!,
         collaborator.password!,
@@ -201,7 +201,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject empty name", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -221,7 +221,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject expiration in the past", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -243,7 +243,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject expiration beyond 365 days", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -266,7 +266,7 @@ describe("Service Account Management", () => {
 
     test("should enforce max 5 active service accounts per project", async () => {
       for (let i = 0; i < 5; i++) {
-        const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+        const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
           owner.publicKey!,
           owner.encryptedPrivateKey!,
           owner.password!,
@@ -280,7 +280,7 @@ describe("Service Account Management", () => {
         });
       }
 
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -301,7 +301,7 @@ describe("Service Account Management", () => {
 
     test("should allow creating after revoking one at limit", async () => {
       for (let i = 0; i < 5; i++) {
-        const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+        const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
           owner.publicKey!,
           owner.encryptedPrivateKey!,
           owner.password!,
@@ -322,7 +322,7 @@ describe("Service Account Management", () => {
         serviceAccountId: accounts[0].id,
       });
 
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -341,7 +341,7 @@ describe("Service Account Management", () => {
 
   describe("listServiceAccounts", () => {
     test("should list service accounts for owner", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -362,7 +362,7 @@ describe("Service Account Management", () => {
       expect(accounts[0].name).toBe("Listed SA");
       expect(accounts[0].tokenPrefix).toBe(saArgs.tokenPrefix);
       expect(accounts[0].revokedAt).toBeUndefined();
-      expect((accounts[0] as Record<string, unknown>).publicKey).toBeUndefined();
+      expect(accounts[0].publicKey).toBe(saArgs.publicKey);
       expect((accounts[0] as Record<string, unknown>).encryptedPrivateKey).toBeUndefined();
       expect((accounts[0] as Record<string, unknown>).hashedToken).toBeUndefined();
     });
@@ -409,7 +409,7 @@ describe("Service Account Management", () => {
 
   describe("revokeServiceAccount", () => {
     test("should revoke a service account", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -455,7 +455,7 @@ describe("Service Account Management", () => {
         encryptedProjectKey: collabEncryptedProjectKey,
       });
 
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -482,7 +482,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject revoking an already revoked service account", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -524,7 +524,7 @@ describe("Service Account Management", () => {
 
   describe("OIDC policy on create", () => {
     test("should create a service account with OIDC policy", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -553,7 +553,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject OIDC issuer without subject", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -575,7 +575,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject OIDC subject without issuer", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -601,7 +601,7 @@ describe("Service Account Management", () => {
     let serviceAccountId: string;
 
     beforeEach(async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,

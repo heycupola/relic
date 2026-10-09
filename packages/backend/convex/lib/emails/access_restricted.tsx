@@ -46,23 +46,20 @@ export const AccessRestrictedEmail = ({
             <Text style={paragraph}>Hi {userName},</Text>
             <Text style={paragraph}>
               Your 7-day grace period has ended.
-              {hasProjects && " Your access to the following has been restricted:"}
+              {hasProjects && " Here's what changed:"}
             </Text>
             {hasProjects && (
               <Section style={warningBlock}>
                 {ownedProjectCount > 0 && (
-                  <Text style={listItem}>
-                    {ownedProjectCount} {ownedProjectCount === 1 ? "project" : "projects"} owned by
-                    you
+                  <Text style={sharedProjectCount > 0 ? listItem : listItemLast}>
+                    {ownedProjectCount} {ownedProjectCount === 1 ? "project is" : "projects are"}{" "}
+                    over the Free plan limit
                   </Text>
                 )}
                 {sharedProjectCount > 0 && (
-                  <Text
-                    style={
-                      sharedProjectCount > 0 && ownedProjectCount > 0 ? listItemLast : listItem
-                    }
-                  >
-                    {sharedProjectCount} shared {sharedProjectCount === 1 ? "project" : "projects"}
+                  <Text style={listItemLast}>
+                    Collaborators lost access to {sharedProjectCount} shared{" "}
+                    {sharedProjectCount === 1 ? "project" : "projects"}
                   </Text>
                 )}
               </Section>

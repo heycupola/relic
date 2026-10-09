@@ -14,7 +14,7 @@ import {
 import { createError, ErrorCode } from "./lib/errors";
 import { createLogger } from "./lib/logger";
 import { protectedAction, protectedMutation, protectedQuery } from "./lib/middleware";
-import { PLANS } from "./lib/plans";
+import { getAccessibleProjectIds, getPlanState } from "./lib/plans";
 import { checkRateLimit } from "./lib/rateLimit";
 import { EmailKind, ErrorSeverity } from "./lib/types";
 import { sendEmail, sendEmailDirect } from "./resend";
@@ -206,10 +206,12 @@ export const _queueAccessRestrictedEmails = internalMutation({
       });
 
       const projects = await listActiveOwnedProjects(ctx, user._id);
-      if (projects.length <= PLANS.free.includedProjects) continue;
+      const accessible = getAccessibleProjectIds(projects, getPlanState(user));
+      const restricted = projects.filter((p) => !accessible.has(p._id));
+      if (restricted.length === 0) continue;
 
       const shareCounts = await Promise.all(
-        projects.map(async (p) => (await listActiveSharesByProject(ctx, p._id)).length),
+        restricted.map(async (p) => (await listActiveSharesByProject(ctx, p._id)).length),
       );
 
       await ctx.scheduler.runAfter(0, internal.emails._send, {
@@ -218,7 +220,7 @@ export const _queueAccessRestrictedEmails = internalMutation({
         data: {
           kind: EmailKind.AccessRestricted,
           userName: user.name,
-          ownedProjectCount: projects.length,
+          ownedProjectCount: restricted.length,
           sharedProjectCount: shareCounts.filter((count) => count > 0).length,
         },
       });

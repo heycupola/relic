@@ -7,8 +7,8 @@ import {
   wrapAESKeyWithRSA,
 } from "@repo/crypto";
 import { convexTest, type TestConvex } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { api, components, internal } from "../convex/_generated/api";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { ErrorCode } from "../convex/lib/errors.ts";
 import { SecretValueType } from "../convex/lib/types.ts";

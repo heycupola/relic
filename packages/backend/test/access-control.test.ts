@@ -1,7 +1,7 @@
 import { createProjectKey } from "@repo/crypto";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { api, components, internal } from "../convex/_generated/api";
+import { api, components } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { ErrorCode } from "../convex/lib/errors.ts";
 import schema from "../convex/schema";
@@ -30,7 +30,7 @@ function assertProjectCreated(result: {
 describe("Access Control", () => {
   let t: TestConvex<typeof schema>;
   let testUsers: TestUser[] = [];
-  let owner: TestUser, collaborator: TestUser, nonCollaborator: TestUser;
+  let owner: TestUser, collaborator: TestUser;
 
   beforeEach(async () => {
     t = convexTest(schema, modules);
@@ -41,7 +41,6 @@ describe("Access Control", () => {
     testUsers = await getTestUsers(t);
     owner = testUsers[0]!;
     collaborator = testUsers[1]!;
-    nonCollaborator = testUsers[2];
   });
 
   afterEach(() => {

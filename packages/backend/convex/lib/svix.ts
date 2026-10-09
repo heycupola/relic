@@ -76,7 +76,7 @@ function base64ToBytes(base64: string): Uint8Array {
     }
 
     return bytes;
-  } catch (_error) {
+  } catch {
     log.error("Invalid base64 in secret");
     throw new Error("Invalid webhook secret format");
   }
