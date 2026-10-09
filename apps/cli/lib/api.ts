@@ -138,6 +138,39 @@ export interface SecretNames {
   count: number;
 }
 
+export type SecretChangeType = "updated" | "deleted" | "restored";
+
+export interface SecretHistoryVersion {
+  id: string;
+  version: number;
+  key: string;
+  encryptedValue: string;
+  valueType: "string" | "number" | "boolean";
+  scope: "client" | "server" | "shared";
+  changeType: SecretChangeType;
+  changedBy: string;
+  changedByEmail: string | null;
+  changedAt: number;
+}
+
+export interface SecretHistory {
+  secret: {
+    id: string;
+    key: string;
+    isDeleted: boolean;
+    currentVersion: number | null;
+    encryptedValue: string | null;
+    valueType: "string" | "number" | "boolean";
+    scope: "client" | "server" | "shared";
+    updatedBy: string;
+    updatedByEmail: string | null;
+    updatedAt: number;
+  };
+  versions: SecretHistoryVersion[];
+  encryptedProjectKey: string;
+  retentionLimit: number;
+}
+
 export interface FullUser extends User {
   publicKey?: string;
   encryptedPrivateKey?: string;
@@ -424,6 +457,41 @@ export class ProtectedApi {
       }),
     );
     return { secrets: result.secrets, count: result.count };
+  }
+
+  async getSecretHistory(args: {
+    projectId: string;
+    environmentName: string;
+    folderName?: string;
+    key: string;
+  }): Promise<SecretHistory> {
+    const result = await this.withAuth(() =>
+      this.client.query(api.secretHistory.getSecretHistoryByKey, {
+        projectId: toId<"project">(args.projectId),
+        environmentName: args.environmentName,
+        folderName: args.folderName,
+        key: args.key,
+      }),
+    );
+    return {
+      secret: { ...result.secret, id: String(result.secret.id) },
+      versions: result.versions.map((entry) => ({ ...entry, id: String(entry.id) })),
+      encryptedProjectKey: result.encryptedProjectKey,
+      retentionLimit: result.retentionLimit,
+    };
+  }
+
+  async restoreSecretVersion(
+    secretId: string,
+    version: number,
+  ): Promise<{ restoredVersion: number; wasDeleted: boolean }> {
+    const result = await this.withAuth(() =>
+      this.client.mutation(api.secretHistory.restoreSecretVersion, {
+        secretId: toId<"secret">(secretId),
+        version,
+      }),
+    );
+    return { restoredVersion: result.restoredVersion, wasDeleted: result.wasDeleted };
   }
 
   async createServiceAccount(args: {
