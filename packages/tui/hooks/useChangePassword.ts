@@ -1,4 +1,4 @@
-import { savePassword } from "@repo/auth";
+import { clearPassword, savePassword } from "@repo/auth";
 import {
   decryptPrivateKeyWithPassword,
   encryptPrivateKeyWithPassword,
@@ -15,6 +15,7 @@ interface UseChangePasswordOptions {
   salt: string | null;
   updatePassword: (args: { encryptedPrivateKey: string; salt: string }) => Promise<void>;
   onChanged: () => void;
+  onLocalSaveFailed: (message: string) => void;
 }
 
 export function useChangePassword({
@@ -22,6 +23,7 @@ export function useChangePassword({
   salt,
   updatePassword,
   onChanged,
+  onLocalSaveFailed,
 }: UseChangePasswordOptions) {
   const { user } = useUser();
   const [isChanging, setIsChanging] = useState(false);
@@ -77,13 +79,23 @@ export function useChangePassword({
       return;
     }
 
+    trackEvent("password_changed", { success: true });
+
     try {
       await savePassword(newPassword, user ? { userId: user.id, email: user.email } : undefined);
     } catch (err) {
       logger.error("Failed to save password locally:", err);
+      // NOTE: The stored password no longer matches the keys, so drop it and require an unlock.
+      await clearPassword().catch((clearError: unknown) => {
+        logger.error("Failed to clear stale local password:", clearError);
+      });
+      setIsChanging(false);
+      onLocalSaveFailed(
+        "Password changed, but it couldn't be saved on this device. Unlock with your new password.",
+      );
+      return;
     }
 
-    trackEvent("password_changed", { success: true });
     setIsChanging(false);
     onChanged();
   };

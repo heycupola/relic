@@ -1,65 +1,109 @@
+import { extractErrorMessage } from "@repo/auth";
 import { createLogger, trackError } from "@repo/logger";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { getProtectedApi } from "../api";
-import type { Secret as ApiSecret } from "../types/api";
-import type { Folder, Secret } from "../types/models";
+import type { Folder, Secret, SecretScope, SecretValueType } from "../types/models";
 import { decryptSecretValue, encryptSecretValue, getProjectKey } from "../utils/crypto";
+import { mapApiFolder, mapApiSecret } from "../utils/mappers";
 
 const logger = createLogger("tui");
 
-import { mapApiFolder, mapApiSecret } from "../utils/mappers";
+export interface ProjectKeySource {
+  encryptedProjectKey: string;
+  keyVersion: number;
+}
+
+export function isProjectKeyChangedError(error: unknown): boolean {
+  return extractErrorMessage(error).toLowerCase().includes("project key changed");
+}
 
 export function useSecrets(
-  _projectId: string,
-  encryptedProjectKeySource: string | null,
+  projectKey: ProjectKeySource | null,
   encryptedPrivateKey: string | null,
   salt: string | null,
+  onProjectKeyChanged: () => void,
 ) {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [secrets, setSecrets] = useState<Secret[]>([]);
+  const [loadedEnvironmentId, setLoadedEnvironmentId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const requestIdRef = useRef(0);
 
-  const loadEnvironment = useCallback(
-    async (environmentId: string) => {
-      setIsLoading(true);
-      setError(null);
+  const loadEnvironment = useCallback(async (environmentId: string) => {
+    const requestId = ++requestIdRef.current;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const api = getProtectedApi();
+      await api.ensureAuth();
+      const data = await api.getEnvironmentData(environmentId);
+      if (requestId !== requestIdRef.current) return;
+      setFolders(data.folders.map(mapApiFolder));
+      setSecrets(data.secrets.map(mapApiSecret));
+      setLoadedEnvironmentId(environmentId);
+    } catch (err) {
+      if (requestId !== requestIdRef.current) return;
+      logger.error("Failed to load environment:", err);
+      trackError("tui", err, { action: "load_environment" });
+      setError(err instanceof Error ? err : new Error("Failed to load environment"));
+    } finally {
+      if (requestId === requestIdRef.current) setIsLoading(false);
+    }
+  }, []);
+
+  const clearEnvironment = useCallback(() => {
+    requestIdRef.current++;
+    setFolders([]);
+    setSecrets([]);
+    setLoadedEnvironmentId(null);
+    setIsLoading(false);
+    setError(null);
+  }, []);
+
+  const requireProjectKey = useCallback(async () => {
+    if (!projectKey || !encryptedPrivateKey || !salt) {
+      throw new Error("The project key isn't available yet. Try again in a moment.");
+    }
+    return {
+      key: await getProjectKey(projectKey.encryptedProjectKey, encryptedPrivateKey, salt),
+      keyVersion: projectKey.keyVersion,
+    };
+  }, [projectKey, encryptedPrivateKey, salt]);
+
+  const decryptSecrets = useCallback(
+    async (toDecrypt: Secret[]): Promise<Map<string, string>> => {
+      const { key } = await requireProjectKey();
+      const values = new Map<string, string>();
+      await Promise.all(
+        toDecrypt.map(async (secret) => {
+          if (!secret.encryptedValue) return;
+          try {
+            values.set(secret.id, await decryptSecretValue(key, secret.encryptedValue));
+          } catch (err) {
+            logger.error(`Failed to decrypt secret ${secret.key}:`, err);
+            trackError("tui", err, { action: "decrypt_secret" });
+          }
+        }),
+      );
+      return values;
+    },
+    [requireProjectKey],
+  );
+
+  const withKeyRecovery = useCallback(
+    async <T>(environmentId: string, fn: () => Promise<T>): Promise<T> => {
       try {
-        const api = getProtectedApi();
-        await api.ensureAuth();
-        const data = await api.getEnvironmentData(environmentId);
-
-        setFolders(data.folders.map(mapApiFolder));
-        const projectKey =
-          encryptedProjectKeySource && encryptedPrivateKey && salt
-            ? await getProjectKey(encryptedProjectKeySource, encryptedPrivateKey, salt)
-            : null;
-
-        const decrypted = await Promise.all(
-          data.secrets.map(async (s: ApiSecret) => {
-            const mapped = mapApiSecret(s);
-            if (projectKey && s.encryptedValue) {
-              try {
-                mapped.value = await decryptSecretValue(projectKey, s.encryptedValue);
-              } catch (err) {
-                logger.error(`Failed to decrypt secret ${mapped.key}:`, err);
-                trackError("tui", err, { action: "decrypt_secret" });
-              }
-            }
-            return mapped;
-          }),
-        );
-
-        setSecrets(decrypted);
+        return await fn();
       } catch (err) {
-        logger.error("Failed to load environment:", err);
-        trackError("tui", err, { action: "load_environment" });
-        setError(err instanceof Error ? err : new Error("Failed to load environment"));
-      } finally {
-        setIsLoading(false);
+        if (isProjectKeyChangedError(err)) {
+          onProjectKeyChanged();
+          await loadEnvironment(environmentId);
+        }
+        throw err;
       }
     },
-    [encryptedProjectKeySource, encryptedPrivateKey, salt],
+    [onProjectKeyChanged, loadEnvironment],
   );
 
   const createFolder = useCallback(
@@ -101,30 +145,29 @@ export function useSecrets(
       folderId?: string;
       key: string;
       value: string;
-      valueType?: "string" | "number" | "boolean";
-      scope?: "client" | "server" | "shared";
+      valueType?: SecretValueType;
+      scope?: SecretScope;
     }) => {
-      if (!encryptedProjectKeySource || !encryptedPrivateKey || !salt) {
-        throw new Error("Cannot encrypt: No project key available");
-      }
-
-      const projectKey = await getProjectKey(encryptedProjectKeySource, encryptedPrivateKey, salt);
-      const encryptedValue = await encryptSecretValue(projectKey, args.value);
-
-      const api = getProtectedApi();
-      await api.ensureAuth();
-      const { id } = await api.createSecret({
-        environmentId: args.environmentId,
-        folderId: args.folderId,
-        key: args.key,
-        encryptedValue,
-        valueType: args.valueType,
-        scope: args.scope,
+      const id = await withKeyRecovery(args.environmentId, async () => {
+        const { key, keyVersion } = await requireProjectKey();
+        const encryptedValue = await encryptSecretValue(key, args.value);
+        const api = getProtectedApi();
+        await api.ensureAuth();
+        const created = await api.createSecret({
+          environmentId: args.environmentId,
+          folderId: args.folderId,
+          key: args.key,
+          encryptedValue,
+          valueType: args.valueType,
+          scope: args.scope,
+          expectedKeyVersion: keyVersion,
+        });
+        return created.id;
       });
       await loadEnvironment(args.environmentId);
       return id;
     },
-    [encryptedProjectKeySource, encryptedPrivateKey, salt, loadEnvironment],
+    [withKeyRecovery, requireProjectKey, loadEnvironment],
   );
 
   const updateSecretBulk = useCallback(
@@ -135,66 +178,51 @@ export function useSecrets(
         secretId?: string;
         key: string;
         value: string;
-        valueType: "string" | "number" | "boolean";
-        scope?: "client" | "server" | "shared";
+        /** Plaintext the editor started with; lets unchanged values keep their ciphertext. */
+        originalValue?: string;
+        valueType: SecretValueType;
+        scope?: SecretScope;
       }>;
       mode?: "skip" | "overwrite";
     }) => {
-      if (!encryptedProjectKeySource || !encryptedPrivateKey || !salt) {
-        throw new Error("Cannot encrypt: No project key available");
-      }
+      const result = await withKeyRecovery(args.environmentId, async () => {
+        const { key, keyVersion } = await requireProjectKey();
 
-      const projectKey = await getProjectKey(encryptedProjectKeySource, encryptedPrivateKey, salt);
-
-      // Optimize: only re-encrypt if value actually changed
-      const encrypted = await Promise.all(
-        args.secrets.map(async (s) => {
-          // Find existing secret by ID or key
-          const existingSecret = s.secretId
-            ? secrets.find((existing) => existing.id === s.secretId)
-            : secrets.find(
-                (existing) =>
-                  existing.key === s.key &&
-                  existing.environmentId === args.environmentId &&
-                  existing.folderId === args.folderId,
-              );
-
-          // If secret exists and value hasn't changed, reuse encrypted value from state
-          if (existingSecret && existingSecret.value === s.value && existingSecret.encryptedValue) {
+        const encrypted = await Promise.all(
+          args.secrets.map(async (s) => {
+            const existing = s.secretId ? secrets.find((e) => e.id === s.secretId) : undefined;
+            const canReuse =
+              existing?.encryptedValue !== undefined &&
+              existing.encryptionKeyVersion === keyVersion &&
+              s.originalValue !== undefined &&
+              s.originalValue === s.value;
             return {
               secretId: s.secretId,
               key: s.key,
-              encryptedValue: existingSecret.encryptedValue,
+              encryptedValue:
+                canReuse && existing?.encryptedValue
+                  ? existing.encryptedValue
+                  : await encryptSecretValue(key, s.value),
               valueType: s.valueType,
               scope: s.scope,
             };
-          }
+          }),
+        );
 
-          // Otherwise, encrypt the new/changed value
-          return {
-            secretId: s.secretId,
-            key: s.key,
-            encryptedValue: await encryptSecretValue(projectKey, s.value),
-            valueType: s.valueType,
-            scope: s.scope,
-          };
-        }),
-      );
-
-      const api = getProtectedApi();
-      await api.ensureAuth();
-      const payload = {
-        environmentId: args.environmentId,
-        folderId: args.folderId,
-        secrets: encrypted,
-        mode: args.mode,
-      };
-
-      const result = await api.updateSecretBulk(payload);
+        const api = getProtectedApi();
+        await api.ensureAuth();
+        return await api.updateSecretBulk({
+          environmentId: args.environmentId,
+          folderId: args.folderId,
+          secrets: encrypted,
+          mode: args.mode,
+          expectedKeyVersion: keyVersion,
+        });
+      });
       await loadEnvironment(args.environmentId);
       return result;
     },
-    [encryptedProjectKeySource, encryptedPrivateKey, salt, loadEnvironment, secrets],
+    [withKeyRecovery, requireProjectKey, loadEnvironment, secrets],
   );
 
   const updateSecret = useCallback(
@@ -203,32 +231,29 @@ export function useSecrets(
       environmentId: string;
       key?: string;
       value?: string;
-      valueType?: "string" | "number" | "boolean";
+      valueType?: SecretValueType;
     }) => {
-      let encryptedValue: string | undefined;
-      if (args.value) {
-        if (!encryptedProjectKeySource || !encryptedPrivateKey || !salt) {
-          throw new Error("Cannot encrypt: No project key available");
+      await withKeyRecovery(args.environmentId, async () => {
+        let encryptedValue: string | undefined;
+        let expectedKeyVersion: number | undefined;
+        if (args.value !== undefined) {
+          const { key, keyVersion } = await requireProjectKey();
+          encryptedValue = await encryptSecretValue(key, args.value);
+          expectedKeyVersion = keyVersion;
         }
-        const projectKey = await getProjectKey(
-          encryptedProjectKeySource,
-          encryptedPrivateKey,
-          salt,
-        );
-        encryptedValue = await encryptSecretValue(projectKey, args.value);
-      }
-
-      const api = getProtectedApi();
-      await api.ensureAuth();
-      await api.updateSecret({
-        secretId: args.secretId,
-        key: args.key,
-        encryptedValue,
-        valueType: args.valueType,
+        const api = getProtectedApi();
+        await api.ensureAuth();
+        await api.updateSecret({
+          secretId: args.secretId,
+          key: args.key,
+          encryptedValue,
+          valueType: args.valueType,
+          expectedKeyVersion,
+        });
       });
       await loadEnvironment(args.environmentId);
     },
-    [encryptedProjectKeySource, encryptedPrivateKey, salt, loadEnvironment],
+    [withKeyRecovery, requireProjectKey, loadEnvironment],
   );
 
   const deleteSecret = useCallback(
@@ -245,9 +270,12 @@ export function useSecrets(
   return {
     folders,
     secrets,
+    loadedEnvironmentId,
     isLoading,
     error,
     loadEnvironment,
+    clearEnvironment,
+    decryptSecrets,
     createFolder,
     updateFolder,
     deleteFolder,

@@ -6,6 +6,7 @@ export interface Project {
   id: string;
   name: string;
   status: ProjectStatus;
+  isOwner: boolean;
 }
 
 export interface Environment {
@@ -22,8 +23,8 @@ export interface Folder {
 export interface Secret {
   id: string;
   key: string;
-  value?: string;
   encryptedValue?: string;
+  encryptionKeyVersion?: number;
   type?: SecretValueType;
   scope?: SecretScope;
   folderId?: string;

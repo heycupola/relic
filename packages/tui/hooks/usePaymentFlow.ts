@@ -7,7 +7,7 @@ type PaymentResult = CreateProjectResult | ShareProjectResult;
 
 export type PaymentOutcome =
   | { kind: "success" }
-  | { kind: "requiresConfirmation"; balance: number }
+  | { kind: "requiresConfirmation"; balance: number; message?: string }
   | { kind: "requiresProPlan"; checkoutUrl: string | null; message?: string }
   | { kind: "failed"; message?: string };
 
@@ -16,6 +16,7 @@ interface ConfirmationState {
   type: PaymentConfirmationType;
   itemName?: string;
   balance: number;
+  message?: string;
 }
 
 const CLOSED_CONFIRMATION: ConfirmationState = { visible: false, type: "project", balance: 0 };
@@ -26,7 +27,11 @@ function toOutcome(result: PaymentResult): PaymentOutcome {
       case "success":
         return { kind: "success" };
       case "requiresConfirmation":
-        return { kind: "requiresConfirmation", balance: result.balance };
+        return {
+          kind: "requiresConfirmation",
+          balance: "balance" in result ? (result.balance ?? 0) : 0,
+          message: result.message,
+        };
       case "requiresProPlan":
         return {
           kind: "requiresProPlan",
@@ -36,7 +41,9 @@ function toOutcome(result: PaymentResult): PaymentOutcome {
     }
   }
   if (result.success) return { kind: "success" };
-  if ("requiresConfirmation" in result) return { kind: "requiresConfirmation", balance: 0 };
+  if ("requiresConfirmation" in result) {
+    return { kind: "requiresConfirmation", balance: 0, message: result.message };
+  }
   if ("requiresProPlan" in result) {
     return { kind: "requiresProPlan", checkoutUrl: result.checkoutUrl, message: result.message };
   }
@@ -45,7 +52,7 @@ function toOutcome(result: PaymentResult): PaymentOutcome {
 
 function successMessage(type: PaymentConfirmationType, itemName?: string): string {
   const name = itemName ? `"${itemName}" ` : "";
-  return type === "project" ? `Project ${name}created` : `Collaborator ${name}added`;
+  return type === "collaborator" ? `Collaborator ${name}added` : `Project ${name}created`;
 }
 
 export function usePaymentFlow() {
@@ -74,7 +81,13 @@ export function usePaymentFlow() {
           showSuccess(successMessage(type, itemName));
           break;
         case "requiresConfirmation":
-          setConfirmationModal({ visible: true, type, itemName, balance: outcome.balance });
+          setConfirmationModal({
+            visible: true,
+            type,
+            itemName,
+            balance: outcome.balance,
+            message: outcome.message,
+          });
           break;
         case "requiresProPlan":
           cancelTask();

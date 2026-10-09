@@ -61,7 +61,11 @@ export function InlineInput({
 
   usePaste((text) => {
     if (!active) return;
-    const cleanText = text.replace(/\s/g, "").slice(0, maxLength);
+    // NOTE: Passwords may legitimately contain spaces; only line breaks are dropped.
+    const cleanText = (isPassword ? text.replace(/[\r\n]/g, "") : text.replace(/\s/g, "")).slice(
+      0,
+      maxLength,
+    );
     input.handlePaste(cleanText);
   });
 

@@ -2,37 +2,37 @@
 import { useKeyboard } from "@opentui/react";
 import { useTaskQueue } from "../../hooks/useTaskQueue";
 import { PRICING, THEME_COLORS } from "../../utils/constants";
+import { truncate } from "../../utils/ui";
 import { Modal } from "../shared/Modal";
 
-export type PaymentConfirmationType = "seat" | "project";
+export type PaymentConfirmationType = "collaborator" | "project";
 
 interface ConfirmPaymentModalProps {
   visible: boolean;
   type: PaymentConfirmationType;
   itemName?: string;
-  balance: number;
+  message?: string;
   isLoading?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
-function getTitle(type: PaymentConfirmationType): string {
-  return type === "seat" ? "Add Collaborator" : "Create Project";
-}
+const COPY: Record<PaymentConfirmationType, { title: string; unit: string; price: string }> = {
+  collaborator: {
+    title: "Add collaborator",
+    unit: "collaborator",
+    price: PRICING.collaboratorPrice,
+  },
+  project: { title: "Create project", unit: "project", price: PRICING.projectPrice },
+};
 
-function getUnitName(type: PaymentConfirmationType): string {
-  return type === "seat" ? "share" : "project";
-}
-
-function getPrice(type: PaymentConfirmationType): string {
-  return type === "seat" ? PRICING.seatPrice : PRICING.projectPrice;
-}
+const MODAL_WIDTH = 56;
 
 export function ConfirmPaymentModal({
   visible,
   type,
   itemName,
-  balance,
+  message,
   isLoading = false,
   onConfirm,
   onCancel,
@@ -51,16 +51,14 @@ export function ConfirmPaymentModal({
 
   if (!visible) return null;
 
-  const title = getTitle(type);
-  const unitName = getUnitName(type);
-  const price = getPrice(type);
-  const hasBalance = balance > 0;
+  const { title, unit, price } = COPY[type];
+  const label = type === "project" ? "Project: " : "Email: ";
 
   return (
     <Modal
       visible={true}
       title={title}
-      width={56}
+      width={MODAL_WIDTH}
       shortcuts={[
         { key: "enter", description: "confirm", disabled: isLoading || isRunning },
         { key: "esc", description: "cancel", disabled: isLoading || isRunning },
@@ -69,28 +67,18 @@ export function ConfirmPaymentModal({
       <box flexDirection="column" gap={1}>
         {itemName && (
           <text>
-            <span fg={THEME_COLORS.textMuted}>{type === "project" ? "Project: " : "Email: "}</span>
-            <span fg={THEME_COLORS.primary}>{itemName}</span>
+            <span fg={THEME_COLORS.textMuted}>{label}</span>
+            <span fg={THEME_COLORS.primary}>
+              {truncate(itemName, MODAL_WIDTH - 4 - label.length)}
+            </span>
           </text>
         )}
-        {hasBalance ? (
-          <>
-            <text fg={THEME_COLORS.text}>
-              This will use <span fg={THEME_COLORS.accent}>1</span> of your{" "}
-              <span fg={THEME_COLORS.success}>{balance}</span> purchased {unitName}
-              {balance !== 1 ? "s" : ""}.
-            </text>
-            <text fg={THEME_COLORS.textMuted}>
-              Additional {unitName}s require purchased credits.
-            </text>
-          </>
+        {message ? (
+          <text fg={THEME_COLORS.text}>{message}</text>
         ) : (
-          <>
-            <text fg={THEME_COLORS.text}>
-              Adding another {unitName} costs <span fg={THEME_COLORS.accent}>{price}</span>.
-            </text>
-            <text fg={THEME_COLORS.textMuted}>Additional {unitName}s require payment.</text>
-          </>
+          <text fg={THEME_COLORS.text}>
+            Adding another {unit} costs <span fg={THEME_COLORS.warning}>{price}</span>.
+          </text>
         )}
 
         {isLoading && <text fg={THEME_COLORS.primary}>Processing payment...</text>}

@@ -4,6 +4,7 @@ import { getProtectedApi } from "../api";
 import type { ShareLimits, ShareProjectResult } from "../types/api";
 import { getProjectKey } from "../utils/crypto";
 import { buildRotationPayload, wrapProjectKeyFor } from "../utils/keyRotation";
+import type { ProjectKeySource } from "./useSecrets";
 
 const MAX_ROTATION_ATTEMPTS = 3;
 
@@ -21,23 +22,27 @@ async function withTransientRetry(fn: () => Promise<void>): Promise<void> {
 
 export function useSharing(
   projectId: string,
-  encryptedProjectKeySource: string | null,
+  projectKey: ProjectKeySource | null,
   encryptedPrivateKey: string | null,
   salt: string | null,
   shareLimits: ShareLimits | null,
 ) {
+  const encryptedProjectKeySource = projectKey?.encryptedProjectKey ?? null;
+
   const shareProject = useCallback(
     async (email: string, confirmPayment?: boolean): Promise<ShareProjectResult> => {
       const api = getProtectedApi();
       await api.ensureAuth();
 
-      if (!shareLimits?.hasPro) {
-        return await api.shareProject({
-          projectId,
-          userEmail: email,
-          encryptedProjectKey: "",
-          confirmPayment,
-        });
+      if (shareLimits && !shareLimits.hasPro) {
+        const plan = await api.getProPlan();
+        if (!plan.hasPro) {
+          return {
+            status: "requiresProPlan",
+            checkoutUrl: plan.url || null,
+            message: "Upgrade to Pro to add collaborators",
+          };
+        }
       }
 
       const collaboratorKeyResult = await api.getUserPublicKeyByEmail(email);

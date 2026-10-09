@@ -13,7 +13,7 @@ export type ProjectItem =
       type: "secret";
       id: string;
       name: string;
-      value: string;
+      value: string | null;
       secretType: SecretValueType;
       secretScope: SecretScope;
     };
@@ -34,12 +34,12 @@ export function secretsInView(secrets: Secret[], location: ProjectLocation): Sec
   return [];
 }
 
-function toSecretItem(secret: Secret): ProjectItem {
+function toSecretItem(secret: Secret, values: ReadonlyMap<string, string> | null): ProjectItem {
   return {
     type: "secret",
     id: secret.id,
     name: secret.key,
-    value: secret.value ?? "",
+    value: values?.get(secret.id) ?? null,
     secretType: secret.type || "string",
     secretScope: secret.scope || "shared",
   };
@@ -50,6 +50,7 @@ export function buildProjectItems(
   environments: Environment[],
   folders: Folder[],
   secrets: Secret[],
+  values: ReadonlyMap<string, string> | null = null,
 ): ProjectItem[] {
   if (location.viewLevel === "environments") {
     return environments.map((e) => ({ type: "env", id: e.id, name: e.name }));
@@ -60,5 +61,5 @@ export function buildProjectItems(
           .filter((f) => f.environmentId === location.environmentId)
           .map((f) => ({ type: "folder", id: f.id, name: f.name }))
       : [];
-  return [...folderItems, ...secretsInView(secrets, location).map(toSecretItem)];
+  return [...folderItems, ...secretsInView(secrets, location).map((s) => toSecretItem(s, values))];
 }

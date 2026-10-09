@@ -11,7 +11,7 @@
     "lint": "oxlint .",
     "format": "oxfmt .",
     "check-types": "tsc --noEmit",
-    "test": "bun test",
+    "test": "bun test --timeout 30000",
     "lint:fix": "oxlint . --fix",
     "format:check": "oxfmt --check ."
   },

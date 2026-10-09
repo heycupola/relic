@@ -1,5 +1,119 @@
 import { describe, expect, test } from "bun:test";
-import { computeRemovedKeys, validateBulkImportJson } from "./bulkImport";
+import {
+  computeRemovedKeys,
+  envToJson,
+  findCollisions,
+  formatEnvValue,
+  jsonToEnv,
+  parseEnvContent,
+  resolveType,
+  validateBulkImportJson,
+} from "./bulkImport";
+
+function roundTrip(value: string): string | number | boolean | undefined {
+  const env = jsonToEnv(JSON.stringify([{ key: "KEY", value }]));
+  return parseEnvContent(env)[0]?.value;
+}
+
+describe("env serialization", () => {
+  test.each([
+    ["multi-line value", "line one\nline two\nline three"],
+    ["windows line endings", "a\r\nb"],
+    ["embedded double quotes", 'say "hello"'],
+    ["backslashes with spaces", "C:\\Program Files\\relic"],
+    ["literal backslash-n with spaces", "keep \\n literal"],
+    ["single-quoted text", "'quoted'"],
+    ["hash sign", "abc#def"],
+    ["leading and trailing spaces", "  padded  "],
+    ["PEM key", "-----BEGIN KEY-----\nMIIB\\x/+==\n-----END KEY-----"],
+    ["plain value", "simple"],
+    ["empty value", ""],
+    ["equals sign", "a=b=c"],
+  ])("round-trips %s", (_, value) => {
+    expect(roundTrip(value)).toBe(value);
+  });
+
+  test("keeps every value on a single line", () => {
+    const env = jsonToEnv(
+      JSON.stringify([
+        { key: "A", value: "x\ny" },
+        { key: "B", value: "z" },
+      ]),
+    );
+    expect(env.split("\n")).toEqual(['A="x\\ny"', "B=z"]);
+  });
+
+  test("escapes quotes and backslashes", () => {
+    expect(formatEnvValue('a "b" \\c')).toBe('"a \\"b\\" \\\\c"');
+  });
+
+  test("unescapes standard dotenv sequences in double quotes", () => {
+    const [secret] = parseEnvContent('KEY="a\\nb \\"c\\" \\\\d"');
+    expect(secret?.value).toBe('a\nb "c" \\d');
+  });
+
+  test("treats unquoted and single-quoted values literally", () => {
+    const secrets = parseEnvContent("A=foo\\nbar\nB='x\\ny'");
+    expect(secrets.map((s) => s.value)).toEqual(["foo\\nbar", "x\\ny"]);
+  });
+
+  test("reads double-quoted values that span multiple lines", () => {
+    const secrets = parseEnvContent('CERT="line1\nline2"\nNEXT=1');
+    expect(secrets.map((s) => [s.key, s.value])).toEqual([
+      ["CERT", "line1\nline2"],
+      ["NEXT", "1"],
+    ]);
+  });
+
+  test("ignores trailing text after a closing quote", () => {
+    expect(parseEnvContent('KEY="value" # comment')[0]?.value).toBe("value");
+  });
+});
+
+describe("type preservation", () => {
+  test("keeps the original type of existing keys", () => {
+    const known = new Map([
+      ["PORT", "string" as const],
+      ["FLAG", "string" as const],
+      ["COUNT", "number" as const],
+    ]);
+    const secrets = parseEnvContent("PORT=3000\nFLAG=true\nCOUNT=5\nNEW=42", known);
+    expect(secrets.map((s) => [s.key, s.type])).toEqual([
+      ["PORT", "string"],
+      ["FLAG", "string"],
+      ["COUNT", "number"],
+      ["NEW", "number"],
+    ]);
+  });
+
+  test("falls back to string when the value no longer fits the known type", () => {
+    expect(resolveType("not-a-number", "number")).toBe("string");
+    expect(resolveType("12", "number")).toBe("number");
+    expect(resolveType("false", "boolean")).toBe("boolean");
+  });
+
+  test("envToJson uses known types", () => {
+    const json = JSON.parse(envToJson("ZIP=02134", undefined, new Map([["ZIP", "string"]])));
+    expect(json[0]).toMatchObject({ key: "ZIP", value: "02134", type: "string" });
+  });
+});
+
+describe("findCollisions", () => {
+  const existing = [
+    { id: "s1", key: "API_KEY" },
+    { id: "s2", key: "DB_URL" },
+  ];
+
+  test("ignores secrets that were loaded into the editor", () => {
+    expect(findCollisions(["API_KEY", "DB_URL"], existing, new Set(["s1", "s2"]))).toEqual([]);
+  });
+
+  test("reports existing secrets the editor did not load", () => {
+    expect(findCollisions(["API_KEY", "NEW"], existing, new Set(["s2"]))).toEqual([
+      { key: "API_KEY", existingSecretId: "s1" },
+    ]);
+  });
+});
 
 describe("bulkImportValidator", () => {
   describe("validateBulkImportJson", () => {

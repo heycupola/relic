@@ -14,89 +14,88 @@ interface GuideBarProps {
   showHelp?: boolean;
 }
 
-export function GuideBar({
-  shortcuts,
-  groups,
-  customWidth,
-  minimal = false,
-  showHelp = false,
-}: GuideBarProps) {
+interface GuideItem extends Shortcut {
+  secondary?: boolean;
+  isHelp?: boolean;
+}
+
+const HELP_ITEM: GuideItem = { key: "?", description: "help", isHelp: true };
+
+function itemWidth(item: GuideItem): number {
+  return item.key.length + item.description.length + 3;
+}
+
+/** Packs items into rows that fit `width`, keeping primary and secondary items on separate rows. */
+function packRows(items: GuideItem[], width: number): GuideItem[][] {
+  const rows: GuideItem[][] = [];
+  let row: GuideItem[] = [];
+  let used = 0;
+
+  for (const item of items) {
+    const size = itemWidth(item);
+    const gap = row.length > 0 ? 1 : 0;
+    const startsSecondary = item.secondary && row.length > 0 && !row[row.length - 1]?.secondary;
+    if (row.length > 0 && (startsSecondary || used + gap + size > width)) {
+      rows.push(row);
+      row = [];
+      used = 0;
+    }
+    used += (row.length > 0 ? 1 : 0) + size;
+    row.push(item);
+  }
+  if (row.length > 0) rows.push(row);
+  return rows;
+}
+
+function GuideRow({ items, width }: { items: GuideItem[]; width: number }) {
+  return (
+    <box width={width} height={1}>
+      <text>
+        {items.map((item, index) => {
+          const keyColor = item.disabled
+            ? THEME_COLORS.textDim
+            : item.isHelp
+              ? THEME_COLORS.accent
+              : item.secondary
+                ? THEME_COLORS.textMuted
+                : THEME_COLORS.primary;
+          return (
+            <span key={`${item.key}-${index}`}>
+              {index > 0 && <span> </span>}
+              <span fg={THEME_COLORS.textDim}>[</span>
+              <span fg={keyColor}>{item.key}</span>
+              <span fg={THEME_COLORS.textDim}>] </span>
+              <span fg={item.disabled ? THEME_COLORS.textDim : THEME_COLORS.textMuted}>
+                {item.description}
+              </span>
+            </span>
+          );
+        })}
+      </text>
+    </box>
+  );
+}
+
+export function GuideBar({ shortcuts, groups, customWidth, showHelp = false }: GuideBarProps) {
   const boxWidth = customWidth ?? 66;
 
-  if (minimal && groups) {
-    const primaryActions = groups.primary.flatMap((g) => g.shortcuts).slice(0, 3);
+  const items: GuideItem[] = groups
+    ? [
+        ...groups.primary.flatMap((g) => g.shortcuts),
+        ...(showHelp ? [HELP_ITEM] : []),
+        ...groups.secondary.flatMap((g) => g.shortcuts.map((s) => ({ ...s, secondary: true }))),
+      ]
+    : [...(shortcuts ?? []), ...(showHelp ? [HELP_ITEM] : [])];
 
-    return (
-      <box width={boxWidth} height={1}>
-        <text>
-          {primaryActions.map((shortcut, index) => (
-            <span key={`${shortcut.key}-${index}`}>
-              <span fg={THEME_COLORS.textDim}>[</span>
-              <span fg={shortcut.disabled ? THEME_COLORS.textMuted : THEME_COLORS.primary}>
-                {shortcut.key}
-              </span>
-              <span fg={THEME_COLORS.textDim}>] </span>
-              <span fg={THEME_COLORS.textMuted}>{shortcut.description}</span>
-              {(index < primaryActions.length - 1 || showHelp) && <span> </span>}
-            </span>
-          ))}
-          {showHelp && (
-            <span key="help">
-              <span fg={THEME_COLORS.textDim}>[</span>
-              <span fg={THEME_COLORS.accent}>?</span>
-              <span fg={THEME_COLORS.textDim}>] </span>
-              <span fg={THEME_COLORS.textMuted}>help</span>
-            </span>
-          )}
-        </text>
-      </box>
-    );
-  }
+  if (items.length === 0) return null;
 
-  if (groups) {
-    const allShortcuts = [
-      ...groups.primary.flatMap((g) => g.shortcuts),
-      ...groups.secondary.flatMap((g) => g.shortcuts),
-    ];
+  const rows = packRows(items, boxWidth);
 
-    return (
-      <box width={boxWidth} height={1}>
-        <text>
-          {allShortcuts.slice(0, 5).map((shortcut, index) => (
-            <span key={`${shortcut.key}-${index}`}>
-              <span fg={THEME_COLORS.textDim}>[</span>
-              <span fg={shortcut.disabled ? THEME_COLORS.textMuted : THEME_COLORS.primary}>
-                {shortcut.key}
-              </span>
-              <span fg={THEME_COLORS.textDim}>] </span>
-              <span fg={THEME_COLORS.textMuted}>{shortcut.description}</span>
-              {index < Math.min(allShortcuts.length, 5) - 1 && <span> </span>}
-            </span>
-          ))}
-        </text>
-      </box>
-    );
-  }
-
-  if (shortcuts) {
-    return (
-      <box width={boxWidth} height={1}>
-        <text>
-          {shortcuts.slice(0, 5).map((shortcut, index) => (
-            <span key={`${shortcut.key}-${index}`}>
-              <span fg={THEME_COLORS.textDim}>[</span>
-              <span fg={shortcut.disabled ? THEME_COLORS.textMuted : THEME_COLORS.primary}>
-                {shortcut.key}
-              </span>
-              <span fg={THEME_COLORS.textDim}>] </span>
-              <span fg={THEME_COLORS.textMuted}>{shortcut.description}</span>
-              {index < Math.min(shortcuts.length, 5) - 1 && <span> </span>}
-            </span>
-          ))}
-        </text>
-      </box>
-    );
-  }
-
-  return null;
+  return (
+    <box flexDirection="column" width={boxWidth}>
+      {rows.map((row, index) => (
+        <GuideRow key={`row-${index}`} items={row} width={boxWidth} />
+      ))}
+    </box>
+  );
 }

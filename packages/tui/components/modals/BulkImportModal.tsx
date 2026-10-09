@@ -1,4 +1,5 @@
 /** @jsxImportSource @opentui/react */
+import { useTerminalDimensions } from "@opentui/react";
 import { useMemo } from "react";
 import { useTaskQueue } from "../../hooks/useTaskQueue";
 import type { CursorPosition } from "../../types/keyboard";
@@ -23,8 +24,11 @@ interface BulkImportModalProps {
   onClose: () => void;
 }
 
-const EDITOR_HEIGHT = 18;
-const EDITOR_WIDTH = 76;
+const MAX_EDITOR_ROWS = 18;
+const MIN_EDITOR_ROWS = 5;
+const MAX_EDITOR_COLUMNS = 76;
+/** Rows the modal needs around the editor: title, format row, status, info, guide bar, padding. */
+const MODAL_CHROME_HEIGHT = 15;
 
 export function BulkImportModal({
   visible,
@@ -36,6 +40,12 @@ export function BulkImportModal({
   onClose: _onClose,
 }: BulkImportModalProps) {
   const { isRunning } = useTaskQueue();
+  const { width: termWidth, height: termHeight } = useTerminalDimensions();
+  const editorHeight = Math.max(
+    MIN_EDITOR_ROWS,
+    Math.min(MAX_EDITOR_ROWS, termHeight - MODAL_CHROME_HEIGHT),
+  );
+  const editorWidth = Math.max(30, Math.min(MAX_EDITOR_COLUMNS, termWidth - 8));
 
   const validationResult = useMemo((): ValidationResult => {
     const trimmed = content.trim();
@@ -63,15 +73,19 @@ export function BulkImportModal({
 
   const getShortcuts = () => {
     return [
-      { key: "⌥j", description: format === "env" ? "advanced" : "simple", disabled: isRunning },
-      { key: "⌥s", description: "save", disabled: isRunning },
+      { key: "^s", description: "save", disabled: isRunning },
+      {
+        key: "^t",
+        description: format === "env" ? "switch to JSON" : "switch to .env",
+        disabled: isRunning,
+      },
       { key: "esc", description: "cancel", disabled: isRunning },
     ];
   };
 
   const lines = content.split("\n");
-  const visibleLines = EDITOR_HEIGHT - 2;
-  const maxLineWidth = EDITOR_WIDTH - 8;
+  const visibleLines = editorHeight - 2;
+  const maxLineWidth = editorWidth - 8;
 
   const { wrappedLine, wrappedColumn, allWrappedLines } = useMemo(
     () => mapCursorToWrappedLines(lines, cursor, maxLineWidth),
@@ -168,21 +182,29 @@ export function BulkImportModal({
   };
 
   return (
-    <Modal visible={visible} title="Edit Secrets" width={80} height={28} shortcuts={getShortcuts()}>
-      <box flexDirection="column" width={EDITOR_WIDTH}>
+    <Modal
+      visible={visible}
+      title="Edit secrets"
+      width={editorWidth + 4}
+      height={editorHeight + MODAL_CHROME_HEIGHT - 2}
+      shortcuts={getShortcuts()}
+    >
+      <box flexDirection="column" width={editorWidth}>
         <box flexDirection="row" justifyContent="space-between">
           <text>
             <span fg={THEME_COLORS.textMuted}>Format: </span>
             <span fg={THEME_COLORS.primary}>{format === "env" ? ".env" : "JSON"}</span>
           </text>
-          <text fg={THEME_COLORS.textDim}>
-            {format === "json" && "• Set type and scope per secret"}
-            {format === "env" && "• Paste your .env file"}
-          </text>
+          {editorWidth >= 60 && (
+            <text fg={THEME_COLORS.textMuted}>
+              {format === "json" && "• Set type and scope per secret"}
+              {format === "env" && "• Paste your .env file"}
+            </text>
+          )}
         </box>
         <box
-          height={EDITOR_HEIGHT}
-          width={EDITOR_WIDTH}
+          height={editorHeight}
+          width={editorWidth}
           backgroundColor={THEME_COLORS.inputBg}
           marginTop={1}
           paddingLeft={1}
@@ -206,7 +228,7 @@ export function BulkImportModal({
           {validationResult.errors.length > 0 && (
             <text>
               <span fg={THEME_COLORS.error}>✗ </span>
-              <span fg={THEME_COLORS.textDim}>{validationResult.errors[0]?.message}</span>
+              <span fg={THEME_COLORS.textMuted}>{validationResult.errors[0]?.message}</span>
             </text>
           )}
           {validationResult.valid && (
@@ -216,19 +238,22 @@ export function BulkImportModal({
                 {validationResult.secrets.length} secrets ready
               </span>
               {collisions.length > 0 && (
-                <span fg={THEME_COLORS.accent}>
+                <span fg={THEME_COLORS.warning}>
                   {" "}
-                  · {collisions.length} collision{collisions.length > 1 ? "s" : ""}
+                  · will overwrite {collisions.length} secret{collisions.length > 1 ? "s" : ""}{" "}
+                  added elsewhere
                 </span>
               )}
             </text>
           )}
           {!validationResult.valid && validationResult.errors.length === 0 && (
-            <text fg={THEME_COLORS.textDim}>Start typing or paste content...</text>
+            <text fg={THEME_COLORS.textMuted}>Start typing or paste content...</text>
           )}
         </box>
         <box height={1} marginTop={1}>
-          <text fg={THEME_COLORS.textDim}>ℹ Secrets will be added to the current path only</text>
+          <text fg={THEME_COLORS.textMuted} wrapMode="none">
+            ℹ Saved to the current path only. Removed lines are deleted.
+          </text>
         </box>
       </box>
     </Modal>

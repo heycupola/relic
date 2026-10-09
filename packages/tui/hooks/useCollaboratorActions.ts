@@ -1,6 +1,6 @@
 import { extractErrorMessage } from "@repo/auth";
 import { createLogger, trackEvent } from "@repo/logger";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ShareProjectResult } from "../types/api";
 import type { SharedUser } from "../types/models";
 import { usePaymentFlow } from "./usePaymentFlow";
@@ -13,6 +13,7 @@ interface UseCollaboratorActionsOptions {
   revokeShare: (shareId: string) => Promise<void>;
   revokeShareWithRotation: (shareId: string) => Promise<void>;
   onChanged: () => void;
+  onKeyRotated?: () => void;
 }
 
 export function useCollaboratorActions({
@@ -20,52 +21,62 @@ export function useCollaboratorActions({
   revokeShare,
   revokeShareWithRotation,
   onChanged,
+  onKeyRotated,
 }: UseCollaboratorActionsOptions) {
   const { attemptTask, setTaskPending, continueTask, cancelTask, showSuccess, showError } =
     useTaskQueue();
   const payment = usePaymentFlow();
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const busyRef = useRef(false);
 
-  const addCollaborator = async (email: string, confirmPayment = false) => {
-    if (isBusy) return;
+  const runExclusive = async (fn: () => Promise<void>) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setIsBusy(true);
-    setPendingEmail(email);
-
     try {
-      let result: ShareProjectResult | undefined;
-      if (confirmPayment) {
-        result = await continueTask(() => shareProject(email, true));
-      } else {
-        setTaskPending(`Adding collaborator "${email}"...`);
-        result = await shareProject(email, false);
-      }
-
-      if (!result) {
-        setPendingEmail(null);
-        payment.closeConfirmation();
-        return;
-      }
-
-      logger.debug("shareProject result:", JSON.stringify(result, null, 2));
-      const outcome = payment.handleResult(result, "seat", email);
-      if (outcome === "success") {
-        trackEvent("collaborator_added", { success: true, confirmed_payment: confirmPayment });
-        onChanged();
-      }
-      if (confirmPayment || outcome !== "requiresConfirmation") setPendingEmail(null);
-    } catch (error) {
-      cancelTask();
-      setPendingEmail(null);
-      showError(extractErrorMessage(error));
+      await fn();
     } finally {
+      busyRef.current = false;
       setIsBusy(false);
     }
   };
 
+  const addCollaborator = (email: string, confirmPayment = false) =>
+    runExclusive(async () => {
+      setPendingEmail(email);
+      try {
+        let result: ShareProjectResult | undefined;
+        if (confirmPayment) {
+          result = await continueTask(() => shareProject(email, true));
+        } else {
+          setTaskPending(`Adding collaborator "${email}"...`);
+          result = await shareProject(email, false);
+        }
+
+        if (!result) {
+          setPendingEmail(null);
+          payment.closeConfirmation();
+          return;
+        }
+
+        logger.debug("shareProject result:", JSON.stringify(result, null, 2));
+        const outcome = payment.handleResult(result, "collaborator", email);
+        if (outcome === "success") {
+          trackEvent("collaborator_added", { success: true, confirmed_payment: confirmPayment });
+          onChanged();
+        }
+        if (confirmPayment || outcome !== "requiresConfirmation") setPendingEmail(null);
+      } catch (error) {
+        cancelTask();
+        setPendingEmail(null);
+        showError(extractErrorMessage(error));
+      }
+    });
+
   const confirmPayment = () => {
     const { itemName } = payment.confirmationModal;
-    if (itemName) addCollaborator(itemName, true);
+    if (itemName) void addCollaborator(itemName, true);
   };
 
   const cancelPayment = () => {
@@ -74,13 +85,11 @@ export function useCollaboratorActions({
     setPendingEmail(null);
   };
 
-  const revokeCollaborator = async (collaborator: SharedUser, rotateKeys: boolean) => {
-    if (isBusy) return;
-    setIsBusy(true);
-    try {
+  const revokeCollaborator = (collaborator: SharedUser, rotateKeys: boolean) =>
+    runExclusive(async () => {
       const revoked = await attemptTask(
         rotateKeys
-          ? `Revoking ${collaborator.email} and rotating keys...`
+          ? `Revoking ${collaborator.email} and rotating the project key...`
           : `Revoking ${collaborator.email}...`,
         () => (rotateKeys ? revokeShareWithRotation : revokeShare)(collaborator.id),
       );
@@ -91,14 +100,12 @@ export function useCollaboratorActions({
       if (!revoked) return;
       showSuccess(
         rotateKeys
-          ? `${collaborator.email} revoked and keys rotated`
+          ? `${collaborator.email} revoked and project key rotated`
           : `${collaborator.email} revoked`,
       );
       onChanged();
-    } finally {
-      setIsBusy(false);
-    }
-  };
+      if (rotateKeys) onKeyRotated?.();
+    });
 
   return {
     payment,

@@ -112,7 +112,7 @@ export function PasswordInput({
     <box flexDirection="column" width={width} gap={1}>
       {mode === "change" && (
         <InlineInput
-          active={focusedField === "current"}
+          active={!disabled && focusedField === "current"}
           maxWidth={28}
           maxLength={64}
           placeholder="Current password"
@@ -127,7 +127,7 @@ export function PasswordInput({
       )}
 
       <InlineInput
-        active={mode === "verify" || focusedField === "password"}
+        active={!disabled && (mode === "verify" || focusedField === "password")}
         maxWidth={28}
         maxLength={64}
         placeholder={mode === "change" ? "New password" : "Password"}
@@ -173,7 +173,7 @@ export function PasswordInput({
 
       {mode !== "verify" && (
         <InlineInput
-          active={focusedField === "confirm"}
+          active={!disabled && focusedField === "confirm"}
           maxWidth={28}
           maxLength={64}
           placeholder="Confirm password"
@@ -214,7 +214,6 @@ export function PasswordInput({
           secondary: [],
         }}
         customWidth={width}
-        minimal={true}
       />
     </box>
   );

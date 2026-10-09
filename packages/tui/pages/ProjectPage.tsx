@@ -1,8 +1,8 @@
 /** @jsxImportSource @opentui/react */
-import { useKeyboard, useTerminalDimensions } from "@opentui/react";
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
+import { extractErrorMessage } from "@repo/auth";
 import { trackEvent } from "@repo/logger";
-import open from "open";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BulkImportModal } from "../components/modals/BulkImportModal";
 import { CheckoutRedirectModal } from "../components/modals/CheckoutRedirectModal";
 import { CommandPaletteModal } from "../components/modals/CommandPaletteModal";
@@ -22,9 +22,17 @@ import { useProUpgradeNotice } from "../hooks/useProUpgradeNotice";
 import { useSessionUnlock } from "../hooks/useSessionUnlock";
 import { useTaskQueue } from "../hooks/useTaskQueue";
 import { useRouter } from "../router";
+import type { Shortcut } from "../types/keyboard";
 import type { ModalType, ProjectStatus, ViewLevel } from "../types/models";
-import { DASHBOARD_URL, KEY_SYMBOLS, STATUS_COLORS, THEME_COLORS } from "../utils/constants";
-import { buildProjectItems, type ProjectItem, secretsInView } from "../utils/projectItems";
+import {
+  DASHBOARD_URL,
+  KEY_SYMBOLS,
+  STATUS_COLORS,
+  STATUS_ICONS,
+  THEME_COLORS,
+} from "../utils/constants";
+import { buildProjectItems, type ProjectLocation, secretsInView } from "../utils/projectItems";
+import { openUrl, truncate } from "../utils/ui";
 
 interface ProjectPageProps {
   projectId: string;
@@ -33,25 +41,46 @@ interface ProjectPageProps {
 }
 
 const PAGE_SIZE = 10;
+const CONTENT_WIDTH = 66;
 const COMMAND_CATEGORIES = ["Navigate", "Create", "Manage", "View"];
+const OWNER_ONLY_MESSAGE = "Only the project owner can manage collaborators";
+const READ_ONLY_MESSAGE = "This project is read-only while it's restricted";
 
-type SecretItem = Extract<ProjectItem, { type: "secret" }>;
+function isPlain(key: { ctrl: boolean; meta: boolean; option: boolean }) {
+  return !key.ctrl && !key.meta && !key.option;
+}
 
-export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPageProps) {
+export function ProjectPage({
+  projectId,
+  projectName,
+  projectStatus: initialStatus,
+}: ProjectPageProps) {
   useEffect(() => {
     trackEvent("tui_page_viewed", { page: "project" });
   }, []);
+  const renderer = useRenderer();
   const { width, height } = useTerminalDimensions();
   const { goBack: routerGoBack } = useRouter();
-  const { isProcessing } = useTaskQueue();
+  const { isProcessing, showError } = useTaskQueue();
 
   const {
+    project,
+    isOwner,
+    liveStatus,
+    projectKey,
     environments,
+    environmentsError,
+    isLoadingEnvs,
     folders,
     secrets,
+    loadedEnvironmentId,
+    secretsError,
+    isLoadingSecrets,
     sharedUsers,
     shareLimits,
     loadEnvironment,
+    clearEnvironment,
+    decryptSecrets,
     createEnv,
     updateEnv,
     removeEnv,
@@ -64,31 +93,75 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     revokeShare,
     revokeShareWithRotation,
     refetchProject,
+    reloadProjectKey,
   } = useProjectPage(projectId);
 
   const [viewLevel, setViewLevel] = useState<ViewLevel>("environments");
   const [selectedEnvId, setSelectedEnvId] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [showSecrets, setShowSecrets] = useState(false);
+  const [revealedValues, setRevealedValues] = useState<Map<string, string> | null>(null);
   const [activeModal, setActiveModal] = useState<ModalType>("none");
   const closeModal = () => setActiveModal("none");
 
+  const projectStatus: ProjectStatus =
+    liveStatus ?? (project?.isArchived ? "archived" : initialStatus);
+  const displayName = project?.name ?? projectName;
   const isRestricted = projectStatus === "restricted" || projectStatus === "archived";
-  const location = { viewLevel, environmentId: selectedEnvId, folderId: selectedFolderId };
-  const items = buildProjectItems(location, environments, folders, secrets);
+
+  const location = useMemo<ProjectLocation>(
+    () => ({ viewLevel, environmentId: selectedEnvId, folderId: selectedFolderId }),
+    [viewLevel, selectedEnvId, selectedFolderId],
+  );
+  const secretsInLocation = useMemo(() => secretsInView(secrets, location), [secrets, location]);
+  const items = buildProjectItems(location, environments, folders, secrets, revealedValues);
   const selectedEnv = environments.find((e) => e.id === selectedEnvId);
   const selectedFolder = folders.find((f) => f.id === selectedFolderId);
+
+  // NOTE: Plaintext only exists while values are shown; hiding them or leaving drops it.
+  useEffect(() => {
+    if (!showSecrets) {
+      setRevealedValues(null);
+      return;
+    }
+    let cancelled = false;
+    decryptSecrets(secretsInLocation)
+      .then((values) => {
+        if (!cancelled) setRevealedValues(values);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setShowSecrets(false);
+        showError(extractErrorMessage(error));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showSecrets, secretsInLocation, decryptSecrets, showError]);
+
+  const keySignature = projectKey
+    ? `${projectKey.keyVersion}:${projectKey.encryptedProjectKey}`
+    : null;
+  const lastKeySignatureRef = useRef(keySignature);
+  const selectedEnvIdRef = useRef(selectedEnvId);
+  selectedEnvIdRef.current = selectedEnvId;
+
+  useEffect(() => {
+    if (lastKeySignatureRef.current === keySignature) return;
+    lastKeySignatureRef.current = keySignature;
+    if (selectedEnvIdRef.current) void loadEnvironment(selectedEnvIdRef.current);
+  }, [keySignature, loadEnvironment]);
 
   const navigation = useListNavigation({
     items,
     pageSize: PAGE_SIZE,
-    onSelect: async (index) => {
+    onSelect: (index) => {
       const item = items[index];
       if (item?.type === "env") {
         setSelectedEnvId(item.id);
         setViewLevel("environment");
         navigation.reset();
-        await loadEnvironment(item.id);
+        void loadEnvironment(item.id);
       } else if (item?.type === "folder") {
         setSelectedFolderId(item.id);
         setViewLevel("folder");
@@ -98,13 +171,20 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
   });
   const selectedItem = items[navigation.selectedIndex];
 
+  const leaveEnvironment = () => {
+    setShowSecrets(false);
+    setSelectedFolderId(null);
+    setSelectedEnvId(null);
+    setViewLevel("environments");
+    clearEnvironment();
+  };
+
   const goBack = () => {
     if (viewLevel === "folder") {
       setSelectedFolderId(null);
       setViewLevel("environment");
     } else if (viewLevel === "environment") {
-      setSelectedEnvId(null);
-      setViewLevel("environments");
+      leaveEnvironment();
     } else {
       routerGoBack();
     }
@@ -122,8 +202,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     deleteSecret,
     onDeleted: (item) => {
       if (item.type === "env" && selectedEnvId === item.id) {
-        setSelectedEnvId(null);
-        setViewLevel("environments");
+        leaveEnvironment();
       } else if (item.type === "folder" && selectedFolderId === item.id) {
         setSelectedFolderId(null);
         setViewLevel("environment");
@@ -137,6 +216,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     revokeShare,
     revokeShareWithRotation,
     onChanged: refetchProject,
+    onKeyRotated: reloadProjectKey,
   });
   const { payment } = collaborators;
 
@@ -156,10 +236,27 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     deleteSecret,
   });
 
+  const openingEditorRef = useRef(false);
   const openEditor = () =>
     unlock.requireUnlock(() => {
-      bulkImport.open(items.filter((i): i is SecretItem => i.type === "secret"));
-      setActiveModal("bulkImport");
+      if (openingEditorRef.current) return;
+      openingEditorRef.current = true;
+      decryptSecrets(secretsInLocation)
+        .then((values) => {
+          const failed = secretsInLocation.filter((s) => !values.has(s.id)).length;
+          if (failed > 0) {
+            showError(
+              `Couldn't decrypt ${failed} secret${failed === 1 ? "" : "s"}. Reload the project and try again.`,
+            );
+            return;
+          }
+          bulkImport.open(secretsInLocation, values);
+          setActiveModal("bulkImport");
+        })
+        .catch((error: unknown) => showError(extractErrorMessage(error)))
+        .finally(() => {
+          openingEditorRef.current = false;
+        });
     });
 
   const toggleSecrets = () => {
@@ -167,29 +264,47 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     else unlock.requireUnlock(() => setShowSecrets(true));
   };
 
-  const startCreate = () => {
-    if (viewLevel === "environments") itemActions.setCreatingItem("env");
-    else if (viewLevel === "environment") itemActions.setCreatingItem("folder");
+  const whenWritable = (action: () => void) => {
+    if (isRestricted) showError(READ_ONLY_MESSAGE);
+    else action();
   };
 
-  const startRename = () => {
-    if (selectedItem?.type === "env" || selectedItem?.type === "folder") {
-      itemActions.setEditingItem({
-        type: selectedItem.type,
-        id: selectedItem.id,
-        name: selectedItem.name,
-      });
-    }
+  const openCollaborators = () => {
+    if (!isOwner) showError(OWNER_ONLY_MESSAGE);
+    else if (isRestricted) showError(READ_ONLY_MESSAGE);
+    else setActiveModal("manageCollaborators");
   };
 
-  const startDelete = () => {
-    if (selectedItem) {
-      itemActions.setConfirmingDelete({
-        type: selectedItem.type,
-        id: selectedItem.id,
-        name: selectedItem.name,
-      });
-    }
+  const startCreate = () =>
+    whenWritable(() => {
+      if (viewLevel === "environments") itemActions.setCreatingItem("env");
+      else if (viewLevel === "environment") itemActions.setCreatingItem("folder");
+    });
+
+  const startRename = () =>
+    whenWritable(() => {
+      if (selectedItem?.type === "env" || selectedItem?.type === "folder") {
+        itemActions.setEditingItem({
+          type: selectedItem.type,
+          id: selectedItem.id,
+          name: selectedItem.name,
+        });
+      }
+    });
+
+  const startDelete = () =>
+    whenWritable(() => {
+      if (selectedItem) {
+        itemActions.setConfirmingDelete({
+          type: selectedItem.type,
+          id: selectedItem.id,
+          name: selectedItem.name,
+        });
+      }
+    });
+
+  const startEdit = () => {
+    if (viewLevel !== "environments") whenWritable(openEditor);
   };
 
   const getAllCommands = () => {
@@ -221,31 +336,33 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         }
       }
       cmds.push(
-        { key: "⌥i", description: "Edit secrets", category: "Manage", disabled: isRestricted },
+        { key: "e", description: "Edit secrets", category: "Manage", disabled: isRestricted },
         {
           key: "d",
-          description: viewLevel === "environment" ? "Delete" : "Delete secret",
+          description: selectedItem?.type === "folder" ? "Delete folder" : "Delete secret",
           category: "Manage",
-          disabled: isRestricted,
+          disabled: isRestricted || !selectedItem,
         },
         { key: "g", description: "Open dashboard", category: "Navigate" },
         { key: "esc", description: "Go back", category: "Navigate" },
-        { key: "v", description: showSecrets ? "Hide secrets" : "Show secrets", category: "View" },
+        { key: "v", description: showSecrets ? "Hide values" : "Show values", category: "View" },
       );
     }
-    cmds.push({
-      key: "c",
-      description: "Manage collaborators",
-      category: "Manage",
-      disabled: isRestricted,
-    });
+    cmds.push(
+      {
+        key: "c",
+        description: isOwner ? "Manage collaborators" : "Manage collaborators (owner only)",
+        category: "Manage",
+        disabled: isRestricted || !isOwner,
+      },
+      { key: "q", description: "Quit", category: "Navigate" },
+    );
     return cmds.sort(
       (a, b) => COMMAND_CATEGORIES.indexOf(a.category) - COMMAND_CATEGORIES.indexOf(b.category),
     );
   };
 
   const executeCommand = (cmd: { key: string }) => {
-    if (isRestricted && ["n", "u", "d", "c", "⌥i"].includes(cmd.key)) return;
     switch (cmd.key) {
       case "n":
         startCreate();
@@ -259,17 +376,20 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
       case "esc":
         goBack();
         break;
-      case "⌥i":
-        openEditor();
+      case "e":
+        startEdit();
         break;
       case "c":
-        setActiveModal("manageCollaborators");
+        openCollaborators();
         break;
       case "v":
         toggleSecrets();
         break;
       case "g":
-        open(DASHBOARD_URL);
+        void openUrl(DASHBOARD_URL);
+        break;
+      case "q":
+        renderer.destroy();
         break;
     }
   };
@@ -296,14 +416,22 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     if (activeModal === "commandPalette" || activeModal === "manageCollaborators") return;
 
     if (confirmingDelete) {
-      if (key.name === "y") itemActions.deleteItem();
+      if (key.name === "y") void itemActions.deleteItem();
       else if (key.name === "n" || key.name === "escape") itemActions.setConfirmingDelete(null);
       return;
     }
 
-    if (key.name === "g" && !key.meta && !key.ctrl) {
-      open(DASHBOARD_URL);
-    } else if (key.name === "escape" || key.name === "backspace") {
+    // NOTE: ⌥i/⌥u only reach the app when the terminal sends Option as Meta, so "e" is the default.
+    if ((key.name === "i" || key.name === "u") && key.meta) {
+      startEdit();
+      return;
+    }
+
+    if (!isPlain(key) && !["up", "down", "left", "right"].includes(key.name)) return;
+
+    if (key.name === "g") {
+      void openUrl(DASHBOARD_URL);
+    } else if (["escape", "backspace", "h", "left"].includes(key.name)) {
       goBack();
     } else if (key.name === "k" || key.name === "up") {
       navigation.moveUp();
@@ -311,30 +439,27 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
       navigation.moveDown();
     } else if (key.name === "return" || key.name === "l" || key.name === "right") {
       navigation.select();
-    } else if (key.name === "d" && !isRestricted) {
+    } else if (key.name === "d") {
       startDelete();
-    } else if (key.name === "n" && !key.meta && !isRestricted) {
+    } else if (key.name === "n") {
       startCreate();
-    } else if (key.name === "u" && !key.meta && !isRestricted) {
+    } else if (key.name === "u") {
       startRename();
-    } else if (
-      (key.name === "i" || key.name === "u") &&
-      key.meta &&
-      !isRestricted &&
-      viewLevel !== "environments"
-    ) {
-      openEditor();
-    } else if (key.name === "c" && !isRestricted) {
-      setActiveModal("manageCollaborators");
-    } else if (key.name === "v") {
+    } else if (key.name === "e") {
+      startEdit();
+    } else if (key.name === "c") {
+      openCollaborators();
+    } else if (key.name === "v" && viewLevel !== "environments") {
       toggleSecrets();
+    } else if (key.name === "q") {
+      renderer.destroy();
     } else if (key.sequence === "?") {
       setActiveModal("commandPalette");
     }
   });
 
   const getShortcuts = () => {
-    const isDisabled = isProcessing || collaborators.isBusy || itemActions.isBusy;
+    const isDisabled = isBusy;
 
     if (creatingItem || editingItem) {
       return {
@@ -355,31 +480,68 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
     }
 
     const disabled = isDisabled || isRestricted;
-    const shortcuts =
+    const hasSelection = selectedItem !== undefined;
+    const canOpen = selectedItem?.type === "env" || selectedItem?.type === "folder";
+    const primary: Shortcut[] =
       viewLevel === "environments"
         ? [
-            { key: "n", description: "create environment", disabled },
-            { key: "u", description: "rename environment", disabled },
+            { key: KEY_SYMBOLS.enter, description: "open", disabled: isDisabled || !canOpen },
+            { key: "n", description: "new environment", disabled },
+            { key: "u", description: "rename", disabled: disabled || !hasSelection },
+            { key: "d", description: "delete", disabled: disabled || !hasSelection },
           ]
-        : viewLevel === "environment"
-          ? [
-              { key: "n", description: "create folder", disabled },
-              { key: "⌥i", description: "edit secrets", disabled },
-              ...(selectedItem?.type !== "secret"
-                ? [{ key: "u", description: "rename folder", disabled }]
-                : []),
-            ]
-          : [{ key: "⌥i", description: "edit secrets", disabled }];
-    return { primary: [{ shortcuts }], secondary: [] };
+        : [
+            { key: "e", description: "edit secrets", disabled },
+            {
+              key: "v",
+              description: showSecrets ? "hide values" : "show values",
+              disabled: isDisabled,
+            },
+            ...(viewLevel === "environment"
+              ? [
+                  { key: "n", description: "new folder", disabled },
+                  ...(selectedItem?.type === "folder"
+                    ? [{ key: "u", description: "rename", disabled }]
+                    : []),
+                ]
+              : []),
+            { key: "d", description: "delete", disabled: disabled || !hasSelection },
+          ];
+
+    const secondary: Shortcut[] = [
+      ...(isOwner ? [{ key: "c", description: "collaborators", disabled }] : []),
+      { key: "g", description: "dashboard", disabled: isDisabled },
+      { key: "esc", description: "back", disabled: isDisabled },
+      { key: "q", description: "quit", disabled: isDisabled },
+    ];
+
+    return { primary: [{ shortcuts: primary }], secondary: [{ shortcuts: secondary }] };
   };
 
   const getItemCounts = () => {
     if (viewLevel === "environments") return `${environments.length} environments`;
-    const secretCount = secretsInView(secrets, location).length;
+    const secretCount = secretsInLocation.length;
     if (viewLevel === "folder") return `${secretCount} secrets`;
     const folderCount = folders.filter((f) => f.environmentId === selectedEnvId).length;
     return `${folderCount} folders · ${secretCount} secrets`;
   };
+
+  const isEnvironmentLoading =
+    viewLevel !== "environments" && (isLoadingSecrets || loadedEnvironmentId !== selectedEnvId);
+  const listError =
+    viewLevel === "environments"
+      ? environmentsError && `Couldn't load environments: ${extractErrorMessage(environmentsError)}`
+      : secretsError && `Couldn't load this environment: ${extractErrorMessage(secretsError)}`;
+  const emptyMessage =
+    viewLevel === "environments"
+      ? isRestricted
+        ? "No environments."
+        : "No environments yet. Press n to create one."
+      : isRestricted
+        ? "No secrets."
+        : viewLevel === "environment"
+          ? "No folders or secrets yet. Press e to add secrets."
+          : "No secrets yet. Press e to add secrets.";
 
   return (
     <box
@@ -398,7 +560,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         <box
           flexDirection="column"
           backgroundColor={THEME_COLORS.header}
-          width={70}
+          width={CONTENT_WIDTH + 4}
           paddingTop={1}
           paddingBottom={1}
           paddingLeft={2}
@@ -406,7 +568,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         >
           <box
             height={1}
-            width={66}
+            width={CONTENT_WIDTH}
             flexDirection="row"
             justifyContent="space-between"
             alignItems="center"
@@ -416,25 +578,26 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
               <span fg={THEME_COLORS.primary}>relic</span>
               <span fg={THEME_COLORS.textDim}> / </span>
               <span fg={THEME_COLORS.text}>
-                <strong>{projectName}</strong>
+                <strong>{truncate(displayName, selectedEnv ? 15 : 40)}</strong>
               </span>
               {selectedEnv && (
                 <>
                   <span fg={THEME_COLORS.textDim}> / </span>
-                  <span fg={THEME_COLORS.secondary}>{selectedEnv.name}</span>
+                  <span fg={THEME_COLORS.secondary}>
+                    {truncate(selectedEnv.name, selectedFolder ? 12 : 24)}
+                  </span>
                 </>
               )}
               {selectedFolder && (
                 <>
                   <span fg={THEME_COLORS.textDim}> / </span>
-                  <span fg={THEME_COLORS.accent}>{selectedFolder.name}</span>
+                  <span fg={THEME_COLORS.accent}>{truncate(selectedFolder.name, 12)}</span>
                 </>
               )}
             </text>
             <text>
               <span fg={STATUS_COLORS[projectStatus]}>
-                {projectStatus === "owned" ? "●" : projectStatus === "shared" ? "◉" : "○"}{" "}
-                {projectStatus}
+                {STATUS_ICONS[projectStatus]} {projectStatus}
               </span>
             </text>
           </box>
@@ -446,6 +609,9 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
             scrollOffset={navigation.scrollOffset}
             pageSize={PAGE_SIZE}
             showSecrets={showSecrets}
+            isLoading={viewLevel === "environments" ? isLoadingEnvs : isEnvironmentLoading}
+            error={listError || null}
+            emptyMessage={emptyMessage}
             creatingItem={creatingItem}
             editingItem={editingItem}
             confirmingDelete={confirmingDelete}
@@ -456,21 +622,33 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
           />
 
           <box flexDirection="column" marginTop={1}>
-            <box height={1} width={66} flexDirection="row" justifyContent="space-between">
-              <text fg={THEME_COLORS.textDim}>Collaborators [{sharedUsers.length}]</text>
-              <text fg={THEME_COLORS.textDim}>{getItemCounts()}</text>
+            <box
+              height={1}
+              width={CONTENT_WIDTH}
+              flexDirection="row"
+              justifyContent="space-between"
+            >
+              <text fg={THEME_COLORS.textMuted}>
+                {isOwner ? `Collaborators [${sharedUsers.length}]` : "Shared with you"}
+              </text>
+              <text fg={THEME_COLORS.textMuted}>{getItemCounts()}</text>
             </box>
+            {isRestricted && (
+              <box height={1} width={CONTENT_WIDTH}>
+                <text fg={THEME_COLORS.warning}>
+                  {projectStatus === "archived"
+                    ? "This project is archived and read-only."
+                    : isOwner
+                      ? "Restricted: over the Free plan limit. Upgrade to Pro to edit."
+                      : "Restricted by the owner's plan. Values are read-only."}
+                </text>
+              </box>
+            )}
           </box>
 
           {(activeModal === "none" || activeModal === "commandPalette") && (
             <box marginTop={1}>
-              <GuideBar
-                groups={getShortcuts()}
-                inline={true}
-                customWidth={66}
-                minimal={true}
-                showHelp={true}
-              />
+              <GuideBar groups={getShortcuts()} customWidth={CONTENT_WIDTH} showHelp={true} />
             </box>
           )}
         </box>
@@ -478,14 +656,15 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
 
       <ManageCollaboratorsModal
         visible={activeModal === "manageCollaborators"}
-        projectName={projectName}
+        projectName={displayName}
         collaborators={sharedUsers}
-        onAdd={(email) => collaborators.addCollaborator(email)}
-        onRevoke={(collab) => collaborators.revokeCollaborator(collab, false)}
-        onRevokeWithRotation={(collab) => collaborators.revokeCollaborator(collab, true)}
+        onAdd={(email) => void collaborators.addCollaborator(email)}
+        onRevoke={(collab) => void collaborators.revokeCollaborator(collab, false)}
+        onRevokeWithRotation={(collab) => void collaborators.revokeCollaborator(collab, true)}
         onClose={closeModal}
         pendingEmail={collaborators.pendingEmail}
         shareLimits={shareLimits}
+        inputDisabled={payment.isModalOpen || proNotice.visible}
       />
 
       <CheckoutRedirectModal checkoutUrl={payment.checkoutUrl} onClose={payment.closeCheckout} />
@@ -496,7 +675,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         visible={payment.confirmationModal.visible}
         type={payment.confirmationModal.type}
         itemName={payment.confirmationModal.itemName}
-        balance={payment.confirmationModal.balance}
+        message={payment.confirmationModal.message}
         onConfirm={collaborators.confirmPayment}
         onCancel={collaborators.cancelPayment}
       />
@@ -518,7 +697,7 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
         onClose={bulkImport.close}
       />
 
-      <Modal visible={unlock.isPromptVisible} title="Enter Password" width={50} height={12}>
+      <Modal visible={unlock.isPromptVisible} title="Enter password" width={50} height={8}>
         <PasswordInput
           mode="verify"
           onSubmit={unlock.verify}
@@ -526,6 +705,9 @@ export function ProjectPage({ projectId, projectName, projectStatus }: ProjectPa
           width={46}
           disabled={unlock.isVerifying}
           error={unlock.error}
+          additionalShortcuts={[
+            { key: "esc", description: "cancel", disabled: unlock.isVerifying },
+          ]}
         />
       </Modal>
     </box>

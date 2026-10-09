@@ -1,12 +1,7 @@
 /** @jsxImportSource @opentui/react */
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { verifyPasswordWithExistingKeys } from "@repo/auth";
-import {
-  createUserKeys,
-  decryptPrivateKeyWithPassword,
-  encryptPrivateKeyWithPassword,
-  generateSalt,
-} from "@repo/crypto";
+import { createUserKeys } from "@repo/crypto";
 import { createLogger, trackEvent } from "@repo/logger";
 import { useState } from "react";
 import { getProtectedApi } from "../api";
@@ -23,13 +18,15 @@ interface PasswordSetupPageProps {
   onLogout: () => Promise<void>;
 }
 
-type TaskStatus =
-  | null
-  | "checking_password"
-  | "creating_keys"
-  | "verifying_old_password"
-  | "rewrapping_key"
-  | "updating_backend";
+type TaskStatus = null | "checking_password" | "creating_keys" | "saving_password";
+
+const TASK_MESSAGES: Record<Exclude<TaskStatus, null>, string> = {
+  checking_password: "Checking password...",
+  creating_keys: "Creating encryption keys...",
+  saving_password: "Saving password on this device...",
+};
+
+const FORM_WIDTH = 46;
 
 export function PasswordSetupPage({
   hasExistingKeys,
@@ -37,201 +34,92 @@ export function PasswordSetupPage({
   onLogout,
 }: PasswordSetupPageProps) {
   const { width, height } = useTerminalDimensions();
-  const { encryptedPrivateKey, salt, checkHasKeys, updatePassword, storeUserKeys } = useUserKeys();
+  const { encryptedPrivateKey, salt, checkHasKeys, storeUserKeys } = useUserKeys();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [showPasswordWarning, setShowPasswordWarning] = useState(false);
-  const [pendingPassword, setPendingPassword] = useState<string | null>(null);
-  const [currentEncryptedPrivateKey, setCurrentEncryptedPrivateKey] = useState<string | null>(null);
-  const [currentSalt, setCurrentSalt] = useState<string | null>(null);
   const [taskStatus, setTaskStatus] = useState<TaskStatus>(null);
-  const [setupError, setSetupError] = useState<string | null>(null);
-  const [rewrapError, setRewrapError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogout = async () => {
-    await onLogout();
+  const complete = async (password: string) => {
+    setTaskStatus("saving_password");
+    try {
+      await onComplete(password);
+    } catch (err) {
+      logger.error("Failed to save password locally:", err);
+      setError("Couldn't save your password on this device. Please try again.");
+    } finally {
+      setTaskStatus(null);
+    }
+  };
+
+  const loadStoredKeys = async (): Promise<{
+    encryptedPrivateKey: string;
+    salt: string;
+  } | null> => {
+    if (encryptedPrivateKey && salt) return { encryptedPrivateKey, salt };
+    const api = getProtectedApi();
+    await api.ensureAuth();
+    const user = await api.getCurrentUser();
+    return user.encryptedPrivateKey && user.salt
+      ? { encryptedPrivateKey: user.encryptedPrivateKey, salt: user.salt }
+      : null;
+  };
+
+  const unlock = async (password: string) => {
+    const keys = await loadStoredKeys();
+    if (!keys) {
+      setError("Could not load your encryption keys. Please try again.");
+      return;
+    }
+    if (!(await verifyPasswordWithExistingKeys(password, keys.encryptedPrivateKey, keys.salt))) {
+      trackEvent("password_unlock_failed");
+      setError("Incorrect password");
+      return;
+    }
+    await complete(password);
   };
 
   const handlePasswordSubmit = async (password: string) => {
-    trackEvent("password_setup_started");
-    setSetupError(null);
+    if (taskStatus) return;
+    setError(null);
     setTaskStatus("checking_password");
 
     try {
-      const hasKeys = await checkHasKeys();
-
-      if (!hasKeys) {
-        setTaskStatus("creating_keys");
-        try {
-          const {
-            publicKey,
-            encryptedPrivateKey: newEncryptedPrivateKey,
-            salt: newSalt,
-          } = await createUserKeys(password);
-
-          await storeUserKeys({
-            publicKey,
-            encryptedPrivateKey: newEncryptedPrivateKey,
-            salt: newSalt,
-          });
-
-          setTaskStatus(null);
-          await onComplete(password);
-          return;
-        } catch (error) {
-          logger.error("Failed to create user keys:", error);
-          setTaskStatus(null);
-          throw error;
-        }
-      }
-
-      let storedEncryptedPrivateKey: string | null = null;
-      let storedSalt: string | null = null;
-
-      if (!encryptedPrivateKey || !salt) {
-        const api = getProtectedApi();
-        await api.ensureAuth();
-        const user = await api.getCurrentUser();
-        if (user.encryptedPrivateKey && user.salt) {
-          storedEncryptedPrivateKey = user.encryptedPrivateKey;
-          storedSalt = user.salt;
-        }
-      } else {
-        storedEncryptedPrivateKey = encryptedPrivateKey;
-        storedSalt = salt;
-      }
-
-      if (storedEncryptedPrivateKey && storedSalt) {
-        const isSamePassword = await verifyPasswordWithExistingKeys(
-          password,
-          storedEncryptedPrivateKey,
-          storedSalt,
-        );
-
-        if (isSamePassword) {
-          setTaskStatus(null);
-          await onComplete(password);
-          return;
-        }
-
-        setPendingPassword(password);
-        setCurrentEncryptedPrivateKey(storedEncryptedPrivateKey);
-        setCurrentSalt(storedSalt);
-        setTaskStatus(null);
-        setShowPasswordWarning(true);
-        setRewrapError(null);
+      if (hasExistingKeys || (await checkHasKeys())) {
+        await unlock(password);
         return;
       }
 
+      trackEvent("password_setup_started");
+      setTaskStatus("creating_keys");
+      const keys = await createUserKeys(password);
+      await storeUserKeys(keys);
+      await complete(password);
+    } catch (err) {
+      logger.error("Error preparing account:", err);
+      setError("Failed to prepare your account. Please try again.");
+    } finally {
       setTaskStatus(null);
-      setSetupError("Could not load your encryption keys. Please try again.");
-    } catch (error) {
-      logger.error("Error checking password:", error);
-      setTaskStatus(null);
-      setSetupError("Failed to prepare your account. Please try again.");
     }
-  };
-
-  const handleWarningConfirm = async (oldPassword: string) => {
-    if (!pendingPassword || !currentEncryptedPrivateKey || !currentSalt) {
-      return;
-    }
-
-    if (oldPassword === pendingPassword) {
-      setRewrapError("Must be different from new password");
-      return;
-    }
-
-    setRewrapError(null);
-    setTaskStatus("verifying_old_password");
-
-    let privateKey: CryptoKey;
-    try {
-      privateKey = await decryptPrivateKeyWithPassword(
-        currentEncryptedPrivateKey,
-        oldPassword,
-        currentSalt,
-      );
-    } catch (error) {
-      logger.error("Failed to verify old password:", error);
-      setTaskStatus(null);
-      setRewrapError("Incorrect password. Please try again.");
-      return;
-    }
-
-    setTaskStatus("rewrapping_key");
-
-    try {
-      const newSalt = generateSalt();
-      const newEncryptedPrivateKey = await encryptPrivateKeyWithPassword(
-        privateKey,
-        pendingPassword,
-        newSalt,
-      );
-
-      setTaskStatus("updating_backend");
-
-      await updatePassword({
-        encryptedPrivateKey: newEncryptedPrivateKey,
-        salt: newSalt,
-      });
-
-      setTaskStatus(null);
-      setShowPasswordWarning(false);
-      await onComplete(pendingPassword);
-    } catch (error) {
-      logger.error("Failed to rewrap password:", error);
-      setTaskStatus(null);
-      setRewrapError("Failed to update password. Please try again.");
-    }
-  };
-
-  const handleWarningCancel = () => {
-    setShowPasswordWarning(false);
-    setPendingPassword(null);
-    setCurrentEncryptedPrivateKey(null);
-    setCurrentSalt(null);
-    setRewrapError(null);
   };
 
   useKeyboard((key) => {
-    if (showPasswordWarning || taskStatus) {
-      return;
-    }
+    if (taskStatus) return;
 
     if (showLogoutModal) {
       if (key.name === "y") {
-        handleLogout();
-        return;
+        void onLogout().catch((err) => logger.error("Logout failed:", err));
       } else if (key.name === "n" || key.name === "escape") {
         setShowLogoutModal(false);
-        return;
       }
+      return;
     }
 
-    if (!showLogoutModal && ((key.name === "l" && key.ctrl) || key.sequence === "\x0C")) {
+    if ((key.name === "l" && key.ctrl) || key.sequence === "\x0C") {
       setShowLogoutModal(true);
-      return;
     }
   });
 
-  const isAnyModalOpen = showPasswordWarning || showLogoutModal || !!taskStatus;
-
-  const getTaskStatusMessage = (): string => {
-    switch (taskStatus) {
-      case "checking_password":
-        return "Checking password...";
-      case "creating_keys":
-        return "Creating encryption keys...";
-      case "verifying_old_password":
-        return "Verifying old password...";
-      case "rewrapping_key":
-        return "Rewrapping your private key...";
-      case "updating_backend":
-        return "Updating password...";
-      default:
-        return "";
-    }
-  };
+  const isAnyModalOpen = showLogoutModal || !!taskStatus;
 
   return (
     <box
@@ -250,32 +138,33 @@ export function PasswordSetupPage({
         <box
           flexDirection="column"
           backgroundColor={THEME_COLORS.header}
-          width={50}
+          width={FORM_WIDTH + 4}
           paddingLeft={2}
           paddingRight={2}
           paddingBottom={1}
         >
           <box height={1} marginTop={1}>
             <text fg={THEME_COLORS.text}>
-              {hasExistingKeys ? "Unlock Master Password" : "Create Master Password"}
+              {hasExistingKeys ? "Unlock master password" : "Create master password"}
             </text>
           </box>
 
           <box height={1} marginTop={1}>
-            <text fg={hasExistingKeys ? THEME_COLORS.textDim : THEME_COLORS.accent}>
+            <text fg={hasExistingKeys ? THEME_COLORS.textMuted : THEME_COLORS.warning}>
               {hasExistingKeys
-                ? "Enter your password to unlock this account."
+                ? "Enter your master password to unlock this device."
                 : "Create a password to generate your encryption keys."}
             </text>
           </box>
 
-          <box flexDirection="column" width={46} marginTop={1}>
+          <box flexDirection="column" width={FORM_WIDTH} marginTop={1}>
             <PasswordInput
-              mode="setup"
-              onSubmit={handlePasswordSubmit}
-              width={46}
+              mode={hasExistingKeys ? "verify" : "setup"}
+              onSubmit={(password) => void handlePasswordSubmit(password)}
+              width={FORM_WIDTH}
               disabled={isAnyModalOpen}
-              error={setupError}
+              error={error}
+              additionalShortcuts={[{ key: "^l", description: "logout", disabled: !!taskStatus }]}
             />
           </box>
         </box>
@@ -290,7 +179,7 @@ export function PasswordSetupPage({
           height={1}
           backgroundColor={THEME_COLORS.header}
         >
-          <text fg={THEME_COLORS.accent}>{getTaskStatusMessage()}</text>
+          <text fg={THEME_COLORS.warning}>{TASK_MESSAGES[taskStatus]}</text>
         </box>
       )}
 
@@ -304,30 +193,7 @@ export function PasswordSetupPage({
           { key: "n", description: "no", disabled: !!taskStatus },
         ]}
       >
-        <text fg={THEME_COLORS.textDim}>Are you sure you want to logout?</text>
-      </Modal>
-
-      {/* NOTE: shortcuts={[]} because PasswordInput has its own GuideBar with contextual labels */}
-      <Modal
-        visible={showPasswordWarning}
-        title="Password Change Warning"
-        width={60}
-        height={12}
-        shortcuts={[]}
-      >
-        <box flexDirection="column" width={56} gap={1}>
-          <text fg={THEME_COLORS.accent}>[!] New password detected</text>
-          <text fg={THEME_COLORS.text}>Enter your old password to rewrap your private key</text>
-          <PasswordInput
-            mode="verify"
-            onSubmit={handleWarningConfirm}
-            onCancel={handleWarningCancel}
-            width={46}
-            disabled={!!taskStatus}
-            error={rewrapError}
-            additionalShortcuts={[{ key: "esc", description: "cancel", disabled: !!taskStatus }]}
-          />
-        </box>
+        <text fg={THEME_COLORS.textMuted}>Are you sure you want to logout?</text>
       </Modal>
     </box>
   );

@@ -8,7 +8,7 @@ interface MoreItemsProps {
 
 export function MoreItems({ count, position }: MoreItemsProps) {
   return (
-    <text fg={THEME_COLORS.textDim}>
+    <text fg={THEME_COLORS.textMuted}>
       {"  "}... {count} more item{count > 1 ? "s" : ""} {position}
     </text>
   );

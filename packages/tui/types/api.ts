@@ -151,7 +151,14 @@ export type ShareProjectResult =
   | { success: true; shareId: string }
   | { success: false; requiresProPlan: true; checkoutUrl: string | null; message: string }
   | { success: false; requiresConfirmation: true; freeLimit: number; message: string }
-  | { success: false; message: string };
+  | { success: false; message: string }
+  | { status: "success"; shareId?: string; message?: string }
+  | { status: "requiresProPlan"; checkoutUrl: string | null; message?: string }
+  | { status: "requiresConfirmation"; freeLimit?: number; balance?: number; message?: string };
+
+export type UnarchiveProjectResult =
+  | { status: "success"; message?: string }
+  | { status: "requiresConfirmation"; freeLimit: number; balance: number; message?: string };
 
 export interface ShareLimits {
   hasPro: boolean;

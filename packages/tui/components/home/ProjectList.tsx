@@ -1,25 +1,22 @@
 /** @jsxImportSource @opentui/react */
 import { useEffect, useState } from "react";
 import type { useListNavigation } from "../../hooks/useListNavigation";
-import type { Project, ProjectStatus } from "../../types/models";
+import type { Project } from "../../types/models";
 import {
   SPINNER_FRAMES,
   SPINNER_INTERVAL,
   STATUS_COLORS,
+  STATUS_ICONS,
   THEME_COLORS,
 } from "../../utils/constants";
+import { truncate } from "../../utils/ui";
 import { InlineInput } from "../forms/InlineInput";
 import { DeleteConfirmation } from "../shared/DeleteConfirmation";
 import { MoreItems } from "../shared/MoreItems";
 
-const STATUS_ICONS: Record<ProjectStatus, string> = {
-  owned: "●",
-  shared: "◉",
-  archived: "○",
-  restricted: "Ø",
-};
-
 const LIST_WIDTH = 52;
+// NOTE: Leaves room for the cursor and the "[restricted] Ø" label on the right.
+const MAX_NAME_LENGTH = LIST_WIDTH - 18;
 
 interface ProjectRef {
   id: string;
@@ -62,9 +59,9 @@ function PendingProjectRow({ name }: { name: string }) {
     >
       <text fg={THEME_COLORS.textMuted}>
         <span fg={THEME_COLORS.primary}>{SPINNER_FRAMES[spinnerFrame]} </span>
-        {name}
+        {truncate(name, MAX_NAME_LENGTH)}
       </text>
-      <text fg={THEME_COLORS.textDim}>(creating...)</text>
+      <text fg={THEME_COLORS.textMuted}>(creating...)</text>
     </box>
   );
 }
@@ -82,10 +79,10 @@ function ProjectRow({ project, isSelected }: { project: Project; isSelected: boo
         <span fg={isSelected ? THEME_COLORS.primary : THEME_COLORS.textDim}>
           {isSelected ? "› " : "  "}
         </span>
-        {project.name}
+        {truncate(project.name, MAX_NAME_LENGTH)}
       </text>
       <text>
-        {isSelected && <span fg={THEME_COLORS.textDim}>[{project.status}] </span>}
+        {isSelected && <span fg={THEME_COLORS.textMuted}>[{project.status}] </span>}
         <span fg={STATUS_COLORS[project.status] || THEME_COLORS.text}>
           {STATUS_ICONS[project.status]}
         </span>
@@ -113,26 +110,23 @@ export function ProjectList({
   const height =
     isLoading || isEmpty
       ? 1
-      : Math.min(
-          projects.length +
-            (isCreating ? 1 : 0) +
-            (pendingProjectName ? 1 : 0) +
-            (confirmingDelete ? 1 : 0),
-          pageSize + (confirmingDelete ? 1 : 0) + (pendingProjectName ? 1 : 0),
-        ) +
+      : Math.min(projects.length, pageSize) +
+        (isCreating ? 1 : 0) +
+        (pendingProjectName ? 1 : 0) +
+        (confirmingDelete ? 1 : 0) +
         (navigation.hasMore.above ? 1 : 0) +
         (navigation.hasMore.below ? 1 : 0);
 
   const renderContent = () => {
     if (isLoading) {
-      return <text fg={THEME_COLORS.textDim}>Loading projects...</text>;
+      return <text fg={THEME_COLORS.textMuted}>Loading projects...</text>;
     }
     if (isEmpty) {
       return (
-        <text fg={THEME_COLORS.textDim}>
+        <text fg={THEME_COLORS.textMuted}>
           {archivedCount > 0
-            ? "No active projects. Archived projects are hidden."
-            : "No projects created. Press 'n' to create one."}
+            ? "No active projects. Press n to create one."
+            : "No projects yet. Press n to create one."}
         </text>
       );
     }
@@ -209,7 +203,7 @@ interface ProjectCountProps {
 
 export function ProjectCount({ isLoading, hasError, projectCount, limits }: ProjectCountProps) {
   if (isLoading) {
-    return <text fg={THEME_COLORS.textDim}>...</text>;
+    return <text fg={THEME_COLORS.textMuted}>...</text>;
   }
 
   if (hasError) {
@@ -217,19 +211,19 @@ export function ProjectCount({ isLoading, hasError, projectCount, limits }: Proj
   }
 
   if (!limits) {
-    return <text fg={THEME_COLORS.textDim}>{projectCount}</text>;
+    return <text fg={THEME_COLORS.textMuted}>{projectCount}</text>;
   }
 
   const label = `${limits.usage} project${limits.usage !== 1 ? "s" : ""}`;
   const remainingFree = Math.max(0, limits.includedUsage - limits.usage);
 
   if (remainingFree === 0) {
-    return <text fg={THEME_COLORS.textDim}>{label}</text>;
+    return <text fg={THEME_COLORS.textMuted}>{label}</text>;
   }
 
   return (
     <text>
-      <span fg={THEME_COLORS.textDim}>{label} </span>
+      <span fg={THEME_COLORS.textMuted}>{label} </span>
       <span fg={THEME_COLORS.textDim}>(</span>
       <span fg={THEME_COLORS.success}>{remainingFree} free</span>
       <span fg={THEME_COLORS.textDim}>)</span>

@@ -1,25 +1,20 @@
 /** @jsxImportSource @opentui/react */
 import { useKeyboard } from "@opentui/react";
-import open from "open";
 import { useEffect, useState } from "react";
 import { useTaskQueue } from "../../hooks/useTaskQueue";
 import { THEME_COLORS } from "../../utils/constants";
+import { openUrl } from "../../utils/ui";
 import { Modal } from "../shared/Modal";
 
 type OpenStatus = "pending" | "opening" | "opened";
 
 const AUTO_OPEN_DELAY = 1500;
+const MODAL_WIDTH = 64;
 
-const STATUS_MESSAGES: Record<OpenStatus, string> = {
-  pending: "Preparing checkout...",
-  opening: "Opening browser...",
-  opened: "Waiting for payment...",
-};
-
-const STATUS_COLORS: Record<OpenStatus, string> = {
-  pending: THEME_COLORS.textMuted,
-  opening: THEME_COLORS.primary,
-  opened: THEME_COLORS.success,
+const OPEN_STATUS: Record<OpenStatus, { message: string; color: string }> = {
+  pending: { message: "Preparing checkout...", color: THEME_COLORS.textMuted },
+  opening: { message: "Opening browser...", color: THEME_COLORS.primary },
+  opened: { message: "Waiting for payment...", color: THEME_COLORS.success },
 };
 
 interface CheckoutRedirectModalProps {
@@ -36,7 +31,7 @@ export function CheckoutRedirectModal({ checkoutUrl, onClose }: CheckoutRedirect
     if (checkoutUrl && status === "pending") {
       const timer = setTimeout(() => {
         setStatus("opening");
-        open(checkoutUrl).then(() => setStatus("opened"));
+        void openUrl(checkoutUrl).then(() => setStatus("opened"));
       }, AUTO_OPEN_DELAY);
       return () => clearTimeout(timer);
     }
@@ -50,30 +45,32 @@ export function CheckoutRedirectModal({ checkoutUrl, onClose }: CheckoutRedirect
     if (!checkoutUrl || isRunning) return;
     if (key.name === "escape") onClose();
     else if (key.name === "return") {
-      open(checkoutUrl);
+      void openUrl(checkoutUrl);
       setStatus("opened");
     }
   });
 
   if (!checkoutUrl) return null;
 
-  const truncatedUrl = checkoutUrl.length > 50 ? `${checkoutUrl.substring(0, 50)}...` : checkoutUrl;
+  const { message, color } = OPEN_STATUS[status];
 
   return (
     <Modal
       visible={true}
       title="Upgrade to Pro"
-      width={60}
+      width={MODAL_WIDTH}
       shortcuts={[
         { key: "enter", description: "open link", disabled: isRunning },
         { key: "esc", description: "close", disabled: isRunning },
       ]}
     >
       <box flexDirection="column" gap={1}>
-        <text fg={STATUS_COLORS[status]}>{STATUS_MESSAGES[status]}</text>
-        <box flexDirection="column">
-          <text fg={THEME_COLORS.textDim}>If the page didn't open:</text>
-          <text fg={THEME_COLORS.textDim}>{truncatedUrl}</text>
+        <text fg={color}>{message}</text>
+        <box flexDirection="column" width={MODAL_WIDTH - 4}>
+          <text fg={THEME_COLORS.textMuted}>If the page didn't open, visit:</text>
+          <text fg={THEME_COLORS.link} wrapMode="char">
+            {checkoutUrl}
+          </text>
         </box>
       </box>
     </Modal>
