@@ -3,6 +3,7 @@ import { join } from "node:path";
 import * as p from "@clack/prompts";
 import { trackEvent } from "@repo/logger";
 import pc from "picocolors";
+import { getErrorMessage } from "../lib/cli";
 import { type ConfigResult, findConfig } from "../lib/config";
 import { DotenvDetector } from "../lib/guard/dotenv";
 import { findRepoRoot, getHooksDir } from "../lib/guard/git";
@@ -27,6 +28,7 @@ import {
   type ScanTargets,
 } from "../lib/guard/sources";
 import { loadSecretValues, type ValuesDeps, type ValuesResult } from "../lib/guard/values";
+import { exitWithTelemetry } from "../lib/telemetry";
 
 export interface GuardScanOptions {
   staged?: boolean;
@@ -260,16 +262,16 @@ export async function guardScan(paths: string[], options: GuardScanOptions): Pro
       values_status: report.values.status,
     });
 
-    process.exit(exitCode);
+    return exitWithTelemetry(exitCode);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = getErrorMessage(err);
 
     if (options.json) {
       console.log(JSON.stringify({ error: message }, null, 2));
     } else {
       console.error(`\n  ${pc.red(pc.bold("relic guard:"))} ${message}\n`);
     }
-    process.exit(EXIT_ERROR);
+    return exitWithTelemetry(EXIT_ERROR);
   }
 }
 
@@ -277,7 +279,7 @@ async function requireRepoRoot(): Promise<string> {
   const root = await findRepoRoot(process.cwd());
   if (!root) {
     console.error(`\n  ${pc.red(pc.bold("relic guard:"))} not a git repository\n`);
-    process.exit(EXIT_ERROR);
+    return exitWithTelemetry(EXIT_ERROR);
   }
   return root;
 }
@@ -325,7 +327,7 @@ export async function guardInstall(options: { yes?: boolean }): Promise<void> {
           `  ! Couldn't edit ${manager.configPath} safely. Add the snippet above by hand.\n`,
         ),
       );
-      process.exit(EXIT_ERROR);
+      return exitWithTelemetry(EXIT_ERROR);
     }
 
     await writeFile(configPath, updated);
