@@ -135,6 +135,32 @@ Print the installed version.
 relic version
 ```
 
+### `relic shell`
+
+Open an interactive subshell with secrets loaded as environment variables. Commands you run inside it can read the secrets without a `relic run` prefix or a `.env` file. Type `exit` to return to your original shell.
+
+```bash
+relic shell -e <environment> [options]
+```
+
+| Flag                | Description                                                   |
+| ------------------- | ------------------------------------------------------------- |
+| `-e, --environment` | Environment name (required)                                   |
+| `-f, --folder`      | Folder name                                                   |
+| `-s, --scope`       | Scope filter: `client`, `server`, or `shared`                 |
+| `-p, --project`     | Project ID (overrides `RELIC_PROJECT_ID` and `relic.toml`)    |
+| `--inherit-env`     | Pass the current environment (minus `RELIC_*`) to the shell   |
+| `--force`           | Open a nested shell even if already inside a relic shell      |
+
+**Examples:**
+
+```bash
+relic shell -e development
+relic shell -e staging -f database
+```
+
+The shell sets `RELIC_SHELL=1` and `RELIC_ENVIRONMENT` so you can show the active environment in your prompt. See [Local Development](/guides/local-development) for prompt snippets and details.
+
 ### `relic telemetry`
 
 Manage anonymous usage telemetry.

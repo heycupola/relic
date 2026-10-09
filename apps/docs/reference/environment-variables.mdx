@@ -59,6 +59,18 @@ Relic reads the following environment variables. None of them are required for n
 | `DEV`    | Set to `true` to enable development mode. Switches server URLs to localhost, enables console logging, debug log file, and disables telemetry. | Not set |
 | `CI`     | When set (any value), disables telemetry and console logging. Detected automatically by most CI providers.                                    | Not set |
 
+## Set by `relic shell`
+
+[`relic shell`](/guides/local-development) sets these inside the subshell. You don't set them yourself.
+
+| Variable            | Description                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------- |
+| `RELIC_SHELL`       | `1` inside a relic shell. Used to refuse nested shells unless `--force` is passed.  |
+| `RELIC_ENVIRONMENT` | Environment name of the active shell.                                               |
+| `RELIC_PROJECT_ID`  | Project ID of the active shell. Not set when using a service token.                 |
+| `RELIC_FOLDER`      | Folder passed with `-f`, if any.                                                    |
+| `RELIC_SCOPE`       | Scope passed with `-s`, if any.                                                     |
+
 ## CI/CD Quick Reference
 
 The recommended way to run Relic in a CI/CD pipeline using a service account:

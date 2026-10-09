@@ -34,6 +34,9 @@ relic init
 relic run -e production -- npm run deploy
 relic run -e staging -f database -- ./migrate.sh
 relic run -e production -s client -- npm run build
+
+# Open a subshell with secrets loaded (type `exit` to leave)
+relic shell -e development
 ```
 
 ## Commands
@@ -47,6 +50,7 @@ relic run -e production -s client -- npm run build
 | `relic projects` | List projects with environments and folders |
 | `relic init` | Create `relic.toml` for the current project |
 | `relic run` | Run a command with secrets injected |
+| `relic shell` | Open a subshell with secrets loaded |
 | `relic service-account` | Create, list, and revoke service accounts for CI/CD |
 | `relic mcp` | Start the MCP server for AI assistants |
 | `relic upgrade` | Upgrade to the latest version |
@@ -64,6 +68,8 @@ relic run -e production -s client -- npm run build
 | `--inherit-env` | Pass the current environment (minus `RELIC_*`) to the command |
 
 By default the command only receives the secrets plus `PATH`, `HOME`, `USER`, `SHELL`, `TERM`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR`, and `TZ`. Options after the command name are passed to the command; use `--` to separate them explicitly.
+
+`relic shell` accepts the same options, plus `--force` to open a nested shell.
 
 ## CI/CD
 

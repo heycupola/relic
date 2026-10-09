@@ -19,6 +19,7 @@ bun install
 | `relic projects`               | List projects with environments and folders                     |
 | `relic init`                   | Create `relic.toml` and `.relic/` (with its own `.gitignore`)   |
 | `relic run`                    | Run a command with secrets injected                             |
+| `relic shell`                  | Open a subshell with secrets loaded                             |
 | `relic service-account create` | Create a service account (CI/CD token, optional OIDC policy)    |
 | `relic service-account list`   | List service accounts for a project                             |
 | `relic service-account revoke` | Revoke a service account by `--name` or `--id`                  |
@@ -54,6 +55,18 @@ relic run -e production --inherit-env -- npm run build
 - `relic.toml` is optional when `-p` or `RELIC_PROJECT_ID` is set.
 - By default the command only sees the secrets plus `PATH`, `HOME`, `USER`, `SHELL`, `TERM`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR`, `TZ`. Use `--inherit-env` for the rest (secrets win on conflicts).
 - Exit code: the command's own, `128 + N` if killed by signal `N`, `127` if the command isn't found, `1` for Relic errors.
+
+### `relic shell`
+
+```bash
+relic shell -e <environment> [options]
+```
+
+Accepts the same flags as `relic run`, plus `--force` to open a nested shell. Starts `$SHELL` through the runner with the secrets and `RELIC_SHELL`, `RELIC_ENVIRONMENT`, `RELIC_PROJECT_ID`, `RELIC_FOLDER`, `RELIC_SCOPE` markers. Refuses to nest when `RELIC_SHELL=1` unless `--force` is passed.
+
+```bash
+relic shell -e development
+```
 
 ## Configuration
 
@@ -147,6 +160,7 @@ deploy:
 │   ├── run.ts          # relic run
 │   ├── service-account.ts # relic service-account
 │   ├── upgrade.ts      # relic upgrade
+│   ├── shell.ts        # relic shell
 │   └── telemetry.ts    # relic telemetry
 ├── lib/
 │   ├── api.ts          # Convex API client, secret export
