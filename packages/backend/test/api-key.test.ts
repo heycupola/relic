@@ -10,9 +10,10 @@ import {
   betterAuthModules,
   expectConvexError,
   getTestUsers,
-  mockAutumn,
+  mockBilling,
   modules,
   randomString,
+  setPlan,
   type TestUser,
 } from "./setup";
 
@@ -58,7 +59,7 @@ describe("API Key Management", () => {
   });
 
   afterEach(() => {
-    mockAutumn.reset();
+    mockBilling.reset();
   });
 
   describe("Create API Key", () => {
@@ -226,7 +227,7 @@ describe("API Key Management", () => {
     let projectId: Id<"project">;
 
     beforeEach(async () => {
-      mockAutumn.setFeature(owner.userId, "projects", 2);
+      await setPlan(t, owner.userId, "pro");
       const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
       const result = await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey,
@@ -273,7 +274,7 @@ describe("API Key Management", () => {
     });
 
     test("should reject scoping to another user's project without share", async () => {
-      mockAutumn.setFeature(otherUser.userId, "projects", 2);
+      await setPlan(t, otherUser.userId, "pro");
       const { encryptedProjectKey } = await createProjectKey(otherUser.publicKey!);
       const otherResult = await otherUser.asUser.action(api.project.createProject, {
         encryptedProjectKey,
@@ -294,8 +295,7 @@ describe("API Key Management", () => {
     });
 
     test("collaborator should create a scoped key for a shared project", async () => {
-      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
-      mockAutumn.setFeature(owner.userId, "additional_shares", 5);
+      await setPlan(t, owner.userId, "pro");
 
       const { wrapAESKeyWithRSA, importPublicKey, unwrapProjectKey } = await import("@repo/crypto");
       const { encryptedProjectKey: ownerEPK } = await createProjectKey(owner.publicKey!);
@@ -336,8 +336,7 @@ describe("API Key Management", () => {
     });
 
     test("collaborator scoped key should be rejected after share is revoked", async () => {
-      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
-      mockAutumn.setFeature(owner.userId, "additional_shares", 5);
+      await setPlan(t, owner.userId, "pro");
 
       const { wrapAESKeyWithRSA, importPublicKey, unwrapProjectKey } = await import("@repo/crypto");
       const { encryptedProjectKey: ownerEPK } = await createProjectKey(owner.publicKey!);
@@ -596,7 +595,7 @@ describe("API Key Management", () => {
 
   describe("Export Secrets with API Key (HTTP)", () => {
     beforeEach(async () => {
-      mockAutumn.setFeature(owner.userId, "projects", 2);
+      await setPlan(t, owner.userId, "pro");
     });
 
     async function exportViaHttp(apiKey: string, body: Record<string, unknown>): Promise<Response> {
@@ -729,10 +728,16 @@ describe("API Key Management", () => {
       const { apiKey } = await owner.asUser.mutation(api.apiKey.createApiKey, {
         name: "Expired Key",
         scopes: ["secrets.read"],
-        expiresAt: Date.now() + 1,
+        expiresAt: Date.now() + 60_000,
       });
 
-      await new Promise((r) => setTimeout(r, 10));
+      await t.run(async (ctx) => {
+        const keys = await ctx.db
+          .query("apiKey")
+          .withIndex("by_user", (q) => q.eq("userId", owner.userId))
+          .collect();
+        for (const key of keys) await ctx.db.patch(key._id, { expiresAt: Date.now() - 1 });
+      });
 
       const response = await exportViaHttp(apiKey, {
         projectId,
@@ -828,7 +833,7 @@ describe("API Key Management", () => {
     });
 
     test("should not access another user's project with API key", async () => {
-      mockAutumn.setFeature(otherUser.userId, "projects", 2);
+      await setPlan(t, otherUser.userId, "pro");
 
       const { encryptedProjectKey } = await createProjectKey(otherUser.publicKey!);
 

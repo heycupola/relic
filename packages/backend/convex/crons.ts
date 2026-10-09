@@ -6,7 +6,7 @@ const crons = cronJobs();
 crons.daily(
   "batch-send-access-restricted-emails",
   { hourUTC: 3, minuteUTC: 0 },
-  internal.user._batchSendAccessRestrictedEmails,
+  internal.user._queueAccessRestrictedEmails,
   {},
 );
 

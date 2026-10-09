@@ -1,14 +1,14 @@
 import { type AuthFunctions, createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
-import { betterAuth } from "better-auth";
+import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { deviceAuthorization, lastLoginMethod } from "better-auth/plugins";
 import { components, internal } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
+import authConfig from "./auth.config";
 import authSchema from "./betterAuth/schema";
+import { getSiteUrl } from "./lib/site";
 
-const SITE_URL =
-  process.env.SITE_URL ||
-  (process.env.ENVIRONMENT === "development" ? "http://localhost:3000" : "https://withrelic.com");
+const SITE_URL = getSiteUrl();
 
 const authFunctions: AuthFunctions = internal.auth;
 
@@ -30,11 +30,8 @@ export const authComponent = createClient<DataModel, typeof authSchema>(componen
 
 export const { onCreate, onUpdate, onDelete } = authComponent.triggersApi();
 
-export const createAuth = (
-  ctx: GenericCtx<DataModel>,
-  { optionsOnly } = { optionsOnly: false },
-): ReturnType<typeof betterAuth> => {
-  return betterAuth({
+export const createAuthOptions = (ctx: GenericCtx<DataModel>) =>
+  ({
     user: {
       modelName: "user",
       additionalFields: {
@@ -87,9 +84,6 @@ export const createAuth = (
         },
       },
     },
-    logger: {
-      disabled: optionsOnly,
-    },
     baseURL: SITE_URL,
     database: authComponent.adapter(ctx),
     socialProviders: {
@@ -103,6 +97,7 @@ export const createAuth = (
         clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
       },
     },
-    plugins: [convex(), deviceAuthorization(), lastLoginMethod()],
-  });
-};
+    plugins: [convex({ authConfig }), deviceAuthorization(), lastLoginMethod()],
+  }) satisfies BetterAuthOptions;
+
+export const createAuth = (ctx: GenericCtx<DataModel>) => betterAuth(createAuthOptions(ctx));

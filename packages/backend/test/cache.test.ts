@@ -9,9 +9,10 @@ import {
   betterAuthModules,
   expectConvexError,
   getTestUsers,
-  mockAutumn,
+  mockBilling,
   modules,
   randomString,
+  setPlan,
   type TestUser,
 } from "./setup";
 
@@ -40,11 +41,11 @@ describe("Cache", () => {
     testUsers = await getTestUsers(t);
     owner = testUsers[0]!;
 
-    mockAutumn.setFeature(owner.userId, "projects", 5);
+    await setPlan(t, owner.userId, "pro");
   });
 
   afterEach(() => {
-    mockAutumn.reset();
+    mockBilling.reset();
   });
 
   describe("Timestamp propagation", () => {

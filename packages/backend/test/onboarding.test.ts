@@ -7,7 +7,7 @@ import {
   betterAuthModules,
   expectConvexError,
   getTestUsers,
-  mockAutumn,
+  mockBilling,
   modules,
   type TestUser,
 } from "./setup";
@@ -28,7 +28,7 @@ describe("Onboarding", () => {
   });
 
   afterEach(() => {
-    mockAutumn.reset();
+    mockBilling.reset();
   });
 
   test("should complete onboarding once and persist metadata", async () => {

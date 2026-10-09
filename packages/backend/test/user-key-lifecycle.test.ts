@@ -8,19 +8,19 @@ import {
   wrapAESKeyWithRSA,
 } from "@repo/crypto";
 import { convexTest, type TestConvex } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { ErrorCode } from "../convex/lib/errors.ts";
-import * as projectShareModule from "../convex/projectShare";
 import schema from "../convex/schema";
 import {
   betterAuthModules,
   expectConvexError,
   getTestUsers,
-  mockAutumn,
+  mockBilling,
   modules,
   randomString,
+  setPlan,
   type TestUser,
 } from "./setup";
 
@@ -54,25 +54,19 @@ describe("User Key Lifecycle", () => {
   });
 
   afterEach(() => {
-    mockAutumn.reset();
+    mockBilling.reset();
   });
 
   describe("Key Rotation", () => {
     describe("With Shared Projects", () => {
-      let freeShareLimitSpy: ReturnType<typeof vi.spyOn>;
-
       beforeEach(async () => {
-        freeShareLimitSpy = vi
-          .spyOn(projectShareModule.shareLimits, "freeShareLimit", "get")
-          .mockReturnValue(1);
+        await setPlan(t, owner.userId, "pro");
 
-        mockAutumn.setFeature(owner.userId, "projects", 2);
-        mockAutumn.setFeature(owner.userId, "additional_shares", 2);
-        mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
-        mockAutumn.setFeature(owner2.userId, "projects", 10);
-        mockAutumn.setFeature(owner2.userId, "additional_shares", 2);
-        mockAutumn.setBooleanFeature(owner2.userId, "can_share_project", true);
-        mockAutumn.setFeature(collaborator.userId, "projects", 2);
+        await setPlan(t, owner.userId, "pro");
+        await setPlan(t, owner2.userId, "pro");
+
+        await setPlan(t, owner2.userId, "pro");
+        await setPlan(t, collaborator.userId, "pro");
       });
 
       test("should rotate user keys successfully", async () => {

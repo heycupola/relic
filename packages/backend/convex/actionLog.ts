@@ -1,14 +1,10 @@
-import type { PaginationOptions, PaginationResult } from "convex/server";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
-import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 import { assertProjectAccess } from "./lib/access";
-import { protectedAction, protectedQuery } from "./lib/middleware";
-import { checkRateLimit } from "./lib/rateLimit";
-import type { ProtectedActionCtx, ProtectedQueryCtx } from "./lib/types";
-
+import { getProjectOrThrow } from "./lib/data";
+import { notFoundError } from "./lib/errors";
+import { protectedQuery } from "./lib/middleware";
 export const _insertActionLog = internalMutation({
   args: {
     projectId: v.optional(v.id("project")),
@@ -91,87 +87,40 @@ export const _insertActionLog = internalMutation({
   },
 });
 
-export const _loadActionLogsByProject = internalQuery({
+export const loadActionLogsByProject = protectedQuery({
   args: {
     projectId: v.id("project"),
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
-    const result = await ctx.db
+    const project = await getProjectOrThrow(ctx, args.projectId);
+    await assertProjectAccess(ctx, project);
+
+    return await ctx.db
       .query("actionLog")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .withIndex("by_project", (q) => q.eq("projectId", project._id))
       .order("desc")
       .paginate(args.paginationOpts);
-
-    return result;
   },
 });
 
-export const _loadActionLogsByEnvironment = internalQuery({
+export const loadActionLogsByEnvironment = protectedQuery({
   args: {
     environmentId: v.id("environment"),
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
-    const result = await ctx.db
+    const environment = await ctx.db.get(args.environmentId);
+    if (!environment) notFoundError("environment");
+
+    const project = await getProjectOrThrow(ctx, environment.projectId);
+    await assertProjectAccess(ctx, project);
+
+    return await ctx.db
       .query("actionLog")
-      .withIndex("by_environment", (q) => q.eq("environmentId", args.environmentId))
+      .withIndex("by_environment", (q) => q.eq("environmentId", environment._id))
       .order("desc")
       .paginate(args.paginationOpts);
-
-    return result;
-  },
-});
-
-export const loadActionLogsByProject = protectedAction({
-  args: {
-    projectId: v.id("project"),
-    paginationOpts: paginationOptsValidator,
-  },
-  handler: async (
-    ctx: ProtectedActionCtx,
-    args: { projectId: Id<"project">; paginationOpts: PaginationOptions },
-  ): Promise<PaginationResult<Doc<"actionLog">>> => {
-    await checkRateLimit(ctx, "read");
-
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: args.projectId,
-    });
-
-    await assertProjectAccess(ctx, project);
-
-    return await ctx.runQuery(internal.actionLog._loadActionLogsByProject, {
-      projectId: args.projectId,
-      paginationOpts: args.paginationOpts,
-    });
-  },
-});
-
-export const loadActionLogsByEnvironment = protectedAction({
-  args: {
-    environmentId: v.id("environment"),
-    paginationOpts: paginationOptsValidator,
-  },
-  handler: async (
-    ctx: ProtectedActionCtx,
-    args: { environmentId: Id<"environment">; paginationOpts: PaginationOptions },
-  ): Promise<PaginationResult<Doc<"actionLog">>> => {
-    await checkRateLimit(ctx, "read");
-
-    const environment = await ctx.runQuery(internal.environment._loadEnvironmentById, {
-      environmentId: args.environmentId,
-    });
-
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: environment.projectId,
-    });
-
-    await assertProjectAccess(ctx, project);
-
-    return await ctx.runQuery(internal.actionLog._loadActionLogsByEnvironment, {
-      environmentId: environment._id,
-      paginationOpts: args.paginationOpts,
-    });
   },
 });
 
@@ -179,10 +128,7 @@ export const loadUserActionLogs = protectedQuery({
   args: {
     paginationOpts: paginationOptsValidator,
   },
-  handler: async (
-    ctx: ProtectedQueryCtx,
-    args: { paginationOpts: PaginationOptions },
-  ): Promise<PaginationResult<Doc<"actionLog">>> => {
+  handler: async (ctx, args) => {
     return await ctx.db
       .query("actionLog")
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))

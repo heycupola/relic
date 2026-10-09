@@ -3,7 +3,6 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "moduleResolution": "bundler",
-    "downlevelIteration": true,
     "resolvePackageJsonExports": true,
     "resolvePackageJsonImports": true
   }

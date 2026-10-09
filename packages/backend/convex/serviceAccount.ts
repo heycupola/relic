@@ -1,4 +1,6 @@
 import { v } from "convex/values";
+import { MAX_SERVICE_ACCOUNTS_PER_PROJECT } from "./lib/plans";
+import { getProjectOrThrow } from "./lib/data";
 import { doc } from "convex-helpers/validators";
 import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -13,7 +15,6 @@ import schema from "./schema";
 
 const log = createLogger("serviceAccount");
 
-const MAX_SERVICE_ACCOUNTS_PER_PROJECT = 5;
 const MAX_EXPIRATION_MS = 365 * 24 * 60 * 60 * 1000;
 
 export const createServiceAccount = protectedMutation({
@@ -61,9 +62,7 @@ export const createServiceAccount = protectedMutation({
       });
     }
 
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: args.projectId,
-    });
+    const project = await getProjectOrThrow(ctx, args.projectId);
     await assertProjectAccess(ctx, project);
 
     if (ctx.userId !== project.ownerId) {
@@ -206,9 +205,7 @@ export const updateOidcPolicy = protectedMutation({
       });
     }
 
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: sa.projectId,
-    });
+    const project = await getProjectOrThrow(ctx, sa.projectId);
 
     if (ctx.userId !== project.ownerId) {
       throw permissionError("update OIDC policy for this service account", ErrorSeverity.High);
@@ -278,9 +275,7 @@ export const listServiceAccounts = protectedQuery({
     projectId: v.id("project"),
   },
   handler: async (ctx: ProtectedQueryCtx, args: { projectId: Id<"project"> }) => {
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: args.projectId,
-    });
+    const project = await getProjectOrThrow(ctx, args.projectId);
     await assertProjectAccess(ctx, project);
 
     if (ctx.userId !== project.ownerId) {
@@ -323,9 +318,7 @@ export const revokeServiceAccount = protectedMutation({
       });
     }
 
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: sa.projectId,
-    });
+    const project = await getProjectOrThrow(ctx, sa.projectId);
 
     if (ctx.userId !== project.ownerId) {
       throw permissionError("revoke this service account", ErrorSeverity.High);
@@ -408,9 +401,7 @@ export const _validateServiceToken = internalMutation({
       });
     }
 
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: sa.projectId,
-    });
+    const project = await getProjectOrThrow(ctx, sa.projectId);
 
     if (project.isArchived) {
       throw createError({

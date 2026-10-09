@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { getProjectOrThrow } from "./lib/data";
 import { doc } from "convex-helpers/validators";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -29,9 +30,7 @@ export const createFolder = protectedMutation({
       },
     );
 
-    const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: environment.projectId,
-    });
+    const project: Doc<"project"> = await getProjectOrThrow(ctx, environment.projectId);
 
     await assertProjectAccess(ctx, project);
 
@@ -85,9 +84,7 @@ export const updateFolder = protectedMutation({
       folderId: args.folderId,
     });
 
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: folder.projectId,
-    });
+    const project = await getProjectOrThrow(ctx, folder.projectId);
 
     if (args.name) {
       const existingFolder = await ctx.runQuery(internal.folder._loadFolderBySlug, {
@@ -145,9 +142,7 @@ export const deleteFolder = protectedMutation({
       folderId: args.folderId,
     });
 
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: folder.projectId,
-    });
+    const project = await getProjectOrThrow(ctx, folder.projectId);
 
     await assertProjectAccess(ctx, project);
 

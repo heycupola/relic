@@ -1,7 +1,7 @@
 import { createProjectKey } from "@repo/crypto";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { api, internal } from "../convex/_generated/api";
+import { api, components, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { ErrorCode } from "../convex/lib/errors.ts";
 import schema from "../convex/schema";
@@ -9,8 +9,9 @@ import {
   betterAuthModules,
   expectConvexError,
   getTestUsers,
-  mockAutumn,
+  mockBilling,
   modules,
+  setPlan,
   type TestUser,
 } from "./setup";
 
@@ -43,17 +44,17 @@ describe("Project Lifecycle", () => {
   });
 
   afterEach(() => {
-    mockAutumn.reset();
+    mockBilling.reset();
   });
 
   describe("CRUD Operations", () => {
     beforeEach(async () => {
-      mockAutumn.setFeature(owner.userId, "projects", 4);
-      mockAutumn.setFeature(collaborator.userId, "projects", 4);
+      await setPlan(t, owner.userId, "pro");
+      await setPlan(t, collaborator.userId, "pro");
     });
 
     test("should get project limits successfully", async () => {
-      mockAutumn.setFeature(owner.userId, "projects", 10);
+      await setPlan(t, owner.userId, "pro");
 
       await owner.asUser.action(api.project.createProject, {
         encryptedProjectKey: "#",
@@ -62,20 +63,26 @@ describe("Project Lifecycle", () => {
 
       const limits = await owner.asUser.action(api.project.getLimits, {});
 
-      expect(limits.includedUsage).toBe(10);
+      expect(limits.includedUsage).toBe(5);
       expect(limits.usage).toBe(1);
     });
 
-    test("fails when project limit is exceeded", async () => {
-      mockAutumn.setFeature(owner.userId, "projects", 1, 1);
-
-      const result = await owner.asUser.action(api.project.createProject, {
+    test("free users are asked to upgrade for a second project", async () => {
+      await nonCollaborator.asUser.action(api.project.createProject, {
         encryptedProjectKey: "epk",
-        name: "project-name",
+        name: "first",
+      });
+
+      const result = await nonCollaborator.asUser.action(api.project.createProject, {
+        encryptedProjectKey: "epk",
+        name: "second",
         confirmPayment: true,
       });
 
       expect(result.status).toBe("requiresProPlan");
+      if (result.status === "requiresProPlan") {
+        expect(result.checkoutUrl).toContain(nonCollaborator.userId);
+      }
     });
 
     test("should create a project with encrypted project key", async () => {
@@ -94,8 +101,8 @@ describe("Project Lifecycle", () => {
       expect(project.encryptedProjectKey).toBe(encryptedProjectKey);
       expect(project.keyVersion).toBe(1);
 
-      const projectsQuota = mockAutumn.getUserFeature(owner.userId, "projects");
-      expect(projectsQuota?.current).toBe(1);
+      const limits = await owner.asUser.action(api.project.getProjectLimits, {});
+      expect(limits.totalProjectsCount).toBe(1);
     });
 
     test("should update a project", async () => {
@@ -152,8 +159,8 @@ describe("Project Lifecycle", () => {
 
       expect(project?.isArchived).toBe(true);
 
-      const projectsQuota = mockAutumn.getUserFeature(owner.userId, "projects");
-      expect(projectsQuota?.current).toBe(0);
+      const limits = await owner.asUser.action(api.project.getProjectLimits, {});
+      expect(limits.totalProjectsCount).toBe(0);
     });
 
     test("should unarchive a project", async () => {
@@ -189,8 +196,8 @@ describe("Project Lifecycle", () => {
 
       expect(unarchivedProject?.isArchived).toBe(false);
 
-      const projectsQuota = mockAutumn.getUserFeature(owner.userId, "projects");
-      expect(projectsQuota?.current).toBe(1);
+      const limits = await owner.asUser.action(api.project.getProjectLimits, {});
+      expect(limits.totalProjectsCount).toBe(1);
     });
 
     test("should list projects", async () => {
@@ -219,8 +226,8 @@ describe("Project Lifecycle", () => {
       expect(result.gracePeriodDaysRemaining).toBe(undefined);
       expect(result.isInGracePeriod).toBe(false);
 
-      const projectsQuota = mockAutumn.getUserFeature(owner.userId, "projects");
-      expect(projectsQuota?.current).toBe(2);
+      const limits = await owner.asUser.action(api.project.getProjectLimits, {});
+      expect(limits.totalProjectsCount).toBe(2);
     });
 
     test("shoud not archive an archived project", async () => {
@@ -267,38 +274,25 @@ describe("Project Lifecycle", () => {
       );
     });
 
-    test("should not unarchive an archived project if there is no project quoate left", async () => {
-      mockAutumn.setFeature(owner.userId, "projects", 1, 0);
+    test("free users cannot unarchive past their project quota", async () => {
+      const first = assertProjectCreated(
+        await nonCollaborator.asUser.action(api.project.createProject, {
+          encryptedProjectKey: "epk",
+          name: "project-name-1",
+        }),
+      );
+      await nonCollaborator.asUser.action(api.project.archiveProject, { projectId: first });
 
-      const { encryptedProjectKey: ePK1 } = await createProjectKey(owner.publicKey!);
-
-      const projectResult1 = await owner.asUser.action(api.project.createProject, {
-        encryptedProjectKey: ePK1,
-        name: "project-name-1",
-      });
-
-      const projectId1 = assertProjectCreated(projectResult1);
-
-      await owner.asUser.action(api.project.archiveProject, {
-        projectId: projectId1,
-      });
-
-      const { encryptedProjectKey: ePK2 } = await createProjectKey(owner.publicKey!);
-
-      const projectResult2 = await owner.asUser.action(api.project.createProject, {
-        encryptedProjectKey: ePK2,
-        name: "project-name-2",
-      });
-
-      assertProjectCreated(projectResult2);
+      assertProjectCreated(
+        await nonCollaborator.asUser.action(api.project.createProject, {
+          encryptedProjectKey: "epk",
+          name: "project-name-2",
+        }),
+      );
 
       await expectConvexError(
-        () =>
-          owner.asUser.action(api.project.unarchiveProject, {
-            projectId: projectId1,
-          }),
+        () => nonCollaborator.asUser.action(api.project.unarchiveProject, { projectId: first }),
         ErrorCode.PROJECTS_LIMIT_REACHED,
-        "Limit reached",
       );
     });
 
@@ -351,8 +345,7 @@ describe("Project Lifecycle", () => {
     });
 
     test("should not archive project with active shares", async () => {
-      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
-      mockAutumn.setFeature(owner.userId, "additional_shares", 5);
+      await setPlan(t, owner.userId, "pro");
 
       const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
 
@@ -378,34 +371,12 @@ describe("Project Lifecycle", () => {
         "Cannot archive project with 1 active share(s)",
       );
     });
-
-    test("should return paymentFailed and delete project when track fails", async () => {
-      // User is at exactly the limit (3/3), next project requires payment
-      mockAutumn.setFeature(owner.userId, "projects", 3, 3);
-      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true); // Has Pro
-
-      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
-      const result = await owner.asUser.action(api.project.createProject, {
-        encryptedProjectKey,
-        name: "paid-project",
-        confirmPayment: true,
-      });
-
-      expect(result.status).toBe("paymentFailed");
-      if (result.status === "paymentFailed") {
-        expect(result.billingPortalUrl).toBeDefined();
-      }
-
-      // Verify project was deleted (compensating action)
-      const projects = await owner.asUser.query(api.project.listUserProjects, {});
-      expect(projects.projects.find((p) => p.name === "paid-project")).toBeUndefined();
-    });
   });
 
   describe("Environment CRUD Operations", () => {
     beforeEach(async () => {
-      mockAutumn.setFeature(owner.userId, "projects", 2);
-      mockAutumn.setFeature(collaborator.userId, "projects", 2);
+      await setPlan(t, owner.userId, "pro");
+      await setPlan(t, collaborator.userId, "pro");
     });
 
     test("should create an environment", async () => {
@@ -477,7 +448,7 @@ describe("Project Lifecycle", () => {
     });
 
     test("should get environments if the user has project share access", async () => {
-      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
+      await setPlan(t, owner.userId, "pro");
 
       const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
 
@@ -520,113 +491,93 @@ describe("Project Lifecycle", () => {
   });
 
   describe("Project Subscription Cancellation", () => {
+    async function createProjects(count: number) {
+      const ids: Id<"project">[] = [];
+      for (let i = 0; i < count; i++) {
+        ids.push(
+          assertProjectCreated(
+            await owner.asUser.action(api.project.createProject, {
+              encryptedProjectKey: "epk",
+              name: `project-${i}`,
+              confirmPayment: true,
+            }),
+          ),
+        );
+        await t.run(async (ctx) => {
+          await ctx.db.patch(ids[i]!, { createdAt: 1_000 + i });
+        });
+      }
+      return ids;
+    }
+
+    async function expireGracePeriod() {
+      await t.run(async (ctx) => {
+        await ctx.runMutation(components.betterAuth.adapter.updateOne, {
+          input: {
+            model: "user",
+            where: [{ field: "_id", value: owner.userId }],
+            update: { planDowngradedAt: Date.now() - 8 * 24 * 60 * 60 * 1000 },
+          },
+        });
+      });
+    }
+
     beforeEach(async () => {
-      mockAutumn.setFeature(owner.userId, "projects", 10);
-      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
+      await setPlan(t, owner.userId, "pro");
     });
 
-    test("should block new project when subscription cancelled and over limit", async () => {
-      for (let i = 0; i < 10; i++) {
-        const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
-        const result = await owner.asUser.action(api.project.createProject, {
-          encryptedProjectKey,
-          name: `project-${i}`,
-          confirmPayment: true,
-        });
+    test("cancelled users keep their projects during the grace period", async () => {
+      await createProjects(3);
+      await setPlan(t, owner.userId, "free");
 
-        if (result.status !== "success") {
-          throw new Error(`Project ${i} creation failed: ${result.message || "Unknown error"}`);
-        }
-      }
+      const list = await owner.asUser.query(api.project.listUserProjects, {});
+      expect(list.isInGracePeriod).toBe(true);
+      expect(list.gracePeriodDaysRemaining).toBe(7);
+      expect(list.projects.every((p) => p.status === "owned")).toBe(true);
 
-      mockAutumn.setFeature(owner.userId, "projects", 7, 10);
-
-      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
       const result = await owner.asUser.action(api.project.createProject, {
-        encryptedProjectKey,
+        encryptedProjectKey: "epk",
         name: "new-project",
         confirmPayment: true,
       });
-
-      expect(result.status).toBe("requiresRemoval");
-      if (result.status === "requiresRemoval") {
-        expect(result.currentUsage).toBe(10);
-        expect(result.includedUsage).toBe(7);
-        expect(result.excessCount).toBe(3);
-      }
+      expect(result.status).toBe("requiresProPlan");
     });
 
-    test("should return requiresRemoval without confirmPayment when over limit", async () => {
-      for (let i = 0; i < 10; i++) {
-        const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
-        const result = await owner.asUser.action(api.project.createProject, {
-          encryptedProjectKey,
-          name: `project-${i}`,
-          confirmPayment: true,
-        });
+    test("only the newest project stays unlocked after the grace period", async () => {
+      const ids = await createProjects(3);
+      await setPlan(t, owner.userId, "free");
+      await expireGracePeriod();
 
-        if (result.status !== "success") {
-          throw new Error(`Project ${i} creation failed: ${result.message || "Unknown error"}`);
-        }
-      }
+      const list = await owner.asUser.query(api.project.listUserProjects, {});
+      expect(list.isInGracePeriod).toBe(false);
 
-      mockAutumn.setFeature(owner.userId, "projects", 7, 10);
-
-      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
-      const result = await owner.asUser.action(api.project.createProject, {
-        encryptedProjectKey,
-        name: "new-project",
-      });
-
-      expect(result.status).toBe("requiresRemoval");
-      if (result.status === "requiresRemoval") {
-        expect(result.currentUsage).toBe(10);
-        expect(result.includedUsage).toBe(7);
-        expect(result.excessCount).toBe(3);
-      }
+      const statusById = Object.fromEntries(list.projects.map((p) => [p.id, p.status]));
+      expect(statusById[ids[2]!]).toBe("owned");
+      expect(statusById[ids[0]!]).toBe("restricted");
+      expect(statusById[ids[1]!]).toBe("restricted");
     });
 
-    test("should allow new project after archiving excess projects", async () => {
-      for (let i = 0; i < 8; i++) {
-        const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
-        const result = await owner.asUser.action(api.project.createProject, {
-          encryptedProjectKey,
-          name: `project-${i}`,
-          confirmPayment: true,
-        });
+    test("upgrading again lifts the restriction", async () => {
+      await createProjects(3);
+      await setPlan(t, owner.userId, "free");
+      await expireGracePeriod();
+      await setPlan(t, owner.userId, "pro");
 
-        if (result.status !== "success") {
-          throw new Error(`Project ${i} creation failed: ${result.message || "Unknown error"}`);
-        }
-      }
+      const list = await owner.asUser.query(api.project.listUserProjects, {});
+      expect(list.projects.every((p) => p.status === "owned")).toBe(true);
+    });
 
-      mockAutumn.setFeature(owner.userId, "projects", 6, 8);
+    test("archiving frees a slot for a cancelled user", async () => {
+      const ids = await createProjects(2);
+      await setPlan(t, owner.userId, "free");
 
-      const projects = await owner.asUser.query(api.project.listUserProjects, {});
-      const firstProject = projects.projects[0]!;
-      const secondProject = projects.projects[1]!;
+      await owner.asUser.action(api.project.archiveProject, { projectId: ids[0]! });
+      await owner.asUser.action(api.project.archiveProject, { projectId: ids[1]! });
 
-      mockAutumn.setFeature(owner.userId, "projects", 8, 8);
-
-      await owner.asUser.action(api.project.archiveProject, {
-        projectId: firstProject.id,
-      });
-
-      mockAutumn.setFeature(owner.userId, "projects", 8, 7);
-
-      await owner.asUser.action(api.project.archiveProject, {
-        projectId: secondProject.id,
-      });
-
-      mockAutumn.setFeature(owner.userId, "projects", 8, 6);
-
-      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
       const result = await owner.asUser.action(api.project.createProject, {
-        encryptedProjectKey,
+        encryptedProjectKey: "epk",
         name: "new-project",
-        confirmPayment: true,
       });
-
       expect(result.status).toBe("success");
     });
   });

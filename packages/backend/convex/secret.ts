@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { getProjectOrThrow } from "./lib/data";
 import { doc } from "convex-helpers/validators";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -72,9 +73,7 @@ export const createSecret = protectedMutation({
     });
     const environment = environmentResult as Doc<"environment">;
 
-    const projectResult = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: environment.projectId,
-    });
+    const projectResult = await getProjectOrThrow(ctx, environment.projectId);
     const project = projectResult as Doc<"project">;
 
     await assertProjectAccess(ctx, project);
@@ -149,9 +148,7 @@ export const getSecret = protectedQuery({
       throw notFoundError("secret");
     }
 
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: secretInstance.projectId,
-    });
+    const project = await getProjectOrThrow(ctx, secretInstance.projectId);
 
     await assertProjectAccess(ctx, project);
 
@@ -193,9 +190,7 @@ export const getAllSecretsForProject = protectedQuery({
   ): Promise<
     Array<{ id: Id<"secret">; environmentId: Id<"environment">; encryptedValue: string }>
   > => {
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: args.projectId,
-    });
+    const project = await getProjectOrThrow(ctx, args.projectId);
 
     await assertProjectAccess(ctx, project);
 
@@ -263,9 +258,7 @@ export const updateSecretBulk = protectedMutation({
       },
     );
 
-    const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: environment.projectId,
-    });
+    const project: Doc<"project"> = await getProjectOrThrow(ctx, environment.projectId);
 
     await assertProjectAccess(ctx, project);
 
@@ -521,9 +514,7 @@ export const updateSecret = protectedMutation({
       });
     }
 
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: secret.projectId,
-    });
+    const project = await getProjectOrThrow(ctx, secret.projectId);
 
     await assertProjectAccess(ctx, project);
 
@@ -595,9 +586,7 @@ export const deleteSecret = protectedMutation({
       });
     }
 
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: secret.projectId,
-    });
+    const project = await getProjectOrThrow(ctx, secret.projectId);
 
     await assertProjectAccess(ctx, project);
 
@@ -693,9 +682,7 @@ export const _exportSecretsCore = internalMutation({
     } as unknown as ProtectedMutationCtx;
     await checkRateLimit(authCtx, "read");
 
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: args.projectId,
-    });
+    const project = await getProjectOrThrow(ctx, args.projectId);
 
     await assertProjectAccess(authCtx, project);
 
@@ -840,9 +827,7 @@ export const _exportSecretsForServiceAccount = internalMutation({
   ): Promise<ServiceAccountExportResult> => {
     await checkRateLimit(ctx, "serviceAccountExport", `saExport:${args.serviceAccountId}`);
 
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: args.projectId,
-    });
+    const project = await getProjectOrThrow(ctx, args.projectId);
 
     if (!args.environmentName) {
       throw createError({

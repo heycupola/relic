@@ -17,9 +17,10 @@ import {
   betterAuthModules,
   expectConvexError,
   getTestUsers,
-  mockAutumn,
+  mockBilling,
   modules,
   randomString,
+  setPlan,
   type TestUser,
 } from "./setup";
 
@@ -52,13 +53,13 @@ describe("Secret Management", () => {
   });
 
   afterEach(() => {
-    mockAutumn.reset();
+    mockBilling.reset();
   });
 
   describe("CRUD Operations", () => {
     beforeEach(async () => {
-      mockAutumn.setFeature(owner.userId, "projects", 2);
-      mockAutumn.setFeature(collaborator.userId, "projects", 2);
+      await setPlan(t, owner.userId, "pro");
+      await setPlan(t, collaborator.userId, "pro");
     });
 
     test("should create secrets with different primitive types", async () => {
@@ -190,7 +191,7 @@ describe("Secret Management", () => {
 
   describe("Scope Management", () => {
     beforeEach(async () => {
-      mockAutumn.setFeature(owner.userId, "projects", 2);
+      await setPlan(t, owner.userId, "pro");
     });
 
     test("should create secret with default shared scope", async () => {
@@ -490,7 +491,7 @@ describe("Secret Management", () => {
 
   describe("Bulk Update Optimization", () => {
     beforeEach(async () => {
-      mockAutumn.setFeature(owner.userId, "projects", 2);
+      await setPlan(t, owner.userId, "pro");
     });
 
     test("should not create action log for unchanged secrets in bulk update", async () => {
@@ -527,7 +528,7 @@ describe("Secret Management", () => {
       });
 
       // Get initial action log count
-      const logsBefore = await owner.asUser.action(api.actionLog.loadActionLogsByProject, {
+      const logsBefore = await owner.asUser.query(api.actionLog.loadActionLogsByProject, {
         projectId,
         paginationOpts: { numItems: 100, cursor: null },
       });
@@ -561,7 +562,7 @@ describe("Secret Management", () => {
       });
 
       // Get action logs after bulk update
-      const logsAfter = await owner.asUser.action(api.actionLog.loadActionLogsByProject, {
+      const logsAfter = await owner.asUser.query(api.actionLog.loadActionLogsByProject, {
         projectId,
         paginationOpts: { numItems: 100, cursor: null },
       });
@@ -803,8 +804,7 @@ describe("Secret Management", () => {
     });
 
     test("should return the collaborator encrypted project key for shared project secret export", async () => {
-      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
-      mockAutumn.setFeature(owner.userId, "additional_shares", 2);
+      await setPlan(t, owner.userId, "pro");
 
       const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
 

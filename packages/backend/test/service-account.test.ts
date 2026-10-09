@@ -15,9 +15,10 @@ import {
   betterAuthModules,
   expectConvexError,
   getTestUsers,
-  mockAutumn,
+  mockBilling,
   modules,
   randomString,
+  setPlan,
   type TestUser,
 } from "./setup";
 
@@ -107,7 +108,7 @@ describe("Service Account Management", () => {
       userId: collaborator.userId,
     });
 
-    mockAutumn.setFeature(owner.userId, "projects", 5);
+    await setPlan(t, owner.userId, "pro");
     const projectKeyResult = await createProjectKey(owner.publicKey!);
     encryptedProjectKey = projectKeyResult.encryptedProjectKey;
     const result = await owner.asUser.action(api.project.createProject, {
@@ -118,7 +119,7 @@ describe("Service Account Management", () => {
   });
 
   afterEach(() => {
-    mockAutumn.reset();
+    mockBilling.reset();
   });
 
   describe("createServiceAccount", () => {
@@ -163,8 +164,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject for non-owner", async () => {
-      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
-      mockAutumn.setFeature(owner.userId, "additional_shares", 5);
+      await setPlan(t, owner.userId, "pro");
 
       const projectKey = await unwrapProjectKey(
         encryptedProjectKey,
@@ -368,8 +368,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject collaborator from listing service accounts", async () => {
-      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
-      mockAutumn.setFeature(owner.userId, "additional_shares", 5);
+      await setPlan(t, owner.userId, "pro");
 
       const projectKey = await unwrapProjectKey(
         encryptedProjectKey,
@@ -439,8 +438,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject revoking by non-owner", async () => {
-      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
-      mockAutumn.setFeature(owner.userId, "additional_shares", 5);
+      await setPlan(t, owner.userId, "pro");
 
       const projectKey = await unwrapProjectKey(
         encryptedProjectKey,
@@ -669,8 +667,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject non-owner updating OIDC policy", async () => {
-      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
-      mockAutumn.setFeature(owner.userId, "additional_shares", 5);
+      await setPlan(t, owner.userId, "pro");
 
       const projectKey = await unwrapProjectKey(
         encryptedProjectKey,

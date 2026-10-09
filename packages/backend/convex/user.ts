@@ -1,91 +1,60 @@
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
+import type { Id, TableNames } from "./_generated/dataModel";
 import { internalAction, internalMutation } from "./_generated/server";
 import type { Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
+import { refreshPlan, requestUsageSync, toBillingCustomer } from "./billing";
+import { autumnApi } from "./lib/autumn";
+import {
+  insertActionLog,
+  listActiveOwnedProjects,
+  listActiveSharesByProject,
+  loadUser,
+} from "./lib/data";
 import { createError, ErrorCode } from "./lib/errors";
 import { createLogger } from "./lib/logger";
 import { protectedAction, protectedMutation, protectedQuery } from "./lib/middleware";
+import { PLANS } from "./lib/plans";
 import { checkRateLimit } from "./lib/rateLimit";
-import {
-  EmailKind,
-  ErrorSeverity,
-  type ProtectedActionCtx,
-  type ProtectedQueryCtx,
-} from "./lib/types";
+import { EmailKind, ErrorSeverity } from "./lib/types";
 import { sendEmail, sendEmailDirect } from "./resend";
 
 const log = createLogger("user");
 
 export const getProPlan = protectedAction({
   args: {},
-  handler: async (ctx: ProtectedActionCtx) => {
+  handler: async (ctx) => {
     await checkRateLimit(ctx, "write");
+
+    const refreshed = await refreshPlan(ctx, ctx.userId);
+    if (refreshed?.hasPro) {
+      return { success: true, hasPro: true, checkoutLink: null, sessionId: null };
+    }
 
     const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
       userId: ctx.userId,
     });
+    const checkoutLink = await autumnApi.createProCheckoutUrl(toBillingCustomer(user));
 
-    if (!user.hasPro) {
-      const checkoutResult = await ctx.autumn.checkout(ctx, {
-        productId: "pro_plan",
-        successUrl: `${process.env.SITE_URL || "https://withrelic.com"}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-        customerData: {
-          name: user.name || undefined,
-          email: user.email,
-        },
-        checkoutSessionParams: {
-          cancel_url: `${process.env.SITE_URL || "https://withrelic.com"}/subscription/cancel`,
-          metadata: {
-            userId: ctx.userId,
-          },
-        },
-      });
-
-      const checkoutUrl = checkoutResult.data?.url || null;
-      let sessionId: string | null = null;
-
-      if (checkoutUrl) {
-        const urlParts = checkoutUrl.split("/");
-        const lastPart = urlParts[urlParts.length - 1];
-        sessionId = lastPart?.split("?")[0] || null;
-      }
-
-      return {
-        success: true,
-        hasPro: false,
-        checkoutLink: checkoutUrl,
-        sessionId,
-      };
-    }
-
-    return {
-      success: true,
-      hasPro: true,
-      checkoutLink: null,
-      sessionId: null,
-    };
+    return { success: true, hasPro: false, checkoutLink, sessionId: null };
   },
 });
 
 export const checkProPlan = protectedAction({
   args: {},
-  handler: async (ctx: ProtectedActionCtx) => {
+  handler: async (ctx) => {
     await checkRateLimit(ctx, "read");
-
-    const hasPro = await ctx.autumn.check(ctx, {
-      featureId: "can_share_project",
+    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+      userId: ctx.userId,
     });
-
-    return { success: true, hasProPlan: hasPro.data?.allowed ?? false };
+    return { success: true, hasProPlan: user.hasPro };
   },
 });
 
 export const getCurrentUser = protectedQuery({
   args: {},
-  handler: async (ctx: ProtectedQueryCtx) => {
-    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
-      userId: ctx.userId,
-    });
+  handler: async (ctx) => {
+    const user = await loadUser(ctx, ctx.userId);
 
     return {
       id: user._id,
@@ -106,30 +75,16 @@ export const getCurrentUser = protectedQuery({
 });
 
 export const getUserPublicKeyByEmail = protectedQuery({
-  args: {
-    email: v.string(),
-  },
+  args: { email: v.string() },
   returns: v.union(v.object({ publicKey: v.string() }), v.null()),
-  handler: async (ctx: ProtectedQueryCtx, args: { email: string }) => {
-    // First, check if requesting user has pro plan
-    // Since this is a query, we need to check the user's pro status through the database
-    const currentUser = await ctx.runQuery(components.betterAuth.user.loadUserById, {
-      userId: ctx.userId,
-    });
-
-    if (!currentUser || !currentUser.hasPro) {
-      return null;
-    }
+  handler: async (ctx, args) => {
+    const currentUser = await loadUser(ctx, ctx.userId);
+    if (!currentUser.hasPro) return null;
 
     const user = await ctx.runQuery(components.betterAuth.user.loadUserByEmail, {
-      email: args.email,
+      email: args.email.trim(),
     });
-
-    if (!user || !user.publicKey) {
-      return null;
-    }
-
-    return { publicKey: user.publicKey };
+    return user?.publicKey ? { publicKey: user.publicKey } : null;
   },
 });
 
@@ -161,9 +116,7 @@ export const completeOnboarding = protectedMutation({
     ),
   },
   handler: async (ctx, args) => {
-    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
-      userId: ctx.userId,
-    });
+    const user = await loadUser(ctx, ctx.userId);
 
     const onboarding = await ctx.db
       .query("onboarding")
@@ -171,7 +124,7 @@ export const completeOnboarding = protectedMutation({
       .first();
 
     if (onboarding !== null || user.hasCompletedOnboarding === true) {
-      throw createError({
+      createError({
         code: ErrorCode.UNABLE_TO_PERFORM_THIS_ACTION,
         message: "Onboarding is already completed",
         severity: ErrorSeverity.Low,
@@ -183,64 +136,16 @@ export const completeOnboarding = protectedMutation({
       createdAt: Date.now(),
       teamSize: args.teamSize,
       source: args.source,
-      sourceOther: args.sourceOther,
+      sourceOther: args.sourceOther?.trim() || undefined,
     });
 
     await ctx.runMutation(components.betterAuth.user.markOnboardingCompleted, {
       userId: ctx.userId,
     });
 
-    await ctx.runMutation(internal.actionLog._insertActionLog, {
-      action: "onboarding.completed",
-      userId: ctx.userId,
-    });
+    await insertActionLog(ctx, { action: "onboarding.completed", userId: ctx.userId });
 
     return { success: true };
-  },
-});
-
-export const _handlePlanUpgrade = internalAction({
-  args: {
-    userId: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
-      userId: args.userId,
-    });
-
-    await ctx.runMutation(components.betterAuth.user.upgradeToPro, {
-      userId: user._id,
-    });
-
-    log.info("User upgraded to Pro", { userId: user._id });
-
-    await sendEmail(ctx, user._id, user.email, {
-      kind: EmailKind.PlanUpgraded,
-      userName: user.name,
-    });
-  },
-});
-
-export const _handlePlanDowngrade = internalAction({
-  args: {
-    userId: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
-      userId: args.userId,
-    });
-
-    await ctx.runMutation(components.betterAuth.user.downgradeToFree, {
-      userId: user._id,
-    });
-
-    log.info("User downgraded to Free, grace period started", { userId: user._id });
-
-    await sendEmail(ctx, user._id, user.email, {
-      kind: EmailKind.GracePeriodStarted,
-      daysRemaining: 7,
-      userName: user.name,
-    });
   },
 });
 
@@ -261,7 +166,7 @@ export const _handleEmailDelivered = internalMutation({
   handler: async (ctx, args) => {
     await ctx.runMutation(components.betterAuth.user.updateUserAfterEmailSent, {
       emailKind: args.emailKind,
-      userId: args.userId,
+      userId: args.userId as BetterAuthId<"user">,
     });
 
     return { success: true };
@@ -281,53 +186,59 @@ export const _handleEmailFailed = internalMutation({
       userId: args.userId,
       reason: args.reason,
     });
-
-    // NOTE: it's enough for the MVP
-    // later add retry logic, notification, log table, etc.
   },
 });
 
-export const _batchSendAccessRestrictedEmails = internalAction({
+/** Notifies users whose grace period ended and who now have restricted projects. */
+export const _queueAccessRestrictedEmails = internalMutation({
   args: {},
-  returns: v.object({ success: v.boolean() }),
-  handler: async (ctx, _args) => {
+  returns: v.object({ queued: v.number() }),
+  handler: async (ctx) => {
     const { usersToRestrict } = await ctx.runQuery(
       components.betterAuth.user.loadUsersToRestrict,
       {},
     );
 
-    log.info("Access restriction cron started", { usersToRestrict: usersToRestrict.length });
-
+    let queued = 0;
     for (const user of usersToRestrict) {
-      const projects = await ctx.runQuery(internal.project._loadActiveProjectsByOwner, {
-        ownerId: user._id as BetterAuthId<"user">,
-      });
-      const projectShares = await ctx.runQuery(internal.projectShare._loadActiveSharesByUser, {
-        userId: user._id as BetterAuthId<"user">,
+      await ctx.runMutation(components.betterAuth.user.markAccessRestrictedEmailSent, {
+        userId: user._id,
       });
 
-      await sendEmail(ctx, user._id, user.email, {
-        kind: EmailKind.AccessRestricted,
-        ownedProjectCount: projects.length,
-        sharedProjectCount: projectShares.length,
-        userName: user.name,
+      const projects = await listActiveOwnedProjects(ctx, user._id);
+      if (projects.length <= PLANS.free.includedProjects) continue;
+
+      const shareCounts = await Promise.all(
+        projects.map(async (p) => (await listActiveSharesByProject(ctx, p._id)).length),
+      );
+
+      await ctx.scheduler.runAfter(0, internal.emails._send, {
+        userId: user._id,
+        to: user.email,
+        data: {
+          kind: EmailKind.AccessRestricted,
+          userName: user.name,
+          ownedProjectCount: projects.length,
+          sharedProjectCount: shareCounts.filter((count) => count > 0).length,
+        },
       });
+      queued++;
     }
 
-    log.info("Access restriction cron completed", { processed: usersToRestrict.length });
-
-    return { success: true };
+    log.info("Access restriction emails queued", {
+      checked: usersToRestrict.length,
+      queued,
+    });
+    return { queued };
   },
 });
 
 export const _sendWelcomeEmail = internalAction({
-  args: {
-    userId: v.string(),
-  },
+  args: { userId: v.string() },
   returns: v.object({ success: v.boolean() }),
   handler: async (ctx, args) => {
     const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
-      userId: args.userId,
+      userId: args.userId as BetterAuthId<"user">,
     });
 
     await sendEmail(ctx, user._id, user.email, {
@@ -355,54 +266,50 @@ export const _cascadeDeleteUserData = internalMutation({
     let projectsDeleted = 0;
     let sharesRevoked = 0;
 
+    const deleteAll = async (docs: { _id: Id<TableNames> }[]) => {
+      await Promise.all(docs.map((d) => ctx.db.delete(d._id)));
+      return docs.length;
+    };
+
     const ownedProjects = await ctx.db
       .query("project")
       .withIndex("by_owner", (q) => q.eq("ownerId", args.userId))
       .collect();
 
     for (const project of ownedProjects) {
-      const secrets = await ctx.db
-        .query("secret")
-        .withIndex("by_project", (q) => q.eq("projectId", project._id))
-        .collect();
-      for (const secret of secrets) {
-        await ctx.db.delete(secret._id);
-      }
+      const projectId = project._id;
+      const [secrets, folders, environments, rotations, serviceAccounts, shares] =
+        await Promise.all([
+          ctx.db
+            .query("secret")
+            .withIndex("by_project", (q) => q.eq("projectId", projectId))
+            .collect(),
+          ctx.db
+            .query("folder")
+            .withIndex("by_project", (q) => q.eq("projectId", projectId))
+            .collect(),
+          ctx.db
+            .query("environment")
+            .withIndex("by_project", (q) => q.eq("projectId", projectId))
+            .collect(),
+          ctx.db
+            .query("keyRotation")
+            .withIndex("by_project", (q) => q.eq("projectId", projectId))
+            .collect(),
+          ctx.db
+            .query("serviceAccount")
+            .withIndex("by_project", (q) => q.eq("projectId", projectId))
+            .collect(),
+          ctx.db
+            .query("projectShare")
+            .withIndex("by_project", (q) => q.eq("projectId", projectId))
+            .collect(),
+        ]);
 
-      const environments = await ctx.db
-        .query("environment")
-        .withIndex("by_project", (q) => q.eq("projectId", project._id))
-        .collect();
-      for (const env of environments) {
-        await ctx.db.delete(env._id);
-      }
+      await deleteAll([...secrets, ...folders, ...environments, ...rotations, ...serviceAccounts]);
+      sharesRevoked += await deleteAll(shares);
 
-      const folders = await ctx.db
-        .query("folder")
-        .withIndex("by_project", (q) => q.eq("projectId", project._id))
-        .collect();
-      for (const folder of folders) {
-        await ctx.db.delete(folder._id);
-      }
-
-      const keyRotations = await ctx.db
-        .query("keyRotation")
-        .withIndex("by_project", (q) => q.eq("projectId", project._id))
-        .collect();
-      for (const kr of keyRotations) {
-        await ctx.db.delete(kr._id);
-      }
-
-      const projectShares = await ctx.db
-        .query("projectShare")
-        .withIndex("by_project", (q) => q.eq("projectId", project._id))
-        .collect();
-      for (const share of projectShares) {
-        await ctx.db.delete(share._id);
-        sharesRevoked++;
-      }
-
-      await ctx.db.delete(project._id);
+      await ctx.db.delete(projectId);
       projectsDeleted++;
     }
 
@@ -410,26 +317,39 @@ export const _cascadeDeleteUserData = internalMutation({
       .query("projectShare")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .collect();
-    for (const share of sharedWithMe) {
-      await ctx.db.delete(share._id);
-      sharesRevoked++;
+    sharesRevoked += await deleteAll(sharedWithMe);
+
+    const affectedProjectIds = [...new Set(sharedWithMe.map((s) => s.projectId))];
+    const affectedOwners = new Set<string>();
+    for (const projectId of affectedProjectIds) {
+      const project = await ctx.db.get(projectId);
+      if (!project) continue;
+      const remaining = await listActiveSharesByProject(ctx, projectId);
+      await ctx.db.patch(projectId, { shareUsageCount: remaining.length });
+      affectedOwners.add(project.ownerId);
+    }
+    for (const ownerId of affectedOwners) {
+      await requestUsageSync(ctx, ownerId);
     }
 
     const onboarding = await ctx.db
       .query("onboarding")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
-    if (onboarding) {
-      await ctx.db.delete(onboarding._id);
-    }
+    if (onboarding) await ctx.db.delete(onboarding._id);
 
-    const apiKeys = await ctx.db
-      .query("apiKey")
+    await deleteAll(
+      await ctx.db
+        .query("apiKey")
+        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .collect(),
+    );
+
+    const billingSync = await ctx.db
+      .query("billingSync")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .collect();
-    for (const key of apiKeys) {
-      await ctx.db.delete(key._id);
-    }
+      .unique();
+    if (billingSync) await ctx.db.delete(billingSync._id);
 
     const actionLogs = await ctx.db
       .query("actionLog")
@@ -444,8 +364,7 @@ export const _cascadeDeleteUserData = internalMutation({
       });
     }
 
-    const sharedProjectIds = [...new Set(sharedWithMe.map((s) => s.projectId))];
-    for (const projectId of sharedProjectIds) {
+    for (const projectId of affectedProjectIds) {
       const projectLogs = await ctx.db
         .query("actionLog")
         .withIndex("by_project", (q) => q.eq("projectId", projectId))
@@ -480,23 +399,18 @@ export const _cascadeDeleteUserData = internalMutation({
 export const deleteAccount = protectedAction({
   args: {},
   returns: v.object({ success: v.boolean() }),
-  handler: async (ctx: ProtectedActionCtx) => {
+  handler: async (ctx) => {
     await checkRateLimit(ctx, "write");
 
     const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
       userId: ctx.userId,
     });
 
-    const anonymousId = `deleted-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const anonymousId = `deleted-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
 
     if (user.hasPro) {
       try {
-        const { autumn: sdk } = await ctx.autumn.getAuthParams({ ctx });
-        await sdk.cancel({
-          product_id: "pro_plan",
-          customer_id: ctx.userId,
-          cancel_immediately: true,
-        });
+        await autumnApi.cancelProImmediately(ctx.userId);
       } catch (error) {
         log.error("Failed to cancel subscription during account deletion", {
           error: String(error),
@@ -539,24 +453,14 @@ export const deleteAccount = protectedAction({
 
 export const getBillingPortalUrl = protectedAction({
   args: {},
-  handler: async (ctx: ProtectedActionCtx) => {
+  handler: async (ctx) => {
     await checkRateLimit(ctx, "read");
 
     try {
-      const result = await ctx.autumn.customers.billingPortal(ctx, {
-        returnUrl: `${process.env.SITE_URL || "https://withrelic.com"}/dashboard`,
-      });
-
-      return {
-        success: true,
-        url: result.data?.url || null,
-      };
+      return { success: true, url: await autumnApi.createPortalUrl(ctx.userId) };
     } catch (error) {
       log.error("Failed to get billing portal URL", { error: String(error) });
-      return {
-        success: false,
-        url: null,
-      };
+      return { success: false, url: null };
     }
   },
 });

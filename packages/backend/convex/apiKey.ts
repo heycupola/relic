@@ -1,4 +1,6 @@
 import { v } from "convex/values";
+import { MAX_API_KEYS_PER_USER } from "./lib/plans";
+import { getProjectOrThrow } from "./lib/data";
 import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
@@ -14,7 +16,6 @@ import { ApiKeyScope, ErrorSeverity, hasScopes, validateScopes } from "./lib/typ
 
 const log = createLogger("apiKey");
 
-const MAX_API_KEYS_PER_USER = 5;
 const MAX_EXPIRATION_MS = 365 * 24 * 60 * 60 * 1000;
 
 export const createApiKey = protectedMutation({
@@ -77,9 +78,7 @@ export const createApiKey = protectedMutation({
     }
 
     if (args.projectId) {
-      const project = await ctx.runQuery(internal.project._loadProjectById, {
-        projectId: args.projectId,
-      });
+      const project = await getProjectOrThrow(ctx, args.projectId);
       if (!project) {
         throw createError({
           code: ErrorCode.REQUEST_NOT_FOUND,
