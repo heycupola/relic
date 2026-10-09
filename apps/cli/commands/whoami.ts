@@ -1,23 +1,25 @@
-import { validateSession } from "@repo/auth";
 import { trackEvent } from "@repo/logger";
 import ora from "ora";
 import pc from "picocolors";
 import { getApi } from "../lib/api";
+import {
+  getErrorMessage,
+  hasActiveSession,
+  isAuthErrorMessage,
+  printNotLoggedIn,
+} from "../lib/cli";
 
 export default async function whoami() {
   const spinner = ora("Fetching user info...").start();
 
   try {
-    const sessionValidation = await validateSession();
-    if (!sessionValidation.isValid || sessionValidation.isExpired) {
+    if (!(await hasActiveSession())) {
       spinner.stop();
-      console.log(pc.yellow("Not logged in"));
-      console.log(pc.dim("Run `relic login` to authenticate"));
+      printNotLoggedIn();
       return;
     }
 
-    const api = getApi();
-    const user = await api.getCurrentUser();
+    const user = await getApi().getCurrentUser();
 
     trackEvent("cli_command_executed", { command: "whoami" });
     spinner.stop();
@@ -27,16 +29,10 @@ export default async function whoami() {
     console.log(`${pc.dim("Email:")} ${user.email}`);
     console.log(`${pc.dim("Plan:")}  ${user.hasPro ? pc.green("Pro") : "Free"}`);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to fetch user";
-    // Handle auth-related errors more gracefully
-    if (
-      message.includes("Not authenticated") ||
-      message.includes("JWT") ||
-      message.includes("token")
-    ) {
+    const message = getErrorMessage(err, "Failed to fetch user");
+    if (isAuthErrorMessage(message)) {
       spinner.stop();
-      console.log(pc.yellow("Not logged in"));
-      console.log(pc.dim("Run `relic login` to authenticate"));
+      printNotLoggedIn();
       return;
     }
     spinner.fail(pc.red(`Error: ${message}`));

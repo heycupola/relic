@@ -10,6 +10,9 @@ import {
   validateSession,
 } from "@repo/auth";
 import { createLogger, trackEvent } from "@repo/logger";
+import ora, { type Ora } from "ora";
+import pc from "picocolors";
+import { RunnerBridge } from "../ffi/bridge";
 import {
   cacheEnvironments,
   cacheFolders,
@@ -21,11 +24,7 @@ import {
   getCachedSecrets,
   loadCachedEncryptedProjectKey,
   loadSecretsLastCachedTime,
-} from "helpers/cache";
-import type { SecretScope } from "lib/types";
-import ora from "ora";
-import pc from "picocolors";
-import { RunnerBridge } from "../ffi/bridge";
+} from "../helpers/cache";
 import {
   exportSecretsViaApiKey,
   exportSecretsViaServiceToken,
@@ -35,10 +34,23 @@ import {
   type ProtectedApi,
   type SecretData,
 } from "../lib/api";
+import {
+  failWithUpgradePrompt,
+  getErrorMessage,
+  NO_PASSWORD_MESSAGE,
+  NOT_LOGGED_IN_MESSAGE,
+  PROJECT_ID_REQUIRED_MESSAGE,
+  resolveProjectIdFromEnv,
+  resolveProjectIdWithConfig,
+} from "../lib/cli";
 import { findConfig } from "../lib/config";
 import { decryptSecrets, getProjectKey, ProjectKeyError } from "../lib/crypto";
+import type { SecretScope } from "../lib/types";
 
 const log = createLogger("cli");
+
+const SECRET_SCOPES: readonly SecretScope[] = ["client", "server", "shared"];
+const NO_KEYS_MESSAGE = "No encryption keys found. Run 'relic' to set up your keys first.";
 
 export interface RunOptions {
   environment: string;
@@ -50,6 +62,12 @@ export interface RunOptions {
 export interface PrepareSecretsResult {
   secrets: Record<string, string>;
   count: number;
+}
+
+interface UserKeys {
+  encryptedPrivateKey: string;
+  salt: string;
+  fromCache: boolean;
 }
 
 function isServiceTokenMode(): boolean {
@@ -71,19 +89,40 @@ function isCiEnvironment(): boolean {
   );
 }
 
-async function resolveUserKeysWithApiKey(
+function injectedMessage(count: number): string {
+  return `Injected ${count} secret${count !== 1 ? "s" : ""}`;
+}
+
+async function decryptToEnv(
+  projectKey: CryptoKey,
+  secrets: Array<{ key: string; encryptedValue: string }>,
+): Promise<Record<string, string>> {
+  const decryptedSecrets = await decryptSecrets(
+    projectKey,
+    secrets.map((s) => ({ key: s.key, encryptedValue: s.encryptedValue })),
+  );
+
+  const env: Record<string, string> = {};
+  for (const secret of decryptedSecrets) {
+    env[secret.key] = secret.value;
+  }
+  return env;
+}
+
+function readCachedUserKeys(userKeyDb: Database): UserKeys | null {
+  const cachedKeys = getCachedUserKeys(userKeyDb);
+  if (!cachedKeys) return null;
+  return {
+    encryptedPrivateKey: cachedKeys.encryptedPrivateKey,
+    salt: cachedKeys.salt,
+    fromCache: true,
+  };
+}
+
+async function fetchAndCacheUserKeysViaApiKey(
   userKeyDb: Database,
   apiKey: string,
-): Promise<{ encryptedPrivateKey: string; salt: string; fromCache: boolean }> {
-  const cachedKeys = getCachedUserKeys(userKeyDb);
-  if (cachedKeys) {
-    return {
-      encryptedPrivateKey: cachedKeys.encryptedPrivateKey,
-      salt: cachedKeys.salt,
-      fromCache: true,
-    };
-  }
-
+): Promise<UserKeys> {
   const keys = await fetchUserKeysViaApiKey(apiKey);
 
   cacheUserKeys(userKeyDb, {
@@ -111,7 +150,8 @@ export async function prepareSecretsWithApiKey(
   }
 
   const userKeyDb = await getUserKeyCacheDb();
-  const userKeys = await resolveUserKeysWithApiKey(userKeyDb, apiKey);
+  const userKeys =
+    readCachedUserKeys(userKeyDb) ?? (await fetchAndCacheUserKeysViaApiKey(userKeyDb, apiKey));
 
   const result = await exportSecretsViaApiKey(apiKey, {
     projectId,
@@ -125,47 +165,22 @@ export async function prepareSecretsWithApiKey(
   }
 
   const { unwrapProjectKey } = await import("@repo/crypto");
+  const unwrap = (keys: UserKeys) =>
+    unwrapProjectKey(result.encryptedProjectKey, keys.encryptedPrivateKey, password, keys.salt);
+
   let projectKey: CryptoKey;
   try {
-    projectKey = await unwrapProjectKey(
-      result.encryptedProjectKey,
-      userKeys.encryptedPrivateKey,
-      password,
-      userKeys.salt,
-    );
+    projectKey = await unwrap(userKeys);
   } catch (err) {
     if (!userKeys.fromCache) {
       throw err;
     }
 
     clearCachedUserKeys(userKeyDb);
-    const freshKeys = await fetchUserKeysViaApiKey(apiKey);
-    cacheUserKeys(userKeyDb, {
-      encryptedPrivateKey: freshKeys.encryptedPrivateKey,
-      salt: freshKeys.salt,
-      publicKey: freshKeys.publicKey,
-      keysUpdatedAt: Date.now(),
-    });
-
-    projectKey = await unwrapProjectKey(
-      result.encryptedProjectKey,
-      freshKeys.encryptedPrivateKey,
-      password,
-      freshKeys.salt,
-    );
+    projectKey = await unwrap(await fetchAndCacheUserKeysViaApiKey(userKeyDb, apiKey));
   }
 
-  const decryptedSecrets = await decryptSecrets(
-    projectKey,
-    result.secrets.map((s) => ({ key: s.key, encryptedValue: s.encryptedValue })),
-  );
-
-  const secretsObj: Record<string, string> = {};
-  for (const secret of decryptedSecrets) {
-    secretsObj[secret.key] = secret.value;
-  }
-
-  return { secrets: secretsObj, count: result.count };
+  return { secrets: await decryptToEnv(projectKey, result.secrets), count: result.count };
 }
 
 async function resolveOidcToken(): Promise<string | undefined> {
@@ -228,36 +243,13 @@ export async function prepareSecretsWithServiceToken(
     result.salt,
   );
 
-  const decryptedSecrets = await decryptSecrets(
-    projectKey,
-    result.secrets.map((s) => ({ key: s.key, encryptedValue: s.encryptedValue })),
-  );
-
-  const secretsObj: Record<string, string> = {};
-  for (const secret of decryptedSecrets) {
-    secretsObj[secret.key] = secret.value;
-  }
-
-  return { secrets: secretsObj, count: result.count };
+  return { secrets: await decryptToEnv(projectKey, result.secrets), count: result.count };
 }
 
-async function resolveUserKeys(
-  userKeyDb: Database,
-  api: ProtectedApi,
-): Promise<{ encryptedPrivateKey: string; salt: string; fromCache: boolean }> {
-  const cachedKeys = getCachedUserKeys(userKeyDb);
-
-  if (cachedKeys) {
-    return {
-      encryptedPrivateKey: cachedKeys.encryptedPrivateKey,
-      salt: cachedKeys.salt,
-      fromCache: true,
-    };
-  }
-
+async function fetchAndCacheUserKeys(userKeyDb: Database, api: ProtectedApi): Promise<UserKeys> {
   const user = await api.getFullUser();
   if (!user.encryptedPrivateKey || !user.salt) {
-    throw new Error("No encryption keys found. Run 'relic' to set up your keys first.");
+    throw new Error(NO_KEYS_MESSAGE);
   }
 
   cacheUserKeys(userKeyDb, {
@@ -266,11 +258,22 @@ async function resolveUserKeys(
     keysUpdatedAt: user.keysUpdatedAt ?? Date.now(),
   });
 
-  return {
-    encryptedPrivateKey: user.encryptedPrivateKey,
-    salt: user.salt,
-    fromCache: false,
-  };
+  return { encryptedPrivateKey: user.encryptedPrivateKey, salt: user.salt, fromCache: false };
+}
+
+function loadValidCachedSecrets(
+  db: Database,
+  projectId: string,
+  options: RunOptions,
+  environmentId: string,
+  folderId: string | undefined,
+): { secrets: SecretData[]; encryptedProjectKey: string } | null {
+  const cachedSecrets = getCachedSecrets(db, projectId, environmentId, folderId, options.scope);
+  const cachedProjectKey = loadCachedEncryptedProjectKey(db, projectId);
+  if (cachedSecrets && cachedProjectKey) {
+    return { secrets: cachedSecrets, encryptedProjectKey: cachedProjectKey };
+  }
+  return null;
 }
 
 async function resolveSecrets(
@@ -283,42 +286,30 @@ async function resolveSecrets(
 
   if (cachedEnvironmentId) {
     const cachedFolderId = options.folder
-      ? getCachedFolderId(db, projectId, cachedEnvironmentId, options.folder)
-      : null;
-
+      ? (getCachedFolderId(db, projectId, cachedEnvironmentId, options.folder) ?? undefined)
+      : undefined;
     const isCached = options.folder ? !!cachedFolderId : true;
 
     const lastCachedAt = isCached
-      ? loadSecretsLastCachedTime(db, projectId, cachedEnvironmentId, cachedFolderId ?? undefined)
+      ? loadSecretsLastCachedTime(db, projectId, cachedEnvironmentId, cachedFolderId)
       : null;
 
-    let lastUpdatedAt: number | null = null;
-
-    if (lastCachedAt !== null) {
-      const secretsCacheValidation = await api.getSecretsCacheValidation(
+    if (lastCachedAt) {
+      const validation = await api.getSecretsCacheValidation(
         projectId,
         cachedEnvironmentId,
-        cachedFolderId ?? undefined,
+        cachedFolderId,
       );
-      if (secretsCacheValidation) {
-        lastUpdatedAt = secretsCacheValidation.updatedAt;
-      }
-    }
 
-    const cacheIsValid = isCached && lastCachedAt && lastUpdatedAt && lastCachedAt >= lastUpdatedAt;
-
-    if (cacheIsValid) {
-      const cachedSecrets = getCachedSecrets(
-        db,
-        projectId,
-        cachedEnvironmentId,
-        cachedFolderId ?? undefined,
-        options.scope,
-      );
-      const cachedProjectKey = loadCachedEncryptedProjectKey(db, projectId);
-
-      if (cachedSecrets && cachedProjectKey) {
-        return { secrets: cachedSecrets, encryptedProjectKey: cachedProjectKey };
+      if (validation?.updatedAt && lastCachedAt >= validation.updatedAt) {
+        const cached = loadValidCachedSecrets(
+          db,
+          projectId,
+          options,
+          cachedEnvironmentId,
+          cachedFolderId,
+        );
+        if (cached) return cached;
       }
     }
   }
@@ -358,39 +349,21 @@ async function resolveSecrets(
 
 async function resolveProjectKey(
   encryptedProjectKey: string,
-  userEncryptedPrivateKey: string,
-  userSalt: string,
-  fromCache: boolean,
+  userKeys: UserKeys,
   userKeyDb: Database,
   api: ProtectedApi,
 ): Promise<CryptoKey> {
   try {
-    return await getProjectKey(encryptedProjectKey, userEncryptedPrivateKey, userSalt);
+    return await getProjectKey(encryptedProjectKey, userKeys.encryptedPrivateKey, userKeys.salt);
   } catch (err) {
     const isDecryptionFailure = err instanceof ProjectKeyError && err.code === "DECRYPTION_FAILED";
-
-    if (fromCache && isDecryptionFailure) {
-      clearCachedUserKeys(userKeyDb);
-
-      const freshUser = await api.getFullUser();
-      if (!freshUser.encryptedPrivateKey || !freshUser.salt) {
-        throw new Error("No encryption keys found. Run 'relic' to set up your keys first.");
-      }
-
-      cacheUserKeys(userKeyDb, {
-        encryptedPrivateKey: freshUser.encryptedPrivateKey,
-        salt: freshUser.salt,
-        keysUpdatedAt: freshUser.keysUpdatedAt ?? Date.now(),
-      });
-
-      return await getProjectKey(
-        encryptedProjectKey,
-        freshUser.encryptedPrivateKey,
-        freshUser.salt,
-      );
+    if (!userKeys.fromCache || !isDecryptionFailure) {
+      throw err;
     }
 
-    throw err;
+    clearCachedUserKeys(userKeyDb);
+    const freshKeys = await fetchAndCacheUserKeys(userKeyDb, api);
+    return await getProjectKey(encryptedProjectKey, freshKeys.encryptedPrivateKey, freshKeys.salt);
   }
 }
 
@@ -401,58 +374,32 @@ export async function prepareSecrets(
   userKeyDb: Database,
   api: ProtectedApi,
 ): Promise<PrepareSecretsResult> {
-  const userKeys = await resolveUserKeys(userKeyDb, api);
-
+  const userKeys = readCachedUserKeys(userKeyDb) ?? (await fetchAndCacheUserKeys(userKeyDb, api));
   const { secrets, encryptedProjectKey } = await resolveSecrets(db, projectId, options, api);
+  const projectKey = await resolveProjectKey(encryptedProjectKey, userKeys, userKeyDb, api);
 
-  const projectKey = await resolveProjectKey(
-    encryptedProjectKey,
-    userKeys.encryptedPrivateKey,
-    userKeys.salt,
-    userKeys.fromCache,
-    userKeyDb,
-    api,
-  );
-
-  const decryptedSecrets = await decryptSecrets(
-    projectKey,
-    secrets.map((s) => ({ key: s.key, encryptedValue: s.encryptedValue })),
-  );
-
-  const secretsObj: Record<string, string> = {};
-  for (const secret of decryptedSecrets) {
-    secretsObj[secret.key] = secret.value;
-  }
-
-  return { secrets: secretsObj, count: secrets.length };
+  return { secrets: await decryptToEnv(projectKey, secrets), count: secrets.length };
 }
 
 export function resolveProjectId(options: RunOptions): string | null {
-  if (options.project) return options.project;
-  if (process.env.RELIC_PROJECT_ID) return process.env.RELIC_PROJECT_ID;
-  return null;
+  return resolveProjectIdFromEnv(options.project);
 }
 
-async function runWithServiceToken(
-  command: string[],
-  options: RunOptions,
-  startTime: number,
-): Promise<void> {
-  const spinner = ora("Authenticating with service token...").start();
+function failAndExit(spinner: Ora, message: string): never {
+  spinner.fail(pc.red(message));
+  process.exit(1);
+}
 
+async function prepareWithServiceToken(
+  spinner: Ora,
+  options: RunOptions,
+): Promise<PrepareSecretsResult> {
+  spinner.start("Authenticating with service token...");
   spinner.text = "Fetching secrets via service token...";
-  const { secrets, count } = await prepareSecretsWithServiceToken(options);
-
-  spinner.succeed(pc.green(`Injected ${count} secret${count !== 1 ? "s" : ""}`));
-
-  await executeCommand(command, secrets, count, startTime);
+  return prepareSecretsWithServiceToken(options);
 }
 
-async function runWithApiKey(
-  command: string[],
-  options: RunOptions,
-  startTime: number,
-): Promise<void> {
+async function prepareWithApiKey(spinner: Ora, options: RunOptions): Promise<PrepareSecretsResult> {
   if (isCiEnvironment()) {
     console.error(
       pc.yellow(
@@ -463,72 +410,41 @@ async function runWithApiKey(
     );
   }
 
-  const spinner = ora("Authenticating with API key...").start();
+  spinner.start("Authenticating with API key...");
 
-  const projectId = resolveProjectId(options);
+  const projectId = await resolveProjectIdWithConfig(options.project);
   if (!projectId) {
-    const configResult = await findConfig();
-    if (configResult) {
-      return runWithApiKeyAndProjectId(
-        command,
-        options,
-        configResult.config.project_id,
-        spinner,
-        startTime,
-      );
-    }
-    spinner.fail(pc.red("Project ID is required. Use --project <id> or set RELIC_PROJECT_ID."));
-    process.exit(1);
+    failAndExit(spinner, PROJECT_ID_REQUIRED_MESSAGE);
   }
 
-  return runWithApiKeyAndProjectId(command, options, projectId, spinner, startTime);
-}
-
-async function runWithApiKeyAndProjectId(
-  command: string[],
-  options: RunOptions,
-  projectId: string,
-  spinner: ReturnType<typeof ora>,
-  startTime: number,
-): Promise<void> {
   spinner.text = "Fetching secrets via API key...";
-  const { secrets, count } = await prepareSecretsWithApiKey(projectId, options);
-
-  spinner.succeed(pc.green(`Injected ${count} secret${count !== 1 ? "s" : ""}`));
-
-  await executeCommand(command, secrets, count, startTime);
+  return prepareSecretsWithApiKey(projectId, options);
 }
 
-async function runWithSession(
-  command: string[],
+async function prepareWithSession(
+  spinner: Ora,
   options: RunOptions,
-  startTime: number,
-): Promise<void> {
-  const spinner = ora("Checking authentication...").start();
+): Promise<PrepareSecretsResult> {
+  spinner.start("Checking authentication...");
 
   const sessionValidation = await validateSession();
   if (!sessionValidation.isValid || sessionValidation.isExpired) {
-    spinner.fail(pc.red("Not logged in. Run 'relic login' first."));
-    process.exit(1);
+    failAndExit(spinner, NOT_LOGGED_IN_MESSAGE);
   }
 
   spinner.text = "Verifying password...";
-  const hasPass = await hasPassword();
-  if (!hasPass) {
-    spinner.fail(pc.red("No password set. Run 'relic' to set up your password first."));
-    process.exit(1);
+  if (!(await hasPassword())) {
+    failAndExit(spinner, NO_PASSWORD_MESSAGE);
   }
 
   if (!(await getPasswordFromStorage())) {
-    spinner.fail(pc.red("Could not retrieve password. Please re-authenticate."));
-    process.exit(1);
+    failAndExit(spinner, "Could not retrieve password. Please re-authenticate.");
   }
 
   spinner.text = "Loading configuration...";
   const configResult = await findConfig();
   if (!configResult) {
-    spinner.fail(pc.red("No relic.toml found. Run 'relic init' first."));
-    process.exit(1);
+    failAndExit(spinner, "No relic.toml found. Run 'relic init' first.");
   }
 
   const projectId = resolveProjectId(options) ?? configResult.config.project_id;
@@ -536,13 +452,7 @@ async function runWithSession(
   spinner.text = "Preparing secrets...";
   const db = await getCacheDb();
   const userKeyDb = await getUserKeyCacheDb();
-  const api = getApi();
-
-  const { secrets, count } = await prepareSecrets(projectId, options, db, userKeyDb, api);
-
-  spinner.succeed(pc.green(`Injected ${count} secret${count !== 1 ? "s" : ""}`));
-
-  await executeCommand(command, secrets, count, startTime);
+  return prepareSecrets(projectId, options, db, userKeyDb, getApi());
 }
 
 async function executeCommand(
@@ -550,21 +460,15 @@ async function executeCommand(
   secrets: Record<string, string>,
   count: number,
   startTime: number,
-): Promise<void> {
+): Promise<never> {
   const runner = await RunnerBridge.getInstance();
 
-  const commandJson = JSON.stringify(command);
-  const secretsJson = JSON.stringify(secrets);
-
-  const commandBuffer = Buffer.from(`${commandJson}\0`, "utf-8");
-  const secretsBuffer = Buffer.from(`${secretsJson}\0`, "utf-8");
-
-  const commandPtr = ptr(commandBuffer);
-  const secretsPtr = ptr(secretsBuffer);
+  const commandBuffer = Buffer.from(`${JSON.stringify(command)}\0`, "utf-8");
+  const secretsBuffer = Buffer.from(`${JSON.stringify(secrets)}\0`, "utf-8");
 
   let exitCode = -1;
   try {
-    exitCode = runner.runWithSecrets(commandPtr, secretsPtr);
+    exitCode = runner.runWithSecrets(ptr(commandBuffer), ptr(secretsBuffer));
   } finally {
     commandBuffer.fill(0);
     secretsBuffer.fill(0);
@@ -590,12 +494,13 @@ export default async function run(command: string[], options: RunOptions) {
     process.exit(1);
   }
 
-  if (options.scope && !["client", "server", "shared"].includes(options.scope.toLowerCase())) {
-    console.error(pc.red("Error: --scope must be: client, server, or shared"));
-    process.exit(1);
-  }
   if (options.scope) {
-    options.scope = options.scope.toLowerCase() as SecretScope;
+    const scope = options.scope.toLowerCase() as SecretScope;
+    if (!SECRET_SCOPES.includes(scope)) {
+      console.error(pc.red("Error: --scope must be: client, server, or shared"));
+      process.exit(1);
+    }
+    options.scope = scope;
   }
 
   const mode = isServiceTokenMode() ? "service_token" : isApiKeyMode() ? "api_key" : "session";
@@ -606,44 +511,26 @@ export default async function run(command: string[], options: RunOptions) {
     mode,
   });
 
+  const spinner = ora();
+
   try {
-    if (isServiceTokenMode()) {
-      await runWithServiceToken(command, options, startTime);
-    } else if (isApiKeyMode()) {
-      await runWithApiKey(command, options, startTime);
-    } else {
-      await runWithSession(command, options, startTime);
-    }
+    const { secrets, count } =
+      mode === "service_token"
+        ? await prepareWithServiceToken(spinner, options)
+        : mode === "api_key"
+          ? await prepareWithApiKey(spinner, options)
+          : await prepareWithSession(spinner, options);
+
+    spinner.succeed(pc.green(injectedMessage(count)));
+    await executeCommand(command, secrets, count, startTime);
   } catch (err) {
     log.error("Run failed", err);
     trackEvent("cli_run_completed", { success: false, duration_ms: Date.now() - startTime });
 
     if (err instanceof ProPlanRequiredError) {
-      const spinner = ora();
-      spinner.fail(pc.red(err.message));
-      console.log();
-      console.log(pc.dim("  Upgrade at: ") + pc.underline(err.upgradeUrl));
-      console.log();
-
-      if (process.stdin.isTTY) {
-        const readline = await import("node:readline");
-        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-        console.log(pc.dim("  Press Enter to open the upgrade page, or Ctrl+C to exit."));
-        await new Promise<void>((resolve) =>
-          rl.once("line", () => {
-            rl.close();
-            resolve();
-          }),
-        );
-        const openModule = await import("open");
-        await openModule.default(err.upgradeUrl);
-      }
-
-      process.exit(1);
+      await failWithUpgradePrompt(spinner, err.message, err.upgradeUrl);
     }
 
-    const spinner = ora();
-    spinner.fail(pc.red(err instanceof Error ? err.message : String(err)));
-    process.exit(1);
+    failAndExit(spinner, getErrorMessage(err));
   }
 }

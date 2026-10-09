@@ -29,21 +29,21 @@ async function detectInstallMethod(): Promise<InstallMethod> {
   try {
     await tryExec("brew list relic 2>/dev/null");
     return "homebrew";
-  } catch (_) {
+  } catch {
     // not installed via homebrew
   }
 
   try {
     const result = await tryExec("npm list -g relic 2>/dev/null");
     if (result.includes("relic@")) return "npm";
-  } catch (_) {
+  } catch {
     // not installed via npm
   }
 
   try {
     const result = await tryExec("bun pm ls -g 2>/dev/null");
     if (result.includes("relic@")) return "bun";
-  } catch (_) {
+  } catch {
     // not installed via bun
   }
 

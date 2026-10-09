@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import {
   type CachedUserKeys,
   cacheUserKeys,
@@ -8,14 +8,13 @@ import {
 } from "@repo/auth";
 import {
   cacheEnvironments,
-  cacheFolders,
   cacheProject,
   cacheSecrets,
   getCachedEnvironmentId,
   getCachedFolderId,
   getCachedSecrets,
   initializeSchema,
-} from "helpers/cache";
+} from "../helpers/cache";
 import type { FullUser, ProtectedApi, SecretData } from "../lib/api";
 import { prepareSecrets, type RunOptions } from "./run";
 
@@ -124,8 +123,12 @@ describe("prepareSecrets", () => {
   beforeEach(() => {
     db = createProjectCacheDb();
     userKeyDb = createUserKeyCacheDb();
-    mockGetProjectKey.mockClear();
-    mockDecryptSecrets.mockClear();
+    mockGetProjectKey.mockReset();
+    mockGetProjectKey.mockImplementation(() =>
+      Promise.resolve("mock_crypto_key" as unknown as CryptoKey),
+    );
+    mockDecryptSecrets.mockReset();
+    mockDecryptSecrets.mockImplementation(() => Promise.resolve(MOCK_DECRYPTED_SECRETS));
   });
 
   test("should return decrypted secrets not using cache data", async () => {

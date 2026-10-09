@@ -1,13 +1,14 @@
-import { validateSession } from "@repo/auth";
 import { trackEvent } from "@repo/logger";
 import ora from "ora";
 import pc from "picocolors";
-import { type Environment, type Folder, getApi, type ProjectListItem } from "../lib/api";
-
-interface ProjectWithDetails extends ProjectListItem {
-  isShared: boolean;
-  environments: Array<Environment & { folders: Folder[] }>;
-}
+import { getApi } from "../lib/api";
+import {
+  getErrorMessage,
+  hasActiveSession,
+  isAuthErrorMessage,
+  printNotLoggedIn,
+} from "../lib/cli";
+import { loadProjectTree, type ProjectWithDetails } from "../lib/projects";
 
 const TREE = {
   BRANCH: "├── ",
@@ -71,81 +72,25 @@ export default async function projects() {
   const spinner = ora("Connecting...").start();
 
   try {
-    const sessionValidation = await validateSession();
-    if (!sessionValidation.isValid || sessionValidation.isExpired) {
+    if (!(await hasActiveSession())) {
       spinner.stop();
-      console.log(pc.yellow("Not logged in"));
-      console.log(pc.dim("Run `relic login` to authenticate"));
+      printNotLoggedIn();
       return;
     }
 
-    const api = getApi();
-
     spinner.text = "Fetching projects...";
-    const [ownedProjects, sharedProjects] = await Promise.all([
-      api.listProjects(),
-      api.listSharedProjects(),
-    ]);
+    const projectTree = await loadProjectTree(getApi(), (stage) => {
+      spinner.text = stage === "environments" ? "Fetching environments..." : "Fetching folders...";
+    });
 
-    const allProjects: ProjectWithDetails[] = [
-      ...ownedProjects.map((p) => ({
-        ...p,
-        isShared: false,
-        environments: [] as Array<Environment & { folders: Folder[] }>,
-      })),
-      ...sharedProjects.map((p) => ({
-        ...p,
-        isShared: true,
-        environments: [] as Array<Environment & { folders: Folder[] }>,
-      })),
-    ];
-
-    spinner.text = "Fetching environments...";
-    const projectsWithEnvs = await Promise.all(
-      allProjects.map(async (project) => {
-        try {
-          const environments = await api.getProjectEnvironments(project.id);
-          return {
-            ...project,
-            environments: environments.map((e) => ({ ...e, folders: [] as Folder[] })),
-          };
-        } catch {
-          return { ...project, environments: [] };
-        }
-      }),
-    );
-
-    spinner.text = "Fetching folders...";
-    const projectsWithFolders = await Promise.all(
-      projectsWithEnvs.map(async (project) => {
-        const environmentsWithFolders = await Promise.all(
-          project.environments.map(async (env) => {
-            try {
-              const data = await api.getEnvironmentData(env.id);
-              return { ...env, folders: data.folders };
-            } catch {
-              return { ...env, folders: [] };
-            }
-          }),
-        );
-        return { ...project, environments: environmentsWithFolders };
-      }),
-    );
-
-    trackEvent("cli_command_executed", { command: "projects", count: projectsWithFolders.length });
+    trackEvent("cli_command_executed", { command: "projects", count: projectTree.length });
     spinner.stop();
-    renderProjectTree(projectsWithFolders);
+    renderProjectTree(projectTree);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to fetch projects";
-    // Handle auth-related errors more gracefully
-    if (
-      message.includes("Not authenticated") ||
-      message.includes("JWT") ||
-      message.includes("token")
-    ) {
+    const message = getErrorMessage(err, "Failed to fetch projects");
+    if (isAuthErrorMessage(message)) {
       spinner.stop();
-      console.log(pc.yellow("Not logged in"));
-      console.log(pc.dim("Run `relic login` to authenticate"));
+      printNotLoggedIn();
       return;
     }
     spinner.fail(pc.red(`Error: ${message}`));

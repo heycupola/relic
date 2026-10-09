@@ -1,18 +1,16 @@
+import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import type { CachedUserKeys } from "@repo/auth";
 import type { RunOptions } from "./run";
 
-const userKeyState: { value: CachedUserKeys | null } = { value: null };
+const realAuth = { ...(await import("@repo/auth")) };
+const realApi = { ...(await import("../lib/api")) };
+const realCrypto = { ...(await import("@repo/crypto")) };
 
-const mockGetCachedUserKeys = mock(() => userKeyState.value);
-const mockCacheUserKeys = mock((_db: unknown, keys: CachedUserKeys) => {
-  userKeyState.value = keys;
-});
-const mockClearCachedUserKeys = mock(() => {
-  userKeyState.value = null;
-});
+const userKeyDb = new Database(":memory:");
+realAuth.initializeUserKeyCacheSchema(userKeyDb);
+
+const mockClearCachedUserKeys = mock(realAuth.clearCachedUserKeys);
 const mockGetPasswordFromStorage = mock(() => Promise.resolve("test-password"));
-const mockGetUserKeyCacheDb = mock(() => Promise.resolve({}));
 
 const mockExportSecretsViaApiKey = mock(() =>
   Promise.resolve({
@@ -38,13 +36,10 @@ const mockUnwrapProjectKey = mock(() =>
 );
 
 mock.module("@repo/auth", () => ({
-  cacheUserKeys: mockCacheUserKeys,
+  ...realAuth,
   clearCachedUserKeys: mockClearCachedUserKeys,
-  getCachedUserKeys: mockGetCachedUserKeys,
   getPasswordFromStorage: mockGetPasswordFromStorage,
-  getUserKeyCacheDb: mockGetUserKeyCacheDb,
-  hasPassword: mock(() => Promise.resolve(true)),
-  validateSession: mock(() => Promise.resolve({ isValid: true, isExpired: false })),
+  getUserKeyCacheDb: mock(() => Promise.resolve(userKeyDb)),
 }));
 
 class ProPlanRequiredError extends Error {
@@ -57,6 +52,7 @@ class ProPlanRequiredError extends Error {
 }
 
 mock.module("../lib/api", () => ({
+  ...realApi,
   exportSecretsViaApiKey: mockExportSecretsViaApiKey,
   fetchUserKeysViaApiKey: mockFetchUserKeysViaApiKey,
   getApi: mock(() => ({})),
@@ -76,6 +72,7 @@ mock.module("../lib/crypto", () => ({
 }));
 
 mock.module("@repo/crypto", () => ({
+  ...realCrypto,
   unwrapProjectKey: mockUnwrapProjectKey,
 }));
 
@@ -88,13 +85,10 @@ const DEFAULT_OPTIONS: RunOptions = {
 describe("prepareSecretsWithApiKey", () => {
   beforeEach(() => {
     process.env.RELIC_API_KEY = "test-api-key";
-    userKeyState.value = null;
+    realAuth.clearCachedUserKeys(userKeyDb);
 
-    mockGetCachedUserKeys.mockClear();
-    mockCacheUserKeys.mockClear();
     mockClearCachedUserKeys.mockClear();
     mockGetPasswordFromStorage.mockClear();
-    mockGetUserKeyCacheDb.mockClear();
     mockExportSecretsViaApiKey.mockClear();
     mockFetchUserKeysViaApiKey.mockClear();
     mockDecryptSecrets.mockClear();
@@ -130,11 +124,11 @@ describe("prepareSecretsWithApiKey", () => {
   });
 
   test("retries with fresh keys when cached API-key keys are stale", async () => {
-    userKeyState.value = {
+    realAuth.cacheUserKeys(userKeyDb, {
       encryptedPrivateKey: "stale_encrypted_private_key",
       salt: "stale_salt",
       keysUpdatedAt: 1,
-    };
+    });
 
     let unwrapCalls = 0;
     mockUnwrapProjectKey.mockImplementation(() => {
@@ -164,13 +158,15 @@ describe("prepareSecretsWithApiKey", () => {
       "test-password",
       "fresh_salt",
     );
-    expect(userKeyState.value?.encryptedPrivateKey).toBe("fresh_encrypted_private_key");
-    expect(userKeyState.value?.salt).toBe("fresh_salt");
+    expect(realAuth.getCachedUserKeys(userKeyDb)?.encryptedPrivateKey).toBe(
+      "fresh_encrypted_private_key",
+    );
+    expect(realAuth.getCachedUserKeys(userKeyDb)?.salt).toBe("fresh_salt");
     expect(result.secrets).toEqual({ API_KEY: "decrypted-value" });
   });
 
   test("does not retry when keys are not from cache", async () => {
-    userKeyState.value = null;
+    realAuth.clearCachedUserKeys(userKeyDb);
     mockUnwrapProjectKey.mockImplementation(() =>
       Promise.reject(new Error("Failed to unwrap project key")),
     );
@@ -186,11 +182,11 @@ describe("prepareSecretsWithApiKey", () => {
   });
 
   test("bubbles error when retry with fresh keys also fails", async () => {
-    userKeyState.value = {
+    realAuth.cacheUserKeys(userKeyDb, {
       encryptedPrivateKey: "stale_encrypted_private_key",
       salt: "stale_salt",
       keysUpdatedAt: 1,
-    };
+    });
 
     mockUnwrapProjectKey.mockImplementation(() =>
       Promise.reject(new Error("Failed to unwrap project key")),

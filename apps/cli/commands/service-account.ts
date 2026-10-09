@@ -1,18 +1,35 @@
-import { getPasswordFromStorage, SITE_URL, validateSession } from "@repo/auth";
+import { getPasswordFromStorage } from "@repo/auth";
 import { trackEvent } from "@repo/logger";
 import { ConvexError } from "convex/values";
-import ora from "ora";
+import ora, { type Ora } from "ora";
 import pc from "picocolors";
-import { getApi } from "../lib/api";
-import { findConfig } from "../lib/config";
+import { getApi, UPGRADE_URL } from "../lib/api";
+import {
+  failWithUpgradePrompt,
+  getErrorMessage,
+  hasActiveSession,
+  NO_PASSWORD_MESSAGE,
+  NOT_LOGGED_IN_MESSAGE,
+  PROJECT_ID_REQUIRED_MESSAGE,
+  resolveProjectIdWithConfig,
+} from "../lib/cli";
 
-function resolveProjectId(projectId?: string): string | null {
-  if (projectId) return projectId;
-  if (process.env.RELIC_PROJECT_ID) return process.env.RELIC_PROJECT_ID;
-  return null;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+interface OidcOptions {
+  github?: string;
+  gitlab?: string;
+  branch?: string;
+  oidcIssuer?: string;
+  oidcSubject?: string;
+  oidcAudience?: string;
 }
 
-const UPGRADE_URL = `${SITE_URL}/dashboard?action=upgrade`;
+export interface ServiceAccountCreateOptions extends OidcOptions {
+  project?: string;
+  name: string;
+  expiresIn?: string;
+}
 
 function parseConvexError(err: unknown): { code?: string; message: string } {
   if (err instanceof ConvexError) {
@@ -29,49 +46,41 @@ function parseConvexError(err: unknown): { code?: string; message: string } {
       return { code: d.code, message: d.message ?? err.message };
     }
   }
-  return { message: err instanceof Error ? err.message : String(err) };
+  return { message: getErrorMessage(err) };
 }
 
-async function handleProUpgradePrompt(spinner: ReturnType<typeof ora>, message: string) {
+function fail(spinner: Ora, message: string): never {
   spinner.fail(pc.red(message));
-  console.log();
-  console.log(pc.dim("  Upgrade at: ") + pc.underline(UPGRADE_URL));
-  console.log();
-
-  if (process.stdin.isTTY) {
-    const readline = await import("node:readline");
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    console.log(pc.dim("  Press Enter to open the upgrade page, or Ctrl+C to exit."));
-    await new Promise<void>((resolve) =>
-      rl.once("line", () => {
-        rl.close();
-        resolve();
-      }),
-    );
-    const openModule = await import("open");
-    await openModule.default(UPGRADE_URL);
-  }
-
   process.exit(1);
 }
 
-async function handleError(spinner: ReturnType<typeof ora>, err: unknown) {
+async function handleError(spinner: Ora, err: unknown): Promise<never> {
   const parsed = parseConvexError(err);
   if (parsed.code === "PRO_PLAN_REQUIRED") {
-    await handleProUpgradePrompt(spinner, parsed.message);
+    await failWithUpgradePrompt(spinner, parsed.message, UPGRADE_URL);
   }
-  spinner.fail(pc.red(parsed.message));
-  process.exit(1);
+  fail(spinner, parsed.message);
 }
 
-function resolveOidcArgs(options: {
-  github?: string;
-  gitlab?: string;
-  branch?: string;
+async function requireSession(spinner: Ora): Promise<void> {
+  if (!(await hasActiveSession())) {
+    fail(spinner, NOT_LOGGED_IN_MESSAGE);
+  }
+}
+
+async function requireProjectId(spinner: Ora, projectOption?: string): Promise<string> {
+  const projectId = await resolveProjectIdWithConfig(projectOption);
+  if (!projectId) {
+    fail(spinner, PROJECT_ID_REQUIRED_MESSAGE);
+  }
+  return projectId;
+}
+
+function resolveOidcArgs(options: OidcOptions): {
   oidcIssuer?: string;
-  oidcSubject?: string;
+  oidcSubjectPattern?: string;
   oidcAudience?: string;
-}): { oidcIssuer?: string; oidcSubjectPattern?: string; oidcAudience?: string } {
+} {
   if (options.github && options.gitlab) {
     throw new Error("Cannot use both --github and --gitlab.");
   }
@@ -111,56 +120,43 @@ function resolveOidcArgs(options: {
   };
 }
 
-export async function serviceAccountCreate(options: {
-  project?: string;
-  name: string;
-  expiresIn?: string;
-  github?: string;
-  gitlab?: string;
-  branch?: string;
-  oidcIssuer?: string;
-  oidcSubject?: string;
-  oidcAudience?: string;
-}) {
+function resolveExpiresAt(expiresIn?: string): number | undefined {
+  if (!expiresIn) return undefined;
+  const days = Number.parseInt(expiresIn, 10);
+  if (Number.isNaN(days) || days <= 0) {
+    throw new Error("--expires-in must be a positive number of days.");
+  }
+  return Date.now() + days * DAY_MS;
+}
+
+function formatDate(timestamp?: number): string {
+  return timestamp ? new Date(timestamp).toLocaleDateString() : pc.dim("never");
+}
+
+export async function serviceAccountCreate(options: ServiceAccountCreateOptions) {
   const spinner = ora("Checking authentication...").start();
 
   try {
     const oidcArgs = resolveOidcArgs(options);
+    const expiresAt = resolveExpiresAt(options.expiresIn);
 
-    const sessionValidation = await validateSession();
-    if (!sessionValidation.isValid || sessionValidation.isExpired) {
-      spinner.fail(pc.red("Not logged in. Run 'relic login' first."));
-      process.exit(1);
-    }
+    await requireSession(spinner);
 
     spinner.text = "Verifying password...";
     const password = await getPasswordFromStorage();
     if (!password) {
-      spinner.fail(pc.red("No password set. Run 'relic' to set up your password first."));
-      process.exit(1);
+      fail(spinner, NO_PASSWORD_MESSAGE);
     }
 
     spinner.text = "Loading configuration...";
-    let projectId = resolveProjectId(options.project);
-    if (!projectId) {
-      const configResult = await findConfig();
-      if (configResult) {
-        projectId = configResult.config.project_id;
-      }
-    }
-
-    if (!projectId) {
-      spinner.fail(pc.red("Project ID is required. Use --project <id> or set RELIC_PROJECT_ID."));
-      process.exit(1);
-    }
+    const projectId = await requireProjectId(spinner, options.project);
 
     spinner.text = "Fetching project details...";
     const api = getApi();
     const user = await api.getFullUser();
 
     if (!user.publicKey || !user.encryptedPrivateKey || !user.salt) {
-      spinner.fail(pc.red("Encryption keys not set up. Run 'relic' to set up your keys."));
-      process.exit(1);
+      fail(spinner, "Encryption keys not set up. Run 'relic' to set up your keys.");
     }
 
     const project = await api.getProject(projectId);
@@ -187,16 +183,6 @@ export async function serviceAccountCreate(options: {
     const saPublicKey = await importPublicKey(saKeys.publicKey);
     const encryptedProjectKey = await wrapAESKeyWithRSA(projectKey, saPublicKey);
 
-    let expiresAt: number | undefined;
-    if (options.expiresIn) {
-      const days = Number.parseInt(options.expiresIn, 10);
-      if (Number.isNaN(days) || days <= 0) {
-        spinner.fail(pc.red("--expires-in must be a positive number of days."));
-        process.exit(1);
-      }
-      expiresAt = Date.now() + days * 24 * 60 * 60 * 1000;
-    }
-
     spinner.text = "Creating service account...";
     await api.createServiceAccount({
       projectId,
@@ -208,9 +194,7 @@ export async function serviceAccountCreate(options: {
       hashedToken,
       tokenPrefix,
       expiresAt,
-      oidcIssuer: oidcArgs.oidcIssuer,
-      oidcSubjectPattern: oidcArgs.oidcSubjectPattern,
-      oidcAudience: oidcArgs.oidcAudience,
+      ...oidcArgs,
     });
 
     spinner.succeed(pc.green("Service account created"));
@@ -241,28 +225,11 @@ export async function serviceAccountList(options: { project?: string }) {
   const spinner = ora("Checking authentication...").start();
 
   try {
-    const sessionValidation = await validateSession();
-    if (!sessionValidation.isValid || sessionValidation.isExpired) {
-      spinner.fail(pc.red("Not logged in. Run 'relic login' first."));
-      process.exit(1);
-    }
-
-    let projectId = resolveProjectId(options.project);
-    if (!projectId) {
-      const configResult = await findConfig();
-      if (configResult) {
-        projectId = configResult.config.project_id;
-      }
-    }
-
-    if (!projectId) {
-      spinner.fail(pc.red("Project ID is required. Use --project <id> or set RELIC_PROJECT_ID."));
-      process.exit(1);
-    }
+    await requireSession(spinner);
+    const projectId = await requireProjectId(spinner, options.project);
 
     spinner.text = "Fetching service accounts...";
-    const api = getApi();
-    const accounts = await api.listServiceAccounts(projectId);
+    const accounts = await getApi().listServiceAccounts(projectId);
 
     spinner.stop();
 
@@ -278,11 +245,6 @@ export async function serviceAccountList(options: { project?: string }) {
         : sa.expiresAt && sa.expiresAt < Date.now()
           ? pc.yellow("expired")
           : pc.green("active");
-
-      const lastUsed = sa.lastUsedAt
-        ? new Date(sa.lastUsedAt).toLocaleDateString()
-        : pc.dim("never");
-      const expires = sa.expiresAt ? new Date(sa.expiresAt).toLocaleDateString() : pc.dim("never");
       const oidc = sa.oidcIssuer ? pc.cyan("enabled") : pc.dim("off");
 
       console.log(`  ${pc.bold(sa.name)}`);
@@ -293,8 +255,8 @@ export async function serviceAccountList(options: { project?: string }) {
         console.log(`    Issuer:  ${pc.dim(sa.oidcIssuer)}`);
         console.log(`    Subject: ${pc.dim(sa.oidcSubjectPattern ?? "")}`);
       }
-      console.log(`    Expires: ${expires}`);
-      console.log(`    Used:    ${lastUsed}`);
+      console.log(`    Expires: ${formatDate(sa.expiresAt)}`);
+      console.log(`    Used:    ${formatDate(sa.lastUsedAt)}`);
       console.log(`    Created: ${new Date(sa.createdAt).toLocaleDateString()}`);
       console.log();
     }
@@ -307,24 +269,8 @@ export async function serviceAccountRevoke(options: { project?: string; name: st
   const spinner = ora("Checking authentication...").start();
 
   try {
-    const sessionValidation = await validateSession();
-    if (!sessionValidation.isValid || sessionValidation.isExpired) {
-      spinner.fail(pc.red("Not logged in. Run 'relic login' first."));
-      process.exit(1);
-    }
-
-    let projectId = resolveProjectId(options.project);
-    if (!projectId) {
-      const configResult = await findConfig();
-      if (configResult) {
-        projectId = configResult.config.project_id;
-      }
-    }
-
-    if (!projectId) {
-      spinner.fail(pc.red("Project ID is required. Use --project <id> or set RELIC_PROJECT_ID."));
-      process.exit(1);
-    }
+    await requireSession(spinner);
+    const projectId = await requireProjectId(spinner, options.project);
 
     spinner.text = "Fetching service accounts...";
     const api = getApi();
@@ -332,13 +278,11 @@ export async function serviceAccountRevoke(options: { project?: string; name: st
 
     const target = accounts.find((sa) => sa.name === options.name);
     if (!target) {
-      spinner.fail(pc.red(`Service account "${options.name}" not found.`));
-      process.exit(1);
+      fail(spinner, `Service account "${options.name}" not found.`);
     }
 
     if (target.revokedAt) {
-      spinner.fail(pc.red(`Service account "${options.name}" is already revoked.`));
-      process.exit(1);
+      fail(spinner, `Service account "${options.name}" is already revoked.`);
     }
 
     spinner.text = "Revoking service account...";

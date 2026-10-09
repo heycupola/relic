@@ -159,7 +159,8 @@ jobs:
       - name: Download OpenTUI native lib (Unix)
         if: runner.os != 'Windows'
         run: |
-          npm pack @opentui/core-${{ matrix.platform }}@0.1.88
+          version=$(bun -p "require('./apps/cli/package.json').optionalDependencies['@opentui/core-${{ matrix.platform }}']")
+          npm pack "@opentui/core-${{ matrix.platform }}@${version}"
           tar xzf opentui-core-*.tgz
           mkdir -p opentui-lib
           cp package/libopentui.* opentui-lib/ 2>/dev/null || true
@@ -168,7 +169,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          npm pack @opentui/core-${{ matrix.platform }}@0.1.88
+          $version = bun -p "require('./apps/cli/package.json').optionalDependencies['@opentui/core-${{ matrix.platform }}']"
+          npm pack "@opentui/core-${{ matrix.platform }}@$version"
           $tgz = Get-ChildItem -Filter "opentui-core-*.tgz" | Select-Object -First 1
           tar xzf $tgz.Name
           New-Item -ItemType Directory -Force -Path opentui-lib

@@ -1,11 +1,9 @@
 import * as p from "@clack/prompts";
-import { AuthenticationError, validateSession } from "@repo/auth";
+import { AuthenticationError } from "@repo/auth";
 import { createLogger, trackEvent } from "@repo/logger";
 import pc from "picocolors";
-
-const log = createLogger("cli");
-
-import { getApi, type ProjectListItem } from "../lib/api";
+import { getApi } from "../lib/api";
+import { getErrorMessage, hasActiveSession } from "../lib/cli";
 import {
   configExists,
   createConfig,
@@ -13,10 +11,9 @@ import {
   getConfigFilePath,
   saveConfig,
 } from "../lib/config";
+import { listAllProjects } from "../lib/projects";
 
-interface ProjectOption extends ProjectListItem {
-  isShared: boolean;
-}
+const log = createLogger("cli");
 
 export default async function init() {
   p.intro(pc.bgCyan(pc.black(" relic init ")));
@@ -30,9 +27,8 @@ export default async function init() {
   const spinner = p.spinner();
   spinner.start("Checking authentication...");
 
-  const sessionValidation = await validateSession();
-  if (!sessionValidation.isValid || sessionValidation.isExpired) {
-    spinner.stop("Not logged in");
+  if (!(await hasActiveSession())) {
+    spinner.error("Not logged in");
     p.log.error(pc.yellow("Not logged in"));
     p.outro(pc.dim("Run `relic login` to authenticate"));
     process.exit(1);
@@ -41,16 +37,7 @@ export default async function init() {
   spinner.message("Loading projects...");
 
   try {
-    const api = getApi();
-    const [ownedProjects, sharedProjects] = await Promise.all([
-      api.listProjects(),
-      api.listSharedProjects(),
-    ]);
-
-    const allProjects: ProjectOption[] = [
-      ...ownedProjects.filter((p) => !p.isArchived).map((p) => ({ ...p, isShared: false })),
-      ...sharedProjects.filter((p) => !p.isArchived).map((p) => ({ ...p, isShared: true })),
-    ];
+    const allProjects = (await listAllProjects(getApi())).filter((project) => !project.isArchived);
 
     spinner.stop("Projects loaded");
 
@@ -88,7 +75,7 @@ export default async function init() {
     p.log.success(pc.green(`Initialized Relic for ${selectedProject.name}`));
     p.outro(pc.dim(`Config saved to ${getConfigFilePath()}`));
   } catch (err) {
-    spinner.stop("Failed");
+    spinner.error("Failed");
 
     if (err instanceof AuthenticationError) {
       p.log.error(pc.yellow("Not logged in"));
@@ -98,7 +85,7 @@ export default async function init() {
 
     log.error("Init failed", err);
     trackEvent("cli_project_initialized", { success: false });
-    const message = err instanceof Error ? err.message : "Failed to initialize";
+    const message = getErrorMessage(err, "Failed to initialize");
     p.log.error(pc.red(`Error: ${message}`));
     process.exit(1);
   }

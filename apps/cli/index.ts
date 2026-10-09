@@ -1,13 +1,13 @@
 import { initLogger, isFirstRun, saveTelemetryPreference } from "@repo/logger";
 import { Command, CommanderError, Help } from "commander";
-import type { SecretScope } from "lib/types";
 import pc from "picocolors";
 import init from "./commands/init";
 import login from "./commands/login";
 import logout from "./commands/logout";
 import projects from "./commands/projects";
-import run from "./commands/run";
+import run, { type RunOptions } from "./commands/run";
 import {
+  type ServiceAccountCreateOptions,
   serviceAccountCreate,
   serviceAccountList,
   serviceAccountRevoke,
@@ -174,38 +174,20 @@ saCmd
   .option("--oidc-issuer <url>", "OIDC issuer URL (advanced, prefer --github or --gitlab)")
   .option("--oidc-subject <pattern>", "OIDC subject pattern (advanced)")
   .option("--oidc-audience <aud>", "OIDC audience (optional)")
-  .action(
-    (options: {
-      name: string;
-      project?: string;
-      expiresIn?: string;
-      github?: string;
-      gitlab?: string;
-      branch?: string;
-      oidcIssuer?: string;
-      oidcSubject?: string;
-      oidcAudience?: string;
-    }) => {
-      serviceAccountCreate(options);
-    },
-  );
+  .action((options: ServiceAccountCreateOptions) => serviceAccountCreate(options));
 
 saCmd
   .command("list")
   .description("List service accounts for a project")
   .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
-  .action((options: { project?: string }) => {
-    serviceAccountList(options);
-  });
+  .action((options: { project?: string }) => serviceAccountList(options));
 
 saCmd
   .command("revoke")
   .description("Revoke a service account")
   .requiredOption("-n, --name <name>", "Service account name to revoke")
   .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
-  .action((options: { name: string; project?: string }) => {
-    serviceAccountRevoke(options);
-  });
+  .action((options: { name: string; project?: string }) => serviceAccountRevoke(options));
 
 program
   .command("mcp")
@@ -222,14 +204,7 @@ program
   .option("-s, --scope <scope>", "Scope filter: client, server, or shared (optional)")
   .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
   .argument("<command...>", "Command to run")
-  .action(
-    (
-      command: string[],
-      options: { environment: string; folder?: string; scope?: SecretScope; project?: string },
-    ) => {
-      run(command, options);
-    },
-  );
+  .action((command: string[], options: RunOptions) => run(command, options));
 
 program
   .command("version")
@@ -248,10 +223,19 @@ try {
       process.exit(0);
     }
 
+    if (err.code === "commander.help") {
+      process.exit(err.exitCode);
+    }
+
     const cleanMessage = err.message.replace(/^error:\s*/i, "");
     console.error();
 
-    if (err.code === "commander.unknownCommand" || err.code === "commander.excessArguments") {
+    if (err.code === "commander.excessArguments") {
+      const excess = err.message.match(/got \d+: (.+?)\.?$/)?.[1];
+      console.error(
+        `  ${pc.red(pc.bold("Unexpected argument:"))} ${pc.white(excess ?? cleanMessage)}`,
+      );
+    } else if (err.code === "commander.unknownCommand") {
       const unknown =
         err.message.match(/'(.+?)'/)?.[1] ??
         process.argv.find(

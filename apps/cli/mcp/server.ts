@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { getUserKeyCacheDb, hasPassword, validateSession } from "@repo/auth";
+import { getUserKeyCacheDb, hasPassword } from "@repo/auth";
 import { z } from "zod";
 import {
   prepareSecrets,
@@ -10,7 +10,9 @@ import {
 } from "../commands/run";
 import { getCacheDb } from "../helpers/cache";
 import { getApi } from "../lib/api";
+import { getErrorMessage, hasActiveSession, resolveProjectIdWithConfig } from "../lib/cli";
 import { findConfig } from "../lib/config";
+import { loadProjectTree } from "../lib/projects";
 import pkg from "../package.json";
 
 const MAX_OUTPUT_CHARS = 50_000;
@@ -23,9 +25,12 @@ function json(value: unknown) {
   return text(JSON.stringify(value, null, 2));
 }
 
+function failure(action: string, err: unknown) {
+  return text(`Failed to ${action}: ${getErrorMessage(err)}`);
+}
+
 async function requireAuth(): Promise<string | null> {
-  const session = await validateSession();
-  if (!session.isValid || session.isExpired) {
+  if (!(await hasActiveSession())) {
     return "Not logged in. Run `relic login` first.";
   }
   return null;
@@ -50,7 +55,7 @@ server.registerTool(
       const user = await getApi().getCurrentUser();
       return json({ name: user.name, email: user.email, plan: user.hasPro ? "Pro" : "Free" });
     } catch (err) {
-      return text(`Failed to fetch user: ${err instanceof Error ? err.message : String(err)}`);
+      return failure("fetch user", err);
     }
   },
 );
@@ -66,56 +71,23 @@ server.registerTool(
     if (authError) return text(authError);
 
     try {
-      const api = getApi();
-      const [owned, shared] = await Promise.all([api.listProjects(), api.listSharedProjects()]);
-
-      const allProjects = [
-        ...owned.map((p) => ({ ...p, isShared: false })),
-        ...shared.map((p) => ({ ...p, isShared: true })),
-      ];
-
-      const projects = await Promise.all(
-        allProjects.map(async (project) => {
-          try {
-            const environments = await api.getProjectEnvironments(project.id);
-            const envsWithFolders = await Promise.all(
-              environments.map(async (env) => {
-                try {
-                  const data = await api.getEnvironmentData(env.id);
-                  return {
-                    id: env.id,
-                    name: env.name,
-                    folders: data.folders.map((f) => ({ id: f.id, name: f.name })),
-                  };
-                } catch {
-                  return { id: env.id, name: env.name, folders: [] };
-                }
-              }),
-            );
-            return {
-              id: project.id,
-              name: project.name,
-              slug: project.slug,
-              isShared: project.isShared,
-              isArchived: project.isArchived,
-              environments: envsWithFolders,
-            };
-          } catch {
-            return {
-              id: project.id,
-              name: project.name,
-              slug: project.slug,
-              isShared: project.isShared,
-              isArchived: project.isArchived,
-              environments: [],
-            };
-          }
-        }),
+      const projects = await loadProjectTree(getApi());
+      return json(
+        projects.map((project) => ({
+          id: project.id,
+          name: project.name,
+          slug: project.slug,
+          isShared: project.isShared,
+          isArchived: project.isArchived,
+          environments: project.environments.map((env) => ({
+            id: env.id,
+            name: env.name,
+            folders: env.folders.map((f) => ({ id: f.id, name: f.name })),
+          })),
+        })),
       );
-
-      return json(projects);
     } catch (err) {
-      return text(`Failed to list projects: ${err instanceof Error ? err.message : String(err)}`);
+      return failure("list projects", err);
     }
   },
 );
@@ -175,7 +147,7 @@ server.registerTool(
         })),
       });
     } catch (err) {
-      return text(`Failed to list secrets: ${err instanceof Error ? err.message : String(err)}`);
+      return failure("list secrets", err);
     }
   },
 );
@@ -200,7 +172,7 @@ server.registerTool(
         rootDir: config.rootDir,
       });
     } catch (err) {
-      return text(`Failed to read config: ${err instanceof Error ? err.message : String(err)}`);
+      return failure("read config", err);
     }
   },
 );
@@ -239,20 +211,15 @@ server.registerTool(
         const authError = await requireAuth();
         if (authError) return text(authError);
 
-        const hasPass = await hasPassword();
-        if (!hasPass) {
+        if (!(await hasPassword())) {
           return text("No password set. Run 'relic' to set up your password first.");
         }
 
-        let projectId = args.projectId ?? process.env.RELIC_PROJECT_ID;
+        const projectId = await resolveProjectIdWithConfig(args.projectId);
         if (!projectId) {
-          const config = await findConfig();
-          if (!config) {
-            return text(
-              "No project ID provided and no relic.toml found. Use the projectId parameter or run `relic init`.",
-            );
-          }
-          projectId = config.config.project_id;
+          return text(
+            "No project ID provided and no relic.toml found. Use the projectId parameter or run `relic init`.",
+          );
         }
 
         if (process.env.RELIC_API_KEY) {
@@ -261,8 +228,7 @@ server.registerTool(
         } else {
           const db = await getCacheDb();
           const userKeyDb = await getUserKeyCacheDb();
-          const api = getApi();
-          const result = await prepareSecrets(projectId, options, db, userKeyDb, api);
+          const result = await prepareSecrets(projectId, options, db, userKeyDb, getApi());
           secrets = result.secrets;
         }
       }
@@ -288,7 +254,7 @@ server.registerTool(
         stderr: truncate(stderr.trimEnd()),
       });
     } catch (err) {
-      return text(`Failed to run command: ${err instanceof Error ? err.message : String(err)}`);
+      return failure("run command", err);
     }
   },
 );
