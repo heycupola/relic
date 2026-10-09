@@ -386,6 +386,38 @@ relic rollback OLD_TOKEN -e staging --to 4 --yes
 
 See [Secret History](/guides/secret-history) for how versions, retention, and access work.
 
+### `relic rotation`
+
+Check how old secret values are and manage rotation policies. Only names, timestamps, and policies are read; values are never decrypted. See [Secret Rotation](/guides/rotation) for how ages and statuses are calculated.
+
+```bash
+relic rotation status [-e <environment>] [-p <project>] [--json] [--fail-on-overdue]
+relic rotation set [KEY] -e <environment> --every <days> [-f <folder>]
+relic rotation clear [KEY] -e <environment> [-f <folder>]
+```
+
+Omit `KEY` to set or clear the environment policy. A secret policy overrides the environment policy.
+
+| Flag                | Description                                                         |
+| ------------------- | ------------------------------------------------------------------- |
+| `-e, --environment` | Environment name. Optional for `status`, required for `set`/`clear` |
+| `-f, --folder`      | Folder containing `KEY`                                             |
+| `-p, --project`     | Project ID (overrides `relic.toml`)                                 |
+| `--every`           | Rotation interval in whole days, 1 to 3650                          |
+| `--json`            | Print the status report as JSON                                     |
+| `--fail-on-overdue` | Exit with code `1` when any secret is overdue                       |
+
+**Examples:**
+
+```bash
+relic rotation status -e production
+relic rotation set -e production --every 90
+relic rotation set STRIPE_SECRET_KEY -e production --every 30
+relic rotation clear STRIPE_SECRET_KEY -e production
+```
+
+With `RELIC_SERVICE_TOKEN` set, `relic rotation status` authenticates with the service account and checks the project it belongs to.
+
 ### `relic telemetry`
 
 Manage anonymous usage telemetry.
