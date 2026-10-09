@@ -66,3 +66,4 @@ jobs:
         run: bunx turbo run build --filter='!@repo/runner'
         env:
           NEXT_PUBLIC_CONVEX_URL: https://placeholder.convex.cloud
+          NEXT_PUBLIC_CONVEX_SITE_URL: https://placeholder.convex.site
