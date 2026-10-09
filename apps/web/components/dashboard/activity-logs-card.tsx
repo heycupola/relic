@@ -13,7 +13,6 @@ import {
   Trash2,
   Upload,
   UserPlus,
-  Users,
   X,
 } from "lucide-react";
 import { useEffect, useRef } from "react";

@@ -31,7 +31,7 @@ export default function SettingsPage() {
     setDeleteError("");
     try {
       await deleteAccountAction({});
-      window.location.href = "/";
+      window.location.assign("/");
     } catch (error) {
       console.error("Failed to delete account:", error);
       setDeleteError("Failed to delete account. Please try again.");
@@ -57,23 +57,37 @@ export default function SettingsPage() {
     <>
       <div className="border-b border-border">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-12">
-          <nav className="flex items-center gap-2 py-3 text-sm">
-            <Link
-              href="/dashboard"
-              className="text-foreground/50 hover:text-foreground transition-colors"
-            >
-              Dashboard
-            </Link>
-            <span className="text-foreground/25">/</span>
-            <span className="text-foreground font-medium">Settings</span>
+          <nav aria-label="Breadcrumb" className="py-3 text-sm">
+            <ol className="flex items-center gap-2">
+              <li>
+                <Link
+                  href="/dashboard"
+                  className="text-foreground/50 hover:text-foreground transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+                >
+                  Dashboard
+                </Link>
+              </li>
+              <li aria-hidden="true" className="text-foreground/25">
+                /
+              </li>
+              <li>
+                <h1 aria-current="page" className="text-foreground font-medium">
+                  Settings
+                </h1>
+              </li>
+            </ol>
           </nav>
         </div>
       </div>
       <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-12">
         <div className="space-y-6">
           {isLoading ? (
-            <div className="border-2 border-border bg-card p-5">
-              <div className="animate-pulse space-y-3">
+            <div className="border-2 border-border bg-card p-5" aria-busy="true">
+              <span className="sr-only">Loading settings…</span>
+              <div
+                className="animate-pulse motion-reduce:animate-none space-y-3"
+                aria-hidden="true"
+              >
                 <div className="h-4 bg-muted rounded w-1/3" />
                 <div className="h-3 bg-muted rounded w-1/2" />
               </div>
@@ -86,7 +100,7 @@ export default function SettingsPage() {
                   <p className="text-base font-semibold text-foreground sm:text-lg">
                     {userData?.name}
                   </p>
-                  <p className="font-mono text-sm text-foreground/60">{email}</p>
+                  <p className="font-mono text-sm text-foreground/60 break-all">{email}</p>
                 </div>
               </div>
 
@@ -104,7 +118,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={openDeleteDialog}
-                    className="flex items-center gap-2 p-3 border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 hover:border-red-500/50 transition-all text-sm"
+                    className="flex items-center gap-2 p-3 border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 hover:border-red-500/50 transition-colors text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500"
                   >
                     <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
                     Delete account
@@ -118,7 +132,7 @@ export default function SettingsPage() {
         <Dialog open={showDeleteDialog} onClose={closeDeleteDialog}>
           <div className="p-5 space-y-4">
             <div className="space-y-2">
-              <h3 className="text-base font-semibold text-foreground">Delete account</h3>
+              <h2 className="text-base font-semibold text-foreground">Delete account</h2>
               <p className="text-sm text-foreground/70 leading-relaxed">
                 This action is permanent and cannot be undone. All your projects, secrets,
                 collaborator shares, and API keys will be permanently deleted.
@@ -137,18 +151,24 @@ export default function SettingsPage() {
                 onChange={(e) => setDeleteConfirmEmail(e.target.value)}
                 placeholder={email}
                 autoComplete="off"
-                className="w-full p-2.5 border border-border bg-background text-sm text-foreground placeholder:text-foreground/30 focus:outline-none focus:border-foreground"
+                spellCheck={false}
+                aria-invalid={deleteConfirmEmail.length > 0 && deleteConfirmEmail !== email}
+                className="w-full p-2.5 border border-border bg-background text-sm text-foreground placeholder:text-foreground/30 focus-visible:outline-none focus-visible:border-foreground"
               />
             </div>
 
-            {deleteError && <p className="text-sm text-red-600 dark:text-red-400">{deleteError}</p>}
+            {deleteError && (
+              <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+                {deleteError}
+              </p>
+            )}
 
             <div className="flex gap-3 pt-1">
               <button
                 type="button"
                 onClick={closeDeleteDialog}
                 disabled={isDeleting}
-                className="flex-1 p-2.5 border border-border text-sm text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
+                className="flex-1 p-2.5 border border-border text-sm text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
               >
                 Cancel
               </button>
@@ -156,7 +176,8 @@ export default function SettingsPage() {
                 type="button"
                 onClick={handleDeleteAccount}
                 disabled={deleteConfirmEmail !== email || isDeleting}
-                className="flex-1 p-2.5 border border-red-500/30 bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-busy={isDeleting}
+                className="flex-1 p-2.5 border border-red-500/30 bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500"
               >
                 {isDeleting ? "Deleting…" : "Delete my account"}
               </button>

@@ -37,7 +37,10 @@ export function StatusBox({ variant = "info", children, className }: StatusBoxPr
   const { icon: Icon, iconClass, boxClass } = variants[variant];
 
   return (
-    <div className={cn("border-2 border-border p-4", boxClass, className)}>
+    <div
+      role={variant === "error" ? "alert" : "status"}
+      className={cn("border-2 border-border p-4", boxClass, className)}
+    >
       <div className="flex items-start gap-3">
         <Icon className={cn("h-4 w-4 shrink-0 mt-0.5", iconClass)} aria-hidden="true" />
         <div className="text-sm text-foreground/70">{children}</div>

@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
-import { Agentation } from "agentation";
 import {
   BLOG_FEED_PATH,
   CHANGELOG_FEED_PATH,
@@ -129,7 +128,6 @@ export default function RootLayout({
       <body
         className={`${geist.variable} ${geistMono.variable} ${spaceGrotesk.variable} font-sans antialiased`}
       >
-        {process.env.NODE_ENV === "development" && <Agentation />}
         <PostHogProvider>
           <ConvexClientProvider>
             <ThemeProvider>{children}</ThemeProvider>

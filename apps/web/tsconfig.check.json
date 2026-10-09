@@ -15,7 +15,8 @@
     "components/**/*.tsx",
     "lib/**/*.ts",
     "lib/**/*.tsx",
-    "types/**/*.d.ts"
+    "types/**/*.d.ts",
+    "proxy.ts"
   ],
   "exclude": ["node_modules", ".next"]
 }

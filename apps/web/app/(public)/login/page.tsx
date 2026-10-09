@@ -16,44 +16,26 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const returnUrl = searchParams.get("returnUrl");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [lastMethod, setLastMethod] = useState<string | null>(null);
 
   useEffect(() => {
     setLastMethod(authClient.getLastUsedLoginMethod());
   }, []);
 
-  const safeReturnUrl = isValidReturnUrl(returnUrl) ? returnUrl : "/dashboard";
+  const callbackURL = isValidReturnUrl(returnUrl) ? returnUrl : "/dashboard";
 
-  const handleGoogleLogin = async () => {
+  const signIn = async (provider: "google" | "github") => {
     setIsLoading(true);
-    trackWebEvent("web_login_started", { provider: "google" });
+    setError(null);
+    trackWebEvent("web_login_started", { provider });
     try {
-      if (safeReturnUrl) {
-        await authClient.signIn.social({
-          provider: "google",
-          callbackURL: safeReturnUrl,
-        });
-      }
-    } catch (error) {
-      console.error("Google login failed:", error);
-      trackWebEvent("web_login_failed", { provider: "google" });
-      setIsLoading(false);
-    }
-  };
-
-  const handleGithubLogin = async () => {
-    setIsLoading(true);
-    trackWebEvent("web_login_started", { provider: "github" });
-    try {
-      if (safeReturnUrl) {
-        await authClient.signIn.social({
-          provider: "github",
-          callbackURL: safeReturnUrl,
-        });
-      }
-    } catch (error) {
-      console.error("GitHub login failed:", error);
-      trackWebEvent("web_login_failed", { provider: "github" });
+      const result = await authClient.signIn.social({ provider, callbackURL });
+      if (result.error) throw new Error(result.error.message);
+    } catch (err) {
+      console.error(`${provider} login failed:`, err);
+      trackWebEvent("web_login_failed", { provider });
+      setError("Sign-in didn't go through. Please try again.");
       setIsLoading(false);
     }
   };
@@ -89,7 +71,7 @@ export default function LoginPage() {
             <OAuthButton
               provider="google"
               icon={<GoogleIcon />}
-              onClick={handleGoogleLogin}
+              onClick={() => void signIn("google")}
               disabled={isLoading}
               lastUsed={lastMethod === "google"}
             >
@@ -116,12 +98,17 @@ export default function LoginPage() {
                   />
                 </>
               }
-              onClick={handleGithubLogin}
+              onClick={() => void signIn("github")}
               disabled={isLoading}
               lastUsed={lastMethod === "github"}
             >
               Continue with GitHub
             </OAuthButton>
+            {error && (
+              <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+                {error}
+              </p>
+            )}
           </div>
 
           <AuthFooter />

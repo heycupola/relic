@@ -1,1 +1,0 @@
-/* Extended type declarations for the Next.js app. */

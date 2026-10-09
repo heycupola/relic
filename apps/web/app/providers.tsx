@@ -1,8 +1,7 @@
 "use client";
 
-import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
+import { type AuthClient, ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import { api } from "@repo/backend";
-import { AutumnProvider } from "autumn-js/react";
 import { ConvexReactClient, useQuery } from "convex/react";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
@@ -52,22 +51,12 @@ function OnboardingGuard() {
   return null;
 }
 
+// @convex-dev/better-auth 0.12 types its AuthClient against an older better-auth client shape.
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
-  const autumnApi = "autumn" in api ? api.autumn : undefined;
-
   return (
-    <ConvexBetterAuthProvider client={convex} authClient={authClient}>
-      {autumnApi ? (
-        <AutumnProvider convex={convex} convexApi={autumnApi}>
-          <OnboardingGuard />
-          {children}
-        </AutumnProvider>
-      ) : (
-        <>
-          <OnboardingGuard />
-          {children}
-        </>
-      )}
+    <ConvexBetterAuthProvider client={convex} authClient={authClient as unknown as AuthClient}>
+      <OnboardingGuard />
+      {children}
     </ConvexBetterAuthProvider>
   );
 }

@@ -1,8 +1,8 @@
 "use client";
 
 import { api } from "@repo/backend";
-import { useAction, useQuery } from "convex/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery } from "convex/react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityLogsCard } from "@/components/dashboard/activity-logs-card";
 import { ApiKeysCard } from "@/components/dashboard/api-keys-card";
 import { ProjectsOverviewCard } from "@/components/dashboard/projects-overview-card";
@@ -12,55 +12,37 @@ import { UserInfoCard } from "@/components/dashboard/user-info-card";
 import { Dialog } from "@/components/dialog";
 import { StatusBox } from "@/components/status-box";
 import { usePaginatedActionLogs } from "@/hooks/usePaginatedActionLogs";
+import { useProCheckout } from "@/hooks/useProCheckout";
 import { authClient } from "@/lib/auth";
 import { trackWebEvent } from "@/lib/posthog";
 
-function useUpgradeAction(
-  userData: { hasPro?: boolean } | undefined,
-  onState: (state: "idle" | "already_pro" | "redirecting" | "error") => void,
-) {
-  const getProPlanAction = useAction(api.user.getProPlan);
-  const [handled, setHandled] = useState(false);
+type UpgradeState = "idle" | "already_pro" | "redirecting" | "error";
+
+/** Handles `/dashboard?action=upgrade` links coming from the pricing page and the CLI. */
+function useUpgradeFromUrl(hasPro: boolean | undefined, onState: (state: UpgradeState) => void) {
+  const { startCheckout } = useProCheckout();
+  const handled = useRef(false);
 
   useEffect(() => {
-    if (handled || !userData) return;
+    if (handled.current || hasPro === undefined) return;
 
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("action") !== "upgrade") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("action") !== "upgrade") return;
 
-    setHandled(true);
+    handled.current = true;
+    url.searchParams.delete("action");
+    window.history.replaceState({}, "", url.toString());
 
-    const cleanUrl = () => {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("action");
-      window.history.replaceState({}, "", url.toString());
-    };
-
-    if (userData.hasPro) {
+    if (hasPro) {
       onState("already_pro");
-      cleanUrl();
       return;
     }
 
     onState("redirecting");
-    trackWebEvent("web_upgrade_started");
-
-    getProPlanAction({})
-      .then((result) => {
-        if (result.checkoutLink) {
-          cleanUrl();
-          window.location.href = result.checkoutLink;
-        } else {
-          onState("error");
-          cleanUrl();
-        }
-      })
-      .catch((error) => {
-        console.error("Failed to get checkout link:", error);
-        onState("error");
-        cleanUrl();
-      });
-  }, [userData, handled, getProPlanAction, onState]);
+    void startCheckout().then((result) => {
+      if (result !== "redirecting") onState(result);
+    });
+  }, [hasPro, startCheckout, onState]);
 }
 
 export default function DashboardPage() {
@@ -87,52 +69,17 @@ export default function DashboardPage() {
     loadMore,
   } = usePaginatedActionLogs(!!session?.user);
 
-  const getLimitsAction = useAction(api.project.getLimits);
-  const getProjectLimitsAction = useAction(api.project.getProjectLimits);
-  const [limitsData, setLimitsData] = useState<{ usage: number; includedUsage: number } | null>(
-    null,
-  );
-  const [projectLimitsData, setProjectLimitsData] = useState<{
-    totalProjectsCount: number;
-    includedUsage: number;
-    hasPro: boolean;
-    freeLimit: number;
-  } | null>(null);
-  const [limitsLoading, setLimitsLoading] = useState(true);
+  const billing = useQuery(api.billing.getBillingOverview, session?.user ? {} : "skip");
 
-  useEffect(() => {
-    if (!session?.user) return;
-
-    Promise.all([getLimitsAction({}), getProjectLimitsAction({}).catch(() => null)])
-      .then(([limits, projectLimits]) => {
-        setLimitsData(limits);
-        if (projectLimits) {
-          setProjectLimitsData(projectLimits);
-        }
-        setLimitsLoading(false);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch limits:", err);
-        setLimitsLoading(false);
-      });
-  }, [session?.user, getLimitsAction, getProjectLimitsAction]);
-
-  const [upgradeState, setUpgradeState] = useState<
-    "idle" | "already_pro" | "redirecting" | "error"
-  >("idle");
-  const handleUpgradeState = useCallback(
-    (s: "idle" | "already_pro" | "redirecting" | "error") => setUpgradeState(s),
-    [],
-  );
-
-  useUpgradeAction(userData, handleUpgradeState);
+  const [upgradeState, setUpgradeState] = useState<UpgradeState>("idle");
+  useUpgradeFromUrl(userData?.hasPro, setUpgradeState);
 
   const isLoading =
     userData === undefined ||
     projectsData === undefined ||
     sharedProjectsData === undefined ||
-    logsLoading ||
-    limitsLoading;
+    billing === undefined ||
+    logsLoading;
 
   const allProjects = useMemo(() => {
     const projectMap = new Map<
@@ -173,20 +120,21 @@ export default function DashboardPage() {
     });
   }, [projectsData?.projects, sharedProjectsData?.shares]);
 
-  const isOverProjectLimit =
-    projectLimitsData &&
-    !projectLimitsData.hasPro &&
-    projectLimitsData.totalProjectsCount > projectLimitsData.freeLimit;
-  const excessProjects = isOverProjectLimit
-    ? projectLimitsData.totalProjectsCount - projectLimitsData.freeLimit
+  const excessProjects = billing
+    ? Math.max(0, billing.projects.active - billing.projects.included)
     : 0;
+  const showGraceNotice = billing?.inGracePeriod && excessProjects > 0;
+  const showRestrictedNotice = billing?.isRestricted && excessProjects > 0;
 
   return (
     <>
       <Dialog open={upgradeState === "redirecting"} onClose={() => void 0} closeOnBackdrop={false}>
         <div className="p-6 text-center space-y-4">
-          <div className="h-6 w-6 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin mx-auto" />
-          <div className="space-y-1">
+          <div
+            className="h-6 w-6 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin motion-reduce:animate-none mx-auto"
+            aria-hidden="true"
+          />
+          <div className="space-y-1" role="status">
             <h3 className="text-base font-semibold text-foreground">Upgrading to Pro</h3>
             <p className="text-sm text-foreground/60">Redirecting you to checkout…</p>
           </div>
@@ -196,7 +144,7 @@ export default function DashboardPage() {
       <Dialog open={upgradeState === "already_pro"} onClose={() => setUpgradeState("idle")}>
         <div className="p-5 space-y-4">
           <div className="space-y-2">
-            <h3 className="text-base font-semibold text-foreground">Already on Pro</h3>
+            <h3 className="text-base font-semibold text-foreground">You're already on Pro</h3>
             <p className="text-sm text-foreground/70 leading-relaxed">
               You're already on the Pro plan. All features are unlocked.
             </p>
@@ -214,7 +162,7 @@ export default function DashboardPage() {
       <Dialog open={upgradeState === "error"} onClose={() => setUpgradeState("idle")}>
         <div className="p-5 space-y-4">
           <div className="space-y-2">
-            <h3 className="text-base font-semibold text-foreground">Checkout Failed</h3>
+            <h3 className="text-base font-semibold text-foreground">Checkout failed</h3>
             <p className="text-sm text-foreground/70 leading-relaxed">
               Failed to start checkout. Please try again.
             </p>
@@ -230,15 +178,27 @@ export default function DashboardPage() {
       </Dialog>
 
       <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-12">
-        <div></div>
+        <h1 className="sr-only">Dashboard</h1>
         <div className="space-y-4 sm:space-y-5">
-          {isOverProjectLimit && (
+          {showGraceNotice && (
             <StatusBox variant="warning">
-              <h3 className="font-medium text-foreground text-sm">Usage limit exceeded</h3>
+              <h2 className="font-medium text-foreground text-sm">Your Pro plan has ended</h2>
               <p className="text-sm text-foreground/70 mt-1 text-pretty">
-                You're using {projectLimitsData.totalProjectsCount} projects but your plan only
-                includes {projectLimitsData.freeLimit}. Please archive {excessProjects} project(s)
-                or upgrade your plan.
+                Everything stays unlocked for {billing.gracePeriodDaysRemaining} more{" "}
+                {billing.gracePeriodDaysRemaining === 1 ? "day" : "days"}. After that only your
+                newest project stays available. Archive {excessProjects}{" "}
+                {excessProjects === 1 ? "project" : "projects"} or upgrade to keep full access.
+              </p>
+            </StatusBox>
+          )}
+
+          {showRestrictedNotice && (
+            <StatusBox variant="warning">
+              <h2 className="font-medium text-foreground text-sm">Some projects are locked</h2>
+              <p className="text-sm text-foreground/70 mt-1 text-pretty">
+                The Free plan includes {billing.projects.included} project. Archive {excessProjects}{" "}
+                {excessProjects === 1 ? "project" : "projects"} or upgrade to Pro to unlock them
+                again.
               </p>
             </StatusBox>
           )}
@@ -253,8 +213,8 @@ export default function DashboardPage() {
             />
             <ProjectsOverviewCard
               projects={allProjects}
-              projectsUsed={limitsData?.usage || 0}
-              projectsLimit={limitsData?.includedUsage || 0}
+              projectsUsed={billing?.projects.active ?? 0}
+              projectsLimit={billing?.projects.included ?? 0}
               isLoading={isLoading}
             />
           </div>

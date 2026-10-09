@@ -1,7 +1,6 @@
 {
   "extends": "@repo/typescript-config/nextjs.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],
       "@repo/ui/*": ["../../packages/ui/src/*"]
@@ -21,6 +20,7 @@
     "lib/**/*.tsx",
     "next-env.d.ts",
     "next.config.js",
+    "proxy.ts",
     ".next/types/**/*.ts"
   ],
   "exclude": ["node_modules"]

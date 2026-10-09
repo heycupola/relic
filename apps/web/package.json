@@ -25,7 +25,6 @@
     "@repo/backend": "*",
     "@repo/ui": "*",
     "@tailwindcss/postcss": "catalog:",
-    "autumn-js": "catalog:",
     "better-auth": "catalog:",
     "convex": "catalog:",
     "gray-matter": "^4.0.3",
