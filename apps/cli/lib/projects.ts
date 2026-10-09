@@ -7,8 +7,13 @@ export interface ProjectWithDetails extends ProjectListItem {
   environments: EnvironmentWithFolders[];
 }
 
+export type ProjectTreeApi = Pick<
+  ProtectedApi,
+  "listProjects" | "listSharedProjects" | "getProjectEnvironments" | "getEnvironmentData"
+>;
+
 export async function listAllProjects(
-  api: ProtectedApi,
+  api: Pick<ProtectedApi, "listProjects" | "listSharedProjects">,
 ): Promise<Array<ProjectListItem & { isShared: boolean }>> {
   const [owned, shared] = await Promise.all([api.listProjects(), api.listSharedProjects()]);
   return [
@@ -18,10 +23,11 @@ export async function listAllProjects(
 }
 
 export async function loadProjectTree(
-  api: ProtectedApi,
+  api: ProjectTreeApi,
   onStage?: (stage: "environments" | "folders") => void,
+  projectId?: string,
 ): Promise<ProjectWithDetails[]> {
-  const projects = await listAllProjects(api);
+  const projects = (await listAllProjects(api)).filter((p) => !projectId || p.id === projectId);
 
   onStage?.("environments");
   const withEnvironments = await Promise.all(

@@ -63,6 +63,7 @@
           "guides/check",
           "guides/tui",
           "guides/importing",
+          "guides/editor",
           "guides/project-collaboration",
           "guides/service-accounts",
           "guides/oidc",

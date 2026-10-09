@@ -1,0 +1,167 @@
+---
+title: VS Code and Cursor
+description: Run, debug, and test code with Relic secrets from VS Code or Cursor, without a .env file.
+keywords: ["vscode", "cursor", "extension", "debugging", "tasks", "dotenv"]
+---
+
+The Relic extension for VS Code and Cursor routes the code you run through `relic run`, so secrets reach your program without a `.env` file on disk. It is not a secret browser: it never reads, shows, stores, or logs secret values. It only works with secret **names**, and every process that needs values is started by the `relic` CLI, which decrypts on your device.
+
+## Prerequisites
+
+- The Relic CLI, [installed](/introduction#installation) and logged in with `relic login`.
+- A project linked with [`relic init`](/guides/cli#relic-init), so your workspace contains a `relic.toml`.
+
+The extension activates when the workspace contains a `relic.toml`. In a monorepo with several `relic.toml` files, the extension uses the one closest to the file you're editing.
+
+## Install
+
+Install **Relic** from the VS Code Marketplace, or from Open VSX in Cursor. To install a local build, run **Extensions: Install from VSIX...** and pick the `.vsix` file.
+
+<Info>
+  The extension requires a trusted workspace, because it runs the `relic` CLI and your project's
+  commands.
+</Info>
+
+## Select an environment
+
+The status bar shows the Relic environment that runs, tasks, debugging, and diagnostics use. Click it, or run **Relic: Select Environment**, to choose from the environments of the linked project. The choice is saved per workspace and per project.
+
+If the project has a single environment, or one named `development`, `dev`, or `local`, the extension selects it automatically.
+
+The status bar also tells you when something needs attention:
+
+| Status bar                | What to do                                                                         |
+| ------------------------- | ---------------------------------------------------------------------------------- |
+| `Relic: install CLI`      | Install the CLI, or set `relic.cliPath` if it isn't on your `PATH`.                |
+| `Relic: log in`           | Click to run `relic login` in a terminal. The extension refreshes when it finishes. |
+| `Relic: upgrade CLI`      | Your CLI predates `relic secrets` and `relic projects --json`. Run `relic upgrade`. |
+| `Relic: select environment` | Click to pick an environment.                                                    |
+
+## Run commands
+
+**Relic: Run with Secrets** asks for a command and runs it in a terminal:
+
+```bash
+relic run -e development -- npm run dev
+```
+
+The command after `--` is passed to your shell as you typed it.
+
+## Tasks
+
+Every `package.json` script in the project appears under **Tasks: Run Task** → **relic**. Each one runs through `relic run` with the package manager your project uses (detected from `packageManager` or the lockfile).
+
+You can also define Relic tasks in `.vscode/tasks.json`:
+
+```jsonc
+{
+  "version": "2.0.0",
+  "tasks": [
+    { "type": "relic", "script": "dev", "label": "dev (relic)" },
+    { "type": "relic", "command": "bun run migrate", "environment": "staging" },
+    { "type": "relic", "command": ["python", "manage.py", "runserver"], "folder": "api" },
+  ],
+}
+```
+
+| Property      | Description                                                                                 |
+| ------------- | ------------------------------------------------------------------------------------------- |
+| `script`      | A `package.json` script to run.                                                             |
+| `command`     | A command to run. A string goes through the shell; an array is passed as arguments.         |
+| `path`        | Directory to run in, relative to the workspace folder.                                      |
+| `environment` | Relic environment. Defaults to the environment selected in the status bar when the task runs. |
+| `folder`      | Only inject secrets from this folder.                                                       |
+| `scope`       | Only inject secrets with this scope: `client`, `server`, or `shared`.                       |
+
+## Relic shell
+
+Pick **Relic Shell** from the terminal profile dropdown, or run **Relic: Open Shell with Secrets**, to open a shell with secrets loaded through `relic shell -e <environment>`.
+
+If your CLI doesn't include `relic shell`, the extension opens a regular terminal with a reminder to prefix commands with `relic run -e <environment> --`. Upgrade the CLI with `relic upgrade` to get a shell with secrets loaded.
+
+## Debugging
+
+Run **Relic: Debug Current File with Secrets** (also in the editor's run menu) to debug the active JavaScript, TypeScript, or Python file. Or add `"relic": true` to a configuration in `.vscode/launch.json`:
+
+```jsonc
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "API",
+      "program": "${workspaceFolder}/src/index.js",
+      "relic": true,
+    },
+    {
+      "type": "bun",
+      "request": "launch",
+      "name": "Worker",
+      "program": "${workspaceFolder}/worker.ts",
+      "relic": { "environment": "staging" },
+    },
+    {
+      "type": "debugpy",
+      "request": "launch",
+      "name": "Django",
+      "program": "${workspaceFolder}/manage.py",
+      "args": ["runserver", "--noreload"],
+      "relic": true,
+    },
+  ],
+}
+```
+
+`relic` accepts `true` or an object with `environment`, `folder`, and `scope`. VS Code may underline `relic` as an unknown property; you can ignore that warning.
+
+### How it works
+
+On macOS and Linux, `relic run` starts your program with a minimal environment (`PATH`, `HOME`, and a few others) plus your secrets. Debuggers usually hook into programs through environment variables like `NODE_OPTIONS`, which would be removed, so the extension connects over a local inspector port instead:
+
+| Runtime | What the extension does                                                                                                                                                                                                                                                  |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Node.js | Sets `runtimeExecutable` to `relic` and runs `relic run -- node --inspect-brk=127.0.0.1:<port>`. The built-in JavaScript debugger attaches to that port (`attachSimplePort`).                                                                                             |
+| Bun     | Starts `relic run -- bun --inspect-wait=127.0.0.1:<port>/relic <program>` in a terminal, waits for the inspector, then attaches with the [Bun extension](https://marketplace.visualstudio.com/items?itemName=oven.bun-vscode).                                              |
+| Python  | Starts your interpreter through `relic run` with a small bootstrap that calls `debugpy.listen()`, waits until it's listening, then attaches with the [Python Debugger extension](https://marketplace.visualstudio.com/items?itemName=ms-python.debugpy). It uses the debugpy bundled with that extension. |
+
+Entries in the configuration's `env` are re-applied after the secrets, so they still reach your program and take precedence over a secret with the same name.
+
+### Limitations
+
+- Node.js child processes (workers, `cluster`, `child_process`) are not debugged automatically, because the debugger attaches to a single port.
+- For Node.js, `runtimeExecutable` must be `node` or `tsx`. To debug something started by a package manager script, point the configuration at the entry file instead.
+- Bun and Python run in a terminal named **Relic debug**. If the program fails before the debugger attaches (for example, you're logged out), the error is shown there.
+- Python on Windows, and remote, WSL, and container workspaces, are untested.
+
+## Missing-secret warnings
+
+The extension highlights environment variables your code reads that aren't secrets in the selected environment:
+
+| Language                | Patterns                                                                 |
+| ----------------------- | ------------------------------------------------------------------------ |
+| JavaScript / TypeScript | `process.env.X`, `process.env["X"]`, `import.meta.env.X`, `Bun.env.X`    |
+| Python                  | `os.environ["X"]`, `os.getenv("X")`, `os.environ.get("X")`               |
+
+Quick fixes open the Relic TUI so you can add the secret, copy the name, or ignore the variable for the workspace. Warnings refresh when the TUI closes, or when you run **Relic: Refresh Environments and Secret Names**.
+
+Names come from [`relic secrets --json`](/guides/cli#relic-secrets), which returns names and scopes only. Common runtime variables such as `NODE_ENV`, `PATH`, and `PORT` are ignored by default.
+
+## Settings
+
+| Setting                      | Default             | Description                                                                         |
+| ---------------------------- | ------------------- | ----------------------------------------------------------------------------------- |
+| `relic.cliPath`              | `relic`             | Path to the CLI. Machine-scoped, so a workspace's settings can't point it elsewhere. |
+| `relic.diagnostics.enabled`  | `true`              | Show missing-secret warnings.                                                       |
+| `relic.diagnostics.severity` | `warning`           | `error`, `warning`, `information`, or `hint`.                                       |
+| `relic.diagnostics.ignore`   | common runtime vars | Variable names that never produce a warning.                                        |
+| `relic.tasks.packageScripts` | `true`              | Offer `package.json` scripts as Relic tasks.                                        |
+
+## Security
+
+| Guarantee                         | How                                                                                                   |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| The extension never sees values   | It only calls `relic projects --json` and `relic secrets --json`, which return structure and names.   |
+| Decryption stays in the CLI       | Runs, tasks, shells, and debug sessions are started by `relic run` or `relic shell`.                  |
+| No `.env` files                   | Secrets go straight into the process environment and are never written to disk.                       |
+| The CLI binary can't be swapped   | `relic.cliPath` can only be set in user settings, not workspace settings.                             |

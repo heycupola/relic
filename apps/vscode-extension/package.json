@@ -1,0 +1,263 @@
+{
+  "name": "relic-vscode",
+  "displayName": "Relic",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Run, debug, and test your code with Relic secrets injected. No .env files.",
+  "categories": [
+    "Debuggers",
+    "Linters",
+    "Other"
+  ],
+  "keywords": [
+    "dotenv",
+    "env",
+    "environment variables",
+    "relic",
+    "secrets",
+    "zero-knowledge"
+  ],
+  "homepage": "https://docs.withrelic.com/guides/editor",
+  "bugs": {
+    "url": "https://github.com/heycupola/relic/issues"
+  },
+  "license": "MIT",
+  "author": "Can Vardar",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/heycupola/relic.git",
+    "directory": "apps/vscode-extension"
+  },
+  "publisher": "heycupola",
+  "main": "./dist/extension.js",
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node18 --external:vscode --outfile=dist/extension.js --minify --sourcemap",
+    "dev": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node18 --external:vscode --outfile=dist/extension.js --sourcemap --watch",
+    "package": "bun run build && vsce package --no-dependencies --out relic-vscode.vsix",
+    "lint": "oxlint .",
+    "format": "oxfmt .",
+    "check-types": "tsc --noEmit",
+    "test": "bun test",
+    "lint:fix": "oxlint . --fix",
+    "format:check": "oxfmt --check ."
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "*",
+    "@types/bun": "latest",
+    "@types/vscode": "~1.90.0",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.27.0",
+    "smol-toml": "^1.6.0"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "relic.selectEnvironment",
+        "title": "Select Environment",
+        "category": "Relic",
+        "icon": "$(lock)"
+      },
+      {
+        "command": "relic.runWithSecrets",
+        "title": "Run with Secrets",
+        "category": "Relic",
+        "icon": "$(play)"
+      },
+      {
+        "command": "relic.debugWithSecrets",
+        "title": "Debug Current File with Secrets",
+        "category": "Relic",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "relic.openShell",
+        "title": "Open Shell with Secrets",
+        "category": "Relic",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "relic.openTui",
+        "title": "Open Relic TUI",
+        "category": "Relic"
+      },
+      {
+        "command": "relic.refresh",
+        "title": "Refresh Environments and Secret Names",
+        "category": "Relic",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "relic.login",
+        "title": "Log In",
+        "category": "Relic"
+      },
+      {
+        "command": "relic.showSetup",
+        "title": "Show Setup Help",
+        "category": "Relic"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "relic.selectEnvironment",
+          "when": "relic.hasProject"
+        },
+        {
+          "command": "relic.runWithSecrets",
+          "when": "relic.hasProject"
+        },
+        {
+          "command": "relic.debugWithSecrets",
+          "when": "relic.hasProject"
+        },
+        {
+          "command": "relic.openShell",
+          "when": "relic.hasProject"
+        },
+        {
+          "command": "relic.openTui",
+          "when": "relic.hasProject"
+        },
+        {
+          "command": "relic.refresh",
+          "when": "relic.hasProject"
+        }
+      ],
+      "editor/title/run": [
+        {
+          "command": "relic.debugWithSecrets",
+          "when": "relic.hasProject && resourceLangId =~ /^(javascript|typescript|javascriptreact|typescriptreact|python)$/",
+          "group": "relic"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Relic",
+      "properties": {
+        "relic.cliPath": {
+          "type": "string",
+          "default": "relic",
+          "scope": "machine",
+          "markdownDescription": "Path to the `relic` CLI. Defaults to `relic` on your `PATH`. Machine-scoped so a workspace cannot point it at a different binary."
+        },
+        "relic.diagnostics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn when code reads an environment variable that is not a secret in the selected Relic environment."
+        },
+        "relic.diagnostics.severity": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warning",
+            "information",
+            "hint"
+          ],
+          "default": "warning",
+          "description": "Severity used for missing-secret diagnostics."
+        },
+        "relic.diagnostics.ignore": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "NODE_ENV",
+            "PATH",
+            "HOME",
+            "PWD",
+            "USER",
+            "SHELL",
+            "TERM",
+            "LANG",
+            "TZ",
+            "TMPDIR",
+            "CI",
+            "PORT",
+            "MODE",
+            "DEV",
+            "PROD",
+            "SSR",
+            "BASE_URL"
+          ],
+          "description": "Environment variable names that never produce a missing-secret warning."
+        },
+        "relic.tasks.packageScripts": {
+          "type": "boolean",
+          "default": true,
+          "description": "Offer package.json scripts as Relic tasks that run through `relic run`."
+        }
+      }
+    },
+    "taskDefinitions": [
+      {
+        "type": "relic",
+        "properties": {
+          "script": {
+            "type": "string",
+            "description": "package.json script to run through relic run."
+          },
+          "command": {
+            "type": [
+              "string",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Command to run through relic run. A string is passed to the shell; an array is passed as arguments."
+          },
+          "path": {
+            "type": "string",
+            "description": "Directory (relative to the workspace folder) to run in."
+          },
+          "environment": {
+            "type": "string",
+            "description": "Relic environment. Defaults to the environment selected in the status bar."
+          },
+          "folder": {
+            "type": "string",
+            "description": "Relic folder to scope secrets to."
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "client",
+              "server",
+              "shared"
+            ],
+            "description": "Only inject secrets with this scope."
+          }
+        }
+      }
+    ],
+    "terminal": {
+      "profiles": [
+        {
+          "id": "relic.shell",
+          "title": "Relic Shell",
+          "icon": "lock"
+        }
+      ]
+    }
+  },
+  "activationEvents": [
+    "workspaceContains:**/relic.toml"
+  ],
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#0E0E0E",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Relic runs the relic CLI and your project's commands, which requires a trusted workspace."
+    },
+    "virtualWorkspaces": false
+  }
+}

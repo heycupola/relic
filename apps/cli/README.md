@@ -26,6 +26,7 @@ bun install
 | `relic guard scan`             | Scan for leaked secrets and dotenv files                        |
 | `relic guard install`          | Add a pre-commit hook that runs the guard                       |
 | `relic guard uninstall`        | Remove the guard pre-commit hook                                |
+| `relic secrets`                | List secret names in an environment                             |
 | `relic service-account create` | Create a service account (CI/CD token, optional OIDC policy)    |
 | `relic service-account list`   | List service accounts for a project                             |
 | `relic service-account revoke` | Revoke a service account by `--name` or `--id`                  |

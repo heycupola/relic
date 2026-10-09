@@ -7,9 +7,10 @@ import importSecrets, { type ImportOptions } from "./commands/import";
 import init from "./commands/init";
 import login from "./commands/login";
 import logout from "./commands/logout";
-import projects from "./commands/projects";
+import projects, { type ProjectsOptions } from "./commands/projects";
 import push from "./commands/push";
 import run, { type RunOptions } from "./commands/run";
+import secrets, { type SecretsOptions } from "./commands/secrets";
 import {
   type ServiceAccountCreateOptions,
   type ServiceAccountRevokeOptions,
@@ -60,7 +61,7 @@ const COMMAND_GROUPS = [
   },
   {
     label: "Secrets",
-    commands: ["run", "shell", "import", "push", "check", "guard", "service-account"],
+    commands: ["run", "shell", "import", "push", "check", "guard", "secrets", "service-account"],
   },
   {
     label: "Tools",
@@ -161,7 +162,12 @@ const program = new Command()
 program.command("login").description("Authenticate with Relic").action(login);
 program.command("logout").description("Clear authentication").action(logout);
 program.command("whoami").description("Show current user").action(whoami);
-program.command("projects").description("List all projects").action(projects);
+program
+  .command("projects")
+  .description("List all projects")
+  .option("--json", "Output machine-readable JSON")
+  .option("-p, --project <id>", "Only show this project")
+  .action((options: ProjectsOptions) => projects(options));
 program.command("init").description("Initialize Relic for the current project").action(init);
 
 const telemetryCmd = program
@@ -372,6 +378,16 @@ guardCmd
   .description("Remove the relic guard pre-commit hook")
   .option("-y, --yes", "Edit hook manager config (lefthook.yml) without asking")
   .action((options: { yes?: boolean }) => guardUninstall(options));
+
+program
+  .command("secrets")
+  .description("List secret names in an environment (never values)")
+  .requiredOption("-e, --environment <name>", "Environment name (required)")
+  .option("-f, --folder <name>", "Folder name (optional)")
+  .option("-s, --scope <scope>", "Scope filter: client, server, or shared (optional)")
+  .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
+  .option("--json", "Output machine-readable JSON")
+  .action((options: SecretsOptions) => secrets(options));
 
 program
   .command("version")

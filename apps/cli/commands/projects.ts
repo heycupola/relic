@@ -2,7 +2,14 @@ import { trackEvent } from "@repo/logger";
 import ora from "ora";
 import pc from "picocolors";
 import { getApi } from "../lib/api";
-import { getErrorMessage, hasActiveSession, isAuthError, printNotLoggedIn } from "../lib/cli";
+import {
+  getErrorMessage,
+  hasActiveSession,
+  isAuthError,
+  NOT_LOGGED_IN_MESSAGE,
+  printNotLoggedIn,
+} from "../lib/cli";
+import { printJson, printJsonError } from "../lib/json";
 import { loadProjectTree, type ProjectWithDetails } from "../lib/projects";
 import { exitWithTelemetry } from "../lib/telemetry";
 
@@ -64,30 +71,79 @@ function renderProjectTree(projects: ProjectWithDetails[]): void {
   }
 }
 
-export default async function projects() {
-  const spinner = ora("Connecting...").start();
+export interface ProjectsOptions {
+  json?: boolean;
+  project?: string;
+}
+
+export function toProjectsJson(projects: ProjectWithDetails[]) {
+  return projects.map((project) => ({
+    id: project.id,
+    name: project.name,
+    slug: project.slug,
+    isShared: project.isShared,
+    isArchived: project.isArchived,
+    environments: project.environments.map((env) => ({
+      id: env.id,
+      name: env.name,
+      color: env.color ?? null,
+      folders: env.folders.map((folder) => ({ id: folder.id, name: folder.name })),
+    })),
+  }));
+}
+
+export default async function projects(options: ProjectsOptions = {}) {
+  const json = !!options.json;
+  const spinner = json ? null : ora("Connecting...").start();
+
+  const notLoggedIn = async (): Promise<never> => {
+    if (json) {
+      printJsonError("not_logged_in", NOT_LOGGED_IN_MESSAGE);
+    } else {
+      spinner?.stop();
+      printNotLoggedIn();
+    }
+    return exitWithTelemetry(1);
+  };
 
   try {
     if (!(await hasActiveSession())) {
-      spinner.stop();
-      printNotLoggedIn();
-      await exitWithTelemetry(1);
+      await notLoggedIn();
     }
 
-    spinner.text = "Fetching projects...";
-    const projectTree = await loadProjectTree(getApi(), (stage) => {
-      spinner.text = stage === "environments" ? "Fetching environments..." : "Fetching folders...";
-    });
+    if (spinner) spinner.text = "Fetching projects...";
+    const projectTree = await loadProjectTree(
+      getApi(),
+      (stage) => {
+        if (spinner) {
+          spinner.text =
+            stage === "environments" ? "Fetching environments..." : "Fetching folders...";
+        }
+      },
+      options.project,
+    );
 
-    trackEvent("cli_command_executed", { command: "projects", count: projectTree.length });
-    spinner.stop();
+    trackEvent("cli_command_executed", { command: "projects", count: projectTree.length, json });
+    spinner?.stop();
+
+    if (json) {
+      if (options.project && projectTree.length === 0) {
+        printJsonError("project_not_found", `Project "${options.project}" not found`);
+        return exitWithTelemetry(1);
+      }
+      printJson(toProjectsJson(projectTree));
+      return;
+    }
     renderProjectTree(projectTree);
   } catch (err) {
     if (isAuthError(err)) {
-      spinner.stop();
-      printNotLoggedIn();
+      return notLoggedIn();
+    }
+    const message = getErrorMessage(err, "Failed to fetch projects");
+    if (json) {
+      printJsonError("failed", message);
     } else {
-      spinner.fail(pc.red(`Error: ${getErrorMessage(err, "Failed to fetch projects")}`));
+      spinner?.fail(pc.red(`Error: ${message}`));
     }
     await exitWithTelemetry(1);
   }
