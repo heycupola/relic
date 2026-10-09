@@ -7,6 +7,7 @@ import { getWebhookCustomerId } from "./billing";
 import { hashKey } from "./lib/crypto";
 import { credentialFailureResponse, toHttpErrorResponse } from "./lib/errors";
 import { createLogger, type Logger } from "./lib/logger";
+import { parsePushAudit, parseScopes } from "./lib/push";
 import { verifySvixSignature } from "./lib/svix";
 import { EmailKind } from "./lib/types";
 
@@ -225,6 +226,8 @@ http.route({
         folderName: optionalString(body.folderName),
         folderId: ids.folderId,
         scope: optionalScope(body.scope),
+        scopes: parseScopes(body.scopes),
+        push: parsePushAudit(body.push),
       });
 
       return json(result);
@@ -303,6 +306,8 @@ http.route({
         environmentName: optionalString(body.environmentName),
         folderName: optionalString(body.folderName),
         scope: optionalScope(body.scope),
+        scopes: parseScopes(body.scopes),
+        push: parsePushAudit(body.push),
       });
 
       return json({

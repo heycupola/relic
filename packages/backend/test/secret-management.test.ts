@@ -805,6 +805,103 @@ describe("Secret Management", () => {
       expect(result.encryptedProjectKey).toBeDefined();
     });
 
+    test("should record a secrets.pushed log when exporting for a push", async () => {
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const projectResult = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+      const projectId = assertProjectCreated(projectResult);
+
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        projectId,
+        name: "environment_" + randomString(),
+      });
+
+      for (const scope of ["client", "server", "shared"] as const) {
+        await owner.asUser.mutation(api.secret.createSecret, {
+          encryptedValue: "encrypted-value",
+          environmentId,
+          key: `${scope.toUpperCase()}_KEY`,
+          scope,
+          valueType: "string",
+        });
+      }
+
+      const result = await owner.asUser.mutation(api.secret.exportSecrets, {
+        projectId,
+        environmentId,
+        push: { target: "vercel", destination: "prj_123 (production)" },
+      });
+      expect(result.count).toBe(3);
+
+      const scoped = await owner.asUser.mutation(api.secret.exportSecrets, {
+        projectId,
+        environmentId,
+        scopes: ["client", "shared"],
+        push: { target: "cloudflare", destination: "my-worker", dryRun: true },
+      });
+      expect(scoped.secrets.map((s) => s.key).sort()).toEqual(["CLIENT_KEY", "SHARED_KEY"]);
+
+      const logs = await owner.asUser.action(api.actionLog.loadActionLogsByProject, {
+        projectId,
+        paginationOpts: { numItems: 10, cursor: null },
+      });
+
+      const [dryRunLog, pushLog] = logs.page;
+      expect(dryRunLog?.action).toBe("secrets.pushed");
+      expect(dryRunLog?.metadata).toMatchObject({
+        pushTarget: "cloudflare",
+        pushDestination: "my-worker",
+        pushDryRun: true,
+        exportCount: 2,
+      });
+      expect(pushLog?.action).toBe("secrets.pushed");
+      expect(pushLog?.metadata).toMatchObject({
+        pushTarget: "vercel",
+        pushDestination: "prj_123 (production)",
+        exportCount: 3,
+      });
+      expect(pushLog?.metadata?.pushDryRun).toBeUndefined();
+      expect(JSON.stringify(logs.page)).not.toContain("encrypted-value");
+    });
+
+    test("should reject an invalid push target", async () => {
+      const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
+
+      const projectResult = await owner.asUser.action(api.project.createProject, {
+        encryptedProjectKey,
+        name: "project_" + randomString(),
+      });
+      const projectId = assertProjectCreated(projectResult);
+
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "environment_" + randomString(),
+        projectId,
+      });
+
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.secret.exportSecrets, {
+            projectId,
+            environmentId,
+            push: { target: "Not A Target!" },
+          }),
+        ErrorCode.INVALID_ARGUMENTS,
+      );
+
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.secret.exportSecrets, {
+            projectId,
+            environmentId,
+            push: { target: "vercel", destination: "x".repeat(201) },
+          }),
+        ErrorCode.INVALID_ARGUMENTS,
+      );
+    });
+
     test("should return the collaborator encrypted project key for shared project secret export", async () => {
       await setPlan(t, owner.userId, "pro");
 
