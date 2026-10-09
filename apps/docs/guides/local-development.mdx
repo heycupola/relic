@@ -1,0 +1,127 @@
+---
+title: Local Development
+description: Work on your project with secrets loaded in your shell, without a .env file.
+---
+
+`relic shell` opens a subshell with your project's secrets loaded as environment variables. Inside it, `bun run dev`, `npm test`, database CLIs, and any other command can read the secrets directly, without a `relic run` prefix and without a `.env` file on disk.
+
+## Prerequisites
+
+- You are logged in with `relic login`
+- Your project has a `relic.toml` (run `relic init` at the project root)
+
+## Start a shell
+
+```bash
+relic shell -e development
+```
+
+Relic fetches and decrypts the secrets on your device, then starts your default shell (`$SHELL`) with them in its environment. Run your usual commands:
+
+```bash
+bun run dev
+bun test
+psql "$DATABASE_URL"
+```
+
+Type `exit` (or press `Ctrl+D`) to return to your original shell. The secrets only existed in the subshell's environment, so the parent shell never sees them.
+
+The same flags as [`relic run`](/guides/cli#relic-run) are available:
+
+```bash
+relic shell -e staging -f database    # Only secrets in the database folder
+relic shell -e development -s server  # Only server-scoped secrets
+```
+
+## How it works
+
+`relic shell` uses the same authentication, cache, and decryption path as `relic run`, and starts the shell through the same Rust [runner](/development/runner):
+
+- Secret values are decrypted locally and never written to disk.
+- On macOS and Linux, the shell starts from a cleared environment with only a small set of system variables (`PATH`, `HOME`, `USER`, `SHELL`, `TERM`, locale, `TMPDIR`, `TZ`), plus your secrets. Your shell's startup files (`.zshrc`, `.bashrc`, `config.fish`) run as usual and restore the rest of your setup. Relic credentials such as `RELIC_SERVICE_TOKEN`, `RELIC_API_KEY`, and `RELIC_PASSWORD` are not passed into the shell.
+- Variables set outside your startup files, such as `SSH_AUTH_SOCK` from an SSH agent, are not inherited on macOS and Linux. Export them from your startup file if you need them inside the shell.
+- `Ctrl+C` interrupts the command running inside the shell, not the shell itself. The exit code of the shell becomes the exit code of `relic shell`.
+
+<Warning>
+  Processes you start inside the shell inherit its environment, including the secrets. A process
+  you leave running in the background keeps them after you exit.
+</Warning>
+
+<Note>
+  If a startup file exports a variable with the same name as one of your secrets, the startup file
+  wins because it runs after the secrets are loaded.
+</Note>
+
+## Show the environment in your prompt
+
+Relic sets these variables inside the shell:
+
+| Variable            | Value                                                                 |
+| ------------------- | --------------------------------------------------------------------- |
+| `RELIC_SHELL`       | `1`                                                                   |
+| `RELIC_ENVIRONMENT` | The environment name passed to `-e`                                   |
+| `RELIC_PROJECT_ID`  | The project ID (not set when using a service token)                   |
+| `RELIC_FOLDER`      | The folder passed to `-f`, if any                                     |
+| `RELIC_SCOPE`       | The scope passed to `-s`, if any                                      |
+
+Use them to show which environment is active. Add one of these snippets to the end of your shell configuration:
+
+<CodeGroup>
+
+```zsh ~/.zshrc
+if [[ -n "$RELIC_SHELL" ]]; then
+  PROMPT="%F{magenta}(relic:$RELIC_ENVIRONMENT)%f $PROMPT"
+fi
+```
+
+```bash ~/.bashrc
+if [[ -n "$RELIC_SHELL" ]]; then
+  PS1="(relic:$RELIC_ENVIRONMENT) $PS1"
+fi
+```
+
+```fish ~/.config/fish/config.fish
+if set -q RELIC_SHELL
+    function __relic_prompt --on-event fish_prompt
+        set_color magenta
+        echo "(relic:$RELIC_ENVIRONMENT)"
+        set_color normal
+    end
+end
+```
+
+```toml ~/.config/starship.toml
+[env_var.RELIC_ENVIRONMENT]
+format = "[relic:$env_value]($style) "
+style = "bold purple"
+```
+
+</CodeGroup>
+
+If you use a prompt framework such as starship or a zsh theme, use its configuration instead of editing `PROMPT` directly, since the framework redraws the prompt after your startup file runs.
+
+## Nested shells
+
+Running `relic shell` inside a relic shell is refused, so you don't lose track of which environment is active:
+
+```text
+  Already inside a relic shell (development)
+
+  Type exit to leave it first, or pass --force to nest.
+```
+
+Pass `--force` to open a nested shell anyway. On macOS and Linux the nested shell only contains the secrets of the new environment, not the outer one.
+
+## Windows
+
+On Windows, `relic shell` starts `$SHELL` if it points to an existing executable, and otherwise falls back to `%COMSPEC%` (usually `cmd.exe`). As with `relic run` on Windows, the shell inherits your full environment instead of starting from a cleared one.
+
+## When to use `relic run` instead
+
+`relic shell` is meant for interactive work on your machine. For scripts, CI/CD pipelines, and one-off commands, use `relic run`, which scopes secrets to a single process:
+
+```bash
+relic run -e production -- npm run deploy
+```
+
+See [CI/CD Integration](/guides/ci-cd-integration) for pipeline setup.

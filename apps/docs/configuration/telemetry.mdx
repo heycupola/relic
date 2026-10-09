@@ -23,6 +23,7 @@ The CLI and TUI send anonymous events through a first-party telemetry proxy (`te
 | `cli_login_started` / `cli_login_completed`                | User logs in via CLI                                       |
 | `cli_logout`                                               | User logs out                                              |
 | `cli_run_started` / `cli_run_completed`                    | Secret injection run (success/failure, duration)           |
+| `cli_shell_started` / `cli_shell_completed`                | `relic shell` session (success/failure, duration)          |
 | `cli_project_initialized`                                  | `relic init` is run                                        |
 | `cli_command_executed`                                     | `whoami`, `projects`, or `upgrade` command used            |
 | `service_account_created` / `service_account_revoked`      | Service account actions (whether OIDC is used, no IDs)     |
