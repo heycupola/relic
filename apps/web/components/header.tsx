@@ -5,7 +5,7 @@ import { Menu, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { authClient } from "@/lib/auth";
 import { trackWebEvent } from "@/lib/posthog";
 import { BLOG_PATH, ENTERPRISE_URL, SITE_DOCS_URL } from "@/lib/site";
@@ -29,6 +29,15 @@ export function Header({ showLogout = false }: HeaderProps) {
     x: number;
     y: number;
   } | null>(null);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileMenuOpen(false);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [mobileMenuOpen]);
 
   const handleLogout = async () => {
     trackWebEvent("web_logout");

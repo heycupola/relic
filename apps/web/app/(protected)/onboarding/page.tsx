@@ -78,6 +78,7 @@ export default function OnboardingPage() {
   const [sourceOther, setSourceOther] = useState("");
   const [selectedTeamSize, setSelectedTeamSize] = useState<TeamSize | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     if (userData === undefined) return;
@@ -105,6 +106,7 @@ export default function OnboardingPage() {
 
   const handleComplete = async () => {
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
       await completeOnboardingMutation({
         source: selectedSource ?? undefined,
@@ -118,6 +120,7 @@ export default function OnboardingPage() {
       router.replace("/dashboard");
     } catch (error) {
       console.error("Failed to complete onboarding:", error);
+      setSubmitError("Couldn't save your answers. Please try again.");
       setIsSubmitting(false);
     }
   };
@@ -293,11 +296,17 @@ export default function OnboardingPage() {
                   type="button"
                   onClick={handleComplete}
                   disabled={isSubmitting}
+                  aria-busy={isSubmitting}
                   className="flex-1 px-6 py-3 text-sm font-medium bg-foreground text-background border-2 border-foreground transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? "Completing\u2026" : "Go to Dashboard"}
                 </button>
               </div>
+              {submitError && (
+                <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+                  {submitError}
+                </p>
+              )}
             </div>
           )}
         </div>

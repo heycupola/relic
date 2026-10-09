@@ -25,6 +25,7 @@ interface InstallSectionProps {
 export function InstallSection({ showWrapper = true, compact = false }: InstallSectionProps) {
   const [activeMethod, setActiveMethod] = useState<InstallMethod>(installMethods[0]!);
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
 
   const copyToClipboard = async () => {
     try {
@@ -45,7 +46,8 @@ export function InstallSection({ showWrapper = true, compact = false }: InstallS
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       console.error("Failed to copy:", error);
-      // Could show a toast/alert here in production
+      setCopyFailed(true);
+      setTimeout(() => setCopyFailed(false), 4000);
     }
   };
 
@@ -129,8 +131,16 @@ export function InstallSection({ showWrapper = true, compact = false }: InstallS
             )}
           </button>
         </div>
-        <output className="sr-only" aria-live="polite" aria-atomic="true">
-          {copied ? "Installation command copied to clipboard" : ""}
+        <output
+          className={copyFailed ? "block mt-2 text-xs text-red-600 dark:text-red-400" : "sr-only"}
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {copied
+            ? "Installation command copied to clipboard"
+            : copyFailed
+              ? "Couldn't copy. Select the command and copy it manually."
+              : ""}
         </output>
       </div>
     </div>
