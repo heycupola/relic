@@ -104,6 +104,23 @@ export interface Project {
   encryptedProjectKey: string;
   keyVersion: number;
   isArchived: boolean;
+  ownerId: string;
+}
+
+export interface BulkSecretInput {
+  secretId?: string;
+  key: string;
+  encryptedValue: string;
+  valueType: "string" | "number" | "boolean";
+  scope?: "client" | "server" | "shared";
+}
+
+export interface BulkUpdateResult {
+  success: boolean;
+  updatedCount: number;
+  createdCount: number;
+  skippedCount: number;
+  secretIds: string[];
 }
 
 export interface FullUser extends User {
@@ -282,6 +299,33 @@ export class ProtectedApi {
       encryptedProjectKey: result.encryptedProjectKey,
       keyVersion: result.keyVersion,
       isArchived: result.isArchived,
+      ownerId: String(result.ownerId),
+    };
+  }
+
+  async updateSecretBulk(args: {
+    environmentId: string;
+    folderId?: string;
+    secrets: BulkSecretInput[];
+    mode?: "skip" | "overwrite";
+  }): Promise<BulkUpdateResult> {
+    const result = await this.withAuth(() =>
+      this.client.mutation(api.secret.updateSecretBulk, {
+        environmentId: toId<"environment">(args.environmentId),
+        folderId: args.folderId ? toId<"folder">(args.folderId) : undefined,
+        secrets: args.secrets.map((s) => ({
+          secretId: s.secretId ? toId<"secret">(s.secretId) : undefined,
+          key: s.key,
+          encryptedValue: s.encryptedValue,
+          valueType: s.valueType,
+          scope: s.scope,
+        })),
+        mode: args.mode,
+      }),
+    );
+    return {
+      ...result,
+      secretIds: result.secretIds.map((id) => String(id)),
     };
   }
 

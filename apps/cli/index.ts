@@ -1,6 +1,7 @@
 import { initLogger, isFirstRun, saveTelemetryPreference } from "@repo/logger";
 import { Command, CommanderError, Help } from "commander";
 import pc from "picocolors";
+import importSecrets, { type ImportOptions } from "./commands/import";
 import init from "./commands/init";
 import login from "./commands/login";
 import logout from "./commands/logout";
@@ -55,7 +56,7 @@ const COMMAND_GROUPS = [
   },
   {
     label: "Secrets",
-    commands: ["run", "shell", "service-account"],
+    commands: ["run", "shell", "import", "service-account"],
   },
   {
     label: "Tools",
@@ -245,6 +246,35 @@ program
   )
   .option("--force", "Open a nested shell even if already inside a relic shell")
   .action((options: ShellOptions) => shell(options));
+
+program
+  .command("import")
+  .description("Import secrets from a .env file, JSON, or another secrets manager")
+  .argument(
+    "[source]",
+    "Path to a .env or .json file, - for stdin, or doppler, infisical, vercel, 1password (default: .env)",
+  )
+  .requiredOption("-e, --environment <name>", "Environment name (required)")
+  .option("-f, --folder <name>", "Folder name (optional)")
+  .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
+  .option("-s, --scope <scope>", "Default scope for imported secrets: client, server, or shared")
+  .option("--format <format>", "Input format for files and stdin: env or json")
+  .option("--overwrite", "Overwrite existing secrets with imported values")
+  .option("--skip-existing", "Keep existing secrets and import only new ones")
+  .option("--dry-run", "Show the import plan without importing")
+  .option("-y, --yes", "Skip confirmation prompts")
+  .option("--delete-source", "Delete the source file after a successful import (asks first)")
+  .option("--doppler-project <name>", "Doppler project (doppler source)")
+  .option("--doppler-config <name>", "Doppler config (doppler source)")
+  .option("--infisical-env <slug>", "Infisical environment slug (infisical source)")
+  .option("--infisical-path <path>", "Infisical secret path (infisical source)")
+  .option("--infisical-project <id>", "Infisical project ID (infisical source)")
+  .option("--vercel-project <idOrName>", "Vercel project ID or name (vercel source)")
+  .option("--vercel-team <id>", "Vercel team ID (vercel source)")
+  .option("--vercel-target <target>", "production, preview, or development (vercel source)")
+  .option("--op-item <item>", "1Password item name or ID (1password source)")
+  .option("--op-vault <vault>", "1Password vault (1password source)")
+  .action((source: string | undefined, options: ImportOptions) => importSecrets(source, options));
 
 program
   .command("version")

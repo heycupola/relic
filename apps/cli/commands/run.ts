@@ -70,7 +70,7 @@ export interface PrepareSecretsResult {
   count: number;
 }
 
-interface UserKeys {
+export interface UserKeys {
   encryptedPrivateKey: string;
   salt: string;
   fromCache: boolean;
@@ -262,6 +262,10 @@ export async function prepareSecretsWithServiceToken(
   return { secrets: await decryptToEnv(projectKey, result.secrets), count: result.count };
 }
 
+export async function resolveUserKeys(userKeyDb: Database, api: ProtectedApi): Promise<UserKeys> {
+  return readCachedUserKeys(userKeyDb) ?? (await fetchAndCacheUserKeys(userKeyDb, api));
+}
+
 async function fetchAndCacheUserKeys(userKeyDb: Database, api: ProtectedApi): Promise<UserKeys> {
   const user = await api.getFullUser();
   if (!user.encryptedPrivateKey || !user.salt) {
@@ -363,7 +367,7 @@ async function resolveSecrets(
   return { secrets, encryptedProjectKey: result.encryptedProjectKey };
 }
 
-async function resolveProjectKey(
+export async function resolveProjectKey(
   encryptedProjectKey: string,
   userKeys: UserKeys,
   userKeyDb: Database,

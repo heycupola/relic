@@ -1,5 +1,5 @@
 import { getPasswordFromStorage } from "@repo/auth";
-import { decryptSecret, unwrapProjectKey } from "@repo/crypto";
+import { decryptSecret, encryptSecret, unwrapProjectKey } from "@repo/crypto";
 import { NO_PASSWORD_MESSAGE } from "./cli";
 import { trackCliError } from "./telemetry";
 
@@ -45,6 +45,10 @@ export async function getProjectKey(
       error instanceof Error ? error : new Error(String(error)),
     );
   }
+}
+
+export async function encryptSecretValue(projectKey: CryptoKey, value: string): Promise<string> {
+  return await encryptSecret(projectKey, value);
 }
 
 export async function decryptSecretValue(
