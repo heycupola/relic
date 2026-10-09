@@ -1,13 +1,14 @@
 import { initLogger, isFirstRun, saveTelemetryPreference } from "@repo/logger";
 import { Command, CommanderError, Help } from "commander";
-import type { SecretScope } from "lib/types";
 import pc from "picocolors";
 import init from "./commands/init";
 import login from "./commands/login";
 import logout from "./commands/logout";
 import projects from "./commands/projects";
-import run from "./commands/run";
+import run, { type RunOptions } from "./commands/run";
 import {
+  type ServiceAccountCreateOptions,
+  type ServiceAccountRevokeOptions,
   serviceAccountCreate,
   serviceAccountList,
   serviceAccountRevoke,
@@ -127,6 +128,7 @@ const program = new Command()
   .name("relic")
   .description("Zero-knowledge secret layer for your projects")
   .version(pkg.version)
+  .enablePositionalOptions()
   .exitOverride()
   .configureHelp({
     formatHelp: (cmd, helper) => {
@@ -174,38 +176,21 @@ saCmd
   .option("--oidc-issuer <url>", "OIDC issuer URL (advanced, prefer --github or --gitlab)")
   .option("--oidc-subject <pattern>", "OIDC subject pattern (advanced)")
   .option("--oidc-audience <aud>", "OIDC audience (optional)")
-  .action(
-    (options: {
-      name: string;
-      project?: string;
-      expiresIn?: string;
-      github?: string;
-      gitlab?: string;
-      branch?: string;
-      oidcIssuer?: string;
-      oidcSubject?: string;
-      oidcAudience?: string;
-    }) => {
-      serviceAccountCreate(options);
-    },
-  );
+  .action((options: ServiceAccountCreateOptions) => serviceAccountCreate(options));
 
 saCmd
   .command("list")
   .description("List service accounts for a project")
   .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
-  .action((options: { project?: string }) => {
-    serviceAccountList(options);
-  });
+  .action((options: { project?: string }) => serviceAccountList(options));
 
 saCmd
   .command("revoke")
   .description("Revoke a service account")
-  .requiredOption("-n, --name <name>", "Service account name to revoke")
+  .option("-n, --name <name>", "Service account name to revoke")
+  .option("--id <id>", "Service account ID to revoke (use when several share a name)")
   .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
-  .action((options: { name: string; project?: string }) => {
-    serviceAccountRevoke(options);
-  });
+  .action((options: ServiceAccountRevokeOptions) => serviceAccountRevoke(options));
 
 program
   .command("mcp")
@@ -214,6 +199,21 @@ program
     await import("./mcp/server");
   });
 
+const RUN_HELP = `
+Environment:
+  By default the command gets only the decrypted secrets plus a minimal set of
+  variables from your shell: PATH, HOME, USER, SHELL, TERM, LANG, LC_ALL,
+  LC_CTYPE, TMPDIR and TZ. Everything else (e.g. NODE_ENV, CI, GITHUB_*) is
+  dropped. Use --inherit-env to pass the full environment through.
+
+  Options after the command name belong to the command, not to relic. Use --
+  to separate them explicitly.
+
+Examples:
+  $ relic run -e production -- npm start
+  $ relic run -e staging -f api -- node -e "console.log(process.env.API_URL)"
+  $ relic run -e production --inherit-env -- npm run build`;
+
 program
   .command("run")
   .description("Run a command with secrets injected as environment variables")
@@ -221,15 +221,14 @@ program
   .option("-f, --folder <name>", "Folder name (optional)")
   .option("-s, --scope <scope>", "Scope filter: client, server, or shared (optional)")
   .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
+  .option(
+    "--inherit-env",
+    "Pass the current environment (except RELIC_* variables) to the command; secrets take precedence",
+  )
   .argument("<command...>", "Command to run")
-  .action(
-    (
-      command: string[],
-      options: { environment: string; folder?: string; scope?: SecretScope; project?: string },
-    ) => {
-      run(command, options);
-    },
-  );
+  .passThroughOptions()
+  .addHelpText("after", RUN_HELP)
+  .action((command: string[], options: RunOptions) => run(command, options));
 
 program
   .command("version")
@@ -248,10 +247,19 @@ try {
       process.exit(0);
     }
 
+    if (err.code === "commander.help") {
+      process.exit(err.exitCode);
+    }
+
     const cleanMessage = err.message.replace(/^error:\s*/i, "");
     console.error();
 
-    if (err.code === "commander.unknownCommand" || err.code === "commander.excessArguments") {
+    if (err.code === "commander.excessArguments") {
+      const excess = err.message.match(/got \d+: (.+?)\.?$/)?.[1];
+      console.error(
+        `  ${pc.red(pc.bold("Unexpected argument:"))} ${pc.white(excess ?? cleanMessage)}`,
+      );
+    } else if (err.code === "commander.unknownCommand") {
       const unknown =
         err.message.match(/'(.+?)'/)?.[1] ??
         process.argv.find(
@@ -269,6 +277,12 @@ try {
       console.error(`  ${pc.red(pc.bold("Missing required option:"))} ${pc.dim(cleanMessage)}`);
     } else if (err.code === "commander.optionMissingArgument") {
       console.error(`  ${pc.red(pc.bold("Option missing argument:"))} ${pc.dim(cleanMessage)}`);
+    } else if (err.code === "commander.unknownOption" && process.argv.slice(2).includes("run")) {
+      console.error(`  ${pc.red(pc.bold("Error:"))} ${pc.dim(cleanMessage)}`);
+      console.error(
+        `\n  ${pc.dim("If this option is meant for your command, put it after")} ${pc.white("--")}${pc.dim(":")}`,
+      );
+      console.error(`    ${pc.dim("$")} relic run -e <environment> -- <command> --your-flag`);
     } else {
       console.error(`  ${pc.red(pc.bold("Error:"))} ${pc.dim(cleanMessage)}`);
     }

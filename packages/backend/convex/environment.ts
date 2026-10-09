@@ -1,8 +1,9 @@
 import { v } from "convex/values";
+import { getProjectOrThrow } from "./lib/data";
 import { doc } from "convex-helpers/validators";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
 import { assertProjectAccess } from "./lib/access";
 import { alreadyExistsError, createError, ErrorCode, notFoundError } from "./lib/errors";
 import { generateSlug } from "./lib/helpers";
@@ -12,6 +13,19 @@ import { ErrorSeverity, type ProtectedMutationCtx, type ProtectedQueryCtx } from
 import schema from "./schema";
 
 const MAX_ENV_COUNT = 32;
+
+function validateEnvironmentName(rawName: string): { name: string; slug: string } {
+  const name = rawName.trim();
+  const slug = generateSlug(name);
+  if (!name || !slug) {
+    createError({
+      code: ErrorCode.INVALID_ARGUMENTS,
+      message: "Environment name is required",
+      severity: ErrorSeverity.Low,
+    });
+  }
+  return { name, slug };
+}
 
 export const getProjectEnvironments = protectedQuery({
   args: {
@@ -32,9 +46,7 @@ export const getProjectEnvironments = protectedQuery({
     }),
   ),
   handler: async (ctx: ProtectedQueryCtx, args: { projectId: Id<"project"> }) => {
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: args.projectId,
-    });
+    const project = await getProjectOrThrow(ctx, args.projectId);
 
     await assertProjectAccess(ctx, project, { skipArchivedCheck: true });
 
@@ -81,17 +93,17 @@ export const createEnvironment = protectedMutation({
       // color?: string;
     },
   ): Promise<{ id: Id<"environment"> }> => {
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: args.projectId,
-    });
+    const project = await getProjectOrThrow(ctx, args.projectId);
 
     await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
+    const { name, slug } = validateEnvironmentName(args.name);
+
     const existingEnv = await ctx.runQuery(
       internal.environment._loadEnvironmentByProjectIdAndSlug,
-      { projectId: args.projectId, slug: generateSlug(args.name) },
+      { projectId: args.projectId, slug },
     );
 
     if (existingEnv) {
@@ -118,7 +130,7 @@ export const createEnvironment = protectedMutation({
     const environmentId = await ctx.runMutation(internal.environment._insertEnvironment, {
       createdBy: ctx.userId,
       sortOrder: maxSortOrder + 1,
-      name: args.name,
+      name,
       projectId: project._id,
     });
 
@@ -128,7 +140,7 @@ export const createEnvironment = protectedMutation({
       userId: ctx.userId,
       action: "environment.created",
       environmentId,
-      environmentName: args.name,
+      environmentName: name,
     });
 
     return { id: environmentId };
@@ -157,18 +169,30 @@ export const updateEnvironment = protectedMutation({
       environmentId: args.environmentId,
     });
 
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: environment.projectId,
-    });
+    const project = await getProjectOrThrow(ctx, environment.projectId);
 
     await assertProjectAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
+    let name: string | undefined;
+    if (args.name !== undefined) {
+      const validated = validateEnvironmentName(args.name);
+      name = validated.name;
+
+      const clash = await ctx.runQuery(internal.environment._loadEnvironmentByProjectIdAndSlug, {
+        projectId: environment.projectId,
+        slug: validated.slug,
+      });
+      if (clash && clash._id !== environment._id) {
+        alreadyExistsError("environment");
+      }
+    }
+
     await ctx.runMutation(internal.environment._updateEnvironment, {
       environmentId: args.environmentId,
       updates: {
-        name: args.name,
+        name,
         // sortOrder: args.sortOrder,
       },
     });
@@ -179,7 +203,7 @@ export const updateEnvironment = protectedMutation({
       userId: ctx.userId,
       action: "environment.updated",
       environmentId: args.environmentId,
-      environmentName: args.name ?? environment.name,
+      environmentName: name ?? environment.name,
     });
 
     return { success: true };
@@ -195,9 +219,7 @@ export const deleteEnvironment = protectedMutation({
       environmentId: args.environmentId,
     });
 
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: environment.projectId,
-    });
+    const project = await getProjectOrThrow(ctx, environment.projectId);
 
     await assertProjectAccess(ctx, project);
 
@@ -305,9 +327,7 @@ export const getEnvironmentData = protectedQuery({
       },
     );
 
-    const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: environment.projectId,
-    });
+    const project: Doc<"project"> = await getProjectOrThrow(ctx, environment.projectId);
 
     await assertProjectAccess(ctx, project);
 
@@ -372,7 +392,7 @@ export const getEnvironmentData = protectedQuery({
   },
 });
 
-// NOTE: This function intentionally has no access guard; it is used for CLI cache purposes.
+// NOTE: Used by the CLI to decide whether its local secret cache is still fresh.
 export const getSecretsCacheValidation = protectedQuery({
   args: {
     projectId: v.id("project"),
@@ -380,6 +400,9 @@ export const getSecretsCacheValidation = protectedQuery({
     folderId: v.optional(v.id("folder")),
   },
   handler: async (ctx, args) => {
+    const project = await getProjectOrThrow(ctx, args.projectId);
+    await assertProjectAccess(ctx, project);
+
     if (args.folderId) {
       const folder: Doc<"folder"> = await ctx.runQuery(internal.folder._loadFolderById, {
         folderId: args.folderId,
@@ -413,27 +436,33 @@ export const getSecretsCacheValidation = protectedQuery({
   },
 });
 
-export const _invalidateProjectCache = internalMutation({
-  args: {
-    projectId: v.id("project"),
-  },
-  handler: async (ctx, args) => {
-    const now = Date.now();
-    const environments = await ctx.db
-      .query("environment")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .collect();
-    for (const env of environments) {
+export async function invalidateProjectCache(
+  ctx: Pick<MutationCtx, "db">,
+  projectId: Id<"project">,
+): Promise<void> {
+  const now = Date.now();
+  const environments = await ctx.db
+    .query("environment")
+    .withIndex("by_project", (q) => q.eq("projectId", projectId))
+    .collect();
+
+  await Promise.all(
+    environments.map(async (env) => {
       await ctx.db.patch(env._id, { updatedAt: now });
       const folders = await ctx.db
         .query("folder")
         .withIndex("by_environment", (q) => q.eq("environmentId", env._id))
         .collect();
-      for (const folder of folders) {
-        await ctx.db.patch(folder._id, { updatedAt: now });
-      }
-    }
+      await Promise.all(folders.map((f) => ctx.db.patch(f._id, { updatedAt: now })));
+    }),
+  );
+}
+
+export const _invalidateProjectCache = internalMutation({
+  args: {
+    projectId: v.id("project"),
   },
+  handler: async (ctx, args) => invalidateProjectCache(ctx, args.projectId),
 });
 
 export const _loadEnvironmentById = internalQuery({
@@ -546,6 +575,15 @@ export const _deleteEnvironmentById = internalMutation({
     environmentId: v.id("environment"),
   },
   handler: async (ctx, args) => {
+    // Callers ensure no live secrets or folders remain; purge soft-deleted secrets with it.
+    const secrets = await ctx.db
+      .query("secret")
+      .withIndex("by_environment", (q) => q.eq("environmentId", args.environmentId))
+      .collect();
+    for (const secret of secrets) {
+      await ctx.db.delete(secret._id);
+    }
+
     await ctx.db.delete(args.environmentId);
   },
 });

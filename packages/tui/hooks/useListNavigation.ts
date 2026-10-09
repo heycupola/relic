@@ -20,10 +20,18 @@ export function useListNavigation<T>({
   }, [onSelect]);
 
   useEffect(() => {
-    if (items.length > 0 && selectedIndex >= items.length) {
-      setSelectedIndex(0);
-    }
-  }, [items.length, selectedIndex]);
+    const lastIndex = Math.max(0, items.length - 1);
+    const clampedIndex = Math.min(selectedIndex, lastIndex);
+    if (clampedIndex !== selectedIndex) setSelectedIndex(clampedIndex);
+
+    const maxOffset = Math.max(0, items.length - pageSize);
+    setScrollOffset((offset) => {
+      let next = Math.min(offset, maxOffset);
+      if (clampedIndex < next) next = clampedIndex;
+      if (clampedIndex >= next + pageSize) next = clampedIndex - pageSize + 1;
+      return Math.max(0, next);
+    });
+  }, [items.length, selectedIndex, pageSize]);
 
   const moveUp = useCallback(() => {
     if (items.length === 0) return;
@@ -53,7 +61,7 @@ export function useListNavigation<T>({
 
   const select = useCallback(() => {
     if (items.length > 0 && onSelectRef.current) {
-      onSelectRef.current(selectedIndex);
+      onSelectRef.current(Math.min(selectedIndex, items.length - 1));
     }
   }, [selectedIndex, items.length]);
 
@@ -63,7 +71,7 @@ export function useListNavigation<T>({
   }, []);
 
   return {
-    selectedIndex,
+    selectedIndex: Math.min(selectedIndex, Math.max(0, items.length - 1)),
     scrollOffset,
     moveUp,
     moveDown,

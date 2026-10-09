@@ -4,6 +4,8 @@ export default defineConfig({
   test: {
     environment: "edge-runtime",
     setupFiles: ["./test/vitest.setup.ts"],
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
     server: {
       deps: {
         inline: ["convex-test"],

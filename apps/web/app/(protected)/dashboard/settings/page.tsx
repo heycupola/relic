@@ -5,8 +5,7 @@ import { useAction, useQuery } from "convex/react";
 import { AlertTriangle, ArrowRight, ExternalLink, KeyRound, ShieldCheck } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/dashboard/page-header";
-import { ADD_ONS, PRO_PRICE_LABEL } from "@/components/dashboard/plan-copy";
-import { useBillingPortal, useProCheckout } from "@/components/dashboard/plan-card";
+import { useBillingPortal } from "@/components/dashboard/plan-card";
 import {
   CardSkeleton,
   CopyButton,
@@ -16,8 +15,10 @@ import {
   tone,
 } from "@/components/dashboard/primitives";
 import { Dialog } from "@/components/dialog";
+import { useProCheckout } from "@/hooks/useProCheckout";
 import { authClient } from "@/lib/auth";
 import { formatDate } from "@/lib/format";
+import { ADD_ONS, PRO_PRICE_LABEL } from "@/lib/plans";
 import { SITE_DOCS_URL } from "@/lib/site";
 import { trackWebEvent } from "@/lib/posthog";
 import { dangerButton, focusRing, primaryButton, secondaryButton } from "@/lib/styles";
@@ -231,7 +232,7 @@ export default function SettingsPage() {
                 <p className={`font-mono text-[11px] ${tone.danger}`}>danger zone</p>
                 <h2
                   id="danger-zone-heading"
-                  className="font-[family-name:var(--font-space-grotesk)] text-base font-semibold text-foreground"
+                  className="font-[family-name:var(--font-heading)] text-base font-semibold text-foreground"
                 >
                   Delete account
                 </h2>

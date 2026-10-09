@@ -2,83 +2,235 @@ import { v } from "convex/values";
 import { doc } from "convex-helpers/validators";
 import { components, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
-import type { Doc as BetterAuthDoc, Id as BetterAuthId } from "./betterAuth/_generated/dataModel";
-import { assertProjectAccess, isProjectAccessible } from "./lib/access";
+import { requestUsageSync } from "./billing";
+import { invalidateProjectCache } from "./environment";
 import {
-  alreadyExistsError,
-  createError,
-  ErrorCode,
-  notFoundError,
-  permissionError,
-} from "./lib/errors";
+  assertProjectAccess,
+  assertProjectOwner,
+  isProjectAccessible,
+  isUnlockedByOwnerPlan,
+} from "./lib/access";
+import {
+  findActiveShare,
+  findUser,
+  getProjectOrThrow,
+  insertActionLog,
+  listActiveSharesByProject,
+  listActiveSharesByUser,
+  loadUser,
+  type User,
+} from "./lib/data";
+import { alreadyExistsError, createError, ErrorCode, notFoundError } from "./lib/errors";
 import { createLogger } from "./lib/logger";
 import { protectedAction, protectedQuery } from "./lib/middleware";
+import { ADD_ON_PRICES_USD, getPlanState, PLANS, paidSharesFor } from "./lib/plans";
 import { checkRateLimit } from "./lib/rateLimit";
-import {
-  EmailKind,
-  ErrorSeverity,
-  type ProtectedActionCtx,
-  type ProtectedQueryCtx,
-} from "./lib/types";
-import { sendEmail } from "./resend";
+import { EmailKind, ErrorSeverity } from "./lib/types";
+import { createCheckoutUrlSafely } from "./project";
 import schema from "./schema";
 
 const log = createLogger("projectShare");
 
-export const shareLimits = {
-  freeShareLimit: 5,
-};
+const EMAIL_PATTERN =
+  /^[a-zA-Z0-9](?:[a-zA-Z0-9._+-]*[a-zA-Z0-9])?@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
+
+function userCache(ctx: Pick<QueryCtx, "runQuery">) {
+  const cache = new Map<string, Promise<User | null>>();
+  return (userId: string) => {
+    let pending = cache.get(userId);
+    if (!pending) {
+      pending = findUser(ctx, userId);
+      cache.set(userId, pending);
+    }
+    return pending;
+  };
+}
+
+async function loadShareOrThrow(ctx: Pick<QueryCtx, "db">, shareId: Id<"projectShare">) {
+  const share = await ctx.db.get(shareId);
+  if (!share) notFoundError("share");
+  return share;
+}
+
+function assertNotRevoked(share: Doc<"projectShare">) {
+  if (share.revokedAt !== undefined) {
+    createError({
+      code: ErrorCode.INVALID_OPERATION,
+      message: "Share is already revoked",
+      severity: ErrorSeverity.Medium,
+    });
+  }
+}
+
+async function revokeAndCount(ctx: MutationCtx, share: Doc<"projectShare">) {
+  const now = Date.now();
+  await ctx.db.patch(share._id, { revokedAt: now, updatedAt: now });
+  const remaining = (await listActiveSharesByProject(ctx, share.projectId)).length;
+  await ctx.db.patch(share.projectId, { shareUsageCount: remaining });
+  return remaining;
+}
+
+export const _getShareLimits = internalQuery({
+  args: { userId: v.string(), projectId: v.id("project") },
+  handler: async (ctx, { userId, projectId }) => {
+    const project = await getProjectOrThrow(ctx, projectId);
+    await assertProjectAccess({ ...ctx, userId }, project);
+
+    const owner = await loadUser(ctx, project.ownerId);
+    const { isPro } = getPlanState(owner);
+    const totalSharesCount = (await listActiveSharesByProject(ctx, projectId)).length;
+    const included = PLANS.pro.includedSharesPerProject;
+
+    return {
+      hasPro: isPro,
+      freeShareLimit: included,
+      purchasedSharesCount: isPro ? paidSharesFor(totalSharesCount) : 0,
+      totalSharesCount,
+      unusedShares: isPro ? Math.max(0, included - totalSharesCount) : 0,
+    };
+  },
+});
 
 export const getShareLimits = protectedAction({
-  args: {
-    projectId: v.id("project"),
-  },
-  handler: async (ctx: ProtectedActionCtx, args: { projectId: Id<"project"> }) => {
-    const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: args.projectId,
-    });
-
-    await assertProjectAccess(ctx, project);
-
-    const user = await ctx.runQuery(components.betterAuth.user.loadUserById, {
+  args: { projectId: v.id("project") },
+  handler: async (
+    ctx,
+    { projectId },
+  ): Promise<{
+    hasPro: boolean;
+    freeShareLimit: number;
+    purchasedSharesCount: number;
+    totalSharesCount: number;
+    unusedShares: number;
+  }> => {
+    return await ctx.runQuery(internal.projectShare._getShareLimits, {
       userId: ctx.userId,
+      projectId,
     });
+  },
+});
 
-    const totalSharesCount = project.shareUsageCount ?? 0;
+type ShareGateResult =
+  | { success: true; shareId: Id<"projectShare"> }
+  | { success: false; requiresProPlan: true; message: string }
+  | { success: false; requiresConfirmation: true; freeLimit: number; message: string };
 
-    // If user doesn't have pro, they can't share - return actual count but 0 limits
-    if (!user.hasPro) {
+type ShareProjectResult =
+  | Exclude<ShareGateResult, { requiresProPlan: true }>
+  | { success: false; requiresProPlan: true; message: string; checkoutUrl: string | null };
+
+export const _shareProject = internalMutation({
+  args: {
+    userId: v.string(),
+    projectId: v.id("project"),
+    userEmail: v.string(),
+    encryptedProjectKey: v.string(),
+    confirmPayment: v.boolean(),
+  },
+  handler: async (ctx, args): Promise<ShareGateResult> => {
+    const actor = { ...ctx, userId: args.userId };
+    const project = await getProjectOrThrow(ctx, args.projectId);
+    await assertProjectAccess(actor, project);
+    assertProjectOwner(actor, project, "share this project");
+
+    // Free users get the upgrade prompt before any payload validation, so clients can probe with an empty key.
+    const owner = await loadUser(ctx, args.userId);
+    const { limits } = getPlanState(owner);
+    if (!limits.canShare) {
       return {
-        hasPro: false,
-        freeShareLimit: shareLimits.freeShareLimit,
-        purchasedSharesCount: 0,
-        totalSharesCount,
-        unusedShares: 0,
+        success: false as const,
+        requiresProPlan: true as const,
+        message: "Pro plan required to share projects",
       };
     }
 
-    const additionalShares = await ctx.autumn.check(ctx, {
-      featureId: "additional_shares",
-    });
-
-    let unusedShares = 0;
-
-    if (additionalShares.data && !additionalShares.error && additionalShares.data.balance) {
-      unusedShares = additionalShares.data.balance;
+    const email = args.userEmail.trim();
+    if (!EMAIL_PATTERN.test(email)) {
+      createError({
+        code: ErrorCode.INVALID_OPERATION,
+        message: "Invalid email address format",
+        severity: ErrorSeverity.Medium,
+      });
     }
 
-    // purchasedSharesCount = shares used beyond the free limit
-    // Example: freeShareLimit = 5, totalSharesCount = 7 => purchasedSharesCount = 2
-    const purchasedSharesCount = Math.max(0, totalSharesCount - shareLimits.freeShareLimit);
+    if (!args.encryptedProjectKey.trim()) {
+      createError({
+        code: ErrorCode.INVALID_OPERATION,
+        message: "Encrypted project key is required to share a project",
+        severity: ErrorSeverity.High,
+      });
+    }
 
-    return {
-      hasPro: true,
-      freeShareLimit: shareLimits.freeShareLimit,
-      purchasedSharesCount,
-      totalSharesCount,
-      unusedShares,
-    };
+    const target: User | null = await ctx.runQuery(components.betterAuth.user.loadUserByEmail, {
+      email,
+    });
+
+    // Same answer for unknown users and users without keys, so this can't be used to enumerate accounts.
+    if (!target || !target.publicKey) {
+      createError({
+        code: ErrorCode.USER_NOT_FOUND,
+        message: "No Relic user with encryption keys was found for this email",
+        severity: ErrorSeverity.Medium,
+      });
+    }
+    if (target._id === args.userId) {
+      createError({
+        code: ErrorCode.INVALID_OPERATION,
+        message: "Cannot share project with yourself",
+        severity: ErrorSeverity.Medium,
+      });
+    }
+    if (await findActiveShare(ctx, project._id, target._id)) {
+      alreadyExistsError("share", ErrorSeverity.Medium);
+    }
+
+    const activeCount = (await listActiveSharesByProject(ctx, project._id)).length;
+    const isPaidShare = activeCount >= limits.includedSharesPerProject;
+
+    if (isPaidShare && !args.confirmPayment) {
+      return {
+        success: false as const,
+        requiresConfirmation: true as const,
+        freeLimit: limits.includedSharesPerProject,
+        message: `Adding a share costs $${ADD_ON_PRICES_USD.share}/month. Confirm to proceed.`,
+      };
+    }
+
+    const now = Date.now();
+    const shareId = await ctx.db.insert("projectShare", {
+      projectId: project._id,
+      userId: target._id,
+      encryptedProjectKey: args.encryptedProjectKey,
+      sharedBy: args.userId,
+      sharedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await ctx.db.patch(project._id, { shareUsageCount: activeCount + 1 });
+
+    await insertActionLog(ctx, {
+      projectId: project._id,
+      projectName: project.name,
+      userId: args.userId,
+      action: "share.added",
+      metadata: { sharedUserId: target._id, sharedUserEmail: target.email },
+    });
+    await requestUsageSync(ctx, args.userId);
+    await ctx.scheduler.runAfter(0, internal.emails._send, {
+      userId: target._id,
+      to: target.email,
+      data: {
+        kind: EmailKind.CollaboratorAdded,
+        userName: target.name || "there",
+        projectName: project.name,
+        ownerName: owner.name || "someone",
+      },
+    });
+
+    log.info("Project shared", { projectId: project._id, targetUser: target._id, isPaidShare });
+    return { success: true as const, shareId };
   },
 });
 
@@ -89,272 +241,41 @@ export const shareProject = protectedAction({
     encryptedProjectKey: v.string(),
     confirmPayment: v.optional(v.boolean()),
   },
-  handler: async (
-    ctx: ProtectedActionCtx,
-    args: {
-      projectId: Id<"project">;
-      userEmail: string;
-      encryptedProjectKey: string;
-      confirmPayment?: boolean;
-    },
-  ) => {
+  handler: async (ctx, args): Promise<ShareProjectResult> => {
     await checkRateLimit(ctx, "write");
 
-    const emailRegex =
-      /^[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
-    if (!emailRegex.test(args.userEmail)) {
-      throw createError({
-        code: ErrorCode.INVALID_OPERATION,
-        message: "Invalid email address format",
-        severity: ErrorSeverity.Medium,
-      });
-    }
-
-    const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: args.projectId,
-    });
-
-    await assertProjectAccess(ctx, project);
-
-    if (ctx.userId !== project.ownerId) {
-      throw permissionError("share this project", ErrorSeverity.High);
-    }
-
-    const canShare = await ctx.autumn.check(ctx, {
-      featureId: "can_share_project",
-    });
-
-    if (!canShare.data?.allowed) {
-      const checkoutResult = await ctx.autumn.checkout(ctx, {
-        productId: "pro_plan",
-        successUrl: `${process.env.SITE_URL || "https://withrelic.com"}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-        customerData: {
-          name: ctx.name,
-          email: ctx.email,
-        },
-        checkoutSessionParams: {
-          cancel_url: `${process.env.SITE_URL || "https://withrelic.com"}/subscription/cancel`,
-          metadata: {
-            userId: ctx.userId,
-          },
-        },
-      });
-
-      return {
-        success: false,
-        requiresProPlan: true,
-        checkoutUrl: checkoutResult.data?.url || null,
-        message: "Pro plan required to share projects",
-      };
-    }
-
-    const additionalShares = await ctx.autumn.check(ctx, {
-      featureId: "additional_shares",
-    });
-
-    if (additionalShares.data && !additionalShares.error) {
-      const usage = additionalShares.data.usage ?? 0;
-      const includedUsage = additionalShares.data.included_usage ?? 0;
-
-      if (usage > includedUsage) {
-        const excessCount = usage - includedUsage;
-        return {
-          success: false,
-          requiresRemoval: true,
-          currentUsage: usage,
-          includedUsage: includedUsage,
-          excessCount: excessCount,
-          message: `You're using ${usage} paid shares across all projects but only have ${includedUsage} included. Please revoke ${excessCount} share(s) from any project to continue.`,
-        };
-      }
-    }
-
-    const targetUser = await ctx.runQuery(components.betterAuth.user.loadUserByEmail, {
-      email: args.userEmail,
-    });
-
-    if (!targetUser) {
-      throw createError({
-        code: ErrorCode.USER_NOT_FOUND,
-        message: `User with email ${args.userEmail} not found`,
-        severity: ErrorSeverity.Medium,
-      });
-    }
-
-    if (targetUser._id === ctx.userId) {
-      throw createError({
-        code: ErrorCode.INVALID_OPERATION,
-        message: "Cannot share project with yourself",
-        severity: ErrorSeverity.Medium,
-      });
-    }
-
-    if (!targetUser.publicKey) {
-      throw createError({
-        code: ErrorCode.INVALID_OPERATION,
-        message: "Target user has not set up encryption keys yet",
-        severity: ErrorSeverity.Medium,
-      });
-    }
-
-    const existingShare = await ctx.runQuery(
-      internal.projectShare._loadActiveShareByProjectAndUser,
-      {
-        projectId: args.projectId,
-        userId: targetUser._id as BetterAuthId<"user">,
-      },
-    );
-
-    if (existingShare) {
-      throw alreadyExistsError("share", ErrorSeverity.Medium);
-    }
-
-    const currentUsage = project.shareUsageCount ?? 0;
-    const isPaidShare = currentUsage >= shareLimits.freeShareLimit;
-
-    if (isPaidShare && !args.confirmPayment) {
-      return {
-        success: false,
-        requiresConfirmation: true,
-        freeLimit: shareLimits.freeShareLimit,
-        message: "Adding a share costs $1. Confirm to proceed.",
-      };
-    }
-
-    if (!args.encryptedProjectKey || args.encryptedProjectKey.trim() === "") {
-      throw createError({
-        code: ErrorCode.INVALID_OPERATION,
-        message: "Encrypted project key is required to share a project",
-        severity: ErrorSeverity.High,
-      });
-    }
-
-    const { shareId } = await ctx.runMutation(internal.projectShare._insertProjectShare, {
-      projectId: args.projectId,
-      userId: targetUser._id,
-      encryptedProjectKey: args.encryptedProjectKey,
-      sharedBy: ctx.userId,
-    });
-
-    const sId: Id<"projectShare"> = shareId;
-
-    await ctx.runMutation(internal.projectShare._trackShareUsageCount, {
-      projectId: project._id,
-      value: 1,
-    });
-
-    if (isPaidShare) {
-      try {
-        await ctx.autumn.track(ctx, {
-          featureId: "additional_shares",
-          value: 1,
-        });
-      } catch (trackError) {
-        log.error("Payment tracking failed, compensating", { error: String(trackError) });
-
-        await ctx.runMutation(internal.projectShare._revokeProjectShare, {
-          shareId: sId,
-        });
-        await ctx.runMutation(internal.projectShare._trackShareUsageCount, {
-          projectId: project._id,
-          value: -1,
-        });
-
-        let billingPortalUrl: string | null = null;
-        try {
-          const portalResult = await ctx.autumn.customers.billingPortal(ctx, {});
-          billingPortalUrl = portalResult.data?.url || null;
-        } catch (portalError) {
-          log.error("Failed to get billing portal URL", { error: String(portalError) });
-        }
-
-        return {
-          success: false,
-          paymentFailed: true,
-          billingPortalUrl,
-          message: "Payment failed. Please update your billing settings.",
-        };
-      }
-    }
-
-    await ctx.runMutation(internal.actionLog._insertActionLog, {
-      projectId: args.projectId,
-      projectName: project.name,
+    const result: ShareGateResult = await ctx.runMutation(internal.projectShare._shareProject, {
       userId: ctx.userId,
-      action: "share.added",
-      metadata: {
-        sharedUserId: targetUser._id,
-        sharedUserEmail: targetUser.email,
-      },
-    });
-
-    const owner = await ctx.runQuery(components.betterAuth.user.loadUserById, {
-      userId: project.ownerId as BetterAuthId<"user">,
-    });
-
-    try {
-      await sendEmail(ctx, targetUser._id, targetUser.email, {
-        kind: EmailKind.CollaboratorAdded,
-        userName: targetUser.name || "there",
-        projectName: project.name,
-        ownerName: owner?.name || "someone",
-      });
-    } catch (error) {
-      log.error("Failed to send collaborator added email", { error: String(error) });
-    }
-
-    log.info("Project shared", {
       projectId: args.projectId,
-      sharedBy: ctx.userId,
-      targetUser: targetUser._id,
-      isPaidShare,
+      userEmail: args.userEmail,
+      encryptedProjectKey: args.encryptedProjectKey,
+      confirmPayment: args.confirmPayment ?? false,
     });
 
-    return { success: true, shareId: sId };
+    if ("requiresProPlan" in result) {
+      return { ...result, checkoutUrl: await createCheckoutUrlSafely(ctx) };
+    }
+    return result;
   },
 });
 
-export const revokeShare = protectedAction({
-  args: {
-    shareId: v.id("projectShare"),
-  },
-  handler: async (ctx: ProtectedActionCtx, args: { shareId: Id<"projectShare"> }) => {
-    await checkRateLimit(ctx, "write");
+export const _revokeShare = internalMutation({
+  args: { userId: v.string(), shareId: v.id("projectShare") },
+  handler: async (ctx, { userId, shareId }) => {
+    const actor = { ...ctx, userId };
+    const share = await loadShareOrThrow(ctx, shareId);
+    const project = await getProjectOrThrow(ctx, share.projectId);
+    await assertProjectAccess(actor, project);
+    assertProjectOwner(actor, project, "revoke this share");
+    assertNotRevoked(share);
 
-    const share: Doc<"projectShare"> = await ctx.runQuery(internal.projectShare._loadShareById, {
-      shareId: args.shareId,
-    });
+    await revokeAndCount(ctx, share);
 
-    const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: share.projectId,
-    });
-
-    await assertProjectAccess(ctx, project);
-
-    if (ctx.userId !== project.ownerId) {
-      throw permissionError("revoke this share", ErrorSeverity.High);
-    }
-
-    if (share.revokedAt !== undefined) {
-      throw createError({
-        code: ErrorCode.INVALID_OPERATION,
-        message: "Share is already revoked",
-        severity: ErrorSeverity.Medium,
-      });
-    }
-
-    await ctx.runMutation(internal.projectShare._revokeProjectShare, {
-      shareId: args.shareId,
-    });
-
-    const revokedUser = (await ctx.runQuery(components.betterAuth.user.loadUserById, {
-      userId: share.userId as BetterAuthId<"user">,
-    })) as BetterAuthDoc<"user"> | null;
-
-    await ctx.runMutation(internal.actionLog._insertActionLog, {
+    const revokedUser = await findUser(ctx, share.userId);
+    await insertActionLog(ctx, {
       projectId: share.projectId,
       projectName: project.name,
-      userId: ctx.userId,
+      userId,
       action: "share.revoked",
       metadata: {
         sharedUserId: share.userId,
@@ -362,274 +283,147 @@ export const revokeShare = protectedAction({
         keyRotated: false,
       },
     });
+    await requestUsageSync(ctx, userId);
 
-    // Decrement usage count first
-    await ctx.runMutation(internal.projectShare._trackShareUsageCount, {
-      projectId: share.projectId,
-      value: -1,
-    });
-
-    // Then check if we were using purchased shares (after decrement)
-    const updatedProject = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: share.projectId,
-    });
-    const newUsage = updatedProject.shareUsageCount ?? 0;
-
-    // Only track -1 if we were using more than free limit (meaning we freed up a purchased share)
-    // After decrement, if newUsage >= freeShareLimit, we were using purchased shares
-    if (newUsage >= shareLimits.freeShareLimit) {
-      try {
-        await ctx.autumn.track(ctx, {
-          featureId: "additional_shares",
-          value: -1,
-        });
-      } catch (error: unknown) {
-        log.error("Failed to track usage decrease in Autumn", { error: String(error) });
-
-        await ctx.scheduler.runAfter(5 * 60 * 1000, internal.autumn._retryAutumnTracking, {
-          identity: {
-            customerId: ctx.userId,
-            customerData: {
-              name: ctx.name,
-              email: ctx.email,
-            },
-          },
-          attemptCount: 1,
-          featureId: "additional_shares",
-          projectId: project._id,
-          value: -1,
-        });
-      }
-    }
-
-    log.info("Share revoked", {
-      shareId: args.shareId,
-      projectId: share.projectId,
-      userId: ctx.userId,
-    });
-
+    log.info("Share revoked", { shareId, projectId: share.projectId, userId });
     return { success: true };
   },
 });
 
-export const revokeShareWithRotation = protectedAction({
-  args: {
-    shareId: v.id("projectShare"),
-    newEncryptedProjectKey: v.string(),
-    rewrappedShares: v.array(
-      v.object({
-        shareId: v.id("projectShare"),
-        newEncryptedProjectKey: v.string(),
-      }),
-    ),
-    reEncryptedSecrets: v.array(
-      v.object({
-        secretId: v.id("secret"),
-        newEncryptedValue: v.string(),
-      }),
-    ),
-    rewrappedServiceAccounts: v.optional(
-      v.array(
-        v.object({
-          serviceAccountId: v.id("serviceAccount"),
-          newEncryptedProjectKey: v.string(),
-        }),
-      ),
-    ),
-  },
-  handler: async (
-    ctx: ProtectedActionCtx,
-    args: {
-      shareId: Id<"projectShare">;
-      newEncryptedProjectKey: string;
-      rewrappedShares: Array<{ shareId: Id<"projectShare">; newEncryptedProjectKey: string }>;
-      reEncryptedSecrets: Array<{ secretId: Id<"secret">; newEncryptedValue: string }>;
-      rewrappedServiceAccounts?: Array<{
-        serviceAccountId: Id<"serviceAccount">;
-        newEncryptedProjectKey: string;
-      }>;
-    },
-  ) => {
-    const share: Doc<"projectShare"> = await ctx.runQuery(internal.projectShare._loadShareById, {
-      shareId: args.shareId,
-    });
-
-    const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: share.projectId,
-    });
-
-    const newKeyVersion = project.keyVersion + 1;
-
-    await assertProjectAccess(ctx, project);
-
-    if (ctx.userId !== project.ownerId) {
-      throw permissionError("revoke this share", ErrorSeverity.High);
-    }
-
-    if (share.revokedAt !== undefined) {
-      throw createError({
-        code: ErrorCode.INVALID_OPERATION,
-        message: "Share is already revoked",
-        severity: ErrorSeverity.Medium,
-      });
-    }
-
-    if (args.reEncryptedSecrets.length > 0) {
-      const secretValidation = await ctx.runQuery(internal.secret._validateSecretsForRotation, {
-        secretIds: args.reEncryptedSecrets.map(
-          (s: { secretId: Id<"secret">; newEncryptedValue: string }) => s.secretId,
-        ),
-        projectId: share.projectId,
-      });
-
-      if (!secretValidation.valid) {
-        if (secretValidation.missingSecretIds.length > 0) {
-          throw createError({
-            code: ErrorCode.SECRET_NOT_FOUND,
-            message: `Cannot rotate: ${secretValidation.missingSecretIds.length} secret(s) not found`,
-            severity: ErrorSeverity.High,
-            metadata: { missingSecretIds: secretValidation.missingSecretIds },
-          });
-        }
-
-        if (secretValidation.wrongProjectSecretIds.length > 0) {
-          throw createError({
-            code: ErrorCode.INVALID_OPERATION,
-            message: `Cannot rotate: ${secretValidation.wrongProjectSecretIds.length} secret(s) belong to different project`,
-            severity: ErrorSeverity.High,
-            metadata: { wrongProjectSecretIds: secretValidation.wrongProjectSecretIds },
-          });
-        }
-      }
-    }
-
-    for (const rewrapped of args.rewrappedShares) {
-      const otherShare = await ctx.runQuery(internal.projectShare._loadShareById, {
-        shareId: rewrapped.shareId,
-      });
-
-      if (otherShare.projectId !== share.projectId) {
-        throw createError({
-          code: ErrorCode.INVALID_OPERATION,
-          message: "Invalid share in rewrappedShares",
-          severity: ErrorSeverity.High,
-        });
-      }
-
-      if (otherShare.revokedAt !== undefined) {
-        throw createError({
-          code: ErrorCode.INVALID_OPERATION,
-          message: "Cannot update revoked share",
-          severity: ErrorSeverity.High,
-        });
-      }
-    }
-
+export const revokeShare = protectedAction({
+  args: { shareId: v.id("projectShare") },
+  handler: async (ctx, { shareId }): Promise<{ success: boolean }> => {
     await checkRateLimit(ctx, "write");
-
-    await ctx.runMutation(internal.projectShare._revokeProjectShare, {
-      shareId: args.shareId,
+    return await ctx.runMutation(internal.projectShare._revokeShare, {
+      userId: ctx.userId,
+      shareId,
     });
+  },
+});
 
-    await ctx.runMutation(internal.projectShare._trackShareUsageCount, {
-      projectId: share.projectId,
-      value: -1,
+const rotationArgs = {
+  shareId: v.id("projectShare"),
+  newEncryptedProjectKey: v.string(),
+  rewrappedShares: v.array(
+    v.object({ shareId: v.id("projectShare"), newEncryptedProjectKey: v.string() }),
+  ),
+  reEncryptedSecrets: v.array(
+    v.object({ secretId: v.id("secret"), newEncryptedValue: v.string() }),
+  ),
+  rewrappedServiceAccounts: v.optional(
+    v.array(
+      v.object({ serviceAccountId: v.id("serviceAccount"), newEncryptedProjectKey: v.string() }),
+    ),
+  ),
+};
+
+function assertCovers(expected: string[], provided: string[], what: string) {
+  const providedSet = new Set(provided);
+  const missing = expected.filter((id) => !providedSet.has(id));
+  const extra = provided.filter((id) => !expected.includes(id));
+
+  if (missing.length > 0 || extra.length > 0 || providedSet.size !== provided.length) {
+    createError({
+      code: ErrorCode.INVALID_OPERATION,
+      message:
+        missing.length > 0
+          ? `Cannot rotate: ${missing.length} ${what} were not re-encrypted. Update Relic and try again.`
+          : `Cannot rotate: invalid ${what} in request`,
+      severity: ErrorSeverity.High,
+      metadata: { missing, extra },
     });
+  }
+}
 
-    const projectAfterDecrement = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: share.projectId,
-    });
-    const newUsage = projectAfterDecrement.shareUsageCount ?? 0;
+/** Revokes a share and rotates the project key in a single transaction, so no state is ever half-rotated. */
+export const _revokeShareWithRotation = internalMutation({
+  args: { userId: v.string(), ...rotationArgs },
+  handler: async (ctx, args) => {
+    const actor = { ...ctx, userId: args.userId };
+    const share = await loadShareOrThrow(ctx, args.shareId);
+    const project = await getProjectOrThrow(ctx, share.projectId);
+    await assertProjectAccess(actor, project);
+    assertProjectOwner(actor, project, "revoke this share");
+    assertNotRevoked(share);
 
-    if (newUsage >= shareLimits.freeShareLimit) {
-      try {
-        await ctx.autumn.track(ctx, {
-          featureId: "additional_shares",
-          value: -1,
-        });
-      } catch (error: unknown) {
-        log.error("Failed to track usage decrease in Autumn", { error: String(error) });
+    const remainingShares = (await listActiveSharesByProject(ctx, project._id)).filter(
+      (s) => s._id !== share._id,
+    );
+    const serviceAccounts = await ctx.db
+      .query("serviceAccount")
+      .withIndex("by_project_revoked", (q) =>
+        q.eq("projectId", project._id).eq("revokedAt", undefined),
+      )
+      .collect();
+    const secrets = await ctx.db
+      .query("secret")
+      .withIndex("by_project_deleted", (q) => q.eq("projectId", project._id).eq("isDeleted", false))
+      .collect();
 
-        await ctx.scheduler.runAfter(5 * 60 * 1000, internal.autumn._retryAutumnTracking, {
-          identity: {
-            customerId: ctx.userId,
-            customerData: {
-              name: ctx.name,
-              email: ctx.email,
-            },
-          },
-          attemptCount: 1,
-          featureId: "additional_shares",
-          projectId: project._id,
-          value: -1,
-        });
-      }
-    }
+    const rewrappedServiceAccounts = args.rewrappedServiceAccounts ?? [];
+    assertCovers(
+      secrets.map((s) => s._id),
+      args.reEncryptedSecrets.map((s) => s.secretId),
+      "secret(s)",
+    );
+    assertCovers(
+      remainingShares.map((s) => s._id),
+      args.rewrappedShares.map((s) => s.shareId),
+      "collaborator key(s)",
+    );
+    assertCovers(
+      serviceAccounts.map((s) => s._id),
+      rewrappedServiceAccounts.map((s) => s.serviceAccountId),
+      "service account key(s)",
+    );
 
+    const now = Date.now();
     const oldKeyVersion = project.keyVersion;
-    await ctx.runMutation(internal.project._rotateProjectKey, {
-      projectId: share.projectId,
-      newEncryptedProjectKey: args.newEncryptedProjectKey,
-      newKeyVersion,
+    const newKeyVersion = oldKeyVersion + 1;
+
+    await revokeAndCount(ctx, share);
+    await ctx.db.patch(project._id, {
+      encryptedProjectKey: args.newEncryptedProjectKey,
+      keyVersion: newKeyVersion,
+      updatedAt: now,
     });
 
-    for (const rewrapped of args.rewrappedShares) {
-      await ctx.runMutation(internal.projectShare._updateShareKey, {
-        shareId: rewrapped.shareId,
-        newEncryptedProjectKey: rewrapped.newEncryptedProjectKey,
+    for (const { shareId, newEncryptedProjectKey } of args.rewrappedShares) {
+      await ctx.db.patch(shareId, { encryptedProjectKey: newEncryptedProjectKey, updatedAt: now });
+    }
+    for (const { serviceAccountId, newEncryptedProjectKey } of rewrappedServiceAccounts) {
+      await ctx.db.patch(serviceAccountId, {
+        encryptedProjectKey: newEncryptedProjectKey,
+        updatedAt: now,
+      });
+    }
+    for (const { secretId, newEncryptedValue } of args.reEncryptedSecrets) {
+      await ctx.db.patch(secretId, {
+        encryptedValue: newEncryptedValue,
+        encryptionKeyVersion: newKeyVersion,
+        updatedAt: now,
+        updatedBy: args.userId,
       });
     }
 
-    if (args.rewrappedServiceAccounts) {
-      for (const rewrapped of args.rewrappedServiceAccounts) {
-        await ctx.runMutation(internal.serviceAccount._updateServiceAccountProjectKey, {
-          serviceAccountId: rewrapped.serviceAccountId,
-          newEncryptedProjectKey: rewrapped.newEncryptedProjectKey,
-        });
-      }
-    }
+    await invalidateProjectCache(ctx, project._id);
 
-    let secretsReEncrypted = 0;
-
-    if (args.reEncryptedSecrets.length > 0) {
-      const { totalEncrypted } = await ctx.runMutation(
-        internal.secret._reEncryptSecretsForKeyRotation,
-        {
-          secrets: args.reEncryptedSecrets.map(
-            (s: { secretId: Id<"secret">; newEncryptedValue: string }) => ({
-              secretId: s.secretId,
-              newEncryptedValue: s.newEncryptedValue,
-              newEncryptionKeyVersion: newKeyVersion,
-            }),
-          ),
-          userId: ctx.userId,
-        },
-      );
-      secretsReEncrypted = totalEncrypted;
-    }
-
-    await ctx.runMutation(internal.environment._invalidateProjectCache, {
-      projectId: share.projectId,
-    });
-
-    await ctx.runMutation(internal.projectShare._insertKeyRotation, {
-      projectId: share.projectId,
+    await ctx.db.insert("keyRotation", {
+      projectId: project._id,
       oldKeyVersion,
       newKeyVersion,
-      rotatedBy: ctx.userId,
+      rotatedBy: args.userId,
       reason: "share_revoked",
-      secretsReEncrypted,
+      secretsReEncrypted: args.reEncryptedSecrets.length,
       sharesUpdated: args.rewrappedShares.length,
+      createdAt: now,
     });
 
-    const revokedUser = (await ctx.runQuery(components.betterAuth.user.loadUserById, {
-      userId: share.userId as BetterAuthId<"user">,
-    })) as BetterAuthDoc<"user"> | null;
-
-    await ctx.runMutation(internal.actionLog._insertActionLog, {
-      projectId: share.projectId,
+    const revokedUser = await findUser(ctx, share.userId);
+    await insertActionLog(ctx, {
+      projectId: project._id,
       projectName: project.name,
-      userId: ctx.userId,
+      userId: args.userId,
       action: "share.revoked",
       metadata: {
         sharedUserId: share.userId,
@@ -637,105 +431,86 @@ export const revokeShareWithRotation = protectedAction({
         keyRotated: true,
         oldKeyVersion,
         newKeyVersion,
-        secretsReEncrypted,
+        secretsReEncrypted: args.reEncryptedSecrets.length,
         sharesUpdated: args.rewrappedShares.length,
       },
     });
+    await requestUsageSync(ctx, args.userId);
 
     log.info("Share revoked with key rotation", {
-      shareId: args.shareId,
-      projectId: share.projectId,
-      userId: ctx.userId,
-      secretsReEncrypted,
+      shareId: share._id,
+      projectId: project._id,
+      secretsReEncrypted: args.reEncryptedSecrets.length,
       sharesRewrapped: args.rewrappedShares.length,
+      serviceAccountsRewrapped: rewrappedServiceAccounts.length,
     });
-
     return { success: true };
   },
 });
 
-export const listActiveProjectSharesByProject = protectedQuery({
-  args: {
-    projectId: v.id("project"),
-  },
-  handler: async (ctx: ProtectedQueryCtx, args: { projectId: Id<"project"> }) => {
-    const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: args.projectId,
+export const revokeShareWithRotation = protectedAction({
+  args: rotationArgs,
+  handler: async (ctx, args): Promise<{ success: boolean }> => {
+    await checkRateLimit(ctx, "write");
+    return await ctx.runMutation(internal.projectShare._revokeShareWithRotation, {
+      userId: ctx.userId,
+      ...args,
     });
+  },
+});
 
+export const listActiveProjectSharesByProject = protectedQuery({
+  args: { projectId: v.id("project") },
+  handler: async (ctx, args) => {
+    const project = await getProjectOrThrow(ctx, args.projectId);
     await assertProjectAccess(ctx, project);
+    assertProjectOwner(ctx, project, "list shares for this project");
 
-    if (ctx.userId !== project.ownerId) {
-      throw permissionError("list shares for this project", ErrorSeverity.High);
-    }
+    const getUser = userCache(ctx);
+    const shares = await listActiveSharesByProject(ctx, args.projectId);
 
-    const shares: Doc<"projectShare">[] = await ctx.runQuery(
-      internal.projectShare._loadActiveSharesByProject,
-      {
-        projectId: args.projectId,
-      },
-    );
-
-    const sharesWithUsers = await Promise.all(
-      shares.map(async (share: Doc<"projectShare">) => {
-        const user = (await ctx.runQuery(components.betterAuth.user.loadUserById, {
-          userId: share.userId as BetterAuthId<"user">,
-        })) as BetterAuthDoc<"user"> | null;
-
-        const sharedByUser = (await ctx.runQuery(components.betterAuth.user.loadUserById, {
-          userId: share.sharedBy as BetterAuthId<"user">,
-        })) as BetterAuthDoc<"user"> | null;
-
-        return {
-          id: share._id,
-          projectId: share.projectId,
-          userId: share.userId,
-          userEmail: user?.email || "Unknown",
-          userName: user?.name || "Unknown",
-          userPublicKey: user?.publicKey || null,
-          sharedBy: share.sharedBy,
-          sharedByEmail: sharedByUser?.email || "Unknown",
-          sharedAt: share.sharedAt,
-          createdAt: share.createdAt,
-        };
-      }),
-    );
-
-    return { shares: sharesWithUsers };
+    return {
+      shares: await Promise.all(
+        shares.map(async (share) => {
+          const [user, sharedBy] = await Promise.all([
+            getUser(share.userId),
+            getUser(share.sharedBy),
+          ]);
+          return {
+            id: share._id,
+            projectId: share.projectId,
+            userId: share.userId,
+            userEmail: user?.email || "Unknown",
+            userName: user?.name || "Unknown",
+            userPublicKey: user?.publicKey || null,
+            sharedBy: share.sharedBy,
+            sharedByEmail: sharedBy?.email || "Unknown",
+            sharedAt: share.sharedAt,
+            createdAt: share.createdAt,
+          };
+        }),
+      ),
+    };
   },
 });
 
 export const listActiveSharedProjectsForCurrentUser = protectedQuery({
   args: {},
-  handler: async (ctx: ProtectedQueryCtx) => {
-    const shares: Doc<"projectShare">[] = await ctx.runQuery(
-      internal.projectShare._loadActiveSharesByUser,
-      {
-        userId: ctx.userId,
-      },
-    );
+  handler: async (ctx) => {
+    const getUser = userCache(ctx);
+    const shares = await listActiveSharesByUser(ctx, ctx.userId);
 
-    const sharesWithProjects = await Promise.all(
-      shares.map(async (share: Doc<"projectShare">) => {
-        const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
-          projectId: share.projectId,
-        });
+    const results = await Promise.all(
+      shares.map(async (share) => {
+        const project = await ctx.db.get(share.projectId);
+        if (!project) return null;
 
-        const { accessible } = await isProjectAccessible(ctx, project);
+        const [owner, unlocked] = await Promise.all([
+          getUser(project.ownerId),
+          project.isArchived ? Promise.resolve(false) : isUnlockedByOwnerPlan(ctx, project),
+        ]);
 
-        const owner = (await ctx.runQuery(components.betterAuth.user.loadUserById, {
-          userId: project.ownerId as BetterAuthId<"user">,
-        })) as BetterAuthDoc<"user"> | null;
-
-        let status: "shared" | "archived" | "restricted";
-        if (project.isArchived) {
-          status = "archived";
-        } else if (!accessible) {
-          status = "restricted";
-        } else {
-          status = "shared";
-        }
-
+        const isRestricted = !unlocked;
         return {
           id: share._id,
           projectId: share.projectId,
@@ -745,51 +520,33 @@ export const listActiveSharedProjectsForCurrentUser = protectedQuery({
           ownerEmail: owner?.email || "Unknown",
           ownerName: owner?.name || "Unknown",
           sharedAt: share.sharedAt,
-          encryptedProjectKey: share.encryptedProjectKey,
-          isRestricted: !accessible,
+          encryptedProjectKey:
+            isRestricted || project.isArchived ? null : share.encryptedProjectKey,
+          isRestricted,
           isArchived: project.isArchived,
-          status,
+          status: project.isArchived
+            ? ("archived" as const)
+            : isRestricted
+              ? ("restricted" as const)
+              : ("shared" as const),
         };
       }),
     );
 
-    return { shares: sharesWithProjects };
+    return { shares: results.filter((r) => r !== null) };
   },
 });
 
 export const getProjectShareByProjectForCurrentUser = protectedQuery({
-  args: {
-    projectId: v.id("project"),
-  },
-  handler: async (
-    ctx: ProtectedQueryCtx,
-    args: { projectId: Id<"project"> },
-  ): Promise<{
-    id: Id<"projectShare">;
-    projectId: Id<"project">;
-    encryptedProjectKey: string;
-    sharedAt: number;
-  }> => {
-    const share: Doc<"projectShare"> | null = await ctx.runQuery(
-      internal.projectShare._loadActiveShareByProjectAndUser,
-      {
-        projectId: args.projectId,
-        userId: ctx.userId,
-      },
-    );
+  args: { projectId: v.id("project") },
+  handler: async (ctx, args) => {
+    const share = await findActiveShare(ctx, args.projectId, ctx.userId);
+    if (!share) notFoundError("share");
 
-    if (!share) {
-      throw notFoundError("share");
-    }
-
-    const project = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: args.projectId,
-    });
-
+    const project = await getProjectOrThrow(ctx, args.projectId);
     const { accessible } = await isProjectAccessible(ctx, project);
-
     if (!accessible) {
-      throw createError({
+      createError({
         code: ErrorCode.PROJECT_INACCESSIBLE,
         message: "This project is not accessible",
         severity: ErrorSeverity.High,
@@ -806,174 +563,25 @@ export const getProjectShareByProjectForCurrentUser = protectedQuery({
 });
 
 export const _loadShareById = internalQuery({
-  args: {
-    shareId: v.id("projectShare"),
-  },
+  args: { shareId: v.id("projectShare") },
   returns: doc(schema, "projectShare"),
-  handler: async (ctx, args) => {
-    const share = await ctx.db.get(args.shareId);
-
-    if (!share) {
-      throw notFoundError("share");
-    }
-
-    return share;
-  },
+  handler: async (ctx, { shareId }) => loadShareOrThrow(ctx, shareId),
 });
 
 export const _loadActiveSharesByProject = internalQuery({
-  args: {
-    projectId: v.id("project"),
-  },
+  args: { projectId: v.id("project") },
   returns: v.array(doc(schema, "projectShare")),
-  handler: async (ctx, args) => {
-    const shares = await ctx.db
-      .query("projectShare")
-      .withIndex("by_project_active", (q) =>
-        q.eq("projectId", args.projectId).eq("revokedAt", undefined),
-      )
-      .collect();
-
-    return shares;
-  },
+  handler: async (ctx, { projectId }) => listActiveSharesByProject(ctx, projectId),
 });
 
 export const _loadActiveSharesByUser = internalQuery({
-  args: {
-    userId: v.string(),
-  },
+  args: { userId: v.string() },
   returns: v.array(doc(schema, "projectShare")),
-  handler: async (ctx, args) => {
-    const shares = await ctx.db
-      .query("projectShare")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .filter((q) => q.eq(q.field("revokedAt"), undefined))
-      .collect();
-
-    return shares;
-  },
+  handler: async (ctx, { userId }) => listActiveSharesByUser(ctx, userId),
 });
 
 export const _loadActiveShareByProjectAndUser = internalQuery({
-  args: {
-    projectId: v.id("project"),
-    userId: v.string(),
-  },
+  args: { projectId: v.id("project"), userId: v.string() },
   returns: v.union(doc(schema, "projectShare"), v.null()),
-  handler: async (ctx, args) => {
-    const shares = await ctx.db
-      .query("projectShare")
-      .withIndex("by_project_user", (q) =>
-        q.eq("projectId", args.projectId).eq("userId", args.userId),
-      )
-      .filter((q) => q.eq(q.field("revokedAt"), undefined))
-      .collect();
-
-    return shares[0] || null;
-  },
-});
-
-export const _insertProjectShare = internalMutation({
-  args: {
-    projectId: v.id("project"),
-    userId: v.string(),
-    encryptedProjectKey: v.string(),
-    sharedBy: v.string(),
-  },
-  returns: v.object({ success: v.boolean(), shareId: v.id("projectShare") }),
-  handler: async (ctx, args) => {
-    const now = Date.now();
-
-    const shareId = await ctx.db.insert("projectShare", {
-      projectId: args.projectId,
-      userId: args.userId,
-      encryptedProjectKey: args.encryptedProjectKey,
-      sharedBy: args.sharedBy,
-      sharedAt: now,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    return { success: true, shareId };
-  },
-});
-
-export const _revokeProjectShare = internalMutation({
-  args: {
-    shareId: v.id("projectShare"),
-  },
-  returns: v.object({ success: v.boolean() }),
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.shareId, {
-      revokedAt: Date.now(),
-      updatedAt: Date.now(),
-    });
-
-    return { success: true };
-  },
-});
-
-export const _updateShareKey = internalMutation({
-  args: {
-    shareId: v.id("projectShare"),
-    newEncryptedProjectKey: v.string(),
-  },
-  returns: v.object({ success: v.boolean() }),
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.shareId, {
-      encryptedProjectKey: args.newEncryptedProjectKey,
-      updatedAt: Date.now(),
-    });
-
-    return { success: true };
-  },
-});
-
-export const _insertKeyRotation = internalMutation({
-  args: {
-    projectId: v.id("project"),
-    oldKeyVersion: v.number(),
-    newKeyVersion: v.number(),
-    rotatedBy: v.id("user"),
-    reason: v.optional(v.string()),
-    secretsReEncrypted: v.number(),
-    sharesUpdated: v.number(),
-  },
-  returns: v.object({ success: v.boolean(), rotationId: v.id("keyRotation") }),
-  handler: async (ctx, args) => {
-    const rotationId = await ctx.db.insert("keyRotation", {
-      projectId: args.projectId,
-      oldKeyVersion: args.oldKeyVersion,
-      newKeyVersion: args.newKeyVersion,
-      rotatedBy: args.rotatedBy.toString(),
-      reason: args.reason,
-      secretsReEncrypted: args.secretsReEncrypted,
-      sharesUpdated: args.sharesUpdated,
-      createdAt: Date.now(),
-    });
-
-    return { success: true, rotationId };
-  },
-});
-
-export const _trackShareUsageCount = internalMutation({
-  args: { projectId: v.id("project"), value: v.number() },
-  returns: v.object({ success: v.boolean() }),
-  handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-
-    if (!project) {
-      return { success: false };
-    }
-
-    const currentCount = project.shareUsageCount ?? 0;
-
-    const newCount = currentCount + args.value;
-
-    await ctx.db.patch(args.projectId, {
-      shareUsageCount: newCount,
-    });
-
-    return { success: true };
-  },
+  handler: async (ctx, { projectId, userId }) => findActiveShare(ctx, projectId, userId),
 });

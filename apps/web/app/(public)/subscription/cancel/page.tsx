@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { StatusBox } from "@/components/status-box";
 import { trackWebEvent } from "@/lib/posthog";
-import { authHeadingStyle } from "@/lib/styles";
+import { authHeadingStyle, primaryButton } from "@/lib/styles";
 
 export default function SubscriptionCancelPage() {
   useEffect(() => {
@@ -16,7 +16,10 @@ export default function SubscriptionCancelPage() {
     <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
       <div className="w-full max-w-md px-4 py-10 sm:px-6 sm:py-16">
         <div className="flex flex-col gap-8">
-          <Link href="/" className="flex items-center">
+          <Link
+            href="/"
+            className="flex w-fit items-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+          >
             <Image
               src="/relic-logo-dark.svg"
               alt="Relic"
@@ -41,11 +44,8 @@ export default function SubscriptionCancelPage() {
             Your payment was cancelled and no charges were made. You can upgrade to Pro anytime.
           </StatusBox>
 
-          <Link
-            href="/dashboard"
-            className="w-full p-3 text-sm font-medium text-center border-2 border-border bg-foreground text-background hover:bg-foreground/90 transition-colors"
-          >
-            Go to Dashboard
+          <Link href="/dashboard" className={`w-full p-3 text-sm text-center ${primaryButton}`}>
+            Go to dashboard
           </Link>
         </div>
       </div>

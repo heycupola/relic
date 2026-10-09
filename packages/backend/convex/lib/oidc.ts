@@ -1,3 +1,6 @@
+import { createLogger } from "./logger";
+
+const log = createLogger("oidc");
 const decoder = new TextDecoder();
 
 interface JWK {
@@ -25,6 +28,7 @@ export interface OidcClaims {
   aud: string | string[];
   exp: number;
   iat: number;
+  nbf?: number;
   [key: string]: unknown;
 }
 
@@ -75,6 +79,9 @@ async function fetchJwks(issuer: string): Promise<JWKSResponse> {
   if (!jwksUri) {
     throw new Error("OIDC discovery document missing jwks_uri");
   }
+  if (!jwksUri.startsWith("https://")) {
+    throw new Error("OIDC jwks_uri must use https");
+  }
 
   const jwksResponse = await fetch(jwksUri);
   if (!jwksResponse.ok) {
@@ -105,21 +112,57 @@ async function verifyJwtSignature(token: string, key: CryptoKey): Promise<boolea
   return await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, sigBuffer, signedContent);
 }
 
+const CLOCK_SKEW_SECONDS = 60;
+
+function segmentGlobToRegex(glob: string): string {
+  return glob.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^:/]*");
+}
+
+/**
+ * `*` matches within a single `:`/`/`-delimited segment. A trailing `:*` or `/*` is the one
+ * exception and matches any remainder, which is how `repo:org/repo:*` admits every ref of that
+ * repository and `repo:org/*` every repository of that owner.
+ */
 export function matchSubjectPattern(subject: string, pattern: string): boolean {
   if (pattern === subject) return true;
+  if (!pattern.includes("*")) return false;
 
-  if (pattern.endsWith(":*")) {
-    const prefix = pattern.slice(0, -1);
-    return subject.startsWith(prefix);
+  const regex = /[:/]\*$/.test(pattern)
+    ? `^${segmentGlobToRegex(pattern.slice(0, -1))}.*$`
+    : `^${segmentGlobToRegex(pattern)}$`;
+  return new RegExp(regex).test(subject);
+}
+
+/**
+ * Returns a reason when a subject pattern is too broad to be a meaningful trust policy:
+ * wildcards may only appear after a literal claim name and owner (e.g. `repo:my-org/`).
+ */
+export function validateSubjectPattern(pattern: string): string | null {
+  const trimmed = pattern.trim();
+  if (!trimmed) return "OIDC subject pattern cannot be empty";
+  if (trimmed !== pattern) return "OIDC subject pattern cannot have surrounding whitespace";
+
+  const wildcardAt = pattern.indexOf("*");
+  if (wildcardAt === -1) return null;
+
+  const literalPrefix = pattern.slice(0, wildcardAt);
+  if (!/^[^:*]+:[^:*/]+[/:]/.test(literalPrefix)) {
+    return "OIDC subject pattern is too broad. Wildcards must follow a literal owner, e.g. repo:my-org/my-repo:*";
   }
+  return null;
+}
 
-  if (pattern.includes("*")) {
-    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
-    const regex = new RegExp(`^${escaped}$`);
-    return regex.test(subject);
+export function validateIssuerUrl(issuer: string): string | null {
+  try {
+    const url = new URL(issuer);
+    if (url.protocol !== "https:") return "OIDC issuer must use https";
+    if (url.username || url.password || url.search || url.hash) {
+      return "OIDC issuer must be a plain https URL";
+    }
+    return null;
+  } catch {
+    return "OIDC issuer must be a valid URL";
   }
-
-  return false;
 }
 
 export async function validateOidcToken(
@@ -128,11 +171,16 @@ export async function validateOidcToken(
   expectedSubjectPattern: string,
   expectedAudience?: string,
 ): Promise<OidcValidationResult> {
+  const reject = (error: string, detail?: Record<string, unknown>): OidcValidationResult => {
+    log.warn("OIDC token rejected", { reason: error, ...detail });
+    return { valid: false, error };
+  };
+
   try {
     const header = decodeJwtHeader(token);
 
     if (header.alg !== "RS256") {
-      return { valid: false, error: `Unsupported algorithm: ${header.alg}` };
+      return reject("Unsupported OIDC token algorithm", { alg: header.alg });
     }
 
     const jwks = await fetchJwks(expectedIssuer);
@@ -141,53 +189,65 @@ export async function validateOidcToken(
       : jwks.keys.find((k) => k.use === "sig" && k.kty === "RSA");
 
     if (!matchingKey) {
-      return { valid: false, error: "No matching key found in JWKS" };
+      return reject("OIDC token signing key not found");
     }
 
     const publicKey = await importRsaPublicKey(matchingKey);
     const signatureValid = await verifyJwtSignature(token, publicKey);
 
     if (!signatureValid) {
-      return { valid: false, error: "Invalid JWT signature" };
+      return reject("Invalid OIDC token signature");
     }
 
     const claims = decodeJwtPayload(token);
 
     const now = Math.floor(Date.now() / 1000);
-    if (claims.exp && claims.exp < now) {
-      return { valid: false, error: "OIDC token has expired" };
+    if (typeof claims.exp !== "number" || !Number.isFinite(claims.exp)) {
+      return reject("OIDC token is missing an expiry");
+    }
+    if (claims.exp < now - CLOCK_SKEW_SECONDS) {
+      return reject("OIDC token has expired");
+    }
+    if (typeof claims.nbf === "number" && claims.nbf > now + CLOCK_SKEW_SECONDS) {
+      return reject("OIDC token is not valid yet");
+    }
+    if (typeof claims.iat === "number" && claims.iat > now + CLOCK_SKEW_SECONDS) {
+      return reject("OIDC token was issued in the future");
     }
 
-    const normalizedExpected = expectedIssuer.endsWith("/")
-      ? expectedIssuer.slice(0, -1)
-      : expectedIssuer;
-    const normalizedActual = claims.iss.endsWith("/") ? claims.iss.slice(0, -1) : claims.iss;
-    if (normalizedActual !== normalizedExpected) {
-      return {
-        valid: false,
-        error: `Issuer mismatch: expected ${expectedIssuer}, got ${claims.iss}`,
-      };
+    if (
+      typeof claims.iss !== "string" ||
+      stripTrailingSlash(claims.iss) !== stripTrailingSlash(expectedIssuer)
+    ) {
+      return reject("OIDC token issuer is not trusted", { iss: claims.iss });
     }
 
-    if (!matchSubjectPattern(claims.sub, expectedSubjectPattern)) {
-      return {
-        valid: false,
-        error: `Subject mismatch: "${claims.sub}" does not match pattern "${expectedSubjectPattern}"`,
-      };
+    if (
+      typeof claims.sub !== "string" ||
+      !matchSubjectPattern(claims.sub, expectedSubjectPattern)
+    ) {
+      return reject("OIDC token subject is not allowed by this service account", {
+        sub: claims.sub,
+      });
     }
 
     if (expectedAudience) {
       const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
       if (!audiences.includes(expectedAudience)) {
-        return { valid: false, error: `Audience mismatch: expected ${expectedAudience}` };
+        return reject("OIDC token audience is not allowed by this service account");
       }
+    } else {
+      log.warn("OIDC policy has no audience; accepting token for any audience", {
+        issuer: expectedIssuer,
+      });
     }
 
     return { valid: true, claims };
   } catch (error) {
-    return {
-      valid: false,
-      error: `OIDC validation failed: ${error instanceof Error ? error.message : String(error)}`,
-    };
+    return reject("OIDC token validation failed", { error: String(error) });
   }
+}
+
+function stripTrailingSlash(value: string): string {
+  return value.endsWith("/") ? value.slice(0, -1) : value;
 }

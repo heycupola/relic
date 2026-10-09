@@ -7,25 +7,28 @@ Relic reads the following environment variables. None of them are required for n
 
 ## Authentication
 
-| Variable              | Description                                                                                                            | Default                    |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| `RELIC_SERVICE_TOKEN` | Service account token for CI/CD. Handles both authentication and decryption. Recommended over API keys.                | None                       |
-| `RELIC_OIDC_TOKEN`    | OIDC token for identity verification. Auto-detected in GitHub Actions and GitLab CI. Set manually for other providers. | Auto-detected              |
-| `RELIC_PASSWORD`      | Master password for secret decryption. Used with `RELIC_API_KEY` in CI/CD (deprecated).                                | Read from keychain or file |
-| `RELIC_API_KEY`       | API key for CI/CD authentication (deprecated). Use `RELIC_SERVICE_TOKEN` instead.                                      | None                       |
-| `RELIC_PROJECT_ID`    | Project ID. Overrides `relic.toml` and `--project` flag.                                                               | Read from `relic.toml`     |
+| Variable              | Description                                                                                                                                                         | Default                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `RELIC_SERVICE_TOKEN` | Service account token for CI/CD. Handles both authentication and decryption. Recommended over API keys.                                                             | None                               |
+| `RELIC_OIDC_TOKEN`    | OIDC token for identity verification. Requested automatically in GitHub Actions. In GitLab CI, define it with `id_tokens` (see [OIDC](/guides/oidc#gitlab-ci)).     | Auto-detected in GitHub Actions    |
+| `RELIC_PASSWORD`      | Master password for secret decryption. Used with `RELIC_API_KEY` in CI/CD (deprecated).                                                                             | Read from keychain or file         |
+| `RELIC_API_KEY`       | API key for CI/CD authentication (deprecated). Use `RELIC_SERVICE_TOKEN` instead.                                                                                   | None                               |
+| `RELIC_PROJECT_ID`    | Project ID. Overrides `relic.toml`; the `--project` flag overrides this variable.                                                                                    | Read from `relic.toml`             |
+
+`relic run` (on macOS and Linux) and the MCP server don't pass `RELIC_*` variables from your environment to the command they run.
 
 ## Server
 
-| Variable          | Description                                                          | Default                   |
-| ----------------- | -------------------------------------------------------------------- | ------------------------- |
-| `CONVEX_URL`      | Convex backend URL. Only needed for self-hosted or development.      | Production URL (built-in) |
-| `CONVEX_SITE_URL` | Convex HTTP actions URL. Only needed for self-hosted or development. | Production URL (built-in) |
-| `SITE_URL`        | Web dashboard URL. Only needed for self-hosted or development.       | Production URL (built-in) |
+| Variable                | Description                                                          | Default                   |
+| ----------------------- | -------------------------------------------------------------------- | ------------------------- |
+| `RELIC_CONVEX_URL`      | Convex backend URL. Only needed for self-hosted or development.      | Production URL (built-in) |
+| `RELIC_CONVEX_SITE_URL` | Convex HTTP actions URL. Only needed for self-hosted or development. | Production URL (built-in) |
+| `RELIC_SITE_URL`        | Web dashboard URL. Only needed for self-hosted or development.       | Production URL (built-in) |
 
 <Note>
-  You do not need to set `CONVEX_URL`, `CONVEX_SITE_URL`, or `SITE_URL` when using Relic's hosted
-  service. These are only required for self-hosted or local development setups.
+  You do not need to set these when using Relic's hosted service. Earlier versions read
+  `CONVEX_URL`, `CONVEX_SITE_URL`, and `SITE_URL`; those generic names are no longer read, so a
+  `.env` file in your own project can't redirect the CLI to another server.
 </Note>
 
 ## Logging
@@ -42,6 +45,12 @@ Relic reads the following environment variables. None of them are required for n
 | `RELIC_TELEMETRY`     | Set to `false` to disable telemetry.             | Enabled                      |
 | `RELIC_POSTHOG_KEY`   | PostHog API key. Telemetry is disabled if empty. | Empty                        |
 | `RELIC_TELEMETRY_URL` | PostHog proxy host.                              | `https://telemetry.withrelic.com` |
+
+## Installation
+
+| Variable            | Description                                                                                         | Default    |
+| ------------------- | --------------------------------------------------------------------------------------------------- | ---------- |
+| `RELIC_INSTALL_DIR` | Install location for the `curl` install script. `relic upgrade` reuses the running binary's folder. | `~/.relic` |
 
 ## Runtime
 

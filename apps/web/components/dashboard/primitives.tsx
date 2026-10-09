@@ -91,7 +91,7 @@ export function DashboardCard({
           {eyebrow && <p className="font-mono text-[11px] text-electric-ink">{eyebrow}</p>}
           <h2
             id={headingId}
-            className="truncate font-[family-name:var(--font-space-grotesk)] text-base font-semibold text-foreground"
+            className="truncate font-[family-name:var(--font-heading)] text-base font-semibold text-foreground"
           >
             {title}
           </h2>

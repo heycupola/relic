@@ -78,12 +78,31 @@ jobs:
 deploy:
   stage: deploy
   image: oven/bun:latest
+  # Only needed if the service account has an OIDC policy (`--gitlab`).
+  id_tokens:
+    RELIC_OIDC_TOKEN:
+      aud: relic
   script:
     - bun add -g relic
     - relic run -e production -- npm run deploy
   variables:
     RELIC_SERVICE_TOKEN: $RELIC_SERVICE_TOKEN
 ```
+
+<Note>
+  GitHub Actions OIDC tokens are requested automatically. GitLab CI needs the `id_tokens` block
+  above; the `CI_JOB_JWT_V2` variable used by older GitLab versions was removed in GitLab 17.0.
+</Note>
+
+## Environment Variables in the Command
+
+`relic run` starts your command with only the secrets plus a minimal set of variables (`PATH`, `HOME`, `USER`, `SHELL`, `TERM`, `LANG`, `LC_*`, `TMPDIR`, `TZ`). CI variables such as `CI`, `NODE_ENV`, or `GITHUB_*` are **not** passed through by default. Add `--inherit-env` if your build needs them:
+
+```bash
+relic run -e production --inherit-env -- npm run build
+```
+
+On macOS and Linux, Relic's own variables (`RELIC_SERVICE_TOKEN`, `RELIC_API_KEY`, `RELIC_PASSWORD`, ...) are never passed through, with or without `--inherit-env`.
 
 ## Other Providers
 

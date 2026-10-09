@@ -1,14 +1,14 @@
 "use client";
 
 import { api } from "@repo/backend";
-import { useAction, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { Activity, FolderKanban, Share2, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityLogsCard } from "@/components/dashboard/activity-logs-card";
 import { ApiKeysCard } from "@/components/dashboard/api-keys-card";
 import { GetStartedCard } from "@/components/dashboard/get-started-card";
 import { PageHeader } from "@/components/dashboard/page-header";
-import { PlanCard, useProCheckout } from "@/components/dashboard/plan-card";
+import { PlanCard } from "@/components/dashboard/plan-card";
 import { CardSkeleton } from "@/components/dashboard/primitives";
 import {
   type DashboardProject,
@@ -20,6 +20,7 @@ import { type Stat, StatStrip } from "@/components/dashboard/stat-strip";
 import { Dialog } from "@/components/dialog";
 import { StatusBox } from "@/components/status-box";
 import { usePaginatedActionLogs } from "@/hooks/usePaginatedActionLogs";
+import { useProCheckout } from "@/hooks/useProCheckout";
 import { authClient } from "@/lib/auth";
 import { formatTimeAgo, pluralize } from "@/lib/format";
 import { trackWebEvent } from "@/lib/posthog";
@@ -54,46 +55,6 @@ function useUpgradeFromUrl(hasPro: boolean | undefined, onState: (state: Upgrade
   }, [hasPro, startCheckout, onState]);
 }
 
-interface ProjectLimits {
-  used: number;
-  included: number;
-  hasPro?: boolean;
-  freeLimit?: number;
-  totalProjects?: number;
-}
-
-/** `undefined` while loading, `null` if billing info couldn't be fetched. */
-function useProjectLimits(enabled: boolean) {
-  const getLimits = useAction(api.project.getLimits);
-  const getProjectLimits = useAction(api.project.getProjectLimits);
-  const [limits, setLimits] = useState<ProjectLimits | null | undefined>(undefined);
-
-  useEffect(() => {
-    if (!enabled) return;
-    let cancelled = false;
-    Promise.all([getLimits({}), getProjectLimits({}).catch(() => null)])
-      .then(([base, detail]) => {
-        if (cancelled) return;
-        setLimits({
-          used: base.usage,
-          included: base.includedUsage,
-          hasPro: detail?.hasPro,
-          freeLimit: detail?.freeLimit,
-          totalProjects: detail?.totalProjectsCount,
-        });
-      })
-      .catch((error: unknown) => {
-        console.error("Failed to fetch project limits:", error);
-        if (!cancelled) setLimits(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled, getLimits, getProjectLimits]);
-
-  return limits;
-}
-
 const STATUS_ORDER = { owned: 0, shared: 0, restricted: 1, archived: 2 } as const;
 
 function greeting() {
@@ -118,7 +79,7 @@ export default function DashboardPage() {
     enabled,
   );
   const apiKeysData = useQuery(api.apiKey.listApiKeys, enabled);
-  const limits = useProjectLimits(!!session?.user);
+  const billing = useQuery(api.billing.getBillingOverview, enabled);
   const {
     logs: actionLogs,
     isLoading: logsLoading,
@@ -134,7 +95,7 @@ export default function DashboardPage() {
     userData === undefined ||
     projectsData === undefined ||
     sharedProjectsData === undefined ||
-    limits === undefined;
+    billing === undefined;
 
   const projects = useMemo<DashboardProject[]>(() => {
     const byId = new Map<string, DashboardProject>();
@@ -178,17 +139,11 @@ export default function DashboardPage() {
   ).length;
   const lastLog = actionLogs[0];
 
-  const projectsUsed = limits?.used ?? ownedActive.length;
-  const projectsIncluded = limits?.included || projectsUsed;
-  const excessProjects =
-    limits?.freeLimit !== undefined && limits.totalProjects !== undefined && !limits.hasPro
-      ? Math.max(0, limits.totalProjects - limits.freeLimit)
-      : 0;
-  const graceDays = projectsData?.isInGracePeriod
-    ? projectsData.gracePeriodDaysRemaining
-    : undefined;
-  const showGraceNotice = graceDays !== undefined;
-  const showRestrictedNotice = !showGraceNotice && excessProjects > 0;
+  const excessProjects = billing
+    ? Math.max(0, billing.projects.active - billing.projects.included)
+    : 0;
+  const showGraceNotice = billing?.inGracePeriod && excessProjects > 0;
+  const showRestrictedNotice = billing?.isRestricted && excessProjects > 0;
   const isNewUser = !isLoading && projects.length === 0;
 
   const firstName = userData?.name?.trim().split(/\s+/)[0];
@@ -198,7 +153,7 @@ export default function DashboardPage() {
       label: "Projects",
       icon: FolderKanban,
       value: ownedActive.length,
-      hint: limits ? `${projectsUsed} of ${projectsIncluded} included` : "",
+      hint: billing ? `${billing.projects.active} of ${billing.projects.included} included` : "",
       hintTone: excessProjects > 0 ? "warning" : undefined,
     },
     {
@@ -293,11 +248,10 @@ export default function DashboardPage() {
               <StatusBox variant="warning">
                 <h2 className="text-sm font-medium text-foreground">Your Pro plan has ended</h2>
                 <p className="mt-1 text-pretty">
-                  Everything stays unlocked for {pluralize(graceDays ?? 0, "more day")}. After that
-                  only the projects included in the Free plan stay available
-                  {excessProjects > 0
-                    ? `, so archive ${pluralize(excessProjects, "project")} or upgrade to keep full access.`
-                    : "."}
+                  Everything stays unlocked for{" "}
+                  {pluralize(billing.gracePeriodDaysRemaining, "more day")}. After that only your
+                  newest project stays available. Archive {pluralize(excessProjects, "project")} or
+                  upgrade to keep full access.
                 </p>
               </StatusBox>
             )}
@@ -305,7 +259,7 @@ export default function DashboardPage() {
               <StatusBox variant="warning">
                 <h2 className="text-sm font-medium text-foreground">Some projects are locked</h2>
                 <p className="mt-1 text-pretty">
-                  The Free plan includes {pluralize(limits?.freeLimit ?? 0, "project")}. Archive{" "}
+                  The Free plan includes {pluralize(billing.projects.included, "project")}. Archive{" "}
                   {pluralize(excessProjects, "project")} or upgrade to Pro to unlock them again.
                 </p>
               </StatusBox>
@@ -341,8 +295,8 @@ export default function DashboardPage() {
             ) : (
               <PlanCard
                 hasPro={hasPro}
-                projectsUsed={projectsUsed}
-                projectsIncluded={projectsIncluded}
+                projectsUsed={billing.projects.active}
+                projectsIncluded={billing.projects.included}
                 activeApiKeys={activeApiKeys}
               />
             )}
@@ -355,7 +309,7 @@ export default function DashboardPage() {
             <div className="space-y-0.5">
               <h2
                 id="machine-access-heading"
-                className="font-[family-name:var(--font-space-grotesk)] text-lg font-semibold text-foreground"
+                className="font-[family-name:var(--font-heading)] text-lg font-semibold text-foreground"
               >
                 Machine access
               </h2>

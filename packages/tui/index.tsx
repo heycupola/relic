@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 import { initLogger, isFirstRun, saveTelemetryPreference, trackEvent } from "@repo/logger";
 
 await initLogger();
@@ -19,18 +20,21 @@ if (process.env.DEV === "true") {
 }
 
 import { ConsolePosition, createCliRenderer } from "@opentui/core";
-import { createRoot } from "@opentui/react";
+import { createRoot, useRenderer } from "@opentui/react";
 import {
   clearCachedUserKeys,
   clearPassword,
   clearSession,
+  extractErrorMessage,
   getUserKeyCacheDb,
   hasPasswordForAccount,
   savePassword,
   validateSession,
   watchSession,
 } from "@repo/auth";
-import { useCallback, useEffect, useState } from "react";
+import { createLogger } from "@repo/logger";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ErrorBoundary } from "./components/shared/ErrorBoundary";
 import { TaskBar } from "./components/shared/TaskBar";
 import { AppProvider, useUser } from "./context";
 import { ConvexAuthProvider } from "./convex/provider";
@@ -43,7 +47,12 @@ import { ProjectPage } from "./pages/ProjectPage";
 import { RouterProvider, useRouter } from "./router";
 import { getUserDisplayName } from "./utils/mappers";
 
+const logger = createLogger("tui");
+
+const PASSWORD_RECHECK_DELAY_MS = 1000;
+
 function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
+  const renderer = useRenderer();
   const { route, navigate } = useRouter();
   const { user, isLoading: isUserLoading } = useUser();
   const displayName = user ? getUserDisplayName(user) : "User";
@@ -53,9 +62,12 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
     isReady: false,
     loading: true,
   });
+  const isPasswordReadyRef = useRef(false);
+  isPasswordReadyRef.current = passwordStatus.isReady;
 
   useEffect(() => {
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
     const checkPassword = async () => {
       if (isUserLoading) {
@@ -74,18 +86,25 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
         email: user.email,
         encryptedPrivateKey: user.encryptedPrivateKey,
         salt: user.salt,
-      });
+      }).catch(() => false);
 
       if (!cancelled) {
         setPasswordStatus({ isReady, loading: false });
       }
     };
 
-    setPasswordStatus({ isReady: false, loading: true });
-    void checkPassword();
+    if (isPasswordReadyRef.current) {
+      // NOTE: Keys changed while unlocked (e.g. a password change). Keep the current page mounted
+      // and give the local password save a moment to land before re-checking.
+      timer = setTimeout(() => void checkPassword(), PASSWORD_RECHECK_DELAY_MS);
+    } else {
+      setPasswordStatus({ isReady: false, loading: true });
+      void checkPassword();
+    }
 
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
   }, [
     hasExistingKeys,
@@ -116,6 +135,23 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
     navigate({ name: "home" });
   };
 
+  const requireUnlock = useCallback(() => {
+    setPasswordStatus({ isReady: false, loading: false });
+  }, []);
+
+  const isUnlocked =
+    !isUserLoading &&
+    !!user &&
+    !passwordStatus.loading &&
+    hasExistingKeys &&
+    passwordStatus.isReady;
+  const isPreAuthRoute =
+    route.name === "login" || route.name === "password-setup" || route.name === "password-unlock";
+
+  useEffect(() => {
+    if (isUnlocked && isPreAuthRoute) navigate({ name: "home" });
+  }, [isUnlocked, isPreAuthRoute, navigate]);
+
   if (isUserLoading || !user || passwordStatus.loading) {
     return null;
   }
@@ -136,6 +172,7 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
   const sessionContext = {
     logout: handleLogout,
     displayName,
+    requireUnlock,
   };
 
   const renderPage = () => {
@@ -143,7 +180,6 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
       case "login":
       case "password-setup":
       case "password-unlock":
-        navigate({ name: "home" });
         return null;
       case "project":
         return (
@@ -160,7 +196,13 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => Promise<void> }) {
 
   return (
     <AppSessionContext.Provider value={sessionContext}>
-      {renderPage()}
+      <ErrorBoundary
+        key={route.name === "project" ? `project:${route.projectId}` : route.name}
+        onRecover={() => navigate({ name: "home" })}
+        onQuit={() => renderer.destroy()}
+      >
+        {renderPage()}
+      </ErrorBoundary>
       <AuthenticatedTaskBar />
     </AppSessionContext.Provider>
   );
@@ -202,13 +244,15 @@ function AppRouter() {
       });
     };
 
-    setup();
+    setup().catch((error: unknown) => {
+      logger.error("Failed to watch session:", error);
+    });
 
     return () => cleanup?.();
   }, []);
 
   const handleLogin = useCallback(async () => {
-    const validation = await validateSession();
+    const validation = await validateSession().catch(() => ({ isValid: false }));
     setAuthState({ isAuthenticated: validation.isValid, isLoading: false });
     navigate({ name: "home" });
   }, [navigate]);
@@ -257,8 +301,15 @@ trackEvent("tui_launched", { source: process.env._RELIC_FROM_CLI ? "cli" : "stan
 
 const isDev = process.env.DEV === "true";
 
+const EXIT_CODE_INTERRUPTED = 130;
+const EXIT_CODE_CRASHED = 1;
+
+let exitCode = 0;
+let crashError: unknown = null;
+
 const renderer = await createCliRenderer({
   exitOnCtrlC: true,
+  openConsoleOnError: isDev,
   ...(isDev && {
     consoleOptions: {
       position: ConsolePosition.BOTTOM,
@@ -266,6 +317,29 @@ const renderer = await createCliRenderer({
     },
   }),
 });
+
+// NOTE: The renderer destroys itself on Ctrl+C / SIGINT on the next tick; record why first.
+renderer.keyInput.on("keypress", (key) => {
+  if (key.ctrl && key.name === "c") exitCode = EXIT_CODE_INTERRUPTED;
+});
+process.on("SIGINT", () => {
+  exitCode = EXIT_CODE_INTERRUPTED;
+});
+
+// NOTE: In dev the renderer's own handler opens the console instead, so keep the app alive there.
+if (!isDev) {
+  process.on("uncaughtException", (error) => {
+    crashError = error;
+    exitCode = EXIT_CODE_CRASHED;
+    if (!renderer.isDestroyed) renderer.destroy();
+  });
+}
+
 // Wait for terminal restore to finish before exiting
-renderer.on("destroy", () => setTimeout(() => process.exit(0), 50));
+renderer.on("destroy", () =>
+  setTimeout(() => {
+    if (crashError) console.error("Relic crashed:", extractErrorMessage(crashError));
+    process.exit(exitCode);
+  }, 50),
+);
 createRoot(renderer).render(<App />);

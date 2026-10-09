@@ -3,10 +3,10 @@
 import { api } from "@repo/backend";
 import { useAction } from "convex/react";
 import { ArrowRight, Check, ExternalLink } from "lucide-react";
-import { useCallback, useState } from "react";
-import { trackWebEvent } from "@/lib/posthog";
+import { useState } from "react";
+import { useProCheckout } from "@/hooks/useProCheckout";
+import { ADD_ONS, MAX_API_KEYS, PRO_FEATURES, PRO_PRICE_LABEL } from "@/lib/plans";
 import { primaryButton, secondaryButton } from "@/lib/styles";
-import { ADD_ONS, MAX_API_KEYS, PRO_FEATURES, PRO_PRICE_LABEL } from "./plan-copy";
 import { DashboardCard, Meter, PlanBadge, tone } from "./primitives";
 
 interface PlanCardProps {
@@ -14,40 +14,6 @@ interface PlanCardProps {
   projectsUsed: number;
   projectsIncluded: number;
   activeApiKeys: number;
-}
-
-type CheckoutResult = "redirecting" | "already_pro" | "error";
-
-/** Starts Pro checkout and redirects to Autumn, or reports that the user is already on Pro. */
-export function useProCheckout() {
-  const getProPlan = useAction(api.user.getProPlan);
-  const [isPending, setIsPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const startCheckout = useCallback(async (): Promise<CheckoutResult> => {
-    setIsPending(true);
-    setError(null);
-    trackWebEvent("web_upgrade_started");
-
-    try {
-      const result = await getProPlan({});
-      if (result.hasPro) {
-        setIsPending(false);
-        return "already_pro";
-      }
-      if (result.checkoutLink) {
-        window.location.assign(result.checkoutLink);
-        return "redirecting";
-      }
-      throw new Error("Could not create a checkout link. Please try again.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start checkout");
-      setIsPending(false);
-      return "error";
-    }
-  }, [getProPlan]);
-
-  return { startCheckout, isPending, error };
 }
 
 export function useBillingPortal() {

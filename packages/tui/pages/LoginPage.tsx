@@ -1,26 +1,30 @@
-import { useKeyboard, useTerminalDimensions } from "@opentui/react";
+/** @jsxImportSource @opentui/react */
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
 import { createLogger, trackEvent } from "@repo/logger";
-import open from "open";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { GuideBar } from "../components/shared/GuideBar";
 import { LoginButton } from "../components/shared/LoginButton";
 import { Modal } from "../components/shared/Modal";
 import { type DeviceAuthStatus, useDeviceAuth } from "../convex/hooks/useDeviceAuth";
 import { KEY_SYMBOLS, THEME_COLORS } from "../utils/constants";
+import { openUrl } from "../utils/ui";
 
 const logger = createLogger("tui");
 
-import { createHyperlink } from "../utils/ui";
-
 const getShortcutGroups = (isLoading: boolean) => ({
   primary: [
-    { shortcuts: [{ key: KEY_SYMBOLS.enter, description: "sign in", disabled: isLoading }] },
+    {
+      shortcuts: [
+        { key: KEY_SYMBOLS.enter, description: "sign in", disabled: isLoading },
+        { key: "q", description: "quit" },
+      ],
+    },
   ],
   secondary: [],
 });
 
 interface LoginPageProps {
-  onLogin: () => void;
+  onLogin: () => Promise<void>;
 }
 
 function getStatusMessage(
@@ -42,9 +46,9 @@ function getStatusMessage(
     case "denied":
       return "Authorization denied.";
     case "expired":
-      return "Code expired. Press ESC to try again.";
+      return "Code expired. Press esc and sign in again.";
     case "error":
-      return "An error occurred. Press ESC to try again.";
+      return "Something went wrong. Press esc and sign in again.";
     default:
       return "";
   }
@@ -72,13 +76,16 @@ function getStatusColor(
 
 export function LoginPage({ onLogin }: LoginPageProps) {
   const { width, height } = useTerminalDimensions();
+  const renderer = useRenderer();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const { status, userCode, verificationUri, isLoading, error, startAuth, cancel } = useDeviceAuth({
     onSuccess: () => {
       trackEvent("tui_login_completed", { success: true });
       setTimeout(() => {
-        onLogin();
+        onLogin().catch((err: unknown) => {
+          logger.error("Failed to finish login:", err);
+        });
       }, 500);
     },
     onError: (err) => {
@@ -86,26 +93,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       trackEvent("tui_login_completed", { success: false });
     },
   });
-
-  const hyperlinkWrittenRef = useRef<string | null>(null);
-
-  // Write hyperlink escape sequences directly to terminal for Cmd+Click support
-  // The TUI library sanitizes escape sequences in text components, so we need to
-  // write them directly to stdout after the TUI renders
-  useEffect(() => {
-    if (verificationUri && isModalOpen && hyperlinkWrittenRef.current !== verificationUri) {
-      const timer = setTimeout(() => {
-        const hyperlink = createHyperlink(verificationUri, verificationUri);
-        try {
-          process.stdout.write(hyperlink);
-          hyperlinkWrittenRef.current = verificationUri;
-        } catch {
-          // ignore
-        }
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [verificationUri, isModalOpen]);
 
   const closeModal = () => {
     cancel();
@@ -129,15 +116,15 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       if (key.name === "escape") {
         closeModal();
       } else if (key.name === "return" && verificationUri) {
-        open(verificationUri);
+        void openUrl(verificationUri);
       }
       return;
     }
 
     if (key.name === "return") {
-      handleLogin();
+      void handleLogin();
     } else if (key.name === "q") {
-      process.exit(0);
+      renderer.destroy();
     }
   });
 
@@ -186,7 +173,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
           {!isModalOpen && (
             <box marginTop={1}>
-              <GuideBar groups={getShortcutGroups(isLoading)} customWidth={52} minimal={true} />
+              <GuideBar groups={getShortcutGroups(isLoading)} customWidth={52} />
             </box>
           )}
         </box>
@@ -194,8 +181,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
       <Modal
         visible={isModalOpen}
-        title="Device Authorization"
-        width={verificationUri ? Math.min(Math.max(verificationUri.length + 10, 50), 80) : 60}
+        title="Sign in with your browser"
+        width={verificationUri ? Math.min(Math.max(verificationUri.length + 6, 50), 80) : 60}
         shortcuts={[
           {
             key: KEY_SYMBOLS.enter,
@@ -217,14 +204,10 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                 </text>
               </box>
               {verificationUri && (
-                <box flexDirection="column" marginTop={1} gap={0}>
-                  <box height={1} marginTop={0}>
-                    <text fg={THEME_COLORS.textDim}>
-                      {verificationUri.length > 70
-                        ? `${verificationUri.substring(0, 70)}...`
-                        : verificationUri}
-                    </text>
-                  </box>
+                <box marginTop={1}>
+                  <text fg={THEME_COLORS.link} wrapMode="char">
+                    {verificationUri}
+                  </text>
                 </box>
               )}
             </>
@@ -237,15 +220,10 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             </text>
           </box>
           {error && (
-            <box height={1} marginTop={0}>
+            <box marginTop={0}>
               <text fg={THEME_COLORS.error}>
                 Error: {error.message || "Failed to connect to server"}
               </text>
-            </box>
-          )}
-          {(status === "expired" || status === "error" || status === "denied" || error) && (
-            <box height={1} marginTop={0}>
-              <text fg={THEME_COLORS.textDim}>Press ESC to close</text>
             </box>
           )}
         </box>

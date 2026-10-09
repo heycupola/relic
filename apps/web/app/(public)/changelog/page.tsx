@@ -31,7 +31,7 @@ export default async function ChangelogPage() {
     {
       "@context": "https://schema.org",
       "@type": "CollectionPage",
-      name: `relic ${CHANGELOG_TITLE}`,
+      name: `Relic ${CHANGELOG_TITLE}`,
       description: CHANGELOG_DESCRIPTION,
       url: getAbsoluteUrl("/changelog"),
       publisher: {
@@ -74,7 +74,7 @@ export default async function ChangelogPage() {
             <div className="flex shrink-0 items-center gap-3">
               <Link
                 href={CHANGELOG_FEED_PATH}
-                className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:text-foreground"
+                className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
               >
                 RSS
               </Link>
@@ -83,7 +83,7 @@ export default async function ChangelogPage() {
               </span>
               <Link
                 href="/blog"
-                className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:text-foreground"
+                className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
               >
                 Blog
               </Link>
@@ -99,7 +99,7 @@ export default async function ChangelogPage() {
               <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
                 No releases yet
               </p>
-              <p className="mt-3 text-sm text-foreground/50">
+              <p className="mt-3 text-sm text-muted-foreground">
                 Release notes will appear here as versions ship.
               </p>
               <div className="mt-6 flex justify-center gap-3">
@@ -107,13 +107,13 @@ export default async function ChangelogPage() {
                   href={SITE_DOCS_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="border border-border px-3 py-2 text-sm text-foreground/70 transition-colors hover:bg-foreground hover:text-background"
+                  className="border border-border px-3 py-2 text-sm text-foreground/70 transition-colors hover:bg-foreground hover:text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
                 >
                   Docs
                 </Link>
                 <Link
                   href="/github"
-                  className="border border-border px-3 py-2 text-sm text-foreground/70 transition-colors hover:bg-foreground hover:text-background"
+                  className="border border-border px-3 py-2 text-sm text-foreground/70 transition-colors hover:bg-foreground hover:text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
                 >
                   GitHub
                 </Link>
@@ -141,7 +141,7 @@ export default async function ChangelogPage() {
                             href={entry.releaseUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-block pt-1 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:text-foreground"
+                            className="inline-block pt-1 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
                           >
                             GitHub &rarr;
                           </Link>

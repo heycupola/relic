@@ -49,18 +49,13 @@ relic projects
 
 ### `relic init`
 
-Initialize Relic in the current project. Creates `relic.toml` and `.relic/` directory.
+Initialize Relic in the current project. Creates `relic.toml` and a `.relic/` cache directory.
 
 ```bash
 relic init
 ```
 
-Run this at the root of the project where you want to inject secrets.
-
-<Info>
-  Add `.relic/` to your `.gitignore`. See [Introduction](/introduction#initialize-your-project) for
-  details.
-</Info>
+Run this at the root of the project where you want to inject secrets. Commit `relic.toml`; the `.relic/` directory contains its own `.gitignore` (`*`), so the cache stays out of version control automatically.
 
 ### `relic run`
 
@@ -70,12 +65,13 @@ Run a command with secrets injected as environment variables.
 relic run -e <environment> [options] -- <command>
 ```
 
-| Flag                | Description                                   |
-| ------------------- | --------------------------------------------- |
-| `-e, --environment` | Environment name (required)                   |
-| `-f, --folder`      | Folder name                                   |
-| `-s, --scope`       | Scope filter: `client`, `server`, or `shared` |
-| `-p, --project`     | Project ID (overrides `relic.toml`)           |
+| Flag                | Description                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------- |
+| `-e, --environment` | Environment name (required)                                                         |
+| `-f, --folder`      | Folder name                                                                         |
+| `-s, --scope`       | Scope filter: `client`, `server`, or `shared`                                       |
+| `-p, --project`     | Project ID (overrides `RELIC_PROJECT_ID` and `relic.toml`; not needed with a token) |
+| `--inherit-env`     | Pass your current environment (except `RELIC_*` variables) through to the command   |
 
 **Examples:**
 
@@ -84,6 +80,59 @@ relic run -e development -- bun run dev
 relic run -e production -- npm run deploy
 relic run -e staging -f database -- ./migrate.sh
 relic run -e production -s client -- npm run build
+relic run -e production --inherit-env -- npm run build
+```
+
+Everything after the command name is passed to the command unchanged, so `relic run -e prod node -e "..."` runs `node -e "..."`. Relic's own options must come before the command; use `--` to make the boundary explicit.
+
+You don't need `relic.toml` when you pass `-p, --project` or set `RELIC_PROJECT_ID`. Without a `relic.toml`, the cache is stored in `~/.config/relic/cache/<project-id>.db`.
+
+#### Environment of the command
+
+By default the command starts with a **clean environment**: only the decrypted secrets plus `PATH`, `HOME`, `USER`, `SHELL`, `TERM`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR`, and `TZ` from your shell. Anything else (for example `NODE_ENV`, `CI`, or `GITHUB_*`) is not passed through. This keeps unrelated credentials in your shell away from the command.
+
+Use `--inherit-env` when the command needs your shell or CI environment. The full environment is passed through, minus Relic's own variables (`RELIC_PASSWORD`, `RELIC_API_KEY`, `RELIC_SERVICE_TOKEN`, ...). If a secret has the same name as an existing variable, the secret wins.
+
+<Note>
+  On Windows the command currently inherits the full environment in both modes.
+</Note>
+
+#### Exit codes
+
+`relic run` exits with the command's exit code, or `128 + N` when the command is killed by signal `N`. If the command can't be found, it exits with `127`. Errors before the command starts (not logged in, unknown environment, network failures) exit with `1`.
+
+### `relic service-account`
+
+Create, list, and revoke [service accounts](/guides/service-accounts) for CI/CD.
+
+```bash
+relic service-account create --name "ci-deploy" --github myorg/myrepo --branch main
+relic service-account list
+relic service-account revoke --name "ci-deploy"
+```
+
+### `relic mcp`
+
+Start the [MCP server](/development/mcp) over stdio for AI assistants.
+
+```bash
+relic mcp
+```
+
+### `relic upgrade`
+
+Upgrade Relic using the method it was installed with (Homebrew, npm, Bun, or the `curl` install script). If the method can't be detected, the manual commands are printed.
+
+```bash
+relic upgrade
+```
+
+### `relic version`
+
+Print the installed version.
+
+```bash
+relic version
 ```
 
 ### `relic telemetry`
@@ -106,26 +155,24 @@ See [Telemetry](/configuration/telemetry) for details on what is collected.
 project_id = "your-project-id"
 ```
 
-The CLI walks up from the current directory to find `relic.toml`. You can override the project ID with `--project` or `RELIC_PROJECT_ID`.
+The CLI walks up from the current directory to find `relic.toml`. You can override the project ID with `--project` (highest precedence) or `RELIC_PROJECT_ID`.
 
 ## Caching
 
-The CLI caches data locally at `.relic/cache.db` (relative to `relic.toml`) to reduce API calls.
+The CLI caches encrypted data locally at `.relic/cache.db` (relative to `relic.toml`) to reduce API calls. Without a `relic.toml`, it uses `~/.config/relic/cache/<project-id>.db`.
 
 - **Session mode**: Cache is used. Validated against the server's `updatedAt` timestamp on each run.
-- **API key mode**: Cache is not used. Secrets are always fetched fresh.
+- **Service token and API key mode**: Cache is not used. Secrets are always fetched fresh.
 - **Scope filtering** (`--scope`): Applied locally against cached data. No extra API call needed.
 
 To clear the cache, delete `.relic/cache.db`. The next run will fetch fresh data.
 
 ## CI/CD
 
-For non-interactive environments, use API keys instead of `relic login`.
+For non-interactive environments, use a [service account](/guides/service-accounts) instead of `relic login`:
 
 ```bash
-RELIC_API_KEY=relic_...
-RELIC_PASSWORD=...
-RELIC_PROJECT_ID=...          # optional if relic.toml exists
+RELIC_SERVICE_TOKEN=rsk_...   # from `relic service-account create`
 
 relic run -e production -- npm run deploy
 ```
@@ -135,10 +182,13 @@ relic run -e production -- npm run deploy
 ```yaml
 - name: Deploy with secrets
   env:
-    RELIC_API_KEY: ${{ secrets.RELIC_API_KEY }}
-    RELIC_PASSWORD: ${{ secrets.RELIC_PASSWORD }}
-    RELIC_PROJECT_ID: ${{ secrets.RELIC_PROJECT_ID }}
+    RELIC_SERVICE_TOKEN: ${{ secrets.RELIC_SERVICE_TOKEN }}
   run: relic run -e production -- npm run deploy
 ```
+
+<Warning>
+  `RELIC_API_KEY` + `RELIC_PASSWORD` still works but is deprecated: it puts your master password in
+  the CI environment. See [CI/CD Integration](/guides/ci-cd-integration#api-keys-legacy).
+</Warning>
 
 See [Environment Variables](/reference/environment-variables) for the full list.

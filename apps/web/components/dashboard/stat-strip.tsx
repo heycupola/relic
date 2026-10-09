@@ -27,7 +27,7 @@ export function StatStrip({ stats, isLoading }: { stats: Stat[]; isLoading?: boo
             </dd>
           ) : (
             <dd className="space-y-1">
-              <div className="truncate font-[family-name:var(--font-space-grotesk)] text-2xl font-semibold tabular-nums text-foreground sm:text-3xl">
+              <div className="truncate font-[family-name:var(--font-heading)] text-2xl font-semibold tabular-nums text-foreground sm:text-3xl">
                 {value}
               </div>
               <div

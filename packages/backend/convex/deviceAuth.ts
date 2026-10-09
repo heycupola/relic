@@ -19,7 +19,7 @@ export const requestDeviceCode = mutation({
     scope: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await checkRateLimit(ctx, "write", "device-auth-request");
+    await checkRateLimit(ctx, "deviceCodeRequest", "device-auth-request");
 
     const result = await ctx.runMutation(components.betterAuth.deviceAuth.requestDeviceCode, {
       clientId: args.clientId,
@@ -94,7 +94,7 @@ export const approveDeviceCode = protectedMutation({
     user_code: v.string(),
   },
   handler: async (ctx: ProtectedMutationCtx, args: { user_code: string }) => {
-    await checkRateLimit(ctx, "write");
+    await checkRateLimit(ctx, "deviceAuthDecision");
 
     await ctx.runMutation(components.betterAuth.deviceAuth.approveDeviceCode, {
       userId: ctx.userId,
@@ -112,7 +112,9 @@ export const denyDeviceCode = protectedMutation({
     user_code: v.string(),
   },
   handler: async (ctx: ProtectedMutationCtx, args: { user_code: string }) => {
-    await checkRateLimit(ctx, "write");
+    // Codes aren't bound to a user until approval, so a tight per-user budget is what keeps
+    // anyone from guessing and denying other people's pending logins.
+    await checkRateLimit(ctx, "deviceAuthDecision");
 
     await ctx.runMutation(components.betterAuth.deviceAuth.denyDeviceCode, {
       user_code: args.user_code,

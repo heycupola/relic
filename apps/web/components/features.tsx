@@ -18,7 +18,7 @@ interface CompactFeature {
 
 const videoFeatures: VideoFeature[] = [
   {
-    title: "Built-in Secret Editor",
+    title: "Built-in secret editor",
     badge: "Free",
     description: "Paste your .env file or edit secrets directly in the TUI. No context switching.",
     videoSrc: "/videos/editor-demo.mp4",
@@ -31,7 +31,7 @@ const videoFeatures: VideoFeature[] = [
     videoSrc: "/videos/collaboration-demo.mp4",
   },
   {
-    title: "Run Anywhere",
+    title: "Run anywhere",
     badge: "Pro",
     description:
       "Inject secrets into any pipeline with service accounts or OIDC trust. Works in GitHub Actions, GitLab CI, and more.",
@@ -42,24 +42,24 @@ const videoFeatures: VideoFeature[] = [
 const compactFeatures: CompactFeature[] = [
   {
     keyword: "run",
-    title: "Language Agnostic",
+    title: "Language agnostic",
     description: "Any language, any framework. Secrets are injected as environment variables.",
   },
   {
     keyword: "init",
-    title: "Quick Setup",
+    title: "Quick setup",
     description:
       "Run relic init to connect your project, then relic run to inject your secrets. Ready in seconds.",
   },
   {
     keyword: "organize",
-    title: "Projects, Envs, Folders",
+    title: "Projects, envs, folders",
     description:
       "A clean hierarchy to keep your secrets structured, from project level down to individual folders.",
   },
   {
     keyword: "encrypt",
-    title: "Encrypted by Default",
+    title: "Encrypted by default",
     description:
       "AES-256 + Argon2id. Your secrets are encrypted before they ever leave your machine.",
   },
@@ -71,7 +71,7 @@ function Badge({ badge }: { badge: "Free" | "Pro" }) {
       className={
         badge === "Pro"
           ? "px-2 py-0.5 text-[10px] font-bold uppercase bg-foreground text-background"
-          : "px-2 py-0.5 text-[10px] font-bold uppercase border border-border text-foreground/50"
+          : "px-2 py-0.5 text-[10px] font-bold uppercase border border-border text-muted-foreground"
       }
     >
       {badge}
@@ -126,7 +126,7 @@ function VideoButton({
   return (
     <button
       type="button"
-      className={`group relative bg-muted/20 ${className ?? ""}`}
+      className={`group relative bg-muted/20 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-foreground ${className ?? ""}`}
       aria-label={`${feature.title} preview. Hover or tap to play.`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}

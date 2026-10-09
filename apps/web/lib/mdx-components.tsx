@@ -3,7 +3,7 @@ import type React from "react";
 
 function Anchor({ href = "#", children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
   const className =
-    "text-foreground underline underline-offset-4 decoration-border hover:decoration-foreground transition-colors";
+    "text-foreground underline underline-offset-4 decoration-border hover:decoration-foreground transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground";
 
   if (href.startsWith("/")) {
     return (
@@ -13,8 +13,15 @@ function Anchor({ href = "#", children, ...props }: React.AnchorHTMLAttributes<H
     );
   }
 
+  const isExternal = /^https?:\/\//i.test(href);
+
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className={className} {...props}>
+    <a
+      href={href}
+      {...(isExternal && { target: "_blank", rel: "noopener noreferrer" })}
+      className={className}
+      {...props}
+    >
       {children}
     </a>
   );
@@ -35,7 +42,7 @@ export const mdxComponents = {
     <figure className="w-full">{children}</figure>
   ),
   figcaption: ({ children }: { children?: React.ReactNode }) => (
-    <figcaption className="text-sm text-foreground/55">{children}</figcaption>
+    <figcaption className="text-sm text-foreground/65">{children}</figcaption>
   ),
   hr: () => <hr className="border-0 border-t-2 border-border" />,
   blockquote: ({ children }: { children?: React.ReactNode }) => (

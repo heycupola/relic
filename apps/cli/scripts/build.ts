@@ -1,10 +1,43 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import type { BunPlugin } from "bun";
 
 const CLI_DIR = join(dirname(import.meta.dir));
 const DIST_DIR = join(CLI_DIR, "dist");
 const SOURCE_ENTRY = join(CLI_DIR, "index.ts");
 const BUILD_ENTRY = join(CLI_DIR, ".bundle-entry.ts");
+
+const OPENTUI_NATIVE_FILE_NAMES: Record<string, string> = {
+  darwin: "libopentui.dylib",
+  linux: "libopentui.so",
+  win32: "opentui.dll",
+};
+
+// The release ships OpenTUI's native library next to the compiled `relic` binary, and only the
+// host's `@opentui/core-<platform>` package is installed on each CI runner.
+const opentuiNativeNextToExecutable: BunPlugin = {
+  name: "opentui-native-next-to-executable",
+  setup(build) {
+    build.onResolve({ filter: /^@opentui\/core-(darwin|linux|win32)-[\w-]+$/ }, (args) => ({
+      path: args.path,
+      namespace: "opentui-native",
+    }));
+    build.onLoad({ filter: /.*/, namespace: "opentui-native" }, (args) => {
+      const platform = args.path.replace(/^@opentui\/core-/, "").split("-")[0] ?? "";
+      const fileName = OPENTUI_NATIVE_FILE_NAMES[platform];
+      if (!fileName) {
+        throw new Error(`Unknown OpenTUI native package: ${args.path}`);
+      }
+      return {
+        loader: "js",
+        contents: [
+          'import { dirname, join } from "node:path";',
+          `export default join(dirname(process.execPath), ${JSON.stringify(fileName)});`,
+        ].join("\n"),
+      };
+    });
+  },
+};
 
 if (existsSync(DIST_DIR)) {
   rmSync(DIST_DIR, { recursive: true });
@@ -33,7 +66,7 @@ const result = await (async () => {
       naming: "cli.js",
       target: "bun",
       minify: { syntax: true },
-      external: [],
+      plugins: [opentuiNativeNextToExecutable],
     });
   } finally {
     if (existsSync(BUILD_ENTRY)) {
@@ -51,21 +84,7 @@ if (!result.success) {
 }
 
 const outputFile = join(DIST_DIR, "cli.js");
-let bundled = readFileSync(outputFile, "utf-8");
-
-const OPENTUI_IMPORT_PATTERN =
-  "module = await import(`@opentui/core-${process.platform}-${process.arch}/index.ts`), targetLibPath = module.default";
-const OPENTUI_REPLACEMENT =
-  'targetLibPath = (() => { const ext = process.platform === "win32" ? "dll" : process.platform === "darwin" ? "dylib" : "so"; return process.execPath.replace(/[\\/\\\\][^\\/\\\\]*$/, "") + "/libopentui." + ext; })()';
-
-if (bundled.includes(OPENTUI_IMPORT_PATTERN)) {
-  bundled = bundled.replace(OPENTUI_IMPORT_PATTERN, OPENTUI_REPLACEMENT);
-  console.log("Patched OpenTUI native library resolution for compiled binary.");
-} else {
-  console.warn("Warning: OpenTUI import pattern not found — skipping patch.");
-}
-
-writeFileSync(outputFile, `#!/usr/bin/env bun\n${bundled}`);
+writeFileSync(outputFile, `#!/usr/bin/env bun\n${readFileSync(outputFile, "utf-8")}`);
 chmodSync(outputFile, 0o755);
 
 console.log(`Build succeeded → ${outputFile}`);

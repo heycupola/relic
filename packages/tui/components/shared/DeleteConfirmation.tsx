@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 import { THEME_COLORS } from "../../utils/constants";
 
 interface DeleteConfirmationProps {
@@ -9,7 +10,12 @@ interface DeleteConfirmationProps {
 export function DeleteConfirmation({ itemType, itemName, visible }: DeleteConfirmationProps) {
   if (!visible) return null;
 
-  const actionText = itemType === "collaborator" ? "Revoke access to" : "Delete";
+  const actionText =
+    itemType === "collaborator"
+      ? "Revoke access to"
+      : itemType === "project"
+        ? "Archive"
+        : "Delete";
   const displayName = itemName.length > 20 ? `${itemName.slice(0, 18)}…` : itemName;
 
   return (

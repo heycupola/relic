@@ -24,7 +24,7 @@ export default async function BlogPage() {
     {
       "@context": "https://schema.org",
       "@type": "Blog",
-      name: `relic ${BLOG_TITLE}`,
+      name: `Relic ${BLOG_TITLE}`,
       description: BLOG_DESCRIPTION,
       url: getAbsoluteUrl("/blog"),
       publisher: {
@@ -92,7 +92,7 @@ export default async function BlogPage() {
               hint="Writing is in progress."
               actions={[
                 { href: "/github", label: "View GitHub" },
-                { href: "/", label: "Back Home" },
+                { href: "/", label: "Back home" },
               ]}
             />
           ) : (

@@ -1,5 +1,14 @@
+/** @jsxImportSource @opentui/react */
 import { extractErrorMessage } from "@repo/auth";
-import { createContext, type ReactNode, useCallback, useContext, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 export type TaskStatus = "idle" | "pending" | "running" | "success" | "error";
 
@@ -14,6 +23,7 @@ interface TaskContextValue {
   isRunning: boolean;
   isPending: boolean;
   runTask: <T>(message: string, taskFn: () => Promise<T>) => Promise<T | undefined>;
+  attemptTask: (message: string, taskFn: () => Promise<unknown>) => Promise<boolean>;
   setTaskPending: (message: string) => void;
   continueTask: <T>(taskFn: () => Promise<T>) => Promise<T | undefined>;
   cancelTask: () => void;
@@ -28,21 +38,27 @@ const ERROR_HIDE_DELAY = 4000;
 
 export function TaskProvider({ children }: { children: ReactNode }) {
   const [task, setTask] = useState<TaskState>({ status: "idle", message: "" });
-  const [hideTimeout, setHideTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearHideTimeout = useCallback(() => {
-    if (hideTimeout) {
-      clearTimeout(hideTimeout);
-      setHideTimeout(null);
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
     }
-  }, [hideTimeout]);
-
-  const hideAfterDelay = useCallback((delay: number) => {
-    const timeout = setTimeout(() => {
-      setTask({ status: "idle", message: "" });
-    }, delay);
-    setHideTimeout(timeout);
   }, []);
+
+  const hideAfterDelay = useCallback(
+    (delay: number) => {
+      clearHideTimeout();
+      hideTimeoutRef.current = setTimeout(() => {
+        hideTimeoutRef.current = null;
+        setTask({ status: "idle", message: "" });
+      }, delay);
+    },
+    [clearHideTimeout],
+  );
+
+  useEffect(() => clearHideTimeout, [clearHideTimeout]);
 
   const runTask = useCallback(
     async <T,>(message: string, taskFn: () => Promise<T>): Promise<T | undefined> => {
@@ -64,6 +80,17 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     [clearHideTimeout, hideAfterDelay],
   );
 
+  const attemptTask = useCallback(
+    async (message: string, taskFn: () => Promise<unknown>): Promise<boolean> => {
+      const result = await runTask(message, async () => {
+        await taskFn();
+        return true;
+      });
+      return result === true;
+    },
+    [runTask],
+  );
+
   const setTaskPending = useCallback(
     (message: string) => {
       clearHideTimeout();
@@ -74,6 +101,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   const continueTask = useCallback(
     async <T,>(taskFn: () => Promise<T>): Promise<T | undefined> => {
+      clearHideTimeout();
       const currentMessage = task.message;
       setTask({ status: "running", message: currentMessage });
 
@@ -89,7 +117,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         return undefined;
       }
     },
-    [task.message, hideAfterDelay],
+    [task.message, clearHideTimeout, hideAfterDelay],
   );
 
   const cancelTask = useCallback(() => {
@@ -127,6 +155,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         isRunning,
         isPending,
         runTask,
+        attemptTask,
         setTaskPending,
         continueTask,
         cancelTask,

@@ -5,7 +5,7 @@ import { BLOG_DESCRIPTION, BLOG_FEED_PATH, BLOG_TITLE, getAbsoluteUrl, SITE_URL 
 export async function GET() {
   const posts = await getBlogPosts();
   const xml = createRssFeed({
-    title: `relic ${BLOG_TITLE}`,
+    title: `Relic ${BLOG_TITLE}`,
     description: BLOG_DESCRIPTION,
     siteUrl: getAbsoluteUrl("/blog"),
     feedUrl: getAbsoluteUrl(BLOG_FEED_PATH),

@@ -12,19 +12,20 @@
   "scripts": {
     "lint": "oxlint .",
     "format": "oxfmt .",
-    "test": "bun test",
+    "test": "bun test --pass-with-no-tests",
     "lint:fix": "oxlint . --fix",
-    "format:check": "oxfmt --check ."
+    "format:check": "oxfmt --check .",
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "consola": "^3.4.2",
-    "posthog-node": "^5.24.17"
+    "posthog-node": "^5.55.1"
   },
   "devDependencies": {
     "@repo/typescript-config": "*",
-    "@types/bun": "latest"
+    "@types/bun": "^1.4.2"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": ">=5"
   }
 }

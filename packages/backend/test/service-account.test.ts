@@ -10,14 +10,20 @@ import { api, components } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { hashKey } from "../convex/lib/crypto";
 import { ErrorCode } from "../convex/lib/errors.ts";
+import {
+  matchSubjectPattern,
+  validateIssuerUrl,
+  validateSubjectPattern,
+} from "../convex/lib/oidc.ts";
 import schema from "../convex/schema";
 import {
   betterAuthModules,
   expectConvexError,
   getTestUsers,
-  mockAutumn,
+  mockBilling,
   modules,
   randomString,
+  setPlan,
   type TestUser,
 } from "./setup";
 
@@ -107,7 +113,7 @@ describe("Service Account Management", () => {
       userId: collaborator.userId,
     });
 
-    mockAutumn.setFeature(owner.userId, "projects", 5);
+    await setPlan(t, owner.userId, "pro");
     const projectKeyResult = await createProjectKey(owner.publicKey!);
     encryptedProjectKey = projectKeyResult.encryptedProjectKey;
     const result = await owner.asUser.action(api.project.createProject, {
@@ -118,12 +124,12 @@ describe("Service Account Management", () => {
   });
 
   afterEach(() => {
-    mockAutumn.reset();
+    mockBilling.reset();
   });
 
   describe("createServiceAccount", () => {
     test("should create a service account", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -143,7 +149,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject for free users", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -163,8 +169,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject for non-owner", async () => {
-      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
-      mockAutumn.setFeature(owner.userId, "additional_shares", 5);
+      await setPlan(t, owner.userId, "pro");
 
       const projectKey = await unwrapProjectKey(
         encryptedProjectKey,
@@ -181,7 +186,7 @@ describe("Service Account Management", () => {
         encryptedProjectKey: collabEncryptedProjectKey,
       });
 
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         collaborator.publicKey!,
         collaborator.encryptedPrivateKey!,
         collaborator.password!,
@@ -201,7 +206,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject empty name", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -221,7 +226,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject expiration in the past", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -243,7 +248,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject expiration beyond 365 days", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -266,7 +271,7 @@ describe("Service Account Management", () => {
 
     test("should enforce max 5 active service accounts per project", async () => {
       for (let i = 0; i < 5; i++) {
-        const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+        const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
           owner.publicKey!,
           owner.encryptedPrivateKey!,
           owner.password!,
@@ -280,7 +285,7 @@ describe("Service Account Management", () => {
         });
       }
 
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -301,7 +306,7 @@ describe("Service Account Management", () => {
 
     test("should allow creating after revoking one at limit", async () => {
       for (let i = 0; i < 5; i++) {
-        const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+        const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
           owner.publicKey!,
           owner.encryptedPrivateKey!,
           owner.password!,
@@ -322,7 +327,7 @@ describe("Service Account Management", () => {
         serviceAccountId: accounts[0].id,
       });
 
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -341,7 +346,7 @@ describe("Service Account Management", () => {
 
   describe("listServiceAccounts", () => {
     test("should list service accounts for owner", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -362,14 +367,13 @@ describe("Service Account Management", () => {
       expect(accounts[0].name).toBe("Listed SA");
       expect(accounts[0].tokenPrefix).toBe(saArgs.tokenPrefix);
       expect(accounts[0].revokedAt).toBeUndefined();
-      expect((accounts[0] as Record<string, unknown>).publicKey).toBeUndefined();
+      expect(accounts[0].publicKey).toBe(saArgs.publicKey);
       expect((accounts[0] as Record<string, unknown>).encryptedPrivateKey).toBeUndefined();
       expect((accounts[0] as Record<string, unknown>).hashedToken).toBeUndefined();
     });
 
     test("should reject collaborator from listing service accounts", async () => {
-      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
-      mockAutumn.setFeature(owner.userId, "additional_shares", 5);
+      await setPlan(t, owner.userId, "pro");
 
       const projectKey = await unwrapProjectKey(
         encryptedProjectKey,
@@ -410,7 +414,7 @@ describe("Service Account Management", () => {
 
   describe("revokeServiceAccount", () => {
     test("should revoke a service account", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -439,8 +443,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject revoking by non-owner", async () => {
-      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
-      mockAutumn.setFeature(owner.userId, "additional_shares", 5);
+      await setPlan(t, owner.userId, "pro");
 
       const projectKey = await unwrapProjectKey(
         encryptedProjectKey,
@@ -457,7 +460,7 @@ describe("Service Account Management", () => {
         encryptedProjectKey: collabEncryptedProjectKey,
       });
 
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -484,7 +487,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject revoking an already revoked service account", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -526,7 +529,7 @@ describe("Service Account Management", () => {
 
   describe("OIDC policy on create", () => {
     test("should create a service account with OIDC policy", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -555,7 +558,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject OIDC issuer without subject", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -577,7 +580,7 @@ describe("Service Account Management", () => {
     });
 
     test("should reject OIDC subject without issuer", async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -597,13 +600,85 @@ describe("Service Account Management", () => {
         "issuer is required",
       );
     });
+
+    test("should reject overly broad subject patterns and non-https issuers", async () => {
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
+        owner.publicKey!,
+        owner.encryptedPrivateKey!,
+        owner.password!,
+        owner.salt!,
+        encryptedProjectKey,
+      );
+
+      const create = (oidcIssuer: string, oidcSubjectPattern: string) =>
+        owner.asUser.mutation(api.serviceAccount.createServiceAccount, {
+          projectId,
+          name: "Broad OIDC",
+          ...saArgs,
+          oidcIssuer,
+          oidcSubjectPattern,
+        });
+
+      const github = "https://token.actions.githubusercontent.com";
+      for (const pattern of ["*", "repo:*", "repo:org*", " repo:org/repo:*"]) {
+        await expectConvexError(() => create(github, pattern), ErrorCode.INVALID_ARGUMENTS);
+      }
+      await expectConvexError(
+        () => create("http://token.actions.githubusercontent.com", "repo:org/repo:*"),
+        ErrorCode.INVALID_ARGUMENTS,
+        "https",
+      );
+    });
+  });
+
+  describe("OIDC subject matching", () => {
+    test("trailing wildcards admit any remainder, interior wildcards one segment", () => {
+      expect(matchSubjectPattern("repo:org/app:ref:refs/heads/main", "repo:org/app:*")).toBe(true);
+      expect(matchSubjectPattern("repo:org/app:environment:prod", "repo:org/*")).toBe(true);
+      expect(
+        matchSubjectPattern("repo:org/app:ref:refs/heads/main", "repo:org/*:ref:refs/heads/main"),
+      ).toBe(true);
+      expect(
+        matchSubjectPattern(
+          "repo:org/app:ref:refs/heads/main",
+          "repo:org/app*:ref:refs/heads/main",
+        ),
+      ).toBe(true);
+      expect(matchSubjectPattern("repo:org/app-evil:ref:refs/heads/main", "repo:org/app:*")).toBe(
+        false,
+      );
+      expect(
+        matchSubjectPattern("repo:org/a/b:ref:refs/heads/main", "repo:org/*:ref:refs/heads/main"),
+      ).toBe(false);
+      expect(
+        matchSubjectPattern(
+          "repo:org/app:ref:refs/heads/main-x",
+          "repo:org/app:ref:refs/heads/main",
+        ),
+      ).toBe(false);
+      expect(matchSubjectPattern("repo:other/app:ref:x", "repo:org/*")).toBe(false);
+    });
+
+    test("subject pattern validation requires a literal owner before wildcards", () => {
+      expect(validateSubjectPattern("repo:org/app:ref:refs/heads/main")).toBeNull();
+      expect(validateSubjectPattern("repo:org/app:*")).toBeNull();
+      expect(validateSubjectPattern("repo:org/*")).toBeNull();
+      expect(validateSubjectPattern("*")).not.toBeNull();
+      expect(validateSubjectPattern("repo:*")).not.toBeNull();
+      expect(validateSubjectPattern("repo:org*")).not.toBeNull();
+      expect(validateSubjectPattern("")).not.toBeNull();
+      expect(validateIssuerUrl("https://token.actions.githubusercontent.com")).toBeNull();
+      expect(validateIssuerUrl("http://token.actions.githubusercontent.com")).not.toBeNull();
+      expect(validateIssuerUrl("https://user:pw@issuer.example.com")).not.toBeNull();
+      expect(validateIssuerUrl("not a url")).not.toBeNull();
+    });
   });
 
   describe("updateOidcPolicy", () => {
     let serviceAccountId: string;
 
     beforeEach(async () => {
-      const { rawToken, ...saArgs } = await buildServiceAccountArgs(
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
         owner.encryptedPrivateKey!,
         owner.password!,
@@ -668,9 +743,21 @@ describe("Service Account Management", () => {
       );
     });
 
+    test("should reject an overly broad subject pattern on update", async () => {
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.serviceAccount.updateOidcPolicy, {
+            serviceAccountId: serviceAccountId as Id<"serviceAccount">,
+            oidcIssuer: "https://token.actions.githubusercontent.com",
+            oidcSubjectPattern: "repo:*",
+          }),
+        ErrorCode.INVALID_ARGUMENTS,
+        "too broad",
+      );
+    });
+
     test("should reject non-owner updating OIDC policy", async () => {
-      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
-      mockAutumn.setFeature(owner.userId, "additional_shares", 5);
+      await setPlan(t, owner.userId, "pro");
 
       const projectKey = await unwrapProjectKey(
         encryptedProjectKey,

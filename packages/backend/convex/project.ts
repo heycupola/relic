@@ -1,362 +1,278 @@
-import { v } from "convex/values";
+import { type Infer, v } from "convex/values";
 import { doc } from "convex-helpers/validators";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { assertProjectAccess, getUserProjectsWithRestrictions } from "./lib/access";
+import { requestUsageSync, toBillingCustomer } from "./billing";
+import { assertProjectAccess, assertProjectOwner } from "./lib/access";
+import { autumnApi } from "./lib/autumn";
 import {
-  alreadyExistsError,
-  createError,
-  ErrorCode,
-  limitReachedError,
-  notFoundError,
-} from "./lib/errors";
+  findActiveShare,
+  getProjectOrThrow,
+  insertActionLog,
+  listActiveOwnedProjects,
+  listActiveSharesByProject,
+  loadUser,
+} from "./lib/data";
+import { alreadyExistsError, createError, ErrorCode, limitReachedError } from "./lib/errors";
 import { generateSlug } from "./lib/helpers";
 import { createLogger } from "./lib/logger";
 import { protectedAction, protectedMutation, protectedQuery } from "./lib/middleware";
+import { ADD_ON_PRICES_USD, getAccessibleProjectIds, getPlanState } from "./lib/plans";
+import { checkRateLimit } from "./lib/rateLimit";
+import { ErrorSeverity, type ProtectedActionCtx } from "./lib/types";
+import schema from "./schema";
 
 const log = createLogger("project");
 
-import { checkRateLimit } from "./lib/rateLimit";
-import {
-  ErrorSeverity,
-  type ProtectedActionCtx,
-  type ProtectedMutationCtx,
-  type ProtectedQueryCtx,
-} from "./lib/types";
-import schema from "./schema";
+const projectLimitsValidator = v.object({
+  hasPro: v.boolean(),
+  freeLimit: v.number(),
+  totalProjectsCount: v.number(),
+  purchasedProjectsCount: v.number(),
+  unusedProjects: v.number(),
+  includedUsage: v.number(),
+});
+
+export const _getProjectLimits = internalQuery({
+  args: { userId: v.string() },
+  returns: projectLimitsValidator,
+  handler: async (ctx, { userId }) => {
+    const user = await loadUser(ctx, userId);
+    const { isPro, limits } = getPlanState(user);
+    const count = (await listActiveOwnedProjects(ctx, userId)).length;
+    const included = limits.includedProjects;
+
+    return {
+      hasPro: isPro,
+      freeLimit: included,
+      totalProjectsCount: count,
+      purchasedProjectsCount: isPro ? Math.max(0, count - included) : 0,
+      unusedProjects: Math.max(0, included - count),
+      includedUsage: Math.max(included, count),
+    };
+  },
+});
 
 export const getLimits = protectedAction({
   args: {},
-  returns: v.object({
-    usage: v.number(),
-    includedUsage: v.number(),
-  }),
-  handler: async (ctx: ProtectedActionCtx) => {
-    const result = await ctx.autumn.check(ctx, {
-      featureId: "projects",
-    });
-
-    if (result.error || !result.data) {
-      return {
-        usage: 0,
-        includedUsage: 0,
-      };
-    }
-
-    return {
-      usage: result.data.usage ?? 0,
-      includedUsage: result.data.included_usage ?? 0,
-    };
+  returns: v.object({ usage: v.number(), includedUsage: v.number() }),
+  handler: async (ctx): Promise<{ usage: number; includedUsage: number }> => {
+    const limits = await ctx.runQuery(internal.project._getProjectLimits, { userId: ctx.userId });
+    return { usage: limits.totalProjectsCount, includedUsage: limits.freeLimit };
   },
 });
 
 export const getProjectLimits = protectedAction({
   args: {},
-  handler: async (ctx: ProtectedActionCtx) => {
-    const projectsFeature = await ctx.autumn.check(ctx, {
-      featureId: "projects",
-    });
+  returns: projectLimitsValidator,
+  handler: async (ctx): Promise<Infer<typeof projectLimitsValidator>> => {
+    return await ctx.runQuery(internal.project._getProjectLimits, { userId: ctx.userId });
+  },
+});
 
-    if (projectsFeature.error || !projectsFeature.data) {
-      throw createError({
-        code: ErrorCode.EXTERNAL_SERVICE_ERROR,
-        message: "Projects feature info isn't reachable",
-        severity: ErrorSeverity.High,
-      });
+const createProjectResult = v.union(
+  v.object({
+    status: v.literal("success"),
+    projectId: v.id("project"),
+    message: v.optional(v.string()),
+  }),
+  v.object({
+    status: v.literal("requiresProPlan"),
+    checkoutUrl: v.union(v.string(), v.null()),
+    message: v.optional(v.string()),
+  }),
+  v.object({
+    status: v.literal("requiresConfirmation"),
+    balance: v.number(),
+    freeLimit: v.number(),
+    message: v.optional(v.string()),
+  }),
+);
+
+async function assertUniqueSlug(
+  ctx: Pick<MutationCtx, "db">,
+  ownerId: string,
+  slug: string,
+  exceptId?: Id<"project">,
+) {
+  const clash = await ctx.db
+    .query("project")
+    .withIndex("by_owner_slug", (q) => q.eq("ownerId", ownerId).eq("slug", slug))
+    .filter((q) => q.eq(q.field("isArchived"), false))
+    .first();
+
+  if (clash && clash._id !== exceptId) {
+    alreadyExistsError("project", ErrorSeverity.Medium);
+  }
+}
+
+function validateProjectName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    createError({
+      code: ErrorCode.INVALID_ARGUMENTS,
+      message: "Project name is required",
+      severity: ErrorSeverity.Low,
+    });
+  }
+  return trimmed;
+}
+
+type CreateProjectGateResult =
+  | { status: "success"; projectId: Id<"project"> }
+  | { status: "requiresProPlan"; message: string }
+  | { status: "requiresConfirmation"; balance: number; freeLimit: number; message: string };
+
+export const _createProject = internalMutation({
+  args: {
+    ownerId: v.string(),
+    name: v.string(),
+    encryptedProjectKey: v.string(),
+    confirmPayment: v.boolean(),
+  },
+  handler: async (ctx, args): Promise<CreateProjectGateResult> => {
+    const name = validateProjectName(args.name);
+    const user = await loadUser(ctx, args.ownerId);
+    const { isPro, limits } = getPlanState(user);
+    const count = (await listActiveOwnedProjects(ctx, args.ownerId)).length;
+    const isPaidProject = count >= limits.includedProjects;
+
+    if (isPaidProject && !isPro) {
+      return {
+        status: "requiresProPlan" as const,
+        message: `Project limit reached (${count}/${limits.includedProjects}). Upgrade to Pro for more projects.`,
+      };
     }
 
-    const canShare = await ctx.autumn.check(ctx, {
-      featureId: "can_share_project",
-    });
-
-    const hasPro = canShare.data?.allowed === true;
-
-    if (
-      !projectsFeature.data ||
-      projectsFeature.data.usage === undefined ||
-      projectsFeature.data.included_usage === undefined
-    ) {
-      throw createError({
-        code: ErrorCode.EXTERNAL_SERVICE_ERROR,
-        message: "Projects feature data is incomplete",
-        severity: ErrorSeverity.High,
-      });
+    if (isPaidProject && !args.confirmPayment) {
+      return {
+        status: "requiresConfirmation" as const,
+        balance: 0,
+        freeLimit: limits.includedProjects,
+        message: `Adding a project costs $${ADD_ON_PRICES_USD.project}/month.`,
+      };
     }
 
-    const usage = projectsFeature.data.usage;
-    const includedUsage = projectsFeature.data.included_usage;
-    const balance = projectsFeature.data.balance;
+    const slug = generateSlug(name);
+    await assertUniqueSlug(ctx, args.ownerId, slug);
 
-    const freeLimit = includedUsage;
-    const purchasedProjectsCount = Math.max(0, usage - freeLimit);
-    const unusedProjects = balance;
+    const now = Date.now();
+    const projectId = await ctx.db.insert("project", {
+      name,
+      slug,
+      ownerId: args.ownerId,
+      encryptedProjectKey: args.encryptedProjectKey,
+      keyVersion: 1,
+      shareUsageCount: 0,
+      isArchived: false,
+      createdAt: now,
+      updatedAt: now,
+    });
 
-    const effectiveLimit = Math.max(includedUsage, usage) + (balance ?? 0);
+    await insertActionLog(ctx, {
+      projectId,
+      projectName: name,
+      userId: args.ownerId,
+      action: "project.created",
+    });
+    await requestUsageSync(ctx, args.ownerId);
 
-    return {
-      hasPro,
-      freeLimit,
-      totalProjectsCount: usage,
-      purchasedProjectsCount,
-      unusedProjects,
-      includedUsage: effectiveLimit,
-    };
+    log.info("Project created", { projectId, userId: args.ownerId, isPaidProject });
+    return { status: "success" as const, projectId };
   },
 });
 
 export const createProject = protectedAction({
   args: {
     name: v.string(),
-    // description: v.optional(v.string()),
     encryptedProjectKey: v.string(),
     confirmPayment: v.optional(v.boolean()),
   },
-  returns: v.union(
-    v.object({
-      status: v.literal("success"),
-      projectId: v.id("project"),
-      message: v.optional(v.string()),
-    }),
-    v.object({
-      status: v.literal("paymentFailed"),
-      billingPortalUrl: v.union(v.string(), v.null()),
-      message: v.optional(v.string()),
-    }),
-    v.object({
-      status: v.literal("requiresProPlan"),
-      checkoutUrl: v.union(v.string(), v.null()),
-      message: v.optional(v.string()),
-    }),
-    v.object({
-      status: v.literal("requiresConfirmation"),
-      balance: v.number(),
-      freeLimit: v.number(),
-      message: v.optional(v.string()),
-    }),
-    v.object({
-      status: v.literal("requiresRemoval"),
-      currentUsage: v.number(),
-      includedUsage: v.number(),
-      excessCount: v.number(),
-      message: v.optional(v.string()),
-    }),
-  ),
-  handler: async (
-    ctx: ProtectedActionCtx,
-    args: { name: string; encryptedProjectKey: string; confirmPayment?: boolean },
-  ) => {
+  returns: createProjectResult,
+  handler: async (ctx, args): Promise<Infer<typeof createProjectResult>> => {
     await checkRateLimit(ctx, "write");
 
-    const { data, error } = await ctx.autumn.check(ctx, {
-      featureId: "projects",
-    });
-
-    if (error || !data) {
-      throw createError({
-        code: ErrorCode.EXTERNAL_SERVICE_ERROR,
-        message: "Pro plan info isn't reachable",
-        severity: ErrorSeverity.High,
-      });
-    }
-
-    if (data.usage === undefined || data.included_usage === undefined) {
-      throw createError({
-        code: ErrorCode.EXTERNAL_SERVICE_ERROR,
-        message: "Projects feature data is incomplete",
-        severity: ErrorSeverity.High,
-      });
-    }
-
-    const currentUsage = data.usage;
-
-    const canShare = await ctx.autumn.check(ctx, {
-      featureId: "can_share_project",
-    });
-
-    const hasPro = canShare.data?.allowed === true;
-    const freeLimit = data.included_usage;
-
-    const isPaidProject = currentUsage >= freeLimit;
-
-    if (isPaidProject) {
-      if (!hasPro) {
-        try {
-          const checkoutResult = await ctx.autumn.checkout(ctx, {
-            productId: "pro_plan",
-            successUrl: `${process.env.SITE_URL || "https://withrelic.com"}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-            customerData: {
-              name: ctx.name,
-              email: ctx.email,
-            },
-            checkoutSessionParams: {
-              cancel_url: `${process.env.SITE_URL || "https://withrelic.com"}/subscription/cancel`,
-              metadata: {
-                userId: ctx.userId,
-              },
-            },
-          });
-
-          return {
-            status: "requiresProPlan" as const,
-            checkoutUrl: checkoutResult.data?.url || null,
-            message: `Project limit reached (${currentUsage}/${data.included_usage}). Upgrade to Pro for more projects.`,
-          };
-        } catch (checkoutError) {
-          log.error("Autumn checkout failed", { error: String(checkoutError) });
-          return {
-            status: "requiresProPlan" as const,
-            checkoutUrl: null,
-            message: `Project limit reached (${currentUsage}/${data.included_usage}). Upgrade to Pro for more projects.`,
-          };
-        }
-      }
-
-      if (currentUsage > freeLimit) {
-        const excessCount = currentUsage - freeLimit;
-        return {
-          status: "requiresRemoval" as const,
-          currentUsage,
-          includedUsage: freeLimit,
-          excessCount,
-          message: `You're using ${currentUsage} projects but only have ${freeLimit} included. Please archive ${excessCount} project(s) to continue.`,
-        };
-      }
-
-      const balance = data.balance;
-
-      if (!args.confirmPayment) {
-        if (!balance || balance <= 0) {
-          return {
-            status: "requiresConfirmation" as const,
-            balance: 0,
-            freeLimit,
-            message: "No purchased projects available. Adding a project costs $2.",
-          };
-        }
-        return {
-          status: "requiresConfirmation" as const,
-          balance,
-          freeLimit,
-          message: `This will use 1 of your ${balance} purchased projects.`,
-        };
-      }
-    }
-
-    const { projectId } = await ctx.runMutation(internal.project._insertProject, {
-      name: args.name,
-      createdBy: ctx.userId,
+    const result: CreateProjectGateResult = await ctx.runMutation(internal.project._createProject, {
       ownerId: ctx.userId,
+      name: args.name,
       encryptedProjectKey: args.encryptedProjectKey,
+      confirmPayment: args.confirmPayment ?? false,
     });
 
-    const pId: Id<"project"> = projectId;
+    if (result.status !== "requiresProPlan") return result;
 
-    // Track usage: paid projects (for billing) or free projects within limit (for usage counting)
-    if (isPaidProject || data.allowed) {
-      try {
-        await ctx.autumn.track(ctx, {
-          featureId: "projects",
-          value: 1,
-        });
-      } catch (trackError) {
-        log.error("Payment tracking failed after project creation", {
-          error: String(trackError),
-        });
-        if (isPaidProject) {
-          // Compensate: delete the project we just created
-          await ctx.runMutation(internal.project._deleteProject, { projectId: pId });
-
-          // Get billing portal URL for user to fix payment
-          let billingPortalUrl: string | null = null;
-          try {
-            const portalResult = await ctx.autumn.customers.billingPortal(ctx, {});
-            billingPortalUrl = portalResult.data?.url || null;
-          } catch (portalError) {
-            log.error("Failed to get billing portal URL", { error: String(portalError) });
-          }
-
-          return {
-            status: "paymentFailed" as const,
-            billingPortalUrl,
-            message: "Payment failed. Please update your billing settings.",
-          };
-        }
-        // For free tier tracking failures, just log - don't fail the operation
-      }
-    }
-
-    await ctx.runMutation(internal.actionLog._insertActionLog, {
-      projectId: pId,
-      projectName: args.name,
-      userId: ctx.userId,
-      action: "project.created",
-    });
-
-    log.info("Project created", { projectId: pId, userId: ctx.userId, isPaidProject });
-
-    return { status: "success" as const, projectId: pId };
+    return { ...result, checkoutUrl: await createCheckoutUrlSafely(ctx) };
   },
 });
 
+export async function createCheckoutUrlSafely(ctx: ProtectedActionCtx): Promise<string | null> {
+  try {
+    return await autumnApi.createProCheckoutUrl(
+      toBillingCustomer({ _id: ctx.userId, name: ctx.name ?? "", email: ctx.email ?? "" }),
+    );
+  } catch (error) {
+    log.error("Failed to create checkout URL", { error: String(error) });
+    return null;
+  }
+}
+
 export const listUserProjects = protectedQuery({
   args: {},
-  handler: async (ctx: ProtectedQueryCtx) => {
-    const { restrictedProjects, isInGracePeriod, gracePeriodDaysRemaining } =
-      await getUserProjectsWithRestrictions(ctx);
+  handler: async (ctx) => {
+    const user = await loadUser(ctx, ctx.userId);
+    const state = getPlanState(user);
 
-    const allOwnedProjects = await ctx.db
+    const projects = await ctx.db
       .query("project")
       .withIndex("by_owner", (q) => q.eq("ownerId", ctx.userId))
       .collect();
 
-    const restrictedProjectIds = new Set(restrictedProjects.map((p) => p._id));
-
-    const projects = allOwnedProjects.map((p) => {
-      let status: "owned" | "archived" | "restricted";
-      const isRestricted = restrictedProjectIds.has(p._id);
-
-      if (p.isArchived) {
-        status = "archived";
-      } else if (isRestricted) {
-        status = "restricted";
-      } else {
-        status = "owned";
-      }
-
-      return {
-        id: p._id,
-        name: p.name,
-        slug: p.slug,
-        description: p.description,
-        createdAt: p.createdAt,
-        updatedAt: p.updatedAt,
-        isRestricted,
-        isArchived: p.isArchived,
-        status,
-        ownerId: p.ownerId,
-        shareUsageCount: p.shareUsageCount,
-      };
-    });
+    const accessible = getAccessibleProjectIds(
+      projects.filter((p) => !p.isArchived),
+      state,
+    );
 
     return {
-      projects,
-      isInGracePeriod,
-      gracePeriodDaysRemaining: isInGracePeriod ? gracePeriodDaysRemaining : undefined,
+      projects: projects.map((p) => {
+        const isRestricted = !p.isArchived && !accessible.has(p._id);
+        return {
+          id: p._id,
+          name: p.name,
+          slug: p.slug,
+          description: p.description,
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+          isRestricted,
+          isArchived: p.isArchived,
+          status: p.isArchived
+            ? ("archived" as const)
+            : isRestricted
+              ? ("restricted" as const)
+              : ("owned" as const),
+          ownerId: p.ownerId,
+          shareUsageCount: p.shareUsageCount,
+        };
+      }),
+      isInGracePeriod: state.inGracePeriod,
+      gracePeriodDaysRemaining: state.inGracePeriod ? state.gracePeriodDaysRemaining : undefined,
     };
   },
 });
 
 export const getProject = protectedQuery({
-  args: {
-    projectId: v.id("project"),
-  },
-  handler: async (ctx: ProtectedQueryCtx, args: { projectId: Id<"project"> }) => {
-    const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: args.projectId,
-    });
-
+  args: { projectId: v.id("project") },
+  handler: async (ctx, args) => {
+    const project = await getProjectOrThrow(ctx, args.projectId);
     await assertProjectAccess(ctx, project);
+
+    // Each member gets the project key wrapped for their own RSA key; the owner's copy is useless to others.
+    let encryptedProjectKey = project.encryptedProjectKey;
+    if (project.ownerId !== ctx.userId) {
+      const share = await findActiveShare(ctx, project._id, ctx.userId);
+      if (share) encryptedProjectKey = share.encryptedProjectKey;
+    }
 
     return {
       id: project._id,
@@ -366,7 +282,7 @@ export const getProject = protectedQuery({
       ownerId: project.ownerId,
       isArchived: project.isArchived,
       keyVersion: project.keyVersion,
-      encryptedProjectKey: project.encryptedProjectKey,
+      encryptedProjectKey,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
     };
@@ -377,36 +293,23 @@ export const updateProject = protectedMutation({
   args: {
     projectId: v.id("project"),
     name: v.optional(v.string()),
-    // description: v.optional(v.string()),
   },
-  handler: async (ctx: ProtectedMutationCtx, args: { projectId: Id<"project">; name?: string }) => {
-    const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: args.projectId,
-    });
-
-    // Owner-only operation
-    if (ctx.userId !== project.ownerId) {
-      throw createError({
-        code: ErrorCode.INSUFFICIENT_PERMISSION,
-        message: "Only the project owner can update project settings",
-        severity: ErrorSeverity.High,
-      });
-    }
-
+  handler: async (ctx, args) => {
+    const project = await getProjectOrThrow(ctx, args.projectId);
+    assertProjectOwner(ctx, project, "update project settings");
     await assertProjectAccess(ctx, project);
-
     await checkRateLimit(ctx, "write");
 
-    await ctx.runMutation(internal.project._updateProject, {
-      projectId: args.projectId,
-      updates: {
-        name: args.name,
-      },
-    });
+    if (args.name !== undefined) {
+      const name = validateProjectName(args.name);
+      const slug = generateSlug(name);
+      await assertUniqueSlug(ctx, project.ownerId, slug, project._id);
+      await ctx.db.patch(project._id, { name, slug, updatedAt: Date.now() });
+    }
 
-    await ctx.runMutation(internal.actionLog._insertActionLog, {
-      projectId: args.projectId,
-      projectName: args.name ?? project.name,
+    await insertActionLog(ctx, {
+      projectId: project._id,
+      projectName: args.name?.trim() ?? project.name,
       userId: ctx.userId,
       action: "project.updated",
     });
@@ -415,297 +318,139 @@ export const updateProject = protectedMutation({
   },
 });
 
-export const archiveProject = protectedAction({
+const unarchiveProjectResult = v.union(
+  v.object({ status: v.literal("success") }),
+  v.object({
+    status: v.literal("requiresConfirmation"),
+    balance: v.number(),
+    freeLimit: v.number(),
+    message: v.optional(v.string()),
+  }),
+);
+
+type SetArchivedResult = Infer<typeof unarchiveProjectResult>;
+
+export const _setArchived = internalMutation({
   args: {
+    userId: v.string(),
     projectId: v.id("project"),
+    archived: v.boolean(),
+    confirmPayment: v.optional(v.boolean()),
   },
-  handler: async (ctx: ProtectedActionCtx, args: { projectId: Id<"project"> }) => {
-    const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: args.projectId,
-    });
+  returns: unarchiveProjectResult,
+  handler: async (
+    ctx,
+    { userId, projectId, archived, confirmPayment },
+  ): Promise<SetArchivedResult> => {
+    const project = await getProjectOrThrow(ctx, projectId);
+    const actor = { ...ctx, userId };
+    const verb = archived ? "archive projects" : "unarchive projects";
 
-    // Owner-only operation
-    if (ctx.userId !== project.ownerId) {
-      throw createError({
-        code: ErrorCode.INSUFFICIENT_PERMISSION,
-        message: "Only the project owner can archive projects",
-        severity: ErrorSeverity.High,
-      });
-    }
+    assertProjectOwner(actor, project, verb);
+    await assertProjectAccess(actor, project, { skipArchivedCheck: !archived });
 
-    await assertProjectAccess(ctx, project);
-
-    await checkRateLimit(ctx, "write");
-
-    const activeShares = await ctx.runQuery(internal.projectShare._loadActiveSharesByProject, {
-      projectId: args.projectId,
-    });
-
-    if (activeShares.length > 0) {
-      throw createError({
+    if (project.isArchived === archived) {
+      createError({
         code: ErrorCode.INVALID_OPERATION,
-        message: `Cannot archive project with ${activeShares.length} active share(s). Revoke all shares first.`,
+        message: archived ? "Project is already archived" : "Project is not archived",
         severity: ErrorSeverity.Medium,
       });
     }
 
-    const activeServiceAccounts = await ctx.runQuery(
-      internal.serviceAccount._loadActiveServiceAccountsByProject,
-      { projectId: args.projectId },
-    );
+    if (archived) {
+      const shares = await listActiveSharesByProject(ctx, projectId);
+      if (shares.length > 0) {
+        createError({
+          code: ErrorCode.INVALID_OPERATION,
+          message: `Cannot archive project with ${shares.length} active share(s). Revoke all shares first.`,
+          severity: ErrorSeverity.Medium,
+        });
+      }
 
-    if (activeServiceAccounts.length > 0) {
-      throw createError({
-        code: ErrorCode.INVALID_OPERATION,
-        message: `Cannot archive project with ${activeServiceAccounts.length} active service account(s). Revoke all service accounts first.`,
-        severity: ErrorSeverity.Medium,
-      });
+      const serviceAccounts = await ctx.db
+        .query("serviceAccount")
+        .withIndex("by_project_revoked", (q) =>
+          q.eq("projectId", projectId).eq("revokedAt", undefined),
+        )
+        .collect();
+      if (serviceAccounts.length > 0) {
+        createError({
+          code: ErrorCode.INVALID_OPERATION,
+          message: `Cannot archive project with ${serviceAccounts.length} active service account(s). Revoke all service accounts first.`,
+          severity: ErrorSeverity.Medium,
+        });
+      }
+    } else {
+      const user = await loadUser(ctx, userId);
+      const { isPro, limits } = getPlanState(user);
+      const count = (await listActiveOwnedProjects(ctx, userId)).length;
+      const isPaidProject = count >= limits.includedProjects;
+      if (isPaidProject && !isPro) {
+        limitReachedError("projects", count, limits.includedProjects, ErrorSeverity.High);
+      }
+      await assertUniqueSlug(ctx, userId, project.slug, projectId);
+
+      if (isPaidProject && confirmPayment !== true) {
+        return {
+          status: "requiresConfirmation" as const,
+          balance: 0,
+          freeLimit: limits.includedProjects,
+          message: `Unarchiving this project adds a paid project ($${ADD_ON_PRICES_USD.project}/month). Confirm to proceed.`,
+        };
+      }
     }
 
-    await ctx.runMutation(internal.project._archiveProject, {
-      projectId: args.projectId,
-    });
-
-    await ctx.autumn.track(ctx, {
-      featureId: "projects",
-      value: -1,
-    });
-
-    await ctx.runMutation(internal.actionLog._insertActionLog, {
-      projectId: args.projectId,
+    await ctx.db.patch(projectId, { isArchived: archived, updatedAt: Date.now() });
+    await insertActionLog(ctx, {
+      projectId,
       projectName: project.name,
-      userId: ctx.userId,
-      action: "project.archived",
+      userId,
+      action: archived ? "project.archived" : "project.unarchived",
     });
+    await requestUsageSync(ctx, userId);
 
-    log.info("Project archived", { projectId: args.projectId, userId: ctx.userId });
+    log.info(archived ? "Project archived" : "Project unarchived", { projectId, userId });
+    return { status: "success" as const };
+  },
+});
 
+export const archiveProject = protectedAction({
+  args: { projectId: v.id("project") },
+  handler: async (ctx, { projectId }): Promise<{ success: boolean }> => {
+    await checkRateLimit(ctx, "write");
+    await ctx.runMutation(internal.project._setArchived, {
+      userId: ctx.userId,
+      projectId,
+      archived: true,
+    });
     return { success: true };
   },
 });
 
 export const unarchiveProject = protectedAction({
-  args: {
-    projectId: v.id("project"),
-  },
-  handler: async (ctx: ProtectedActionCtx, args: { projectId: Id<"project"> }) => {
-    const project: Doc<"project"> = await ctx.runQuery(internal.project._loadProjectById, {
-      projectId: args.projectId,
-    });
-
-    // Owner-only operation
-    if (ctx.userId !== project.ownerId) {
-      throw createError({
-        code: ErrorCode.INSUFFICIENT_PERMISSION,
-        message: "Only the project owner can unarchive projects",
-        severity: ErrorSeverity.High,
-      });
-    }
-
-    await assertProjectAccess(ctx, project, { skipArchivedCheck: true });
-
+  args: { projectId: v.id("project"), confirmPayment: v.optional(v.boolean()) },
+  returns: unarchiveProjectResult,
+  handler: async (ctx, { projectId, confirmPayment }): Promise<SetArchivedResult> => {
     await checkRateLimit(ctx, "write");
-
-    await ctx.runMutation(internal.project._unarchiveProject, {
-      projectId: args.projectId,
-    });
-
-    const { data, error } = await ctx.autumn.check(ctx, {
-      featureId: "projects",
-    });
-
-    if (error || !data) {
-      throw createError({
-        code: ErrorCode.EXTERNAL_SERVICE_ERROR,
-        message: "Personal projects are inaccessible",
-        severity: ErrorSeverity.High,
-      });
-    }
-
-    if (!data.allowed) {
-      throw limitReachedError("projects", data.usage, data.included_usage, ErrorSeverity.High);
-    }
-
-    await ctx.autumn.track(ctx, {
-      featureId: "projects",
-      value: 1,
-    });
-
-    await ctx.runMutation(internal.actionLog._insertActionLog, {
-      projectId: args.projectId,
-      projectName: project.name,
+    return await ctx.runMutation(internal.project._setArchived, {
       userId: ctx.userId,
-      action: "project.unarchived",
+      projectId,
+      archived: false,
+      confirmPayment,
     });
-
-    log.info("Project unarchived", { projectId: args.projectId, userId: ctx.userId });
-
-    return { success: true };
   },
 });
 
 export const _loadProjectById = internalQuery({
-  args: {
-    projectId: v.id("project"),
-  },
+  args: { projectId: v.id("project") },
   returns: doc(schema, "project"),
-  handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-
-    if (!project) {
-      throw notFoundError("project");
-    }
-
-    return project;
-  },
+  handler: async (ctx, args): Promise<Doc<"project">> => getProjectOrThrow(ctx, args.projectId),
 });
 
 export const _loadActiveProjectsByOwner = internalQuery({
-  args: {
-    ownerId: v.string(),
-  },
+  args: { ownerId: v.string() },
   returns: v.array(doc(schema, "project")),
-  handler: async (ctx, args) => {
-    const projects = await ctx.db
-      .query("project")
-      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
-      .filter((q) => q.eq(q.field("isArchived"), false))
-      .collect();
-
-    return projects;
-  },
-});
-
-export const _loadAllProjectsByOwner = internalQuery({
-  args: {
-    ownerId: v.string(),
-  },
-  returns: v.array(doc(schema, "project")),
-  handler: async (ctx, args) => {
-    const projects = await ctx.db
-      .query("project")
-      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
-      .collect();
-
-    return projects;
-  },
-});
-
-export const _insertProject = internalMutation({
-  args: {
-    name: v.string(),
-    // description: v.optional(v.string()),
-    ownerId: v.string(),
-    encryptedProjectKey: v.string(),
-    createdBy: v.string(),
-  },
-  returns: v.object({ success: v.boolean(), projectId: v.id("project") }),
-  handler: async (ctx, args) => {
-    const now = Date.now();
-    const slug = generateSlug(args.name);
-
-    const existingProjects = await ctx.db
-      .query("project")
-      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
-      .filter((q) => q.eq(q.field("isArchived"), false))
-      .filter((q) => q.eq(q.field("slug"), slug))
-      .collect();
-
-    if (existingProjects.length > 0) {
-      throw alreadyExistsError("project", ErrorSeverity.Medium);
-    }
-
-    const projectId = await ctx.db.insert("project", {
-      name: args.name,
-      slug,
-      // description: args.description,
-      ownerId: args.ownerId,
-      encryptedProjectKey: args.encryptedProjectKey,
-      keyVersion: 1,
-      shareUsageCount: 0,
-      isArchived: false,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    return { success: true, projectId };
-  },
-});
-
-export const _updateProject = internalMutation({
-  args: {
-    projectId: v.id("project"),
-    updates: v.object({
-      name: v.optional(v.string()),
-      // description: v.string(),
-    }),
-  },
-  returns: v.object({
-    success: v.boolean(),
-  }),
-  handler: async (ctx, args) => {
-    const updates: {
-      updatedAt: number;
-      name?: string;
-      slug?: string;
-      description?: string;
-    } = { updatedAt: Date.now() };
-    if (args.updates.name !== undefined) {
-      updates.name = args.updates.name;
-      updates.slug = generateSlug(args.updates.name);
-      // if (args.description !== undefined) updates.description = args.description;
-    }
-
-    await ctx.db.patch(args.projectId, updates);
-
-    return { success: true };
-  },
-});
-
-export const _archiveProject = internalMutation({
-  args: {
-    projectId: v.id("project"),
-  },
-  returns: v.object({
-    success: v.boolean(),
-  }),
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.projectId, { isArchived: true, updatedAt: Date.now() });
-
-    return { success: true };
-  },
-});
-
-export const _unarchiveProject = internalMutation({
-  args: {
-    projectId: v.id("project"),
-  },
-  returns: v.object({
-    success: v.boolean(),
-  }),
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.projectId, { isArchived: false, updatedAt: Date.now() });
-
-    return { success: true };
-  },
-});
-
-// NOTE: This is a HARD DELETE used only as a compensating action when payment
-// tracking fails after project creation. Unlike archiveProject (soft delete that
-// sets isArchived=true and preserves the record), this permanently removes the
-// project from the database to maintain atomicity - either the project AND
-// payment succeed together, or neither exists.
-export const _deleteProject = internalMutation({
-  args: {
-    projectId: v.id("project"),
-  },
-  returns: v.object({
-    success: v.boolean(),
-  }),
-  handler: async (ctx, args) => {
-    await ctx.db.delete(args.projectId);
-    return { success: true };
-  },
+  handler: async (ctx, args) => listActiveOwnedProjects(ctx, args.ownerId),
 });
 
 export const _rotateProjectKey = internalMutation({
@@ -714,16 +459,13 @@ export const _rotateProjectKey = internalMutation({
     newEncryptedProjectKey: v.string(),
     newKeyVersion: v.number(),
   },
-  returns: v.object({
-    success: v.boolean(),
-  }),
+  returns: v.object({ success: v.boolean() }),
   handler: async (ctx, args) => {
     await ctx.db.patch(args.projectId, {
       encryptedProjectKey: args.newEncryptedProjectKey,
       keyVersion: args.newKeyVersion,
       updatedAt: Date.now(),
     });
-
     return { success: true };
   },
 });

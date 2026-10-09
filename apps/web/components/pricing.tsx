@@ -1,66 +1,75 @@
 "use client";
 
 import { api } from "@repo/backend";
-import { useAction, useConvexAuth, useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { Check, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import type { ReactNode } from "react";
+import { useProCheckout } from "@/hooks/useProCheckout";
+import {
+  ADD_ONS,
+  FREE_EXCLUSIONS,
+  FREE_FEATURES,
+  FREE_PRICE_USD,
+  PRO_FEATURES,
+  PRO_PRICE_USD,
+} from "@/lib/plans";
+import { primaryButton, secondaryButton } from "@/lib/styles";
 import { SectionWrapper } from "./section-wrapper";
+
+const UPGRADE_LOGIN_URL = `/login?returnUrl=${encodeURIComponent("/dashboard?action=upgrade")}`;
+
+function Feature({ included = true, children }: { included?: boolean; children: ReactNode }) {
+  return (
+    <li className="flex items-start gap-2">
+      {included ? (
+        <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
+      ) : (
+        <X className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" aria-hidden="true" />
+      )}
+      <span className={included ? "text-foreground" : "text-muted-foreground"}>{children}</span>
+    </li>
+  );
+}
+
+function Price({ amount }: { amount: number }) {
+  return (
+    <p className="flex items-baseline gap-1">
+      <span className="text-3xl font-bold text-foreground tabular-nums sm:text-4xl">${amount}</span>
+      <span className="text-foreground/60 text-sm sm:text-base">/month</span>
+    </p>
+  );
+}
 
 export function Pricing() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const userData = useQuery(api.user.getCurrentUser, isAuthenticated ? {} : "skip");
-  const getProPlan = useAction(api.user.getProPlan);
-  const [isUpgrading, setIsUpgrading] = useState(false);
+  const checkout = useProCheckout();
 
-  const hasPro = userData?.hasPro || false;
+  const hasPro = userData?.hasPro ?? false;
 
   const handleFreeClick = () => {
     if (isLoading) return;
-
-    if (isAuthenticated) {
-      router.push("/dashboard");
-    } else {
-      router.push("/login?returnUrl=/dashboard");
-    }
+    router.push(isAuthenticated ? "/dashboard" : "/login?returnUrl=/dashboard");
   };
 
   const handleProClick = async () => {
-    if (isLoading) return;
-
+    if (isLoading || hasPro) return;
     if (!isAuthenticated) {
-      router.push("/login?returnUrl=/dashboard&action=upgrade");
+      router.push(UPGRADE_LOGIN_URL);
       return;
     }
-
-    if (hasPro) {
-      return;
-    }
-
-    setIsUpgrading(true);
-    try {
-      const result = await getProPlan({});
-      if (result.checkoutLink) {
-        window.location.href = result.checkoutLink;
-      }
-    } catch (error) {
-      console.error("Failed to get checkout link:", error);
-      setIsUpgrading(false);
-    }
+    if ((await checkout.startCheckout()) === "already_pro") router.push("/dashboard");
   };
 
-  const getProButtonText = () => {
-    if (isLoading || isUpgrading) return "Loading…";
-    if (hasPro) return "Current Plan";
+  const proButtonText = (() => {
+    if (isLoading) return "Loading…";
+    if (checkout.isPending) return "Redirecting to checkout…";
+    if (hasPro) return "Current plan";
     if (!isAuthenticated) return "Get started with Pro";
     return "Upgrade to Pro";
-  };
-
-  const getFreeButtonText = () => {
-    if (isLoading) return "Loading…";
-    return "Get started";
-  };
+  })();
 
   return (
     <SectionWrapper label="Pricing" id="pricing">
@@ -71,44 +80,27 @@ export function Pricing() {
         </p>
 
         <div className="mt-8 grid grid-cols-1 gap-5 sm:mt-12 sm:gap-6 lg:grid-cols-2">
-          {/* Free Plan */}
-          <div className="border-2 border-border bg-card flex flex-col">
+          <article
+            aria-labelledby="plan-free"
+            className="border-2 border-border bg-card flex flex-col"
+          >
             <div className="p-4 space-y-4 flex-1 sm:p-6">
               <div className="space-y-1 sm:space-y-2">
-                <h3 className="text-lg font-semibold text-foreground sm:text-xl">Free</h3>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-bold text-foreground tabular-nums sm:text-4xl">
-                    $0
-                  </span>
-                  <span className="text-foreground/60 text-sm sm:text-base">/month</span>
-                </div>
+                <h3 id="plan-free" className="text-lg font-semibold text-foreground sm:text-xl">
+                  Free
+                </h3>
+                <Price amount={FREE_PRICE_USD} />
               </div>
 
               <ul className="space-y-3 text-sm">
-                <li className="flex items-start gap-2">
-                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
-                  <span className="text-foreground">1 project</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
-                  <span className="text-foreground">Activity logs & analytics</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
-                  <span className="text-foreground">Fully encrypted</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
-                  <span className="text-foreground">CLI & TUI access</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <X className="h-4 w-4 text-foreground/30 shrink-0 mt-0.5" aria-hidden="true" />
-                  <span className="text-foreground/50">No project sharing</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <X className="h-4 w-4 text-foreground/30 shrink-0 mt-0.5" aria-hidden="true" />
-                  <span className="text-foreground/50">No CI/CD integration</span>
-                </li>
+                {FREE_FEATURES.map((feature) => (
+                  <Feature key={feature}>{feature}</Feature>
+                ))}
+                {FREE_EXCLUSIONS.map((feature) => (
+                  <Feature key={feature} included={false}>
+                    {feature}
+                  </Feature>
+                ))}
               </ul>
             </div>
 
@@ -118,94 +110,67 @@ export function Pricing() {
                   type="button"
                   onClick={handleFreeClick}
                   disabled={isLoading}
-                  className="block w-full text-center p-3 border-2 border-border bg-background text-foreground font-medium hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={`block w-full text-center p-3 font-medium ${secondaryButton}`}
                 >
-                  {getFreeButtonText()}
+                  {isLoading ? "Loading…" : "Get started"}
                 </button>
               </div>
             )}
-          </div>
+          </article>
 
-          {/* Pro Plan */}
-          <div className="border-2 border-border bg-card relative flex flex-col">
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-              <span className="bg-foreground text-background px-3 py-1 text-xs font-bold">
-                RECOMMENDED
-              </span>
-            </div>
+          <article
+            aria-labelledby="plan-pro"
+            className="border-2 border-border bg-card relative flex flex-col"
+          >
+            <p className="absolute -top-3 left-1/2 -translate-x-1/2 bg-foreground text-background px-3 py-1 text-xs font-bold tracking-wide">
+              Recommended
+            </p>
 
             <div className="p-4 space-y-4 flex-1 sm:p-6">
               <div className="space-y-1 sm:space-y-2">
-                <h3 className="text-lg font-semibold text-foreground sm:text-xl">Pro</h3>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-bold text-foreground tabular-nums sm:text-4xl">
-                    $9
-                  </span>
-                  <span className="text-foreground/60 text-sm sm:text-base">/month</span>
-                </div>
+                <h3 id="plan-pro" className="text-lg font-semibold text-foreground sm:text-xl">
+                  Pro
+                </h3>
+                <Price amount={PRO_PRICE_USD} />
               </div>
 
               <ul className="space-y-3 text-sm">
-                <li className="flex items-start gap-2">
-                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
-                  <span className="text-foreground">
-                    <strong>Collaborate on projects</strong> - 5 free shares per project
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
-                  <span className="text-foreground">
-                    <strong>5 free projects</strong> included
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
-                  <span className="text-foreground">
-                    <strong>Service accounts & OIDC</strong> for CI/CD
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
-                  <span className="text-foreground">
-                    <strong>API keys</strong> for programmatic access
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
-                  <span className="text-foreground">Activity logs & analytics</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
-                  <span className="text-foreground">
-                    <strong>Early access</strong> to new features
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="h-4 w-4 text-electric-ink shrink-0 mt-0.5" aria-hidden="true" />
-                  <span className="text-foreground">Everything in Free</span>
-                </li>
+                {PRO_FEATURES.map((feature) => (
+                  <Feature key={feature.id}>
+                    <strong>{feature.highlight}</strong>
+                    {feature.rest}
+                  </Feature>
+                ))}
+                <Feature>Everything in Free</Feature>
               </ul>
 
-              <div className="pt-2 border-t border-border/50">
-                <p className="text-xs font-medium text-foreground/50 mb-1.5">Need more?</p>
-                <div className="text-xs text-foreground/60 space-y-0.5 tabular-nums">
-                  <p>• Additional projects: $2 each</p>
-                  <p>• Additional shares: $1 each</p>
-                </div>
+              <div className="pt-2 border-t border-border">
+                <p className="text-xs font-medium text-foreground/60 mb-1.5">Need more?</p>
+                <ul className="text-xs text-foreground/60 space-y-0.5 tabular-nums list-disc list-inside">
+                  {ADD_ONS.map((addOn) => (
+                    <li key={addOn}>{addOn}</li>
+                  ))}
+                </ul>
               </div>
             </div>
 
-            <div className="border-t-2 border-border p-4 sm:p-6">
+            <div className="border-t-2 border-border p-4 sm:p-6 space-y-2">
               <button
                 type="button"
-                onClick={handleProClick}
-                disabled={isLoading || hasPro || isUpgrading}
-                className="block w-full text-center p-3 border-2 border-foreground bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => void handleProClick()}
+                disabled={isLoading || hasPro || checkout.isPending}
+                aria-busy={checkout.isPending}
+                className={`block w-full text-center p-3 ${primaryButton}`}
               >
-                {getProButtonText()}
+                {proButtonText}
               </button>
+              {checkout.error && (
+                <p role="alert" className="text-xs text-red-700 dark:text-red-400">
+                  {checkout.error}
+                </p>
+              )}
             </div>
-          </div>
+          </article>
         </div>
       </div>
     </SectionWrapper>

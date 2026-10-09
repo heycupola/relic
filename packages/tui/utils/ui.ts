@@ -1,4 +1,24 @@
+import { createLogger } from "@repo/logger";
+import open from "open";
 import { THEME_COLORS } from "./constants";
+
+const logger = createLogger("tui");
+
+export function truncate(text: string, maxLength: number): string {
+  if (maxLength <= 0) return "";
+  if (text.length <= maxLength) return text;
+  if (maxLength === 1) return "…";
+  return `${text.slice(0, maxLength - 1)}…`;
+}
+
+export function openUrl(url: string): Promise<void> {
+  return open(url).then(
+    () => undefined,
+    (error: unknown) => {
+      logger.error("Failed to open URL in browser:", error);
+    },
+  );
+}
 
 interface HighlightedPart {
   text: string;
@@ -147,11 +167,4 @@ export function mapCursorToWrappedLines(
   }
 
   return { wrappedLine, wrappedColumn, allWrappedLines };
-}
-
-export function createHyperlink(url: string, text?: string, color?: string): string {
-  const displayText = text || url;
-  const colorCode = color ? `\x1b[${color}m` : "";
-  const resetCode = color ? "\x1b[0m" : "";
-  return `\x1b]8;;${url}\x1b\\${colorCode}${displayText}${resetCode}\x1b]8;;\x1b\\`;
 }

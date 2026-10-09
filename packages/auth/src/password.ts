@@ -67,7 +67,7 @@ function writePasswordMetadata(account: PasswordAccount): void {
 function clearPasswordMetadata(): void {
   try {
     rmSync(PASSWORD_METADATA_FILE, { force: true });
-  } catch (_) {
+  } catch {
     void 0;
   }
 }
@@ -79,7 +79,7 @@ async function ensureConfigDir(): Promise<void> {
     if (process.platform !== "win32") {
       await chmod(CONFIG_DIR, 0o700);
     }
-  } catch (_) {
+  } catch {
     void 0;
   }
 }
@@ -108,7 +108,7 @@ export async function getPasswordFromStorage(): Promise<string | null> {
       cachedPassword = password;
       return password;
     }
-  } catch (_) {
+  } catch {
     void 0;
   }
 
@@ -121,7 +121,7 @@ export async function getPasswordFromStorage(): Promise<string | null> {
         return password;
       }
     }
-  } catch (_) {
+  } catch {
     void 0;
   }
 
@@ -140,11 +140,11 @@ async function savePasswordToStorage(password: string): Promise<void> {
     try {
       const file = Bun.file(PASSWORD_FILE);
       if (await file.exists()) await unlink(PASSWORD_FILE);
-    } catch (_) {
+    } catch {
       void 0;
     }
     return;
-  } catch (_) {
+  } catch {
     void 0;
   }
 
@@ -162,14 +162,14 @@ async function deletePasswordFromStorage(): Promise<void> {
 
   try {
     await secrets.delete({ service: SECRETS_SERVICE, name: SECRETS_NAME });
-  } catch (_) {
+  } catch {
     void 0;
   }
 
   try {
     const file = Bun.file(PASSWORD_FILE);
     if (await file.exists()) await unlink(PASSWORD_FILE);
-  } catch (_) {
+  } catch {
     void 0;
   }
 }

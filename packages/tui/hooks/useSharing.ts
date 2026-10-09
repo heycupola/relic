@@ -1,34 +1,48 @@
-import {
-  createProjectKey,
-  decryptSecret,
-  encryptSecret,
-  importPublicKey,
-  wrapAESKeyWithRSA,
-} from "@repo/crypto";
+import { ConvexError } from "convex/values";
 import { useCallback } from "react";
 import { getProtectedApi } from "../api";
-import type { SharedUser, ShareLimits, ShareProjectResult } from "../types/api";
+import type { ShareLimits, ShareProjectResult } from "../types/api";
 import { getProjectKey } from "../utils/crypto";
+import { buildRotationPayload, wrapProjectKeyFor } from "../utils/keyRotation";
+import type { ProjectKeySource } from "./useSecrets";
+
+const MAX_ROTATION_ATTEMPTS = 3;
+
+async function withTransientRetry(fn: () => Promise<void>): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await fn();
+      return;
+    } catch (error) {
+      if (error instanceof ConvexError || attempt >= MAX_ROTATION_ATTEMPTS) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** (attempt - 1)));
+    }
+  }
+}
 
 export function useSharing(
   projectId: string,
-  encryptedProjectKeySource: string | null,
+  projectKey: ProjectKeySource | null,
   encryptedPrivateKey: string | null,
   salt: string | null,
   shareLimits: ShareLimits | null,
 ) {
+  const encryptedProjectKeySource = projectKey?.encryptedProjectKey ?? null;
+
   const shareProject = useCallback(
     async (email: string, confirmPayment?: boolean): Promise<ShareProjectResult> => {
       const api = getProtectedApi();
       await api.ensureAuth();
 
-      if (!shareLimits?.hasPro) {
-        return await api.shareProject({
-          projectId,
-          userEmail: email,
-          encryptedProjectKey: "",
-          confirmPayment,
-        });
+      if (shareLimits && !shareLimits.hasPro) {
+        const plan = await api.getProPlan();
+        if (!plan.hasPro) {
+          return {
+            status: "requiresProPlan",
+            checkoutUrl: plan.url || null,
+            message: "Upgrade to Pro to add collaborators",
+          };
+        }
       }
 
       const collaboratorKeyResult = await api.getUserPublicKeyByEmail(email);
@@ -41,8 +55,10 @@ export function useSharing(
       }
 
       const projectKey = await getProjectKey(encryptedProjectKeySource, encryptedPrivateKey, salt);
-      const collaboratorPublicKey = await importPublicKey(collaboratorKeyResult.publicKey);
-      const encryptedProjectKey = await wrapAESKeyWithRSA(projectKey, collaboratorPublicKey);
+      const encryptedProjectKey = await wrapProjectKeyFor(
+        projectKey,
+        collaboratorKeyResult.publicKey,
+      );
 
       return await api.shareProject({
         projectId,
@@ -61,7 +77,7 @@ export function useSharing(
   }, []);
 
   const revokeShareWithRotation = useCallback(
-    async (shareId: string, sharedUsers: SharedUser[]) => {
+    async (shareId: string) => {
       if (!encryptedProjectKeySource || !encryptedPrivateKey || !salt) {
         throw new Error("Cannot rotate: Missing keys");
       }
@@ -69,64 +85,26 @@ export function useSharing(
       const api = getProtectedApi();
       await api.ensureAuth();
 
-      const currentProjectKey = await getProjectKey(
-        encryptedProjectKeySource,
-        encryptedPrivateKey,
-        salt,
-      );
-      const currentUser = await api.getCurrentUser();
+      const [currentProjectKey, currentUser, { shares }, serviceAccounts, allSecrets] =
+        await Promise.all([
+          getProjectKey(encryptedProjectKeySource, encryptedPrivateKey, salt),
+          api.getCurrentUser(),
+          api.listProjectShares(projectId),
+          api.listServiceAccounts(projectId),
+          api.getAllSecretsForProject(projectId),
+        ]);
       if (!currentUser.publicKey) throw new Error("Current user has no public key");
 
-      const { encryptedProjectKey: newEncryptedProjectKey, projectKey: newProjectKey } =
-        await createProjectKey(currentUser.publicKey);
+      const payload = await buildRotationPayload({
+        revokedShareId: shareId,
+        currentProjectKey,
+        ownerPublicKey: currentUser.publicKey,
+        shares,
+        serviceAccounts,
+        secrets: allSecrets,
+      });
 
-      const allSecrets = await api.getAllSecretsForProject(projectId);
-      const reEncryptedSecrets = await Promise.all(
-        allSecrets.map(async (secret) => ({
-          secretId: secret.id,
-          newEncryptedValue: await encryptSecret(
-            newProjectKey,
-            await decryptSecret(currentProjectKey, secret.encryptedValue),
-          ),
-        })),
-      );
-
-      const remainingShares = sharedUsers.filter((u) => u.id !== shareId);
-      const rewrappedShares = await Promise.all(
-        remainingShares
-          .filter((s): s is SharedUser & { publicKey: string } => s.publicKey !== null)
-          .map(async (s) => ({
-            shareId: s.id,
-            newEncryptedProjectKey: await wrapAESKeyWithRSA(
-              newProjectKey,
-              await importPublicKey(s.publicKey),
-            ),
-          })),
-      );
-
-      const MAX_RETRIES = 3;
-      for (let i = 0; i < MAX_RETRIES; i++) {
-        try {
-          await api.revokeShareWithRotation({
-            shareId,
-            newEncryptedProjectKey,
-            rewrappedShares,
-            reEncryptedSecrets,
-          });
-          return;
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          const errorLower = errorMessage.toLowerCase();
-          const isTerminal =
-            errorLower.includes("not found") ||
-            errorLower.includes("invalid") ||
-            errorLower.includes("already revoked");
-          if (i === MAX_RETRIES - 1 || isTerminal) {
-            throw error;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** i));
-        }
-      }
+      await withTransientRetry(() => api.revokeShareWithRotation({ shareId, ...payload }));
     },
     [projectId, encryptedProjectKeySource, encryptedPrivateKey, salt],
   );

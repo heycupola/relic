@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 import { InstallSection } from "@/components/install-section";
 import { authClient } from "@/lib/auth";
 import { trackWebEvent } from "@/lib/posthog";
-import { authHeadingStyle, authSubtitleStyle } from "@/lib/styles";
+import { authHeadingStyle, authSubtitleStyle, focusRing, primaryButton } from "@/lib/styles";
 
 type Source =
   | "google_search"
@@ -78,6 +78,7 @@ export default function OnboardingPage() {
   const [sourceOther, setSourceOther] = useState("");
   const [selectedTeamSize, setSelectedTeamSize] = useState<TeamSize | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     if (userData === undefined) return;
@@ -105,6 +106,7 @@ export default function OnboardingPage() {
 
   const handleComplete = async () => {
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
       await completeOnboardingMutation({
         source: selectedSource ?? undefined,
@@ -118,6 +120,7 @@ export default function OnboardingPage() {
       router.replace("/dashboard");
     } catch (error) {
       console.error("Failed to complete onboarding:", error);
+      setSubmitError("Couldn't save your answers. Please try again.");
       setIsSubmitting(false);
     }
   };
@@ -134,7 +137,10 @@ export default function OnboardingPage() {
     <div className="min-h-dvh bg-background text-foreground flex items-center justify-center">
       <div className="w-full max-w-lg px-4 py-8 sm:px-6 sm:py-16">
         <div className="flex flex-col gap-8">
-          <Link href="/" className="flex items-center">
+          <Link
+            href="/"
+            className="flex w-fit items-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+          >
             <Image
               src="/relic-logo-dark.svg"
               alt="Relic"
@@ -156,7 +162,11 @@ export default function OnboardingPage() {
           {currentStep === 1 && (
             <div className="flex flex-col gap-6">
               <div>
-                <h1 className="text-2xl font-medium text-foreground" style={authHeadingStyle}>
+                <h1
+                  id="onboarding-source-heading"
+                  className="text-2xl font-medium text-foreground"
+                  style={authHeadingStyle}
+                >
                   How did you hear about us?
                 </h1>
                 <p className="mt-2 text-sm text-muted-foreground" style={authSubtitleStyle}>
@@ -164,14 +174,20 @@ export default function OnboardingPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div
+                role="group"
+                aria-labelledby="onboarding-source-heading"
+                className="grid grid-cols-2 sm:grid-cols-3 gap-2"
+              >
                 {SOURCE_OPTIONS.map((option) => (
                   <button
                     key={option.value}
                     type="button"
                     onClick={() => setSelectedSource(option.value)}
+                    aria-pressed={selectedSource === option.value}
                     className={cn(
-                      "px-3 py-2.5 text-sm font-medium border-2 transition-all",
+                      "px-3 py-2.5 text-sm font-medium border-2 transition-colors",
+                      focusRing,
                       selectedSource === option.value
                         ? "bg-foreground text-background border-foreground"
                         : "border-border bg-background text-foreground hover:bg-muted",
@@ -187,7 +203,8 @@ export default function OnboardingPage() {
                   type="text"
                   value={sourceOther}
                   onChange={(e) => setSourceOther(e.target.value)}
-                  placeholder="Tell us more..."
+                  placeholder="Tell us more…"
+                  aria-label="Tell us more about where you heard about Relic"
                   className="w-full px-4 py-3 text-sm border-2 border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground transition-colors"
                 />
               )}
@@ -197,14 +214,14 @@ export default function OnboardingPage() {
                   type="button"
                   onClick={handleNext}
                   disabled={!selectedSource}
-                  className="flex-1 px-6 py-3 text-sm font-medium bg-foreground text-background border-2 border-foreground transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={`flex-1 px-6 py-3 text-sm ${primaryButton}`}
                 >
                   Continue
                 </button>
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="px-6 py-3 text-sm font-medium text-muted-foreground border-2 border-border transition-all hover:text-foreground hover:border-foreground"
+                  className={`px-6 py-3 text-sm font-medium text-muted-foreground border-2 border-border bg-background transition-colors hover:text-foreground hover:bg-muted/50 ${focusRing}`}
                 >
                   Skip
                 </button>
@@ -215,7 +232,11 @@ export default function OnboardingPage() {
           {currentStep === 2 && (
             <div className="flex flex-col gap-6">
               <div>
-                <h1 className="text-2xl font-medium text-foreground" style={authHeadingStyle}>
+                <h1
+                  id="onboarding-team-heading"
+                  className="text-2xl font-medium text-foreground"
+                  style={authHeadingStyle}
+                >
                   What's your team size?
                 </h1>
                 <p className="mt-2 text-sm text-muted-foreground" style={authSubtitleStyle}>
@@ -223,14 +244,20 @@ export default function OnboardingPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div
+                role="group"
+                aria-labelledby="onboarding-team-heading"
+                className="grid grid-cols-2 sm:grid-cols-3 gap-2"
+              >
                 {TEAM_SIZE_OPTIONS.map((option) => (
                   <button
                     key={option.value}
                     type="button"
                     onClick={() => setSelectedTeamSize(option.value)}
+                    aria-pressed={selectedTeamSize === option.value}
                     className={cn(
-                      "px-3 py-2.5 text-sm font-medium border-2 transition-all",
+                      "px-3 py-2.5 text-sm font-medium border-2 transition-colors",
+                      focusRing,
                       selectedTeamSize === option.value
                         ? "bg-foreground text-background border-foreground"
                         : "border-border bg-background text-foreground hover:bg-muted",
@@ -245,7 +272,7 @@ export default function OnboardingPage() {
                 <button
                   type="button"
                   onClick={handleBack}
-                  className="px-6 py-3 text-sm font-medium text-muted-foreground border-2 border-border transition-all hover:text-foreground hover:border-foreground"
+                  className={`px-6 py-3 text-sm font-medium text-muted-foreground border-2 border-border bg-background transition-colors hover:text-foreground hover:bg-muted/50 ${focusRing}`}
                 >
                   Back
                 </button>
@@ -253,14 +280,14 @@ export default function OnboardingPage() {
                   type="button"
                   onClick={handleNext}
                   disabled={!selectedTeamSize}
-                  className="flex-1 px-6 py-3 text-sm font-medium bg-foreground text-background border-2 border-foreground transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={`flex-1 px-6 py-3 text-sm ${primaryButton}`}
                 >
                   Continue
                 </button>
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="px-6 py-3 text-sm font-medium text-muted-foreground border-2 border-border transition-all hover:text-foreground hover:border-foreground"
+                  className={`px-6 py-3 text-sm font-medium text-muted-foreground border-2 border-border bg-background transition-colors hover:text-foreground hover:bg-muted/50 ${focusRing}`}
                 >
                   Skip
                 </button>
@@ -285,7 +312,7 @@ export default function OnboardingPage() {
                 <button
                   type="button"
                   onClick={handleBack}
-                  className="px-6 py-3 text-sm font-medium text-muted-foreground border-2 border-border transition-all hover:text-foreground hover:border-foreground"
+                  className={`px-6 py-3 text-sm font-medium text-muted-foreground border-2 border-border bg-background transition-colors hover:text-foreground hover:bg-muted/50 ${focusRing}`}
                 >
                   Back
                 </button>
@@ -293,11 +320,17 @@ export default function OnboardingPage() {
                   type="button"
                   onClick={handleComplete}
                   disabled={isSubmitting}
-                  className="flex-1 px-6 py-3 text-sm font-medium bg-foreground text-background border-2 border-foreground transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                  aria-busy={isSubmitting}
+                  className={`flex-1 px-6 py-3 text-sm ${primaryButton}`}
                 >
-                  {isSubmitting ? "Completing\u2026" : "Go to Dashboard"}
+                  {isSubmitting ? "Completing\u2026" : "Go to dashboard"}
                 </button>
               </div>
+              {submitError && (
+                <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+                  {submitError}
+                </p>
+              )}
             </div>
           )}
         </div>

@@ -1,21 +1,43 @@
+/** @jsxImportSource @opentui/react */
 import { useTerminalDimensions } from "@opentui/react";
 import { useEffect, useState } from "react";
 import { type TaskStatus, useTaskQueue } from "../../hooks/useTaskQueue";
 import { SPINNER_FRAMES, SPINNER_INTERVAL, THEME_COLORS } from "../../utils/constants";
+import { truncate } from "../../utils/ui";
 
 // NOTE: Background colors create visual hierarchy:
-// - Idle: darker (#1a1e2e) - blends in, passive status bar
-// - Running/Pending: elevated (#24283b) - "something is happening"
+// - Idle: darker - blends in, passive status bar
+// - Running/Pending: elevated - "something is happening"
 // - Success/Error: colored backgrounds - demands attention
 const STATUS_CONFIG: Record<
   TaskStatus,
   { icon: string; textColor: string; bgColor: string; prefix: string }
 > = {
-  idle: { icon: "", textColor: THEME_COLORS.textDim, bgColor: "#1a1e2e", prefix: "" },
-  pending: { icon: "…", textColor: THEME_COLORS.accent, bgColor: "#24283b", prefix: "" },
-  running: { icon: "", textColor: THEME_COLORS.primary, bgColor: "#24283b", prefix: "" },
-  success: { icon: "✓", textColor: "#1a1e2e", bgColor: "#9ece6a", prefix: "Success: " },
-  error: { icon: "✗", textColor: "#1a1e2e", bgColor: "#f7768e", prefix: "Error: " },
+  idle: { icon: "", textColor: THEME_COLORS.textDim, bgColor: THEME_COLORS.statusBar, prefix: "" },
+  pending: {
+    icon: "…",
+    textColor: THEME_COLORS.warning,
+    bgColor: THEME_COLORS.statusBarActive,
+    prefix: "",
+  },
+  running: {
+    icon: "",
+    textColor: THEME_COLORS.primary,
+    bgColor: THEME_COLORS.statusBarActive,
+    prefix: "",
+  },
+  success: {
+    icon: "✓",
+    textColor: THEME_COLORS.textInverse,
+    bgColor: THEME_COLORS.success,
+    prefix: "Success: ",
+  },
+  error: {
+    icon: "✗",
+    textColor: THEME_COLORS.textInverse,
+    bgColor: THEME_COLORS.error,
+    prefix: "Error: ",
+  },
 };
 
 interface TaskBarProps {
@@ -43,10 +65,21 @@ export function TaskBar({ userEmail, hasPro }: TaskBarProps) {
   const isResult = task.status === "success" || task.status === "error";
   const isIdle = task.status === "idle";
 
-  // NOTE: User email color adapts to background for readability.
-  // Using textMuted (brighter) instead of textDim for better visibility in idle state.
-  const userTextColor = isResult ? config.textColor : THEME_COLORS.textMuted;
   const version = process.env._RELIC_VERSION;
+  const planLabel = hasPro ? "Pro" : "Free";
+  const separatorColor = isResult ? config.textColor : THEME_COLORS.textDim;
+  const userTextColor = isResult ? config.textColor : THEME_COLORS.textMuted;
+
+  // NOTE: The message is truncated so it never runs into the account info on the right.
+  const innerWidth = Math.max(0, width - 2);
+  const maxEmailLength = Math.max(8, Math.floor(innerWidth / 3));
+  const email = userEmail ? truncate(userEmail, maxEmailLength) : "";
+  const rightText = [email && `${email} · ${planLabel}`, version && `v${version}`]
+    .filter(Boolean)
+    .join(" · ");
+  const messageRoom = Math.max(0, innerWidth - rightText.length - 2);
+  const leadLength = isResult ? `${icon} ${config.prefix}`.length : `${icon} `.length;
+  const message = truncate(task.message, Math.max(0, messageRoom - leadLength));
 
   return (
     <box
@@ -71,33 +104,33 @@ export function TaskBar({ userEmail, hasPro }: TaskBarProps) {
                 {icon} {config.prefix}
               </span>
             </b>
-            <span fg={config.textColor}>{task.message}</span>
+            <span fg={config.textColor}>{message}</span>
           </>
         ) : (
           <>
             <span fg={config.textColor}>{icon}</span>
-            <span fg={THEME_COLORS.textMuted}> {task.message}</span>
+            <span fg={THEME_COLORS.text}> {message}</span>
           </>
         )}
       </text>
       <text>
-        {userEmail && (
+        {email && (
           <>
-            <span fg={userTextColor}>{userEmail}</span>
-            <span fg={isResult ? config.textColor : THEME_COLORS.textDim}> · </span>
+            <span fg={userTextColor}>{email}</span>
+            <span fg={separatorColor}> · </span>
             <span
               fg={
-                isResult ? config.textColor : hasPro ? THEME_COLORS.success : THEME_COLORS.textDim
+                isResult ? config.textColor : hasPro ? THEME_COLORS.success : THEME_COLORS.textMuted
               }
             >
-              {hasPro ? "Pro" : "Free"}
+              {planLabel}
             </span>
           </>
         )}
         {version && (
           <>
-            {userEmail && <span fg={isResult ? config.textColor : THEME_COLORS.textDim}> · </span>}
-            <span fg={isResult ? config.textColor : THEME_COLORS.textDim}>v{version}</span>
+            {email && <span fg={separatorColor}> · </span>}
+            <span fg={isResult ? config.textColor : THEME_COLORS.textMuted}>v{version}</span>
           </>
         )}
       </text>

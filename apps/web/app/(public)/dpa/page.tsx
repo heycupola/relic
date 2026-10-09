@@ -17,13 +17,13 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: "/dpa",
     siteName: SITE_NAME,
-    title: "Data Processing Agreement - relic",
+    title: "Data Processing Agreement - Relic",
     description:
       "Data Processing Agreement (DPA) for Relic, a zero-knowledge secrets management platform by Cupola Labs, LLC.",
   },
   twitter: {
     card: "summary",
-    title: "Data Processing Agreement - relic",
+    title: "Data Processing Agreement - Relic",
     description:
       "Data Processing Agreement (DPA) for Relic, a zero-knowledge secrets management platform by Cupola Labs, LLC.",
     creator: SITE_TWITTER_HANDLE,

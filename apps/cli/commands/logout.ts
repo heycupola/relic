@@ -8,6 +8,7 @@ import {
 import { createLogger, trackEvent } from "@repo/logger";
 import ora from "ora";
 import pc from "picocolors";
+import { exitWithTelemetry } from "../lib/telemetry";
 
 const log = createLogger("cli");
 
@@ -34,6 +35,6 @@ export default async function logout() {
     trackEvent("cli_logout", { success: false });
     const message = err instanceof Error ? err.message : "Failed to logout";
     spinner.fail(pc.red(`Error: ${message}`));
-    process.exit(1);
+    await exitWithTelemetry(1);
   }
 }

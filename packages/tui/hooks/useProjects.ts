@@ -1,7 +1,7 @@
 import { api } from "@repo/backend";
 import { createLogger, trackError } from "@repo/logger";
 import { useQuery } from "convex/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getProtectedApi } from "../api";
 import type { CreateProjectResult } from "../types/api";
 import type { Project } from "../types/models";
@@ -15,27 +15,30 @@ export function useProjects() {
   const [limits, setLimits] = useState<{ usage: number; includedUsage: number } | null>(null);
   const [limitsLoading, setLimitsLoading] = useState(true);
   const [limitsError, setLimitsError] = useState<Error | null>(null);
+  const hasLoadedLimitsRef = useRef(false);
 
   const fetchLimits = useCallback(async () => {
-    setLimitsLoading(true);
-    setLimitsError(null);
+    // NOTE: Only the first load shows a loading state so refetches don't make the list flicker.
+    if (!hasLoadedLimitsRef.current) setLimitsLoading(true);
     try {
       const apiClient = getProtectedApi();
       await apiClient.ensureAuth();
       const limitsData = await apiClient.getLimits();
       setLimits(limitsData);
+      setLimitsError(null);
     } catch (err) {
       logger.error("Failed to fetch limits:", err);
       trackError("tui", err, { action: "fetch_limits" });
       setLimits(null);
       setLimitsError(err instanceof Error ? err : new Error("Failed to fetch limits"));
     } finally {
+      hasLoadedLimitsRef.current = true;
       setLimitsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchLimits();
+    void fetchLimits();
   }, [fetchLimits]);
 
   const { archivedCount, projects } = useMemo(() => {
@@ -47,6 +50,7 @@ export function useProjects() {
           id: p.id,
           name: p.name,
           status: p.status as Project["status"],
+          isOwner: true,
         });
       }
     }
@@ -58,6 +62,7 @@ export function useProjects() {
             id: s.projectId,
             name: s.projectName,
             status: s.status as Project["status"],
+            isOwner: false,
           });
         }
       }
@@ -79,6 +84,10 @@ export function useProjects() {
     return { archivedCount, projects: sorted };
   }, [ownedProjectsData, sharedProjectsData]);
 
+  const gracePeriodDaysRemaining = ownedProjectsData?.isInGracePeriod
+    ? (ownedProjectsData.gracePeriodDaysRemaining ?? null)
+    : null;
+
   const isLoading =
     ownedProjectsData === undefined || sharedProjectsData === undefined || limitsLoading;
 
@@ -88,17 +97,13 @@ export function useProjects() {
       encryptedProjectKey: string,
       confirmPayment?: boolean,
     ): Promise<CreateProjectResult> => {
-      try {
-        const apiClient = getProtectedApi();
-        await apiClient.ensureAuth();
-        const result = await apiClient.createProject({ name, encryptedProjectKey, confirmPayment });
-        if (result.status === "success") {
-          fetchLimits();
-        }
-        return result;
-      } catch (err) {
-        throw err instanceof Error ? err : new Error("Failed to create project");
+      const apiClient = getProtectedApi();
+      await apiClient.ensureAuth();
+      const result = await apiClient.createProject({ name, encryptedProjectKey, confirmPayment });
+      if (result.status === "success") {
+        void fetchLimits();
       }
+      return result;
     },
     [fetchLimits],
   );
@@ -114,7 +119,7 @@ export function useProjects() {
       const apiClient = getProtectedApi();
       await apiClient.ensureAuth();
       await apiClient.archiveProject(projectId);
-      fetchLimits();
+      void fetchLimits();
     },
     [fetchLimits],
   );
@@ -124,6 +129,7 @@ export function useProjects() {
     projects,
     limits,
     isLoading,
+    gracePeriodDaysRemaining,
     error: limitsError,
     refetch: fetchLimits,
     createProject,

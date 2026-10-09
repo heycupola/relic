@@ -4,9 +4,16 @@ import { internal } from "./_generated/api";
 const crons = cronJobs();
 
 crons.daily(
+  "reconcile-plans-with-autumn",
+  { hourUTC: 2, minuteUTC: 0 },
+  internal.billing._reconcilePlans,
+  {},
+);
+
+crons.daily(
   "batch-send-access-restricted-emails",
   { hourUTC: 3, minuteUTC: 0 },
-  internal.user._batchSendAccessRestrictedEmails,
+  internal.user._queueAccessRestrictedEmails,
   {},
 );
 

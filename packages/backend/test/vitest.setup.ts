@@ -1,8 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { GenericActionCtx } from "convex/server";
 import { vi } from "vitest";
-import type { DataModel } from "../convex/_generated/dataModel";
 
 // Mock rate limiter modules
 vi.mock("../convex/rateLimiter", () => ({
@@ -41,191 +39,69 @@ vi.mock("../convex/resend", () => ({
     sendEmailManually: vi.fn().mockResolvedValue("mock-email-id"),
   },
   sendEmail: vi.fn().mockResolvedValue({ emailId: "mock-email-id" }),
+  sendEmailDirect: vi.fn().mockResolvedValue({ emailId: "mock-email-id" }),
   getUpgradeUrl: vi.fn().mockReturnValue("https://withrelic.com/upgrade"),
   getDashboardUrl: vi.fn().mockReturnValue("https://withrelic.com/dashboard"),
 }));
 
-// Create the mock autumn in a hoisted block so it's available before vi.mock runs
-const { _mockAutumn } = vi.hoisted(() => {
-  // Inline minimal MockAutumn implementation for hoisting
-  interface FeatureUsage {
-    entityId?: string;
-    featureId: string;
-    type: "usage" | "boolean";
-    limit: number;
-    current: number;
-    booleanValue?: boolean;
-  }
+const { _mockBilling } = vi.hoisted(() => {
+  type Customer = { hasActivePro: boolean; usage: Record<string, number> };
 
-  class MockAutumnInline {
-    private features: Map<string, FeatureUsage[]> = new Map();
+  class MockBilling {
+    customers = new Map<string, Customer>();
+    tracked: { customerId: string; featureId: string; value: number }[] = [];
+    failCancellation = false;
 
-    setFeature(customerId: string, featureId: string, limit: number, currentUsage = 0) {
-      this._setFeature(customerId, featureId, "usage", limit, currentUsage);
-    }
-
-    setEntityFeature(
-      customerId: string,
-      entityId: string,
-      featureId: string,
-      limit: number,
-      currentUsage = 0,
-    ) {
-      this._setFeature(customerId, featureId, "usage", limit, currentUsage, entityId);
-    }
-
-    setBooleanFeature(customerId: string, featureId: string, value: boolean) {
-      this._setFeature(customerId, featureId, "boolean", 1, 0, undefined, value);
-    }
-
-    setEntityBooleanFeature(
-      customerId: string,
-      entityId: string,
-      featureId: string,
-      value: boolean,
-    ) {
-      this._setFeature(customerId, featureId, "boolean", 1, 0, entityId, value);
-    }
-
-    private _setFeature(
-      customerId: string,
-      featureId: string,
-      type: "usage" | "boolean",
-      limit: number,
-      currentUsage = 0,
-      entityId?: string,
-      booleanValue?: boolean,
-    ): void {
-      const existing = this.features.get(customerId) || [];
-      const index = entityId
-        ? existing.findIndex((f) => f.entityId === entityId && f.featureId === featureId)
-        : existing.findIndex((f) => !f.entityId && f.featureId === featureId);
-
-      if (index >= 0) {
-        existing[index] = { featureId, type, limit, current: currentUsage, entityId, booleanValue };
-      } else {
-        existing.push({ featureId, type, limit, current: currentUsage, entityId, booleanValue });
+    private customer(id: string): Customer {
+      let customer = this.customers.get(id);
+      if (!customer) {
+        customer = { hasActivePro: false, usage: { projects: 0, additional_shares: 0 } };
+        this.customers.set(id, customer);
       }
-      this.features.set(customerId, existing);
+      return customer;
     }
 
-    async check(ctx: GenericActionCtx<DataModel>, args: { entityId?: string; featureId: string }) {
-      const identity = await ctx.auth.getUserIdentity();
-      if (!identity?.subject) throw new Error("Unable to get user");
-
-      const customerId = identity.subject;
-      const features = this.features.get(customerId) || [];
-      const feature = args.entityId
-        ? features.find((f) => f.entityId === args.entityId && f.featureId === args.featureId)
-        : features.find((f) => f.featureId === args.featureId);
-
-      if (!feature) {
-        return {
-          data: null,
-          error: `Feature not found: ${args.featureId}`,
-        };
-      }
-
-      if (feature.type === "boolean") {
-        return { data: { allowed: feature.booleanValue ?? false }, error: null };
-      }
-
-      const allowed = feature.current < feature.limit;
-      const balance = Math.max(0, feature.limit - feature.current);
-      return {
-        data: {
-          allowed,
-          balance,
-          included_usage: feature.limit,
-          usage: feature.current,
-          remaining_usage: balance,
-        },
-        error: null,
-      };
+    setPro(customerId: string, hasActivePro: boolean) {
+      this.customer(customerId).hasActivePro = hasActivePro;
     }
 
-    async track(
-      ctx: GenericActionCtx<DataModel>,
-      args: { entityId?: string; featureId: string; value: number },
-    ) {
-      const identity = await ctx.auth.getUserIdentity();
-      if (!identity?.subject) throw new Error("Unable to get user");
-
-      const customerId = identity.subject;
-      const features = this.features.get(customerId) || [];
-      const feature = args.entityId
-        ? features.find((f) => f.entityId === args.entityId && f.featureId === args.featureId)
-        : features.find((f) => f.featureId === args.featureId);
-
-      if (!feature) {
-        return { success: false, error: `Feature not found: ${args.featureId}` };
-      }
-      if (feature.type === "boolean") {
-        return { success: false, error: "Cannot track boolean features" };
-      }
-
-      const newValue = feature.current + args.value;
-      if (newValue > feature.limit) {
-        throw new Error(`Feature limit exceeded for ${args.featureId}`);
-      }
-      feature.current = Math.max(0, newValue);
-      this.features.set(customerId, features);
-      return { success: true };
+    getUsage(customerId: string, featureId: string): number {
+      return this.customer(customerId).usage[featureId] ?? 0;
     }
-
-    async checkout(
-      ctx: GenericActionCtx<DataModel>,
-      args: {
-        productId: string;
-        successUrl?: string;
-        customerData?: { name?: string; email?: string };
-        checkoutSessionParams?: Record<string, unknown>;
-      },
-    ) {
-      return {
-        data: {
-          url: `https://checkout.withrelic.com/session/mock-${args.productId}-${Date.now()}`,
-        },
-        error: null,
-      };
-    }
-
-    customers = {
-      billingPortal: async (ctx: GenericActionCtx<DataModel>, args: { returnUrl?: string }) => {
-        return {
-          data: {
-            url: `https://billing.withrelic.com/portal/mock-${Date.now()}`,
-          },
-          error: null,
-        };
-      },
-    };
 
     reset() {
-      this.features.clear();
+      this.customers.clear();
+      this.tracked = [];
+      this.failCancellation = false;
     }
 
-    getUserFeature(customerId: string, featureId: string) {
-      const features = this.features.get(customerId) || [];
-      const feature = features.find((f) => f.featureId === featureId);
-      return feature ? { limit: feature.limit, current: feature.current } : null;
-    }
-
-    getEntityFeature(customerId: string, entityId: string, featureId: string) {
-      const features = this.features.get(customerId) || [];
-      const feature = features.find((f) => f.entityId === entityId && f.featureId === featureId);
-      return feature ? { limit: feature.limit, current: feature.current } : null;
-    }
+    api = {
+      getSnapshot: async ({ id }: { id: string }) => {
+        const customer = this.customer(id);
+        return { hasActivePro: customer.hasActivePro, usage: { ...customer.usage } };
+      },
+      track: async (customerId: string, featureId: string, value: number) => {
+        const customer = this.customer(customerId);
+        customer.usage[featureId] = (customer.usage[featureId] ?? 0) + value;
+        this.tracked.push({ customerId, featureId, value });
+      },
+      createProCheckoutUrl: async ({ id }: { id: string }) =>
+        `https://checkout.withrelic.com/mock/${id}`,
+      createPortalUrl: async (customerId: string) =>
+        `https://billing.withrelic.com/mock/${customerId}`,
+      cancelProImmediately: async (customerId: string) => {
+        if (this.failCancellation) {
+          throw new Error("Autumn unavailable");
+        }
+        this.customer(customerId).hasActivePro = false;
+      },
+    };
   }
 
-  return { _mockAutumn: new MockAutumnInline() };
+  return { _mockBilling: new MockBilling() };
 });
 
-// Export mock for tests to access via globalThis
 // biome-ignore lint/suspicious/noExplicitAny: Test mock needs to be accessible via globalThis
-(globalThis as any).__mockAutumn = _mockAutumn;
+(globalThis as any).__mockBilling = _mockBilling;
 
-vi.mock("../convex/autumn", () => ({
-  autumn: _mockAutumn,
-  initAutumn: () => _mockAutumn,
-}));
+vi.mock("../convex/lib/autumn", () => ({ autumnApi: _mockBilling.api }));

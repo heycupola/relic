@@ -11,6 +11,9 @@ npm install -g relic
 # Homebrew
 brew install heycupola/tap/relic
 
+# Install script (installs to ~/.relic/bin)
+curl -fsSL https://withrelic.com/install | bash
+
 # Download binary
 curl -fsSL https://github.com/heycupola/relic/releases/latest/download/relic-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m).tar.gz | tar -xz -C /usr/local/bin
 ```
@@ -44,6 +47,10 @@ relic run -e production -s client -- npm run build
 | `relic projects` | List projects with environments and folders |
 | `relic init` | Create `relic.toml` for the current project |
 | `relic run` | Run a command with secrets injected |
+| `relic service-account` | Create, list, and revoke service accounts for CI/CD |
+| `relic mcp` | Start the MCP server for AI assistants |
+| `relic upgrade` | Upgrade to the latest version |
+| `relic version` | Print the installed version |
 | `relic telemetry` | Manage anonymous usage data collection |
 
 ### `relic run` options
@@ -53,26 +60,33 @@ relic run -e production -s client -- npm run build
 | `-e, --environment` | Environment name (required) |
 | `-f, --folder` | Folder name |
 | `-s, --scope` | `client`, `server`, or `shared` |
-| `-p, --project` | Project ID (overrides `relic.toml`) |
+| `-p, --project` | Project ID (overrides `RELIC_PROJECT_ID` and `relic.toml`) |
+| `--inherit-env` | Pass the current environment (minus `RELIC_*`) to the command |
+
+By default the command only receives the secrets plus `PATH`, `HOME`, `USER`, `SHELL`, `TERM`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR`, and `TZ`. Options after the command name are passed to the command; use `--` to separate them explicitly.
 
 ## CI/CD
 
-Use API keys for non-interactive environments:
+Use a service account (recommended):
+
+```bash
+relic service-account create --name "ci-deploy" --github myorg/myrepo --branch main
+```
 
 ```yaml
 # GitHub Actions
 - name: Deploy with secrets
   env:
-    RELIC_API_KEY: ${{ secrets.RELIC_API_KEY }}
-    RELIC_PASSWORD: ${{ secrets.RELIC_PASSWORD }}
+    RELIC_SERVICE_TOKEN: ${{ secrets.RELIC_SERVICE_TOKEN }}
   run: npx relic run -e production -- npm run deploy
 ```
 
 | Variable | Description |
 |----------|-------------|
-| `RELIC_API_KEY` | API key for authentication |
-| `RELIC_PASSWORD` | Master password for decryption |
-| `RELIC_PROJECT_ID` | Project ID (optional if `relic.toml` exists) |
+| `RELIC_SERVICE_TOKEN` | Service account token (authentication and decryption) |
+| `RELIC_OIDC_TOKEN` | OIDC token; requested automatically in GitHub Actions, set via `id_tokens` in GitLab CI |
+
+`RELIC_API_KEY` + `RELIC_PASSWORD` still work but are deprecated because they put your master password in CI.
 
 ## Supported Platforms
 

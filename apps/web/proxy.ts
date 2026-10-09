@@ -35,7 +35,7 @@ const EU_EEA_COUNTRIES = new Set([
   "GB",
 ]);
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const response = NextResponse.next();
 
   const country = request.headers.get("CF-IPCountry") ?? "";

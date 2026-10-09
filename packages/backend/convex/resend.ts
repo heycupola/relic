@@ -3,10 +3,6 @@ import { render } from "@react-email/render";
 import { Resend } from "resend";
 import { components } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
-import { createLogger } from "./lib/logger";
-
-const log = createLogger("resend");
-
 import {
   AccessRestrictedEmail,
   AccountDeletedEmail,
@@ -15,7 +11,11 @@ import {
   PlanUpgradedEmail,
   WelcomeEmail,
 } from "./lib/emails/index";
+import { createLogger } from "./lib/logger";
+import { getSiteUrl } from "./lib/site";
 import { EmailKind } from "./lib/types";
+
+const log = createLogger("resend");
 
 let _resendSdk: Resend | null = null;
 
@@ -31,12 +31,8 @@ export const resend: ResendComponent = new ResendComponent(components.resend, {}
 const FROM_EMAIL_ADDRESS = process.env.FROM_EMAIL_ADDRESS || "Relic <notifications@withrelic.com>";
 const FROM_EMAIL_ADDRESS_PERSONAL =
   process.env.FROM_EMAIL_ADDRESS_PERSONAL || "Can from Relic <can@withrelic.com>";
-const SITE_URL =
-  process.env.SITE_URL ||
-  (process.env.ENVIRONMENT === "development" ? "http://localhost:3000" : "https://withrelic.com");
-
-export const getUpgradeUrl = () => `${SITE_URL}/upgrade`;
-export const getDashboardUrl = () => `${SITE_URL}/dashboard`;
+export const getUpgradeUrl = () => `${getSiteUrl()}/dashboard?action=upgrade`;
+export const getDashboardUrl = () => `${getSiteUrl()}/dashboard`;
 
 type EmailData =
   | {

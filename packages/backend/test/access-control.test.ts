@@ -1,7 +1,7 @@
 import { createProjectKey } from "@repo/crypto";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { api, components, internal } from "../convex/_generated/api";
+import { api, components } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { ErrorCode } from "../convex/lib/errors.ts";
 import schema from "../convex/schema";
@@ -9,9 +9,10 @@ import {
   betterAuthModules,
   expectConvexError,
   getTestUsers,
-  mockAutumn,
+  mockBilling,
   modules,
   randomString,
+  setPlan,
   type TestUser,
 } from "./setup";
 
@@ -29,7 +30,7 @@ function assertProjectCreated(result: {
 describe("Access Control", () => {
   let t: TestConvex<typeof schema>;
   let testUsers: TestUser[] = [];
-  let owner: TestUser, collaborator: TestUser, nonCollaborator: TestUser;
+  let owner: TestUser, collaborator: TestUser;
 
   beforeEach(async () => {
     t = convexTest(schema, modules);
@@ -40,17 +41,16 @@ describe("Access Control", () => {
     testUsers = await getTestUsers(t);
     owner = testUsers[0]!;
     collaborator = testUsers[1]!;
-    nonCollaborator = testUsers[2];
   });
 
   afterEach(() => {
-    mockAutumn.reset();
+    mockBilling.reset();
   });
 
   describe("Project Restrictions", () => {
     beforeEach(async () => {
-      mockAutumn.setFeature(owner.userId, "projects", 2);
-      mockAutumn.setFeature(collaborator.userId, "projects", 2);
+      await setPlan(t, owner.userId, "pro");
+      await setPlan(t, collaborator.userId, "pro");
     });
 
     test("should not access an archived project", async () => {
@@ -84,7 +84,7 @@ describe("Access Control", () => {
     });
 
     test("should get only 2 recent projects after getting restricted", async () => {
-      mockAutumn.setFeature(owner.userId, "projects", 8);
+      await setPlan(t, owner.userId, "pro");
       await owner.asUser.mutation(components.betterAuth.user.upgradeToPro, {
         userId: owner.userId,
       });
@@ -111,7 +111,7 @@ describe("Access Control", () => {
       expect(proState.isInGracePeriod).toBe(false);
       expect(proState.gracePeriodDaysRemaining).not.toBeDefined();
 
-      mockAutumn.setFeature(owner.userId, "projects", 2);
+      await setPlan(t, owner.userId, "pro");
       await owner.asUser.mutation(components.betterAuth.user.downgradeToFree, {
         userId: owner.userId,
       });
@@ -137,9 +137,8 @@ describe("Access Control", () => {
     });
 
     test("should block access to shared projects when owner loses pro and project becomes restricted", async () => {
-      mockAutumn.setFeature(owner.userId, "projects", 7);
-      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
-      mockAutumn.setFeature(owner.userId, "additional_shares", 10);
+      await setPlan(t, owner.userId, "pro");
+
       await owner.asUser.mutation(components.betterAuth.user.upgradeToPro, {
         userId: owner.userId,
       });
@@ -190,7 +189,7 @@ describe("Access Control", () => {
 
       expect(shareBeforeDowngrade).toBeDefined();
 
-      mockAutumn.setFeature(owner.userId, "projects", 2);
+      await setPlan(t, owner.userId, "pro");
       await owner.asUser.mutation(components.betterAuth.user.downgradeToFree, {
         userId: owner.userId,
       });
@@ -217,11 +216,9 @@ describe("Access Control", () => {
     });
 
     test("should allow access to shared projects even when collaborator loses pro", async () => {
-      mockAutumn.setFeature(owner.userId, "projects", 2);
-      mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
-      mockAutumn.setFeature(owner.userId, "additional_shares", 1);
+      await setPlan(t, owner.userId, "pro");
 
-      mockAutumn.setFeature(collaborator.userId, "projects", 2);
+      await setPlan(t, collaborator.userId, "pro");
       await collaborator.asUser.mutation(components.betterAuth.user.upgradeToPro, {
         userId: collaborator.userId,
       });
@@ -255,7 +252,7 @@ describe("Access Control", () => {
       expect(sharedProject).toBeDefined();
       expect(sharedProject.projectId).toBe(projectId);
 
-      mockAutumn.setFeature(collaborator.userId, "projects", 2);
+      await setPlan(t, collaborator.userId, "pro");
       await collaborator.asUser.mutation(components.betterAuth.user.downgradeToFree, {
         userId: collaborator.userId,
       });

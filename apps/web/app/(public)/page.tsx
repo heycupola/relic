@@ -8,6 +8,7 @@ import { Header } from "@/components/header";
 import { Hero } from "@/components/hero";
 import { InstallSection } from "@/components/install-section";
 import { Pricing } from "@/components/pricing";
+import { FREE_PRICE_USD, PRO_PRICE_USD } from "@/lib/plans";
 import {
   getAbsoluteUrl,
   SITE_BRAND_NAME,
@@ -68,14 +69,21 @@ const structuredData = {
         {
           "@type": "Offer",
           name: "Free",
-          price: "0",
+          price: String(FREE_PRICE_USD),
           priceCurrency: "USD",
         },
         {
           "@type": "Offer",
           name: "Pro",
-          price: "20",
+          price: String(PRO_PRICE_USD),
           priceCurrency: "USD",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price: String(PRO_PRICE_USD),
+            priceCurrency: "USD",
+            unitCode: "MON",
+            billingDuration: "P1M",
+          },
         },
       ],
       publisher: {
@@ -105,7 +113,7 @@ export default function Home() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredDataJson }} />
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-foreground focus:text-background focus:rounded focus:outline-none focus:ring-2 focus:ring-ring"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-foreground focus:text-background focus:outline-2 focus:outline-offset-2 focus:outline-foreground"
       >
         Skip to main content
       </a>

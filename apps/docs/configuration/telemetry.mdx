@@ -5,7 +5,10 @@ description: What Relic collects, where it sends data, and how to opt out.
 
 Relic collects anonymous usage telemetry to help us understand how the product is used and where to improve it. Telemetry is entirely optional and can be disabled at any time.
 
-<Note>No secrets, project names, environment names, or personal data are ever collected.</Note>
+<Note>
+  No secrets, secret names, project names or IDs, environment names, or account details are
+  collected. Error reports include a stack trace; see `error_occurred` below.
+</Note>
 
 ## What Is Collected
 
@@ -21,7 +24,8 @@ The CLI and TUI send anonymous events through a first-party telemetry proxy (`te
 | `cli_logout`                                               | User logs out                                              |
 | `cli_run_started` / `cli_run_completed`                    | Secret injection run (success/failure, duration)           |
 | `cli_project_initialized`                                  | `relic init` is run                                        |
-| `cli_command_executed`                                     | `whoami` or `projects` command used                        |
+| `cli_command_executed`                                     | `whoami`, `projects`, or `upgrade` command used            |
+| `service_account_created` / `service_account_revoked`      | Service account actions (whether OIDC is used, no IDs)     |
 | `tui_launched`                                             | TUI is opened                                              |
 | `tui_page_viewed`                                          | A page is viewed in the TUI                                |
 | `project_created` / `project_renamed` / `project_archived` | Project actions                                            |
@@ -33,6 +37,8 @@ The CLI and TUI send anonymous events through a first-party telemetry proxy (`te
 | `password_setup_started` / `password_setup_completed`      | Password setup                                             |
 | `password_changed`                                         | Password changed                                           |
 | `error_occurred`                                           | An error happens (error message and stack, no secret data) |
+
+Stack traces from CLI commands are reduced to file names before they are sent. Stack traces from the TUI are sent as-is and may contain local file paths (for example the install location, which can include your username).
 
 **Metadata attached to each event:**
 

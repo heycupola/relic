@@ -104,10 +104,15 @@ export function getCacheDbPath(rootDir: string): string {
   return join(rootDir, RELIC_DIR, CACHE_DB);
 }
 
+/** Creates `.relic/` (idempotent) with a `.gitignore` that keeps the cache out of version control. */
 export async function createRelicDir(dir?: string): Promise<string> {
   const targetDir = dir ?? process.cwd();
   const relicDir = join(targetDir, RELIC_DIR);
   await mkdir(relicDir, { recursive: true });
+  const gitignore = Bun.file(join(relicDir, ".gitignore"));
+  if (!(await gitignore.exists())) {
+    await Bun.write(gitignore, "*\n");
+  }
   return relicDir;
 }
 

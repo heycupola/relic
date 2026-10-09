@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
+import { listActiveOwnedProjects, listActiveSharesByUser } from "./lib/data";
 import { createError, ErrorCode, notFoundError, permissionError } from "./lib/errors";
 import { createLogger } from "./lib/logger";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
@@ -122,7 +123,7 @@ export const rotateUserKeys = protectedMutation({
       rewrappedOwnedProjects: Array<{ projectId: Id<"project">; newEncryptedProjectKey: string }>;
     },
   ) => {
-    await checkRateLimit(ctx, "write");
+    await checkRateLimit(ctx, "keyRotation");
 
     for (const rewrapped of args.rewrappedShares) {
       const share = await ctx.db.get(rewrapped.shareId);
@@ -157,15 +158,37 @@ export const rotateUserKeys = protectedMutation({
       if (projectDoc.ownerId !== ctx.userId) {
         throw permissionError("update this project");
       }
+    }
 
-      if (projectDoc.isArchived) {
-        throw createError({
-          code: ErrorCode.INVALID_OPERATION,
-          message: `Cannot rewrap archived project: ${rewrapped.projectId}`,
-          severity: ErrorSeverity.High,
-          metadata: { projectId: rewrapped.projectId },
-        });
-      }
+    // Every key wrapped with the old RSA key must be rewrapped, or that project becomes undecryptable.
+    // Archived owned projects are optional because older clients never sent them.
+    const [activeShares, activeOwnedProjects] = await Promise.all([
+      listActiveSharesByUser(ctx, ctx.userId),
+      listActiveOwnedProjects(ctx, ctx.userId),
+    ]);
+    const providedShareIds = new Set<string>(args.rewrappedShares.map((s) => s.shareId));
+    const providedProjectIds = new Set<string>(args.rewrappedOwnedProjects.map((p) => p.projectId));
+    const missingShares = activeShares.filter((s) => !providedShareIds.has(s._id));
+    const missingProjects = activeOwnedProjects.filter((p) => !providedProjectIds.has(p._id));
+
+    if (
+      missingShares.length > 0 ||
+      missingProjects.length > 0 ||
+      providedShareIds.size !== args.rewrappedShares.length ||
+      providedProjectIds.size !== args.rewrappedOwnedProjects.length
+    ) {
+      throw createError({
+        code: ErrorCode.INVALID_OPERATION,
+        message:
+          missingShares.length > 0 || missingProjects.length > 0
+            ? `Cannot rotate keys: ${missingShares.length + missingProjects.length} project key(s) were not rewrapped. Reload and try again.`
+            : "Cannot rotate keys: duplicate entries in request",
+        severity: ErrorSeverity.High,
+        metadata: {
+          missingShareIds: missingShares.map((s) => s._id),
+          missingProjectIds: missingProjects.map((p) => p._id),
+        },
+      });
     }
 
     await ctx.runMutation(components.betterAuth.user.setKeysAndSalt, {

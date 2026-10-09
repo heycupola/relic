@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 import { CONVEX_URL, ensureValidJwt } from "@repo/auth";
 import { createLogger, trackError } from "@repo/logger";
 import { ConvexProvider, ConvexReactClient } from "convex/react";

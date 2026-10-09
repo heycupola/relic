@@ -13,13 +13,13 @@
     "format:check": "oxfmt --check ."
   },
   "dependencies": {
-    "@cf-wasm/og": "^0.3.7",
+    "@cf-wasm/og": "^0.5.0",
     "react": "catalog:"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260317.0",
-    "@types/react": "^19.2.2",
-    "typescript": "5.9.2",
-    "wrangler": "^4.76.0"
+    "@cloudflare/workers-types": "^5.20261009.1",
+    "@types/react": "^19.3.0",
+    "typescript": "6.0.3",
+    "wrangler": "^4.149.0"
   }
 }

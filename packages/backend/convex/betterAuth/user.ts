@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { doc } from "convex-helpers/validators";
 import { notFoundError } from "../lib/errors";
+import { GRACE_PERIOD_MS } from "../lib/plans";
 import { EmailKind } from "../lib/types";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalQuery, mutation, query } from "./_generated/server";
@@ -153,20 +154,61 @@ export const loadUsersToRestrict = query({
   args: {},
   returns: v.object({ success: v.boolean(), usersToRestrict: v.array(doc(schema, "user")) }),
   handler: async (ctx, _args) => {
-    const now = Date.now();
-    const sevenDaysMs = 86_400 * 7;
+    const cutoff = Date.now() - GRACE_PERIOD_MS;
 
-    const usersToRestrict = await ctx.db
+    const downgraded = await ctx.db
       .query("user")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("accessRestrictedEmailSent"), false),
-          q.lt(q.field("planDowngradedAt"), now - sevenDaysMs),
-        ),
+      .withIndex("by_planDowngradedAt", (q) =>
+        q.gte("planDowngradedAt", 0).lte("planDowngradedAt", cutoff),
       )
       .collect();
 
+    const usersToRestrict = downgraded.filter(
+      (user) => !user.hasPro && user.accessRestrictedEmailSent !== true,
+    );
+
     return { success: true, usersToRestrict };
+  },
+});
+
+/** Users whose stored plan could be stale: paying users (paged) and, on the first page, anyone in a grace period. */
+export const loadPlanReconcileCandidates = query({
+  args: { cursor: v.union(v.string(), v.null()), numItems: v.number() },
+  returns: v.object({
+    userIds: v.array(v.string()),
+    continueCursor: v.string(),
+    isDone: v.boolean(),
+  }),
+  handler: async (ctx, { cursor, numItems }) => {
+    const page = await ctx.db
+      .query("user")
+      .withIndex("by_hasPro", (q) => q.eq("hasPro", true))
+      .paginate({ cursor, numItems });
+
+    const userIds = page.page.map((user) => user._id as string);
+
+    if (cursor === null) {
+      const inGrace = await ctx.db
+        .query("user")
+        .withIndex("by_planDowngradedAt", (q) =>
+          q.gt("planDowngradedAt", Date.now() - GRACE_PERIOD_MS),
+        )
+        .collect();
+      for (const user of inGrace) {
+        if (!user.hasPro) userIds.push(user._id);
+      }
+    }
+
+    return { userIds, continueCursor: page.continueCursor, isDone: page.isDone };
+  },
+});
+
+export const markAccessRestrictedEmailSent = mutation({
+  args: { userId: v.id("user") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.userId, { accessRestrictedEmailSent: true, updatedAt: Date.now() });
+    return null;
   },
 });
 
@@ -229,7 +271,7 @@ export const deleteUserAndAuthRecords = mutation({
 
     const deviceCodes = await ctx.db
       .query("deviceCode")
-      .filter((q) => q.eq(q.field("userId"), args.userId))
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
       .collect();
     for (const deviceCode of deviceCodes) {
       await ctx.db.delete(deviceCode._id);

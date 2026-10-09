@@ -9,7 +9,7 @@ export function ContentCard({ entry }: ContentCardProps) {
   return (
     <Link
       href={entry.href}
-      className="group flex h-full flex-col overflow-hidden border-2 border-border bg-card transition-colors hover:border-foreground/40"
+      className="group flex h-full flex-col overflow-hidden border-2 border-border bg-card transition-colors hover:border-foreground/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
     >
       <div className="aspect-[1.91/1] border-b-2 border-border bg-muted">
         <img src={entry.ogImagePath} alt="" className="h-full w-full object-cover" />

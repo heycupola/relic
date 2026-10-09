@@ -1,7 +1,45 @@
 import { CONVEX_SITE_URL, CONVEX_URL, ensureValidJwt, SITE_URL } from "@repo/auth";
 import { api, type Id, type TableNames } from "@repo/backend";
-import { trackError } from "@repo/logger";
 import { ConvexHttpClient } from "convex/browser";
+import { trackCliError } from "./telemetry";
+import type { SecretScope } from "./types";
+
+export const UPGRADE_URL = `${SITE_URL}/dashboard?action=upgrade`;
+
+export const REQUEST_TIMEOUT_MS = 30_000;
+
+export class NetworkError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "NetworkError";
+  }
+}
+
+function toNetworkError(err: unknown): NetworkError {
+  const name = err instanceof Error ? err.name : "";
+  if (name === "TimeoutError") {
+    return new NetworkError(
+      `Couldn't reach Relic (request timed out after ${REQUEST_TIMEOUT_MS / 1000}s).`,
+      { cause: err },
+    );
+  }
+  return new NetworkError("Couldn't reach Relic (network error).", { cause: err });
+}
+
+/** `fetch` with a hard timeout; transport failures become a `NetworkError`. */
+export async function fetchWithTimeout(
+  input: string | URL | Request,
+  init: RequestInit = {},
+): Promise<Response> {
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
+  try {
+    return await fetch(input, { ...init, signal });
+  } catch (err) {
+    if (init.signal?.aborted) throw err;
+    throw toNetworkError(err);
+  }
+}
 
 export interface User {
   id: string;
@@ -43,14 +81,14 @@ export interface Secret {
   environmentId: string;
   folderId?: string;
   valueType: "string" | "number" | "boolean";
-  scope: "client" | "server" | "shared";
+  scope: SecretScope;
 }
 
 export interface SecretData {
   id: string;
   key: string;
   encryptedValue: string;
-  scope: "client" | "server" | "shared";
+  scope: SecretScope;
   valueType: "string" | "number" | "boolean";
 }
 
@@ -75,21 +113,41 @@ export interface FullUser extends User {
   keysUpdatedAt?: number;
 }
 
-function createClient(): ConvexHttpClient {
-  return new ConvexHttpClient(CONVEX_URL);
+export interface ServiceAccount {
+  id: string;
+  name: string;
+  publicKey: string;
+  tokenPrefix: string;
+  oidcIssuer?: string;
+  oidcSubjectPattern?: string;
+  oidcAudience?: string;
+  expiresAt?: number;
+  revokedAt?: number;
+  lastUsedAt?: number;
+  createdAt: number;
+}
+
+export interface ExportSecretsResult {
+  secrets: SecretData[];
+  count: number;
+  encryptedProjectKey: string;
+  environmentId: string;
+  folderId: string | null;
 }
 
 function toId<T extends TableNames>(id: string): Id<T> {
   return id as Id<T>;
 }
 
-export class ProtectedApi {
-  private client: ConvexHttpClient;
-  private authPromise: Promise<void> | null = null;
+function toOptionalId<T extends TableNames>(id: string | undefined): Id<T> | undefined {
+  return id ? toId<T>(id) : undefined;
+}
 
-  constructor() {
-    this.client = createClient();
-  }
+export class ProtectedApi {
+  private client = new ConvexHttpClient(CONVEX_URL, {
+    fetch: fetchWithTimeout as typeof globalThis.fetch,
+  });
+  private authPromise: Promise<void> | null = null;
 
   private async ensureAuth(): Promise<void> {
     if (this.authPromise) {
@@ -102,7 +160,7 @@ export class ProtectedApi {
         const token = await ensureValidJwt();
         this.client.setAuth(token);
       } catch (error) {
-        trackError("cli", error, { action: "cli_auth" });
+        trackCliError(error, { action: "cli_auth" });
         this.client.clearAuth();
         throw error;
       } finally {
@@ -118,14 +176,31 @@ export class ProtectedApi {
     return fn();
   }
 
-  async getCurrentUser(): Promise<User> {
+  private async fetchCurrentUser() {
     const result = await this.withAuth(() => this.client.query(api.user.getCurrentUser, {}));
-    return {
+    const user: User = {
       id: String(result.id),
       name: result.name,
       email: result.email,
       image: result.image ?? undefined,
       hasPro: result.hasPro ?? false,
+    };
+    return { result, user };
+  }
+
+  async getCurrentUser(): Promise<User> {
+    const { user } = await this.fetchCurrentUser();
+    return user;
+  }
+
+  async getFullUser(): Promise<FullUser> {
+    const { result, user } = await this.fetchCurrentUser();
+    return {
+      ...user,
+      publicKey: result.publicKey ?? undefined,
+      encryptedPrivateKey: result.encryptedPrivateKey ?? undefined,
+      salt: result.salt ?? undefined,
+      keysUpdatedAt: result.keysUpdatedAt ?? undefined,
     };
   }
 
@@ -141,27 +216,17 @@ export class ProtectedApi {
     const result = await this.withAuth(() =>
       this.client.query(api.projectShare.listActiveSharedProjectsForCurrentUser, {}),
     );
-    return result.shares.map(
-      (share: {
-        projectId: string;
-        projectName: string;
-        projectSlug: string;
-        status: string;
-        isRestricted: boolean;
-        isArchived: boolean;
-        ownerId?: string;
-      }) => ({
-        id: String(share.projectId),
-        name: share.projectName,
-        slug: share.projectSlug,
-        status: share.status as ProjectListItem["status"],
-        isRestricted: share.isRestricted,
-        isArchived: share.isArchived,
-        ownerId: share.ownerId,
-        createdAt: 0,
-        updatedAt: 0,
-      }),
-    );
+    return result.shares.map((share) => ({
+      id: String(share.projectId),
+      name: share.projectName,
+      slug: share.projectSlug,
+      status: share.status as ProjectListItem["status"],
+      isRestricted: share.isRestricted,
+      isArchived: share.isArchived,
+      ownerId: share.ownerId,
+      createdAt: 0,
+      updatedAt: 0,
+    }));
   }
 
   async getProjectEnvironments(projectId: string): Promise<Environment[]> {
@@ -201,21 +266,6 @@ export class ProtectedApi {
         name: f.name,
         environmentId: String(f.environmentId),
       })),
-    };
-  }
-
-  async getFullUser(): Promise<FullUser> {
-    const result = await this.withAuth(() => this.client.query(api.user.getCurrentUser, {}));
-    return {
-      id: String(result.id),
-      name: result.name,
-      email: result.email,
-      image: result.image ?? undefined,
-      hasPro: result.hasPro ?? false,
-      publicKey: result.publicKey ?? undefined,
-      encryptedPrivateKey: result.encryptedPrivateKey ?? undefined,
-      salt: result.salt ?? undefined,
-      keysUpdatedAt: result.keysUpdatedAt ?? undefined,
     };
   }
 
@@ -261,8 +311,8 @@ export class ProtectedApi {
     return await this.withAuth(() =>
       this.client.query(api.environment.getSecretsCacheValidation, {
         projectId: toId<"project">(projectId),
-        environmentId: environmentId ? toId<"environment">(environmentId) : undefined,
-        folderId: folderId ? toId<"folder">(folderId) : undefined,
+        environmentId: toOptionalId<"environment">(environmentId),
+        folderId: toOptionalId<"folder">(folderId),
       }),
     );
   }
@@ -273,27 +323,15 @@ export class ProtectedApi {
     environmentId?: string;
     folderName?: string;
     folderId?: string;
-    scope?: "client" | "server" | "shared";
-  }): Promise<{
-    secrets: SecretData[];
-    count: number;
-    encryptedProjectKey: string;
-    environmentId: string;
-    folderId: string | null;
-  }> {
-    const result: {
-      secrets: SecretData[];
-      count: number;
-      encryptedProjectKey: string;
-      environmentId: string;
-      folderId: string | null;
-    } = await this.withAuth(() =>
+    scope?: SecretScope;
+  }): Promise<ExportSecretsResult> {
+    const result = await this.withAuth(() =>
       this.client.mutation(api.secret.exportSecrets, {
         projectId: toId<"project">(args.projectId),
         environmentName: args.environmentName,
-        environmentId: args.environmentId ? toId<"environment">(args.environmentId) : undefined,
+        environmentId: toOptionalId<"environment">(args.environmentId),
         folderName: args.folderName,
-        folderId: args.folderId ? toId<"folder">(args.folderId) : undefined,
+        folderId: toOptionalId<"folder">(args.folderId),
         scope: args.scope,
       }),
     );
@@ -323,18 +361,8 @@ export class ProtectedApi {
   }): Promise<{ id: string; tokenPrefix: string }> {
     const result = await this.withAuth(() =>
       this.client.mutation(api.serviceAccount.createServiceAccount, {
+        ...args,
         projectId: toId<"project">(args.projectId),
-        name: args.name,
-        publicKey: args.publicKey,
-        encryptedPrivateKey: args.encryptedPrivateKey,
-        salt: args.salt,
-        encryptedProjectKey: args.encryptedProjectKey,
-        hashedToken: args.hashedToken,
-        tokenPrefix: args.tokenPrefix,
-        expiresAt: args.expiresAt,
-        oidcIssuer: args.oidcIssuer,
-        oidcSubjectPattern: args.oidcSubjectPattern,
-        oidcAudience: args.oidcAudience,
       }),
     );
     return { id: String(result.id), tokenPrefix: result.tokenPrefix };
@@ -348,45 +376,19 @@ export class ProtectedApi {
   }): Promise<{ success: boolean }> {
     return await this.withAuth(() =>
       this.client.mutation(api.serviceAccount.updateOidcPolicy, {
+        ...args,
         serviceAccountId: toId<"serviceAccount">(args.serviceAccountId),
-        oidcIssuer: args.oidcIssuer,
-        oidcSubjectPattern: args.oidcSubjectPattern,
-        oidcAudience: args.oidcAudience,
       }),
     );
   }
 
-  async listServiceAccounts(projectId: string): Promise<
-    Array<{
-      id: string;
-      name: string;
-      tokenPrefix: string;
-      oidcIssuer?: string;
-      oidcSubjectPattern?: string;
-      oidcAudience?: string;
-      expiresAt?: number;
-      revokedAt?: number;
-      lastUsedAt?: number;
-      createdAt: number;
-    }>
-  > {
+  async listServiceAccounts(projectId: string): Promise<ServiceAccount[]> {
     const result = await this.withAuth(() =>
       this.client.query(api.serviceAccount.listServiceAccounts, {
         projectId: toId<"project">(projectId),
       }),
     );
-    return result.map((sa) => ({
-      id: String(sa.id),
-      name: sa.name,
-      tokenPrefix: sa.tokenPrefix,
-      oidcIssuer: sa.oidcIssuer,
-      oidcSubjectPattern: sa.oidcSubjectPattern,
-      oidcAudience: sa.oidcAudience,
-      expiresAt: sa.expiresAt,
-      revokedAt: sa.revokedAt,
-      lastUsedAt: sa.lastUsedAt,
-      createdAt: sa.createdAt,
-    }));
+    return result.map((sa) => ({ ...sa, id: String(sa.id) }));
   }
 
   async revokeServiceAccount(serviceAccountId: string): Promise<{ success: boolean }> {
@@ -416,24 +418,60 @@ export class ProPlanRequiredError extends Error {
   }
 }
 
-export interface ExportSecretsHttpResponse {
-  secrets: {
-    id: string;
-    key: string;
-    encryptedValue: string;
-    scope: "client" | "server" | "shared";
-    valueType: "string" | "number" | "boolean";
-  }[];
-  count: number;
-  encryptedProjectKey: string;
-  environmentId: string;
-  folderId: string | null;
-}
+export type ExportSecretsHttpResponse = ExportSecretsResult;
 
 export interface UserCryptoKeysResponse {
   encryptedPrivateKey: string;
   salt: string;
   publicKey: string;
+}
+
+export interface ServiceAccountExportResponse extends ExportSecretsResult {
+  encryptedPrivateKey: string;
+  salt: string;
+}
+
+async function requestSiteApi<T>(
+  path: string,
+  options: {
+    token: string;
+    proPlanMessage: string;
+    body?: unknown;
+    headers?: Record<string, string>;
+  },
+): Promise<T> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${options.token}`,
+    ...options.headers,
+  };
+  if (options.body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  const response = await fetchWithTimeout(`${CONVEX_SITE_URL}${path}`, {
+    method: options.body === undefined ? "GET" : "POST",
+    headers,
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+  });
+
+  if (!response.ok) {
+    const parsed = (await response.json().catch(() => null)) as {
+      error?: string;
+      code?: string;
+      upgradeUrl?: string;
+    } | null;
+
+    if (response.status === 402 || parsed?.code === "PRO_PLAN_REQUIRED") {
+      throw new ProPlanRequiredError(
+        parsed?.error || options.proPlanMessage,
+        parsed?.upgradeUrl || UPGRADE_URL,
+      );
+    }
+
+    throw new Error(parsed?.error ?? `HTTP ${response.status}`);
+  }
+
+  return (await response.json()) as T;
 }
 
 export async function exportSecretsViaApiKey(
@@ -445,115 +483,33 @@ export async function exportSecretsViaApiKey(
     scope?: string;
   },
 ): Promise<ExportSecretsHttpResponse> {
-  const url = `${CONVEX_SITE_URL}/api/secrets/export`;
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
+  return requestSiteApi("/api/secrets/export", {
+    token: apiKey,
+    body,
+    proPlanMessage: "API keys require a Pro plan.",
   });
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    const parsed = errorBody as { error?: string; code?: string; upgradeUrl?: string } | null;
-
-    if (response.status === 402 || parsed?.code === "PRO_PLAN_REQUIRED") {
-      throw new ProPlanRequiredError(
-        parsed?.error || "API keys require a Pro plan.",
-        parsed?.upgradeUrl || `${SITE_URL}/dashboard?action=upgrade`,
-      );
-    }
-
-    throw new Error(parsed?.error ?? `HTTP ${response.status}`);
-  }
-
-  return (await response.json()) as ExportSecretsHttpResponse;
-}
-
-export interface ServiceAccountExportResponse {
-  secrets: {
-    id: string;
-    key: string;
-    encryptedValue: string;
-    scope: "client" | "server" | "shared";
-    valueType: "string" | "number" | "boolean";
-  }[];
-  count: number;
-  environmentId: string;
-  folderId: string | null;
-  encryptedProjectKey: string;
-  encryptedPrivateKey: string;
-  salt: string;
 }
 
 export async function exportSecretsViaServiceToken(
   serviceToken: string,
   body: {
-    environmentName: string;
+    environmentName?: string;
     folderName?: string;
     scope?: string;
   },
   oidcToken?: string,
 ): Promise<ServiceAccountExportResponse> {
-  const url = `${CONVEX_SITE_URL}/api/sa/secrets/export`;
-
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${serviceToken}`,
-    "Content-Type": "application/json",
-  };
-  if (oidcToken) {
-    headers["X-Oidc-Token"] = oidcToken;
-  }
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
+  return requestSiteApi("/api/sa/secrets/export", {
+    token: serviceToken,
+    body,
+    headers: oidcToken ? { "X-Oidc-Token": oidcToken } : undefined,
+    proPlanMessage: "Service accounts require a Pro plan.",
   });
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    const parsed = errorBody as { error?: string; code?: string; upgradeUrl?: string } | null;
-
-    if (response.status === 402 || parsed?.code === "PRO_PLAN_REQUIRED") {
-      throw new ProPlanRequiredError(
-        parsed?.error || "Service accounts require a Pro plan.",
-        parsed?.upgradeUrl || `${SITE_URL}/dashboard?action=upgrade`,
-      );
-    }
-
-    throw new Error(parsed?.error ?? `HTTP ${response.status}`);
-  }
-
-  return (await response.json()) as ServiceAccountExportResponse;
 }
 
 export async function fetchUserKeysViaApiKey(apiKey: string): Promise<UserCryptoKeysResponse> {
-  const url = `${CONVEX_SITE_URL}/api/user/keys`;
-
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
+  return requestSiteApi("/api/user/keys", {
+    token: apiKey,
+    proPlanMessage: "API keys require a Pro plan.",
   });
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    const parsed = errorBody as { error?: string; code?: string; upgradeUrl?: string } | null;
-
-    if (response.status === 402 || parsed?.code === "PRO_PLAN_REQUIRED") {
-      throw new ProPlanRequiredError(
-        parsed?.error || "API keys require a Pro plan.",
-        parsed?.upgradeUrl || `${SITE_URL}/dashboard?action=upgrade`,
-      );
-    }
-
-    throw new Error(parsed?.error ?? `HTTP ${response.status}`);
-  }
-
-  return (await response.json()) as UserCryptoKeysResponse;
 }

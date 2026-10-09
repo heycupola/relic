@@ -4,17 +4,17 @@ import { ApiKeyScope, api } from "@repo/backend";
 import { cn } from "@repo/ui/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { Check, Copy } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Dialog } from "@/components/dialog";
 import { Select } from "@/components/select";
+import { MAX_API_KEYS } from "@/lib/plans";
+import { focusRing, primaryButton, secondaryButton } from "@/lib/styles";
 
 interface CreateApiKeyDialogProps {
   open: boolean;
   onClose: () => void;
   activeKeyCount: number;
 }
-
-const MAX_KEYS = 5;
 
 const EXPIRATION_OPTIONS = [
   { value: "30", label: "30 days" },
@@ -37,6 +37,7 @@ const AVAILABLE_SCOPES = [
 ];
 
 export function CreateApiKeyDialog({ open, onClose, activeKeyCount }: CreateApiKeyDialogProps) {
+  const titleId = useId();
   const createApiKey = useMutation(api.apiKey.createApiKey);
   const projectsData = useQuery(api.project.listUserProjects, open ? {} : "skip");
 
@@ -52,7 +53,8 @@ export function CreateApiKeyDialog({ open, onClose, activeKeyCount }: CreateApiK
   const [createdKey, setCreatedKey] = useState("");
   const [copied, setCopied] = useState(false);
 
-  const canCreate = name.trim().length > 0 && selectedScopes.size > 0 && activeKeyCount < MAX_KEYS;
+  const canCreate =
+    name.trim().length > 0 && selectedScopes.size > 0 && activeKeyCount < MAX_API_KEYS;
 
   const projectOptions = [
     { value: "", label: "All projects" },
@@ -136,18 +138,21 @@ export function CreateApiKeyDialog({ open, onClose, activeKeyCount }: CreateApiK
             }
           : handleClose
       }
-      closeOnBackdrop={step !== "reveal"}
+      closeOnBackdrop={step !== "reveal" && !isCreating}
+      labelledBy={titleId}
     >
       {step === "form" ? (
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            handleCreate();
+            void handleCreate();
           }}
         >
           <div className="p-5 space-y-4">
             <div className="space-y-2">
-              <h3 className="text-base font-semibold text-foreground">Create API Key</h3>
+              <h2 id={titleId} className="text-base font-semibold text-foreground">
+                Create API key
+              </h2>
               <p className="text-sm text-foreground/70 leading-relaxed">
                 Generate a key to access your secrets programmatically via the API.
               </p>
@@ -165,51 +170,66 @@ export function CreateApiKeyDialog({ open, onClose, activeKeyCount }: CreateApiK
                 placeholder="e.g. GitHub Actions"
                 autoFocus
                 autoComplete="off"
-                className="w-full p-2.5 border border-border bg-background text-sm text-foreground placeholder:text-foreground/30 focus:outline-none focus:border-foreground"
+                className="w-full p-2.5 border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground"
               />
             </div>
 
-            <div className="space-y-1.5">
-              <p className="text-sm text-foreground/70">Permissions</p>
+            <fieldset className="space-y-1.5">
+              <legend className="text-sm text-foreground/70 mb-1.5">Permissions</legend>
               <div className="border border-border divide-y divide-border">
                 {AVAILABLE_SCOPES.map((scope) => {
                   const checked = selectedScopes.has(scope.id);
+                  const descriptionId = `api-key-scope-${scope.id}-description`;
                   return (
-                    <button
+                    <label
                       key={scope.id}
-                      type="button"
-                      onClick={() => toggleScope(scope.id)}
-                      className="flex items-center gap-3 w-full p-3 text-left hover:bg-muted/50 transition-colors"
+                      className="flex items-center gap-3 w-full p-3 text-left hover:bg-muted/50 has-[:focus-visible]:bg-muted/50 transition-colors cursor-pointer"
                     >
-                      <div
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleScope(scope.id)}
+                        aria-describedby={descriptionId}
+                        className="peer sr-only"
+                      />
+                      <span
+                        aria-hidden="true"
                         className={cn(
-                          "h-4 w-4 shrink-0 border-2 flex items-center justify-center transition-colors",
+                          "h-4 w-4 shrink-0 border-2 flex items-center justify-center transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-foreground",
                           checked
                             ? "bg-foreground border-foreground"
-                            : "bg-transparent border-border",
+                            : "bg-transparent border-foreground/40",
                         )}
                       >
                         {checked && <Check className="h-3 w-3 text-background" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
+                      </span>
+                      <span className="flex-1 min-w-0">
                         <span className="text-sm text-foreground font-mono">{scope.label}</span>
-                        <p className="text-xs text-foreground/50 mt-0.5">{scope.description}</p>
-                      </div>
-                    </button>
+                        <span
+                          id={descriptionId}
+                          className="block text-xs text-muted-foreground mt-0.5"
+                        >
+                          {scope.description}
+                        </span>
+                      </span>
+                    </label>
                   );
                 })}
               </div>
-            </div>
+            </fieldset>
 
             <div className="space-y-1.5">
-              <p className="text-sm text-foreground/70">Project scope</p>
+              <label htmlFor="api-key-project" className="block text-sm text-foreground/70">
+                Project scope
+              </label>
               <Select
                 id="api-key-project"
                 value={selectedProjectId}
                 onChange={setSelectedProjectId}
                 options={projectOptions}
+                aria-describedby="api-key-project-hint"
               />
-              <p className="text-xs text-foreground/40">
+              <p id="api-key-project-hint" className="text-xs text-muted-foreground">
                 {selectedProjectId
                   ? "This key can only access the selected project."
                   : "This key can access all your projects."}
@@ -217,7 +237,9 @@ export function CreateApiKeyDialog({ open, onClose, activeKeyCount }: CreateApiK
             </div>
 
             <div className="space-y-1.5">
-              <p className="text-sm text-foreground/70">Expiration</p>
+              <label htmlFor="api-key-expiration" className="block text-sm text-foreground/70">
+                Expiration
+              </label>
               <Select
                 id="api-key-expiration"
                 value={expiration}
@@ -226,21 +248,26 @@ export function CreateApiKeyDialog({ open, onClose, activeKeyCount }: CreateApiK
               />
             </div>
 
-            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+            {error && (
+              <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+                {error}
+              </p>
+            )}
 
             <div className="flex gap-3 pt-1">
               <button
                 type="button"
                 onClick={handleClose}
                 disabled={isCreating}
-                className="flex-1 p-2.5 border border-border text-sm text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
+                className={`flex-1 p-2.5 text-sm ${secondaryButton}`}
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={!canCreate || isCreating}
-                className="flex-1 p-2.5 border border-border bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-busy={isCreating}
+                className={`flex-1 p-2.5 text-sm ${primaryButton}`}
               >
                 {isCreating ? "Creating…" : "Create key"}
               </button>
@@ -250,7 +277,9 @@ export function CreateApiKeyDialog({ open, onClose, activeKeyCount }: CreateApiK
       ) : (
         <div className="p-5 space-y-4">
           <div className="space-y-2">
-            <h3 className="text-base font-semibold text-foreground">API Key Created</h3>
+            <h2 id={titleId} className="text-base font-semibold text-foreground">
+              API key created
+            </h2>
             <p className="text-sm text-foreground/70 leading-relaxed">
               Copy this key now. It will only be shown once and cannot be retrieved later.
             </p>
@@ -263,22 +292,26 @@ export function CreateApiKeyDialog({ open, onClose, activeKeyCount }: CreateApiK
             <button
               type="button"
               onClick={handleCopy}
-              className="absolute top-2.5 right-2.5 p-1 text-foreground/40 hover:text-foreground transition-colors"
-              aria-label={copied ? "Copied" : "Copy to clipboard"}
+              autoFocus
+              className={`absolute top-2.5 right-2.5 p-1 text-muted-foreground hover:text-foreground transition-colors ${focusRing}`}
+              aria-label={copied ? "Copied" : "Copy API key"}
             >
               {copied ? (
-                <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+                <Check className="h-4 w-4 text-green-700 dark:text-green-400" aria-hidden="true" />
               ) : (
-                <Copy className="h-4 w-4" />
+                <Copy className="h-4 w-4" aria-hidden="true" />
               )}
             </button>
+            <span className="sr-only" aria-live="polite">
+              {copied && "API key copied to clipboard"}
+            </span>
           </div>
 
           <div className="flex gap-3 pt-1">
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 p-2.5 border border-border bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors"
+              className={`flex-1 p-2.5 text-sm ${primaryButton}`}
             >
               Done
             </button>

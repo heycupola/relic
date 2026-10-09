@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { getUserKeyCacheDb, hasPassword, validateSession } from "@repo/auth";
+import { getUserKeyCacheDb, hasPassword } from "@repo/auth";
 import { z } from "zod";
 import {
   prepareSecrets,
@@ -10,10 +10,18 @@ import {
 } from "../commands/run";
 import { getCacheDb } from "../helpers/cache";
 import { getApi } from "../lib/api";
+import {
+  getErrorMessage,
+  hasActiveSession,
+  NO_PASSWORD_MESSAGE,
+  NOT_LOGGED_IN_MESSAGE,
+  resolveProjectIdWithConfig,
+} from "../lib/cli";
 import { findConfig } from "../lib/config";
+import { buildChildEnv } from "../lib/env";
+import { loadProjectTree } from "../lib/projects";
 import pkg from "../package.json";
-
-const MAX_OUTPUT_CHARS = 50_000;
+import { DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS, runCommandCaptured } from "./run-command";
 
 function text(value: string) {
   return { content: [{ type: "text" as const, text: value }] };
@@ -23,10 +31,17 @@ function json(value: unknown) {
   return text(JSON.stringify(value, null, 2));
 }
 
+function errorText(value: string) {
+  return { ...text(value), isError: true };
+}
+
+function failure(action: string, err: unknown) {
+  return errorText(`Failed to ${action}: ${getErrorMessage(err)}`);
+}
+
 async function requireAuth(): Promise<string | null> {
-  const session = await validateSession();
-  if (!session.isValid || session.isExpired) {
-    return "Not logged in. Run `relic login` first.";
+  if (!(await hasActiveSession())) {
+    return NOT_LOGGED_IN_MESSAGE;
   }
   return null;
 }
@@ -44,13 +59,13 @@ server.registerTool(
   },
   async () => {
     const authError = await requireAuth();
-    if (authError) return text(authError);
+    if (authError) return errorText(authError);
 
     try {
       const user = await getApi().getCurrentUser();
       return json({ name: user.name, email: user.email, plan: user.hasPro ? "Pro" : "Free" });
     } catch (err) {
-      return text(`Failed to fetch user: ${err instanceof Error ? err.message : String(err)}`);
+      return failure("fetch user", err);
     }
   },
 );
@@ -63,59 +78,26 @@ server.registerTool(
   },
   async () => {
     const authError = await requireAuth();
-    if (authError) return text(authError);
+    if (authError) return errorText(authError);
 
     try {
-      const api = getApi();
-      const [owned, shared] = await Promise.all([api.listProjects(), api.listSharedProjects()]);
-
-      const allProjects = [
-        ...owned.map((p) => ({ ...p, isShared: false })),
-        ...shared.map((p) => ({ ...p, isShared: true })),
-      ];
-
-      const projects = await Promise.all(
-        allProjects.map(async (project) => {
-          try {
-            const environments = await api.getProjectEnvironments(project.id);
-            const envsWithFolders = await Promise.all(
-              environments.map(async (env) => {
-                try {
-                  const data = await api.getEnvironmentData(env.id);
-                  return {
-                    id: env.id,
-                    name: env.name,
-                    folders: data.folders.map((f) => ({ id: f.id, name: f.name })),
-                  };
-                } catch {
-                  return { id: env.id, name: env.name, folders: [] };
-                }
-              }),
-            );
-            return {
-              id: project.id,
-              name: project.name,
-              slug: project.slug,
-              isShared: project.isShared,
-              isArchived: project.isArchived,
-              environments: envsWithFolders,
-            };
-          } catch {
-            return {
-              id: project.id,
-              name: project.name,
-              slug: project.slug,
-              isShared: project.isShared,
-              isArchived: project.isArchived,
-              environments: [],
-            };
-          }
-        }),
+      const projects = await loadProjectTree(getApi());
+      return json(
+        projects.map((project) => ({
+          id: project.id,
+          name: project.name,
+          slug: project.slug,
+          isShared: project.isShared,
+          isArchived: project.isArchived,
+          environments: project.environments.map((env) => ({
+            id: env.id,
+            name: env.name,
+            folders: env.folders.map((f) => ({ id: f.id, name: f.name })),
+          })),
+        })),
       );
-
-      return json(projects);
     } catch (err) {
-      return text(`Failed to list projects: ${err instanceof Error ? err.message : String(err)}`);
+      return failure("list projects", err);
     }
   },
 );
@@ -134,7 +116,7 @@ server.registerTool(
   },
   async ({ projectId, environment, folder }) => {
     const authError = await requireAuth();
-    if (authError) return text(authError);
+    if (authError) return errorText(authError);
 
     try {
       const api = getApi();
@@ -143,7 +125,9 @@ server.registerTool(
 
       if (!env) {
         const available = environments.map((e) => e.name).join(", ");
-        return text(`Environment "${environment}" not found. Available: ${available || "none"}`);
+        return errorText(
+          `Environment "${environment}" not found. Available: ${available || "none"}`,
+        );
       }
 
       const data = await api.getEnvironmentData(env.id);
@@ -155,7 +139,7 @@ server.registerTool(
         );
         if (!targetFolder) {
           const available = data.folders.map((f) => f.name).join(", ");
-          return text(`Folder "${folder}" not found. Available: ${available || "none"}`);
+          return errorText(`Folder "${folder}" not found. Available: ${available || "none"}`);
         }
         secrets = secrets.filter((s) => s.folderId === targetFolder.id);
       }
@@ -175,7 +159,7 @@ server.registerTool(
         })),
       });
     } catch (err) {
-      return text(`Failed to list secrets: ${err instanceof Error ? err.message : String(err)}`);
+      return failure("list secrets", err);
     }
   },
 );
@@ -190,7 +174,7 @@ server.registerTool(
     try {
       const config = await findConfig();
       if (!config) {
-        return text(
+        return errorText(
           "No relic.toml found in the current directory or any parent. Run `relic init` to initialize.",
         );
       }
@@ -200,7 +184,7 @@ server.registerTool(
         rootDir: config.rootDir,
       });
     } catch (err) {
-      return text(`Failed to read config: ${err instanceof Error ? err.message : String(err)}`);
+      return failure("read config", err);
     }
   },
 );
@@ -209,10 +193,14 @@ server.registerTool(
   "run-with-secrets",
   {
     description:
-      "Run a command with Relic secrets injected as environment variables. Secret values are never exposed — only command output is returned.",
+      "Run a command with Relic secrets injected as environment variables and return its exit code, stdout and stderr. " +
+      "Secret values are redacted from the returned output on a best-effort basis (verbatim matches of values with 4+ characters become [REDACTED:KEY]); " +
+      "encoded or transformed values are not caught, so avoid commands that print the environment. " +
+      "Relic credentials (RELIC_* variables) are not passed to the command. " +
+      `The command is killed after timeoutSeconds (default ${DEFAULT_TIMEOUT_SECONDS}s) and partial output is returned.`,
     annotations: { readOnlyHint: false, destructiveHint: true },
     inputSchema: {
-      command: z.array(z.string()).describe('Command and arguments (e.g. ["npm", "run", "dev"])'),
+      command: z.array(z.string()).min(1).describe('Command and arguments (e.g. ["npm", "test"])'),
       environment: z.string().describe("Environment name (e.g. production, staging)"),
       folder: z.string().optional().describe("Folder name"),
       scope: z.enum(["client", "server", "shared"]).optional().describe("Scope filter"),
@@ -220,6 +208,15 @@ server.registerTool(
         .string()
         .optional()
         .describe("Project ID (defaults to relic.toml or RELIC_PROJECT_ID)"),
+      timeoutSeconds: z
+        .number()
+        .int()
+        .min(1)
+        .max(MAX_TIMEOUT_SECONDS)
+        .optional()
+        .describe(
+          `Kill the command after this many seconds (default ${DEFAULT_TIMEOUT_SECONDS}, max ${MAX_TIMEOUT_SECONDS})`,
+        ),
     },
   },
   async (args) => {
@@ -237,58 +234,48 @@ server.registerTool(
         secrets = result.secrets;
       } else {
         const authError = await requireAuth();
-        if (authError) return text(authError);
+        if (authError) return errorText(authError);
 
-        const hasPass = await hasPassword();
-        if (!hasPass) {
-          return text("No password set. Run 'relic' to set up your password first.");
+        if (!(await hasPassword())) {
+          return errorText(NO_PASSWORD_MESSAGE);
         }
 
-        let projectId = args.projectId ?? process.env.RELIC_PROJECT_ID;
+        const projectId = await resolveProjectIdWithConfig(args.projectId);
         if (!projectId) {
-          const config = await findConfig();
-          if (!config) {
-            return text(
-              "No project ID provided and no relic.toml found. Use the projectId parameter or run `relic init`.",
-            );
-          }
-          projectId = config.config.project_id;
+          return errorText(
+            "No project ID provided and no relic.toml found. Use the projectId parameter or run `relic init`.",
+          );
         }
 
         if (process.env.RELIC_API_KEY) {
           const result = await prepareSecretsWithApiKey(projectId, options);
           secrets = result.secrets;
         } else {
-          const db = await getCacheDb();
+          const db = await getCacheDb(projectId);
           const userKeyDb = await getUserKeyCacheDb();
-          const api = getApi();
-          const result = await prepareSecrets(projectId, options, db, userKeyDb, api);
+          const result = await prepareSecrets(projectId, options, db, userKeyDb, getApi());
           secrets = result.secrets;
         }
       }
 
-      const proc = Bun.spawn(args.command, {
-        env: { ...process.env, ...secrets },
-        stdout: "pipe",
-        stderr: "pipe",
+      const result = await runCommandCaptured({
+        command: args.command,
+        env: buildChildEnv(process.env, secrets),
+        secrets,
+        timeoutMs: (args.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS) * 1000,
       });
-
-      const [stdout, stderr] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-      ]);
-      const exitCode = await proc.exited;
-
-      const truncate = (s: string) =>
-        s.length > MAX_OUTPUT_CHARS ? `${s.slice(0, MAX_OUTPUT_CHARS)}\n... (truncated)` : s;
 
       return json({
-        exitCode,
-        stdout: truncate(stdout.trimEnd()),
-        stderr: truncate(stderr.trimEnd()),
+        exitCode: result.exitCode,
+        ...(result.signal ? { signal: result.signal } : {}),
+        ...(result.timedOut
+          ? { timedOut: true, timeoutSeconds: args.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS }
+          : {}),
+        stdout: result.stdout,
+        stderr: result.stderr,
       });
     } catch (err) {
-      return text(`Failed to run command: ${err instanceof Error ? err.message : String(err)}`);
+      return failure("run command", err);
     }
   },
 );

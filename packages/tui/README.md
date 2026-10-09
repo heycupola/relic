@@ -55,11 +55,11 @@ Terminal UI for Relic. Built with OpenTUI and React. Provides interactive secret
 ├── components/
 │   ├── shared/         # TaskBar, GuideBar, Modal, DeleteConfirmation
 │   ├── modals/         # CommandPalette, ManageCollaborators, BulkImport
-│   └── forms/          # TextInput, InlineInput
+│   └── forms/          # InlineInput
 ├── hooks/              # useProjects, useProjectPage, useSecrets, useSharing
 ├── convex/             # ConvexAuthProvider, useUserKeys, useDeviceAuth
 ├── types/              # API types, models, keyboard
-└── utils/              # Constants, paths, bulk import parsing
+└── utils/              # Constants, bulk import parsing
 ```
 
 ## Caching

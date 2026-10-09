@@ -25,8 +25,8 @@ export function mapApiSecret(apiSecret: ApiSecret): Secret {
   return {
     id: apiSecret.id,
     key: apiSecret.key,
-    value: undefined,
     encryptedValue: apiSecret.encryptedValue,
+    encryptionKeyVersion: apiSecret.encryptionKeyVersion,
     type:
       apiSecret.valueType === "string"
         ? "string"

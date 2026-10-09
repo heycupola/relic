@@ -10,50 +10,32 @@ import { OAuthButton } from "@/components/oauth-button";
 import { authClient } from "@/lib/auth";
 import { trackWebEvent } from "@/lib/posthog";
 import { authHeadingStyle } from "@/lib/styles";
-import { isValidReturnUrl } from "@/lib/url";
+import { getSafeReturnPath } from "@/lib/url";
 
 export default function LoginPage() {
   const searchParams = useSearchParams();
   const returnUrl = searchParams.get("returnUrl");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [lastMethod, setLastMethod] = useState<string | null>(null);
 
   useEffect(() => {
     setLastMethod(authClient.getLastUsedLoginMethod());
   }, []);
 
-  const safeReturnUrl = isValidReturnUrl(returnUrl) ? returnUrl : "/dashboard";
+  const callbackURL = getSafeReturnPath(returnUrl) ?? "/dashboard";
 
-  const handleGoogleLogin = async () => {
+  const signIn = async (provider: "google" | "github") => {
     setIsLoading(true);
-    trackWebEvent("web_login_started", { provider: "google" });
+    setError(null);
+    trackWebEvent("web_login_started", { provider });
     try {
-      if (safeReturnUrl) {
-        await authClient.signIn.social({
-          provider: "google",
-          callbackURL: safeReturnUrl,
-        });
-      }
-    } catch (error) {
-      console.error("Google login failed:", error);
-      trackWebEvent("web_login_failed", { provider: "google" });
-      setIsLoading(false);
-    }
-  };
-
-  const handleGithubLogin = async () => {
-    setIsLoading(true);
-    trackWebEvent("web_login_started", { provider: "github" });
-    try {
-      if (safeReturnUrl) {
-        await authClient.signIn.social({
-          provider: "github",
-          callbackURL: safeReturnUrl,
-        });
-      }
-    } catch (error) {
-      console.error("GitHub login failed:", error);
-      trackWebEvent("web_login_failed", { provider: "github" });
+      const result = await authClient.signIn.social({ provider, callbackURL });
+      if (result.error) throw new Error(result.error.message);
+    } catch (err) {
+      console.error(`${provider} login failed:`, err);
+      trackWebEvent("web_login_failed", { provider });
+      setError("Sign-in didn't go through. Please try again.");
       setIsLoading(false);
     }
   };
@@ -63,7 +45,10 @@ export default function LoginPage() {
       <div className="w-full max-w-md px-4 py-10 sm:px-6 sm:py-16">
         <div className="flex flex-col gap-8">
           <div className="flex flex-col gap-6">
-            <Link href="/" className="flex items-center">
+            <Link
+              href="/"
+              className="flex w-fit items-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+            >
               <Image
                 src="/relic-logo-dark.svg"
                 alt="Relic"
@@ -89,7 +74,7 @@ export default function LoginPage() {
             <OAuthButton
               provider="google"
               icon={<GoogleIcon />}
-              onClick={handleGoogleLogin}
+              onClick={() => void signIn("google")}
               disabled={isLoading}
               lastUsed={lastMethod === "google"}
             >
@@ -116,12 +101,17 @@ export default function LoginPage() {
                   />
                 </>
               }
-              onClick={handleGithubLogin}
+              onClick={() => void signIn("github")}
               disabled={isLoading}
               lastUsed={lastMethod === "github"}
             >
               Continue with GitHub
             </OAuthButton>
+            {error && (
+              <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+                {error}
+              </p>
+            )}
           </div>
 
           <AuthFooter />

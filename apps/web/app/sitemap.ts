@@ -3,14 +3,12 @@ import { getBlogPosts, getChangelogEntries } from "@/lib/content";
 import { getAbsoluteUrl, PUBLIC_SITE_ROUTES } from "@/lib/site";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // Changelog entries redirect to anchors on /changelog, so only blog posts get their own URLs.
   const [blogPosts, changelogEntries] = await Promise.all([getBlogPosts(), getChangelogEntries()]);
 
   const contentDates = new Map<string, string>();
   for (const post of blogPosts) {
     contentDates.set(post.href, post.isoDate);
-  }
-  for (const entry of changelogEntries) {
-    contentDates.set(entry.href, entry.isoDate);
   }
 
   const latestBlogDate = blogPosts[0]?.isoDate;
@@ -18,25 +16,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   if (latestBlogDate) contentDates.set("/blog", latestBlogDate);
   if (latestChangelogDate) contentDates.set("/changelog", latestChangelogDate);
 
-  const contentRoutes = [...blogPosts.map((p) => p.href), ...changelogEntries.map((e) => e.href)];
-  const routes = [...new Set([...PUBLIC_SITE_ROUTES, ...contentRoutes])];
+  const routes = [...new Set([...PUBLIC_SITE_ROUTES, ...blogPosts.map((p) => p.href)])];
 
-  return routes.map((path) => ({
-    url: getAbsoluteUrl(path),
-    lastModified: contentDates.get(path) ?? new Date().toISOString(),
-    changeFrequency:
-      path === "/"
-        ? "weekly"
-        : path.startsWith("/blog") || path.startsWith("/changelog")
-          ? "monthly"
-          : "yearly",
-    priority:
-      path === "/"
-        ? 1
-        : path === "/blog" || path === "/changelog"
-          ? 0.7
-          : path.startsWith("/blog/") || path.startsWith("/changelog/")
-            ? 0.5
-            : 0.2,
-  }));
+  return routes.map((path) => {
+    const lastModified = contentDates.get(path);
+    return {
+      url: getAbsoluteUrl(path),
+      ...(lastModified && { lastModified }),
+      changeFrequency:
+        path === "/"
+          ? "weekly"
+          : path.startsWith("/blog") || path.startsWith("/changelog")
+            ? "monthly"
+            : "yearly",
+      priority:
+        path === "/"
+          ? 1
+          : path === "/blog" || path === "/changelog"
+            ? 0.7
+            : path.startsWith("/blog/")
+              ? 0.5
+              : 0.2,
+    };
+  });
 }

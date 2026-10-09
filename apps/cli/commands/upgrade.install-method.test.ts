@@ -17,6 +17,18 @@ describe("detectInstallMethodFromExecutablePath", () => {
     expect(detectInstallMethodFromExecutablePath(path)).toBe("homebrew");
   });
 
+  test("detects the default curl install in ~/.relic/bin", () => {
+    const path = "/Users/dev/.relic/bin/relic";
+    expect(detectInstallMethodFromExecutablePath(path, {})).toBe("curl");
+  });
+
+  test("detects a curl install in a custom RELIC_INSTALL_DIR", () => {
+    const path = "/opt/tools/relic/bin/relic";
+    expect(
+      detectInstallMethodFromExecutablePath(path, { RELIC_INSTALL_DIR: "/opt/tools/relic" }),
+    ).toBe("curl");
+  });
+
   test("returns null for unrecognized paths", () => {
     expect(detectInstallMethodFromExecutablePath("/usr/local/bin/relic")).toBe(null);
   });

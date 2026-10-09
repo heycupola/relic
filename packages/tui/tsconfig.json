@@ -1,7 +1,6 @@
 {
   "extends": "@repo/typescript-config/bundler.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "@repo/backend": ["../backend/index.ts"],
       "@repo/backend/*": ["../backend/*"],
@@ -12,9 +11,9 @@
       "@repo/logger": ["../logger/index.ts"],
       "@repo/logger/*": ["../logger/*"]
     },
-    "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "jsxImportSource": "@opentui/react"
+    "types": ["bun"],
+    "jsxImportSource": "react"
   },
   "include": ["./**/*.ts", "./**/*.tsx"],
-  "exclude": ["node_modules", "../backend/convex/lib/emails"]
+  "exclude": ["node_modules"]
 }

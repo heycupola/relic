@@ -1,63 +1,70 @@
-import { useKeyboard, useTerminalDimensions } from "@opentui/react";
-import { savePassword } from "@repo/auth";
-import {
-  createProjectKey,
-  decryptPrivateKeyWithPassword,
-  encryptPrivateKeyWithPassword,
-  generateSalt,
-} from "@repo/crypto";
+/** @jsxImportSource @opentui/react */
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
+import { extractErrorMessage } from "@repo/auth";
+import { createProjectKey } from "@repo/crypto";
 import { createLogger, trackEvent } from "@repo/logger";
-import open from "open";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { getProtectedApi } from "../api";
-import { InlineInput } from "../components/forms/InlineInput";
+import { useCallback, useEffect, useState } from "react";
+import { ProjectCount, ProjectList } from "../components/home/ProjectList";
+import { CheckoutRedirectModal } from "../components/modals/CheckoutRedirectModal";
 import { CommandPaletteModal } from "../components/modals/CommandPaletteModal";
 import { ConfirmPaymentModal } from "../components/modals/ConfirmPaymentModal";
-import { BillingPortalModal, CheckoutRedirectModal } from "../components/modals/UrlOpenModal";
+import { ProWelcomeModal } from "../components/modals/ProWelcomeModal";
 import { PasswordInput } from "../components/PasswordInput";
-import { DeleteConfirmation } from "../components/shared/DeleteConfirmation";
 import { GuideBar } from "../components/shared/GuideBar";
 import { Modal } from "../components/shared/Modal";
 import { useUser } from "../context";
 import { useUserKeys } from "../convex/hooks/useUserKeys";
 import { useAppSession } from "../hooks/useAppSession";
+import { useChangePassword } from "../hooks/useChangePassword";
 import { useListNavigation } from "../hooks/useListNavigation";
 import { useLoadingState } from "../hooks/useLoadingState";
 import { usePaymentFlow } from "../hooks/usePaymentFlow";
 import { useProjects } from "../hooks/useProjects";
+import { useProUpgradeNotice } from "../hooks/useProUpgradeNotice";
 import { useTaskQueue } from "../hooks/useTaskQueue";
 import { useRouter } from "../router";
-import type { ModalType, ProjectStatus } from "../types/models";
-import {
-  DASHBOARD_URL,
-  KEY_SYMBOLS,
-  SPINNER_FRAMES,
-  SPINNER_INTERVAL,
-  STATUS_COLORS,
-  THEME_COLORS,
-} from "../utils/constants";
+import type { ModalType } from "../types/models";
+import { DASHBOARD_URL, KEY_SYMBOLS, THEME_COLORS } from "../utils/constants";
+import { openUrl } from "../utils/ui";
 
 const logger = createLogger("tui");
 
-const STATUS_ICONS: Record<ProjectStatus, string> = {
-  owned: "●",
-  shared: "◉",
-  archived: "○",
-  restricted: "Ø",
-};
-
 const PAGE_SIZE = 5;
+const RESTRICTED_SHARED_MESSAGE =
+  "This shared project is restricted by the owner's plan. Ask the owner to upgrade to Pro.";
+
+const COMMANDS = [
+  { key: "g", description: "Open dashboard", category: "Navigate" },
+  { key: "q", description: "Quit", category: "Navigate" },
+  { key: "n", description: "Create project", category: "Create" },
+  { key: "u", description: "Rename project", category: "Manage" },
+  { key: "d", description: "Archive project", category: "Manage" },
+  { key: "p", description: "Change password", category: "Account" },
+  { key: "^l", description: "Log out", category: "Account" },
+];
+
+function isPlain(key: { ctrl: boolean; meta: boolean; option: boolean }) {
+  return !key.ctrl && !key.meta && !key.option;
+}
 
 export function HomePage() {
   useEffect(() => {
     trackEvent("tui_page_viewed", { page: "home" });
   }, []);
+  const renderer = useRenderer();
   const { width, height } = useTerminalDimensions();
   const { navigate } = useRouter();
-  const { logout } = useAppSession();
-  const { runTask, continueTask, cancelTask, showSuccess, showError, isProcessing } =
-    useTaskQueue();
-  const { user, hasPro, isLoading: isLoadingPlan } = useUser();
+  const { logout, requireUnlock } = useAppSession();
+  const {
+    attemptTask,
+    setTaskPending,
+    continueTask,
+    cancelTask,
+    showSuccess,
+    showError,
+    isProcessing,
+  } = useTaskQueue();
+  const { hasPro, isLoading: isLoadingPlan } = useUser();
 
   const {
     archivedCount,
@@ -65,7 +72,11 @@ export function HomePage() {
     isLoading: isLoadingProjects,
     limits,
     error: limitsError,
+    gracePeriodDaysRemaining,
     refetch: refetchProjects,
+    createProject,
+    renameProject,
+    archiveProject,
   } = useProjects();
 
   const {
@@ -76,19 +87,16 @@ export function HomePage() {
     salt,
     updatePassword,
   } = useUserKeys();
-  const showSetupRequiredError = useCallback(() => {
-    showError(
-      hasKeys
-        ? "Unlock your master password to continue."
-        : "Create a master password first to generate your encryption keys.",
-    );
-  }, [hasKeys, showError]);
 
   const navigation = useListNavigation({
     items: projects,
     pageSize: PAGE_SIZE,
     onSelect: (index) => {
       const project = projects[index];
+      if (project?.status === "restricted" && !project.isOwner) {
+        showError(RESTRICTED_SHARED_MESSAGE);
+        return;
+      }
       if (project)
         navigate({
           name: "project",
@@ -101,38 +109,40 @@ export function HomePage() {
 
   const payment = usePaymentFlow();
   const loading = useLoadingState(["creating", "renaming", "archiving"] as const);
-
-  const [showProSuccess, setShowProSuccess] = useState(false);
-  const prevHasProRef = useRef<boolean | null>(null);
-  useEffect(() => {
-    if (isLoadingPlan) return;
-    if (prevHasProRef.current !== null && hasPro && !prevHasProRef.current) {
-      payment.closeAll();
-      refetchProjects();
-      setShowProSuccess(true);
-    }
-    prevHasProRef.current = hasPro;
-  }, [hasPro, isLoadingPlan, payment, refetchProjects]);
+  const proNotice = useProUpgradeNotice(() => {
+    payment.closeAll();
+    refetchProjects();
+  });
 
   const [activeModal, setActiveModal] = useState<ModalType>("none");
   const [creatingProject, setCreatingProject] = useState(false);
   const [pendingProjectName, setPendingProjectName] = useState<string | null>(null);
-  const [spinnerFrame, setSpinnerFrame] = useState(0);
   const [editingProject, setEditingProject] = useState<{ id: string; name: string } | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState<{ id: string; name: string } | null>(
     null,
   );
-  const [removalSelectedIndex, setRemovalSelectedIndex] = useState(0);
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null);
 
+  const closeModal = useCallback(() => setActiveModal("none"), []);
+  const passwordChange = useChangePassword({
+    encryptedPrivateKey,
+    salt,
+    updatePassword,
+    onChanged: () => {
+      closeModal();
+      showSuccess("Password changed");
+    },
+    onLocalSaveFailed: (message) => {
+      closeModal();
+      showError(message);
+      requireUnlock();
+    },
+  });
+
+  const pendingProjectCreated =
+    pendingProjectName !== null && projects.some((p) => p.name === pendingProjectName);
   useEffect(() => {
-    if (!pendingProjectName) return;
-    const interval = setInterval(() => {
-      setSpinnerFrame((prev) => (prev + 1) % SPINNER_FRAMES.length);
-    }, SPINNER_INTERVAL);
-    return () => clearInterval(interval);
-  }, [pendingProjectName]);
+    if (pendingProjectCreated) setPendingProjectName(null);
+  }, [pendingProjectCreated]);
 
   const validatedEditingProject =
     editingProject && projects.some((p) => p.id === editingProject.id) ? editingProject : null;
@@ -141,15 +151,23 @@ export function HomePage() {
       ? confirmingDelete
       : null;
 
-  const showPendingProject =
-    pendingProjectName && !projects.some((p) => p.name === pendingProjectName);
+  // NOTE: The project can vanish (archived elsewhere, access revoked); drop stale edit state with it.
+  useEffect(() => {
+    if (editingProject && !validatedEditingProject) setEditingProject(null);
+  }, [editingProject, validatedEditingProject]);
+  useEffect(() => {
+    if (confirmingDelete && !validatedConfirmingDelete) setConfirmingDelete(null);
+  }, [confirmingDelete, validatedConfirmingDelete]);
 
-  // Projects that can be archived (owned, non-archived)
-  const archivableProjects = projects.filter(
-    (p) => p.status === "owned" && !p.status.includes("archived"),
-  );
+  const showSetupRequiredError = useCallback(() => {
+    showError(
+      hasKeys
+        ? "Unlock your master password to continue."
+        : "Create a master password first to generate your encryption keys.",
+    );
+  }, [hasKeys, showError]);
 
-  const handleCreateProject = async (name: string, confirmPayment?: boolean) => {
+  const handleCreateProject = async (name: string, confirmPayment = false) => {
     if (!hasKeys || !publicKey) {
       logger.error("Cannot create project: User has no keys");
       showSetupRequiredError();
@@ -160,230 +178,111 @@ export function HomePage() {
       setCreatingProject(false);
       setPendingProjectName(name);
 
-      try {
-        if (confirmPayment) {
-          const result = await continueTask(async () => {
-            const { encryptedProjectKey } = await createProjectKey(publicKey);
-            const api = getProtectedApi();
-            return await api.createProject({ name, encryptedProjectKey, confirmPayment: true });
-          });
-
-          if (!result) {
-            setPendingProjectName(null);
-            payment.closeConfirmation();
-            return;
-          }
-
-          payment.handleResult(result, "project", name);
-          if (result.status === "success") {
-            await refetchProjects();
-          } else {
-            setPendingProjectName(null);
-          }
-          return;
+      const create = async () => {
+        const { encryptedProjectKey } = await createProjectKey(publicKey);
+        return await createProject(name, encryptedProjectKey, confirmPayment);
+      };
+      let result: Awaited<ReturnType<typeof create>> | undefined;
+      if (confirmPayment) {
+        result = await continueTask(create);
+      } else {
+        // NOTE: Stay pending (not success) until we know whether a payment prompt is needed.
+        setTaskPending(`Creating project "${name}"...`);
+        try {
+          result = await create();
+        } catch (error) {
+          cancelTask();
+          showError(extractErrorMessage(error));
         }
+      }
 
-        const result = await runTask(`Creating project "${name}"...`, async () => {
-          const { encryptedProjectKey } = await createProjectKey(publicKey);
-          const api = getProtectedApi();
-          return await api.createProject({ name, encryptedProjectKey, confirmPayment: false });
-        });
-
-        if (!result) {
-          setPendingProjectName(null);
-          return;
-        }
-
-        payment.handleResult(result, "project", name);
-        if (result.status === "success") {
-          trackEvent("project_created", { success: true });
-          await refetchProjects();
-        } else {
-          setPendingProjectName(null);
-        }
-      } catch {
+      if (!result) {
         trackEvent("project_created", { success: false });
+        setPendingProjectName(null);
+        if (confirmPayment) payment.closeConfirmation();
+        return;
+      }
+
+      if (payment.handleResult(result, "project", name) === "success") {
+        trackEvent("project_created", { success: true, confirmed_payment: confirmPayment });
+      } else {
         setPendingProjectName(null);
       }
     });
   };
 
-  const handleConfirmPayment = async () => {
-    if (payment.confirmationModal.itemName) {
-      await handleCreateProject(payment.confirmationModal.itemName, true);
-    }
-  };
-
   const handleRenameProject = async (name: string, projectId: string) => {
-    if (!projectId) {
-      setEditingProject(null);
-      return;
-    }
     const currentProject = projects.find((p) => p.id === projectId);
-    if (currentProject && name === currentProject.name) {
+    if (!currentProject || name === currentProject.name) {
       setEditingProject(null);
       return;
     }
     await loading.run("renaming", async () => {
-      await runTask(`Renaming project to "${name}"...`, async () => {
-        const api = getProtectedApi();
-        await api.updateProject({ projectId, name });
-      });
-      trackEvent("project_renamed", { success: true });
-      showSuccess(`Project renamed to "${name}"`);
+      const renamed = await attemptTask(`Renaming project to "${name}"...`, () =>
+        renameProject(projectId, name),
+      );
+      trackEvent("project_renamed", { success: renamed });
+      if (renamed) showSuccess(`Project renamed to "${name}"`);
       setEditingProject(null);
     });
   };
 
   const handleArchiveProject = async () => {
-    if (!confirmingDelete) return;
+    if (!validatedConfirmingDelete) return;
+    const { id, name } = validatedConfirmingDelete;
     await loading.run("archiving", async () => {
-      await runTask(`Archiving "${confirmingDelete.name}"...`, async () => {
-        const api = getProtectedApi();
-        await api.archiveProject(confirmingDelete.id);
-      });
-      trackEvent("project_archived", { success: true });
-      showSuccess(`"${confirmingDelete.name}" archived`);
+      const archived = await attemptTask(`Archiving "${name}"...`, () => archiveProject(id));
+      trackEvent("project_archived", { success: archived });
+      if (archived) showSuccess(`"${name}" archived`);
       setConfirmingDelete(null);
-      await refetchProjects();
     });
   };
 
-  const handleArchiveFromRemovalModal = async () => {
-    const project = archivableProjects[removalSelectedIndex];
-    if (!project) return;
-    await loading.run("archiving", async () => {
-      await runTask(`Archiving "${project.name}"...`, async () => {
-        const api = getProtectedApi();
-        await api.archiveProject(project.id);
-      });
-      showSuccess(`"${project.name}" archived`);
-      await refetchProjects();
-      // Reset selection if needed
-      if (removalSelectedIndex >= archivableProjects.length - 1) {
-        setRemovalSelectedIndex(Math.max(0, archivableProjects.length - 2));
-      }
-      // Close modal if we've archived enough projects
-      if (payment.removalModal.currentUsage - 1 <= payment.removalModal.includedUsage) {
-        payment.closeRemoval();
-      }
+  const selectedProject = projects[navigation.selectedIndex];
+
+  const startCreate = () => {
+    if (isLoadingKeys) return;
+    if (hasKeys && publicKey) setCreatingProject(true);
+    else showSetupRequiredError();
+  };
+
+  const requireOwnedProject = (action: string, onOwned: (id: string, name: string) => void) => {
+    if (!selectedProject) return;
+    if (selectedProject.isOwner) {
+      onOwned(selectedProject.id, selectedProject.name);
+    } else {
+      showError(`Only the project owner can ${action} it`);
+    }
+  };
+
+  const startRename = () =>
+    requireOwnedProject("rename", (id, name) => setEditingProject({ id, name }));
+
+  const startArchive = () =>
+    requireOwnedProject("archive", (id, name) => setConfirmingDelete({ id, name }));
+
+  const openDashboard = () => {
+    trackEvent("tui_open_dashboard");
+    void openUrl(DASHBOARD_URL);
+  };
+
+  const confirmLogout = () => {
+    logout().catch((error: unknown) => {
+      logger.error("Logout failed:", error);
+      showError(`Couldn't log out: ${extractErrorMessage(error)}`);
     });
   };
-
-  const handleLogout = async () => {
-    await logout();
-  };
-
-  const handlePasswordChange = async (currentPassword: string, newPassword: string) => {
-    if (!encryptedPrivateKey || !salt) {
-      setPasswordChangeError("Unable to change password: encryption keys not found");
-      return;
-    }
-
-    if (currentPassword === newPassword) {
-      setPasswordChangeError("New password must be different from current password");
-      return;
-    }
-
-    setPasswordChangeError(null);
-    setIsChangingPassword(true);
-
-    // Step 1: Verify current password by decrypting the private key
-    let privateKey: CryptoKey;
-    try {
-      privateKey = await decryptPrivateKeyWithPassword(encryptedPrivateKey, currentPassword, salt);
-    } catch (error) {
-      logger.error("Failed to verify current password:", error);
-      setIsChangingPassword(false);
-      setPasswordChangeError("Incorrect password");
-      return;
-    }
-
-    // Step 2: Generate new salt and re-encrypt private key with new password
-    let newEncryptedPrivateKey: string;
-    let newSalt: string;
-    try {
-      newSalt = generateSalt();
-      newEncryptedPrivateKey = await encryptPrivateKeyWithPassword(
-        privateKey,
-        newPassword,
-        newSalt,
-      );
-    } catch (error) {
-      logger.error("Failed to rewrap private key:", error);
-      setIsChangingPassword(false);
-      setPasswordChangeError("Failed to encrypt with new password");
-      return;
-    }
-
-    // Step 3: Update backend with new encrypted private key and salt
-    try {
-      await updatePassword({
-        encryptedPrivateKey: newEncryptedPrivateKey,
-        salt: newSalt,
-      });
-    } catch (error) {
-      logger.error("Failed to update password on backend:", error);
-      setIsChangingPassword(false);
-      setPasswordChangeError("Failed to save new password");
-      return;
-    }
-
-    try {
-      await savePassword(
-        newPassword,
-        user
-          ? {
-              userId: user.id,
-              email: user.email,
-            }
-          : undefined,
-      );
-    } catch (error) {
-      logger.error("Failed to save password locally:", error);
-    }
-
-    trackEvent("password_changed", { success: true });
-    setIsChangingPassword(false);
-    setActiveModal("none");
-    showSuccess("Password changed successfully");
-  };
-
-  const commands = [
-    { key: "n", description: "Create project", category: "Create" },
-    { key: "u", description: "Rename project", category: "Manage" },
-    { key: "d", description: "Delete project", category: "Manage" },
-    { key: "p", description: "Change password", category: "Account" },
-    { key: "^l", description: "Logout", category: "Account" },
-  ];
 
   const executeCommand = (cmd: { key: string }) => {
-    const project = projects[navigation.selectedIndex];
-    const isOwned = project && project.status === "owned";
-    const isAccessible =
-      project && project.status !== "restricted" && project.status !== "archived";
-
     switch (cmd.key) {
       case "n":
-        if (!isLoadingKeys && hasKeys && publicKey) {
-          setCreatingProject(true);
-        } else if (!isLoadingKeys) {
-          showSetupRequiredError();
-        }
+        startCreate();
         break;
       case "u":
-        if (isOwned && project.id) {
-          setEditingProject({ id: project.id, name: project.name });
-        } else if (isAccessible && !isOwned) {
-          showError("Only project owners can rename projects");
-        }
+        startRename();
         break;
       case "d":
-        if (isOwned) {
-          setConfirmingDelete({ id: project.id, name: project.name });
-        } else if (isAccessible && !isOwned) {
-          showError("Only project owners can delete projects");
-        }
+        startArchive();
         break;
       case "p":
         setActiveModal("password");
@@ -391,64 +290,49 @@ export function HomePage() {
       case "^l":
         setActiveModal("logout");
         break;
+      case "g":
+        openDashboard();
+        break;
+      case "q":
+        renderer.destroy();
+        break;
     }
   };
 
   useKeyboard((key) => {
-    if (showProSuccess) {
-      if (key.name === "escape" || key.name === "return") {
-        setShowProSuccess(false);
-      }
-      return;
-    }
-
-    if (creatingProject || editingProject) return;
-    if (
-      payment.confirmationModal.visible ||
-      payment.checkoutModal.visible ||
-      payment.billingPortalModal.visible
-    )
-      return;
+    if (proNotice.visible) return;
+    if (creatingProject || validatedEditingProject) return;
+    if (payment.isModalOpen) return;
     if (isProcessing || loading.anyLoading()) return;
 
-    // Handle removal modal keyboard navigation
-    if (payment.removalModal.visible) {
-      if (key.name === "k" || key.name === "up") {
-        setRemovalSelectedIndex((prev) => Math.max(0, prev - 1));
-      } else if (key.name === "j" || key.name === "down") {
-        setRemovalSelectedIndex((prev) => Math.min(archivableProjects.length - 1, prev + 1));
-      } else if (key.name === "return" || key.name === "d") {
-        handleArchiveFromRemovalModal();
-      } else if (key.name === "escape") {
-        payment.closeRemoval();
-        setRemovalSelectedIndex(0);
-      } else if (key.name === "g" && !key.meta && !key.ctrl) {
-        open(DASHBOARD_URL);
-      }
-      return;
-    }
-
     if (activeModal === "logout") {
-      if (key.name === "y") handleLogout();
-      else if (key.name === "n" || key.name === "escape") setActiveModal("none");
+      if (key.name === "y") confirmLogout();
+      else if (key.name === "n" || key.name === "escape") closeModal();
       return;
     }
 
     if (activeModal === "password") {
-      if (key.name === "escape" && !isChangingPassword) {
-        setActiveModal("none");
-        setPasswordChangeError(null);
+      if (key.name === "escape" && !passwordChange.isChanging) {
+        closeModal();
+        passwordChange.reset();
       }
       return;
     }
 
     if (activeModal === "commandPalette") return;
 
-    if (confirmingDelete) {
-      if (key.name === "y") handleArchiveProject();
+    if (validatedConfirmingDelete) {
+      if (key.name === "y") void handleArchiveProject();
       else if (key.name === "n" || key.name === "escape") setConfirmingDelete(null);
       return;
     }
+
+    if ((key.name === "l" && key.ctrl) || key.sequence === "\x0C") {
+      setActiveModal("logout");
+      return;
+    }
+
+    if (!isPlain(key) && !["up", "down", "right"].includes(key.name)) return;
 
     if (key.name === "k" || key.name === "up") {
       navigation.moveUp();
@@ -456,64 +340,38 @@ export function HomePage() {
     } else if (key.name === "j" || key.name === "down") {
       navigation.moveDown();
       setConfirmingDelete(null);
-    } else if (key.name === "return") {
+    } else if (key.name === "return" || key.name === "l" || key.name === "right") {
       navigation.select();
     } else if (key.name === "d") {
-      const project = projects[navigation.selectedIndex];
-      if (project && project.status === "owned") {
-        setConfirmingDelete({ id: project.id, name: project.name });
-      } else if (project && project.status === "shared") {
-        showError("Only project owners can delete projects");
-      }
+      startArchive();
     } else if (key.name === "n") {
-      if (!isLoadingKeys && hasKeys && publicKey) {
-        setCreatingProject(true);
-      } else if (!isLoadingKeys) {
-        showSetupRequiredError();
-      }
+      startCreate();
     } else if (key.name === "u") {
-      const project = projects[navigation.selectedIndex];
-      if (project && project.status === "owned" && project.id) {
-        setEditingProject({ id: project.id, name: project.name });
-      } else if (project && project.status === "shared") {
-        showError("Only project owners can rename projects");
-      }
+      startRename();
     } else if (key.name === "p") {
       setActiveModal("password");
-    } else if (key.name === "g" && !key.meta && !key.ctrl) {
-      trackEvent("tui_open_dashboard");
-      open(DASHBOARD_URL);
-    } else if ((key.name === "l" && key.ctrl) || key.sequence === "\x0C") {
-      setActiveModal("logout");
+    } else if (key.name === "g") {
+      openDashboard();
     } else if (key.sequence === "?") {
       setActiveModal("commandPalette");
     } else if (key.name === "q") {
-      process.exit(0);
+      renderer.destroy();
     }
   });
 
   const getShortcuts = () => {
     const isDisabled = isProcessing || loading.anyLoading();
 
-    if (creatingProject) {
+    if (creatingProject || validatedEditingProject) {
       return {
         primary: [
           {
             shortcuts: [
-              { key: KEY_SYMBOLS.enter, description: "create", disabled: isDisabled },
-              { key: "esc", description: "cancel", disabled: isDisabled },
-            ],
-          },
-        ],
-        secondary: [],
-      };
-    }
-    if (validatedEditingProject) {
-      return {
-        primary: [
-          {
-            shortcuts: [
-              { key: KEY_SYMBOLS.enter, description: "save", disabled: isDisabled },
+              {
+                key: KEY_SYMBOLS.enter,
+                description: creatingProject ? "create" : "save",
+                disabled: isDisabled,
+              },
               { key: "esc", description: "cancel", disabled: isDisabled },
             ],
           },
@@ -522,20 +380,26 @@ export function HomePage() {
       };
     }
 
+    const hasSelection = selectedProject !== undefined;
+    const canManage = hasSelection && selectedProject.isOwner;
     return {
       primary: [
         {
           shortcuts: [
-            { key: "n", description: "create project", disabled: isDisabled },
-            { key: "g", description: "open dashboard", disabled: isDisabled },
+            { key: KEY_SYMBOLS.enter, description: "open", disabled: isDisabled || !hasSelection },
+            { key: "n", description: "new project", disabled: isDisabled },
+            { key: "u", description: "rename", disabled: isDisabled || !canManage },
+            { key: "d", description: "archive", disabled: isDisabled || !canManage },
           ],
         },
       ],
       secondary: [
         {
           shortcuts: [
-            { key: "p", description: "change password", disabled: isDisabled },
-            { key: "^l", description: "logout", disabled: isDisabled },
+            { key: "g", description: "dashboard", disabled: isDisabled },
+            { key: "p", description: "password", disabled: isDisabled },
+            { key: "^l", description: "log out", disabled: isDisabled },
+            { key: "q", description: "quit", disabled: isDisabled },
           ],
         },
       ],
@@ -575,9 +439,9 @@ export function HomePage() {
               {isLoadingPlan ? (
                 <span fg={THEME_COLORS.textDim}>...</span>
               ) : hasPro ? (
-                <span fg={THEME_COLORS.success}>PRO</span>
+                <span fg={THEME_COLORS.success}>Pro</span>
               ) : (
-                <span fg={THEME_COLORS.textDim}>FREE</span>
+                <span fg={THEME_COLORS.textMuted}>Free</span>
               )}
             </text>
           </box>
@@ -592,186 +456,44 @@ export function HomePage() {
             alignItems="center"
           >
             <text fg={THEME_COLORS.textMuted}>Projects</text>
-            {(() => {
-              if (isLoadingProjects) {
-                return <text fg={THEME_COLORS.textDim}>...</text>;
-              }
-
-              if (limitsError) {
-                return (
-                  <text fg={THEME_COLORS.warning}>{projects.length} (limits unavailable)</text>
-                );
-              }
-
-              if (limits !== null && limits.includedUsage !== undefined) {
-                const totalProjects = limits.usage;
-                const freeLimit = limits.includedUsage;
-                const remainingFree = Math.max(0, freeLimit - totalProjects);
-                // #endregion
-
-                if (remainingFree === 0) {
-                  return (
-                    <text fg={THEME_COLORS.textDim}>
-                      {totalProjects} project{totalProjects !== 1 ? "s" : ""}
-                    </text>
-                  );
-                }
-
-                return (
-                  <text>
-                    <span fg={THEME_COLORS.textDim}>
-                      {totalProjects} project{totalProjects !== 1 ? "s" : ""}{" "}
-                    </span>
-                    <span fg={THEME_COLORS.textDim}>(</span>
-                    <span fg={THEME_COLORS.success}>{remainingFree} free</span>
-                    <span fg={THEME_COLORS.textDim}>)</span>
-                  </text>
-                );
-              }
-
-              return <text fg={THEME_COLORS.textDim}>{projects.length}</text>;
-            })()}
+            <ProjectCount
+              isLoading={isLoadingProjects}
+              hasError={limitsError !== null}
+              projectCount={projects.length}
+              limits={limits}
+            />
           </box>
 
-          <box
-            flexDirection="column"
-            width={52}
-            height={
-              isLoadingProjects ||
-              (projects.length === 0 && !creatingProject && !showPendingProject)
-                ? 1
-                : Math.min(
-                    projects.length +
-                      (creatingProject ? 1 : 0) +
-                      (showPendingProject ? 1 : 0) +
-                      (validatedConfirmingDelete ? 1 : 0),
-                    PAGE_SIZE + (validatedConfirmingDelete ? 1 : 0) + (showPendingProject ? 1 : 0),
-                  ) +
-                  (navigation.hasMore.above ? 1 : 0) +
-                  (navigation.hasMore.below ? 1 : 0)
-            }
-          >
-            {isLoadingProjects ? (
-              <text fg={THEME_COLORS.textDim}>Loading projects...</text>
-            ) : projects.length === 0 && !creatingProject && !showPendingProject ? (
-              <text fg={THEME_COLORS.textDim}>
-                {archivedCount > 0
-                  ? "No active projects. Archived projects are hidden."
-                  : "No projects created. Press 'n' to create one."}
+          <ProjectList
+            projects={projects}
+            isLoading={isLoadingProjects}
+            archivedCount={archivedCount}
+            pageSize={PAGE_SIZE}
+            navigation={navigation}
+            isCreating={creatingProject}
+            editingProject={validatedEditingProject}
+            confirmingDelete={validatedConfirmingDelete}
+            pendingProjectName={pendingProjectCreated ? null : pendingProjectName}
+            onCreate={(name) => void handleCreateProject(name)}
+            onCancelCreate={() => setCreatingProject(false)}
+            onRename={(name, projectId) => void handleRenameProject(name, projectId)}
+            onCancelRename={() => setEditingProject(null)}
+          />
+
+          {gracePeriodDaysRemaining !== null && (
+            <box width={52} marginTop={1}>
+              <text fg={THEME_COLORS.warning}>
+                ⚠ Pro has ended. Extra projects become read-only in {gracePeriodDaysRemaining} day
+                {gracePeriodDaysRemaining === 1 ? "" : "s"}. Press g to renew.
               </text>
-            ) : (
-              <>
-                {navigation.hasMore.above && (
-                  <text fg={THEME_COLORS.textDim}>
-                    {"  "}... {navigation.hasMore.aboveCount} more item
-                    {navigation.hasMore.aboveCount > 1 ? "s" : ""} above
-                  </text>
-                )}
-                {navigation.visibleItems.map((project, index) => {
-                  const actualIndex = index + navigation.scrollOffset;
-                  const isSelected =
-                    actualIndex === navigation.selectedIndex &&
-                    !creatingProject &&
-                    !validatedEditingProject;
-                  const isEditing =
-                    validatedEditingProject !== null && validatedEditingProject?.id === project.id;
-                  const isDeleting =
-                    validatedConfirmingDelete !== null &&
-                    validatedConfirmingDelete?.id === project.id;
-
-                  return (
-                    <box key={project.id} flexDirection="column">
-                      {isEditing ? (
-                        <InlineInput
-                          active={true}
-                          initialValue={project.name}
-                          onSubmit={(name) => {
-                            if (project.id) handleRenameProject(name, project.id);
-                          }}
-                          onCancel={() => setEditingProject(null)}
-                          maxWidth={40}
-                          maxLength={30}
-                          width={52}
-                          icon="[~]"
-                          iconColor={THEME_COLORS.accent}
-                        />
-                      ) : (
-                        <box
-                          height={1}
-                          width={52}
-                          flexDirection="row"
-                          justifyContent="space-between"
-                          alignItems="center"
-                        >
-                          <text fg={isSelected ? THEME_COLORS.text : THEME_COLORS.textMuted}>
-                            <span fg={isSelected ? THEME_COLORS.primary : THEME_COLORS.textDim}>
-                              {isSelected ? "› " : "  "}
-                            </span>
-                            {project.name}
-                          </text>
-                          <text>
-                            {isSelected && (
-                              <span fg={THEME_COLORS.textDim}>[{project.status}] </span>
-                            )}
-                            <span fg={STATUS_COLORS[project.status] || THEME_COLORS.text}>
-                              {STATUS_ICONS[project.status]}
-                            </span>
-                          </text>
-                        </box>
-                      )}
-                      <DeleteConfirmation
-                        itemType="project"
-                        itemName={project.name}
-                        visible={isDeleting}
-                      />
-                    </box>
-                  );
-                })}
-                {creatingProject && (
-                  <InlineInput
-                    active={true}
-                    onSubmit={handleCreateProject}
-                    onCancel={() => setCreatingProject(false)}
-                    maxWidth={28}
-                    maxLength={30}
-                    width={52}
-                    placeholder="e.g. my-project"
-                    icon="[+]"
-                    iconColor={THEME_COLORS.success}
-                  />
-                )}
-                {/* Show pending project in the list with spinner */}
-                {showPendingProject && (
-                  <box
-                    height={1}
-                    width={52}
-                    flexDirection="row"
-                    justifyContent="space-between"
-                    alignItems="center"
-                  >
-                    <text fg={THEME_COLORS.textMuted}>
-                      <span fg={THEME_COLORS.primary}>{SPINNER_FRAMES[spinnerFrame]} </span>
-                      {pendingProjectName}
-                    </text>
-                    <text fg={THEME_COLORS.textDim}>(creating...)</text>
-                  </box>
-                )}
-                {navigation.hasMore.below && (
-                  <text fg={THEME_COLORS.textDim}>
-                    {"  "}... {navigation.hasMore.belowCount} more item
-                    {navigation.hasMore.belowCount > 1 ? "s" : ""} below
-                  </text>
-                )}
-              </>
-            )}
-          </box>
+            </box>
+          )}
 
           {(activeModal === "none" || creatingProject || activeModal === "commandPalette") && (
             <box marginTop={1}>
               <GuideBar
                 groups={getShortcuts()}
                 customWidth={52}
-                minimal={true}
                 showHelp={!creatingProject && !validatedEditingProject}
               />
             </box>
@@ -781,7 +503,7 @@ export function HomePage() {
 
       <Modal
         visible={activeModal === "logout"}
-        title="Logout"
+        title="Log out"
         width={45}
         height={8}
         shortcuts={[
@@ -789,13 +511,13 @@ export function HomePage() {
           { key: "n", description: "no", disabled: isProcessing },
         ]}
       >
-        <text fg={THEME_COLORS.textDim}>Are you sure you want to logout?</text>
+        <text fg={THEME_COLORS.textMuted}>Are you sure you want to log out?</text>
       </Modal>
 
       {/* NOTE: shortcuts={[]} because PasswordInput has its own GuideBar with contextual labels */}
       <Modal
         visible={activeModal === "password"}
-        title="Change Password"
+        title="Change password"
         width={55}
         height={18}
         shortcuts={[]}
@@ -804,118 +526,47 @@ export function HomePage() {
           mode="change"
           onSubmit={(currentPass, newPass) => {
             if (currentPass && newPass) {
-              handlePasswordChange(currentPass, newPass);
+              void passwordChange.changePassword(currentPass, newPass);
             }
           }}
           onCancel={() => {
-            setActiveModal("none");
-            setPasswordChangeError(null);
-            setIsChangingPassword(false);
+            closeModal();
+            passwordChange.reset();
           }}
           additionalShortcuts={[
-            { key: "esc", description: "cancel", disabled: isChangingPassword },
+            { key: "esc", description: "cancel", disabled: passwordChange.isChanging },
           ]}
           width={51}
-          disabled={isChangingPassword}
-          error={passwordChangeError}
+          disabled={passwordChange.isChanging}
+          error={passwordChange.error}
         />
       </Modal>
 
       <CommandPaletteModal
         visible={activeModal === "commandPalette"}
-        commands={commands}
+        commands={COMMANDS}
         onExecute={executeCommand}
-        onClose={() => setActiveModal("none")}
+        onClose={closeModal}
       />
 
-      <CheckoutRedirectModal
-        visible={payment.checkoutModal.visible}
-        checkoutUrl={payment.checkoutModal.url}
-        reason={payment.checkoutModal.reason}
-        onClose={payment.closeCheckout}
-      />
+      <CheckoutRedirectModal checkoutUrl={payment.checkoutUrl} onClose={payment.closeCheckout} />
 
-      <Modal
-        visible={showProSuccess}
-        title="Welcome to Pro!"
-        width={50}
-        shortcuts={[{ key: "esc", description: "close" }]}
-      >
-        <box flexDirection="column" gap={1}>
-          <text fg={THEME_COLORS.success}>You're now a PRO member!</text>
-          <text fg={THEME_COLORS.text}>Unlimited projects and sharing unlocked.</text>
-        </box>
-      </Modal>
+      <ProWelcomeModal visible={proNotice.visible} onClose={proNotice.dismiss} />
 
       <ConfirmPaymentModal
         visible={payment.confirmationModal.visible}
         type={payment.confirmationModal.type}
         itemName={payment.confirmationModal.itemName}
-        balance={payment.confirmationModal.balance}
-        onConfirm={handleConfirmPayment}
+        message={payment.confirmationModal.message}
+        onConfirm={() => {
+          const { itemName } = payment.confirmationModal;
+          if (itemName) void handleCreateProject(itemName, true);
+        }}
         onCancel={() => {
           cancelTask();
           payment.closeConfirmation();
         }}
       />
-
-      <BillingPortalModal
-        visible={payment.billingPortalModal.visible}
-        portalUrl={payment.billingPortalModal.url}
-        onClose={payment.closeBilling}
-      />
-
-      <Modal
-        visible={payment.removalModal.visible}
-        title="Usage Limit Exceeded"
-        width={58}
-        height={Math.min(16, 8 + archivableProjects.length)}
-        shortcuts={[
-          { key: "j/k", description: "navigate", disabled: loading.isLoading("archiving") },
-          { key: "d", description: "archive", disabled: loading.isLoading("archiving") },
-          { key: "g", description: "open dashboard", disabled: false },
-          { key: "esc", description: "close", disabled: loading.isLoading("archiving") },
-        ]}
-      >
-        <box flexDirection="column">
-          <text fg={THEME_COLORS.warning}>
-            You're using {payment.removalModal.currentUsage} projects but only have{" "}
-            {payment.removalModal.includedUsage} included.
-          </text>
-          <text fg={THEME_COLORS.textMuted}>
-            Archive {payment.removalModal.excessCount} project(s) to continue.
-          </text>
-          <box height={1} />
-          <text fg={THEME_COLORS.textDim}>Select a project to archive:</text>
-          <box flexDirection="column" marginTop={1}>
-            {archivableProjects.slice(0, 5).map((project, index) => {
-              const isSelected = index === removalSelectedIndex;
-              return (
-                <box
-                  key={project.id}
-                  height={1}
-                  width={54}
-                  flexDirection="row"
-                  justifyContent="space-between"
-                >
-                  <text fg={isSelected ? THEME_COLORS.text : THEME_COLORS.textMuted}>
-                    <span fg={isSelected ? THEME_COLORS.primary : THEME_COLORS.textDim}>
-                      {isSelected ? "› " : "  "}
-                    </span>
-                    {project.name}
-                  </text>
-                  <text fg={THEME_COLORS.textDim}>[{project.status}]</text>
-                </box>
-              );
-            })}
-            {archivableProjects.length > 5 && (
-              <text fg={THEME_COLORS.textDim}>
-                {"  "}... {archivableProjects.length - 5} more
-              </text>
-            )}
-          </box>
-        </box>
-      </Modal>
     </box>
   );
 }

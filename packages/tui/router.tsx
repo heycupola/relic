@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 import { createContext, type ReactNode, useContext, useState } from "react";
 import type { ProjectStatus } from "./types/models";
 

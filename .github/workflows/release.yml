@@ -159,7 +159,8 @@ jobs:
       - name: Download OpenTUI native lib (Unix)
         if: runner.os != 'Windows'
         run: |
-          npm pack @opentui/core-${{ matrix.platform }}@0.1.88
+          version=$(bun -p "require('./apps/cli/package.json').optionalDependencies['@opentui/core-${{ matrix.platform }}']")
+          npm pack "@opentui/core-${{ matrix.platform }}@${version}"
           tar xzf opentui-core-*.tgz
           mkdir -p opentui-lib
           cp package/libopentui.* opentui-lib/ 2>/dev/null || true
@@ -168,7 +169,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          npm pack @opentui/core-${{ matrix.platform }}@0.1.88
+          $version = bun -p "require('./apps/cli/package.json').optionalDependencies['@opentui/core-${{ matrix.platform }}']"
+          npm pack "@opentui/core-${{ matrix.platform }}@$version"
           $tgz = Get-ChildItem -Filter "opentui-core-*.tgz" | Select-Object -First 1
           tar xzf $tgz.Name
           New-Item -ItemType Directory -Force -Path opentui-lib
@@ -360,6 +362,7 @@ jobs:
       cancel-in-progress: false
     permissions:
       contents: write
+      pull-requests: write
     env:
       TARGET_BRANCH: main
       EXPECTED_RELEASE_TAG: v${{ needs.check-version.outputs.new-version }}
@@ -386,19 +389,25 @@ jobs:
           EXPECTED_RELEASE_TAG: ${{ env.EXPECTED_RELEASE_TAG }}
         run: bun run sync:changelog
 
-      - name: Commit generated changelog content
+      - name: Open changelog pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if git diff --quiet -- apps/web/content/changelog/generated; then
             echo "No changelog updates to commit."
             exit 0
           fi
 
+          branch="chore/sync-changelog-${EXPECTED_RELEASE_TAG}-${GITHUB_RUN_ID}"
+          git checkout -b "$branch"
           git add apps/web/content/changelog/generated
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -m "chore: sync changelog from GitHub releases"
-          git fetch origin "$TARGET_BRANCH"
-          git rebase "origin/$TARGET_BRANCH"
-          git push origin HEAD:"$TARGET_BRANCH"
+          git push -u origin "$branch"
+
+          gh pr create --base "$TARGET_BRANCH" --head "$branch" \
+            --title "chore: sync changelog from ${EXPECTED_RELEASE_TAG}" \
+            --body "Generated website changelog pages from GitHub releases. main only accepts pull requests, so this job opens one instead of pushing directly."
 
   update-homebrew-tap:
     name: Update Homebrew Tap

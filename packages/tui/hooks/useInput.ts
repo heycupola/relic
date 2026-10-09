@@ -43,13 +43,13 @@ interface SingleLineInputOptions {
 export function useSingleLineInput(options: SingleLineInputOptions = {}) {
   const { initialValue = "", maxLength = 1000, onSubmit } = options;
   const [value, setValue] = useState(initialValue);
-  const [cursor, setCursor] = useState(0);
+  const [cursor, setCursor] = useState(initialValue.length);
   const stateRef = useRef({ value, cursor });
   stateRef.current = { value, cursor };
 
   const reset = useCallback(() => {
     setValue(initialValue);
-    setCursor(0);
+    setCursor(initialValue.length);
   }, [initialValue]);
 
   const handlePaste = useCallback(

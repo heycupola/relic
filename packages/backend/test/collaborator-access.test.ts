@@ -17,9 +17,10 @@ import {
   betterAuthModules,
   expectConvexError,
   getTestUsers,
-  mockAutumn,
+  mockBilling,
   modules,
   randomString,
+  setPlan,
   type TestUser,
 } from "./setup";
 
@@ -57,10 +58,9 @@ describe("Collaborator Access Control", () => {
     collaborator = testUsers[1]!;
     nonCollaborator = testUsers[2]!;
 
-    mockAutumn.setFeature(owner.userId, "projects", 5);
-    mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
-    mockAutumn.setFeature(owner.userId, "additional_shares", 5);
-    mockAutumn.setFeature(collaborator.userId, "projects", 5);
+    await setPlan(t, owner.userId, "pro");
+
+    await setPlan(t, collaborator.userId, "pro");
 
     const { encryptedProjectKey } = await createProjectKey(owner.publicKey!);
     const result = await owner.asUser.action(api.project.createProject, {
@@ -86,7 +86,7 @@ describe("Collaborator Access Control", () => {
   });
 
   afterEach(() => {
-    mockAutumn.reset();
+    mockBilling.reset();
   });
 
   describe("Secrets - Collaborator CRUD", () => {

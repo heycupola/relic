@@ -1,7 +1,6 @@
 {
   "extends": "@repo/typescript-config/bundler.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "@repo/auth": ["../../packages/auth/index.ts"],
       "@repo/auth/*": ["../../packages/auth/*"],
@@ -12,5 +11,5 @@
       "@repo/tui": ["./tui.d.ts"]
     }
   },
-  "exclude": ["node_modules", "../../packages/tui/**"]
+  "exclude": ["node_modules", "dist", "prebuilds", "../../packages/tui/**"]
 }

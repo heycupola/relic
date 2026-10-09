@@ -44,7 +44,7 @@ export function ContentEmptyState({
                   href={action.href}
                   target={action.external ? "_blank" : undefined}
                   rel={action.external ? "noopener noreferrer" : undefined}
-                  className="border border-border px-3 py-2 text-sm text-foreground/80 transition-colors hover:bg-foreground hover:text-background"
+                  className="border border-border px-3 py-2 text-sm text-foreground/80 transition-colors hover:bg-foreground hover:text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
                 >
                   {action.label}
                 </Link>

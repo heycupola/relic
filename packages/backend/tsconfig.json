@@ -2,6 +2,8 @@
   "extends": "@repo/typescript-config/convex.json",
   "compilerOptions": {
     "skipLibCheck": true,
+    "declaration": false,
+    "declarationMap": false,
     "types": ["@types/bun"],
     "jsx": "react-jsx",
     "esModuleInterop": true,
