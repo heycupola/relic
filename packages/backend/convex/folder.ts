@@ -4,7 +4,7 @@ import { doc } from "convex-helpers/validators";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { assertProjectAccess } from "./lib/access";
+import { assertProjectWriteAccess } from "./lib/access";
 import { alreadyExistsError, createError, ErrorCode, notFoundError } from "./lib/errors";
 import { generateSlug } from "./lib/helpers";
 import { protectedMutation } from "./lib/middleware";
@@ -32,7 +32,7 @@ export const createFolder = protectedMutation({
 
     const project: Doc<"project"> = await getProjectOrThrow(ctx, environment.projectId);
 
-    await assertProjectAccess(ctx, project);
+    await assertProjectWriteAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
@@ -86,7 +86,7 @@ export const updateFolder = protectedMutation({
 
     const project = await getProjectOrThrow(ctx, folder.projectId);
 
-    await assertProjectAccess(ctx, project);
+    await assertProjectWriteAccess(ctx, project);
 
     await checkRateLimit(ctx, "write");
 
@@ -144,7 +144,7 @@ export const deleteFolder = protectedMutation({
 
     const project = await getProjectOrThrow(ctx, folder.projectId);
 
-    await assertProjectAccess(ctx, project);
+    await assertProjectWriteAccess(ctx, project);
 
     await checkRateLimit(ctx, "delete");
 

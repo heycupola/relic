@@ -15,6 +15,10 @@ When you share a project:
 
 The collaborator can now decrypt the project key with their own private key and access all secrets in the project.
 
+## What Collaborators Can Do
+
+Shared projects are read-only for collaborators. They can browse environments and folders, reveal values, and inject secrets with `relic run`. Only the owner can create, rename, or delete environments, folders, and secrets, and only the owner can manage collaborators.
+
 <Note>
   Both users must have completed the password setup (encryption keys generated) before sharing is
   possible.

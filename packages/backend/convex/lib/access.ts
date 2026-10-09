@@ -83,6 +83,21 @@ export async function assertProjectAccess(
   });
 }
 
+/** Shared projects are read-only for collaborators; only the owner may change their contents. */
+export async function assertProjectWriteAccess(
+  ctx: AccessCtx,
+  project: Doc<"project">,
+): Promise<void> {
+  await assertProjectAccess(ctx, project);
+  if (project.ownerId !== ctx.userId) {
+    createError({
+      code: ErrorCode.INSUFFICIENT_PERMISSION,
+      message: "This project is shared with you as read-only. Ask the owner to make changes.",
+      severity: ErrorSeverity.Medium,
+    });
+  }
+}
+
 export function assertProjectOwner(
   ctx: { userId: string },
   project: Doc<"project">,

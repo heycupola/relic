@@ -37,8 +37,8 @@ function assertProjectCreated(result: {
 
 /**
  * TEST CASES
- * - Collaborators: Full CRUD on secrets, environments, folders
- * - Owner-only: Project update/archive/unarchive, share management
+ * - Collaborators: Read-only access to secrets, environments, folders
+ * - Owner-only: All writes, project update/archive/unarchive, share management
  */
 describe("Collaborator Access Control", () => {
   let t: TestConvex<typeof schema>;
@@ -89,8 +89,8 @@ describe("Collaborator Access Control", () => {
     mockBilling.reset();
   });
 
-  describe("Secrets - Collaborator CRUD", () => {
-    test("collaborator can CREATE secrets", async () => {
+  describe("Secrets - Collaborators are read-only", () => {
+    test("collaborator CANNOT create secrets", async () => {
       const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "env-" + randomString(),
         projectId,
@@ -98,15 +98,17 @@ describe("Collaborator Access Control", () => {
 
       const encryptedValue = await encryptSecret(projectKey, "secret-value");
 
-      const { id: secretId } = await collaborator.asUser.mutation(api.secret.createSecret, {
-        encryptedValue,
-        environmentId,
-        key: "API_KEY_" + randomString(),
-        valueType: "string",
-        folderId: undefined,
-      });
-
-      expect(secretId).toBeDefined();
+      await expectConvexError(
+        () =>
+          collaborator.asUser.mutation(api.secret.createSecret, {
+            encryptedValue,
+            environmentId,
+            key: "API_KEY_" + randomString(),
+            valueType: "string",
+            folderId: undefined,
+          }),
+        ErrorCode.INSUFFICIENT_PERMISSION,
+      );
     });
 
     test("collaborator can READ secrets", async () => {
@@ -133,7 +135,7 @@ describe("Collaborator Access Control", () => {
       expect(decryptedValue).toBe(value);
     });
 
-    test("collaborator can UPDATE secrets", async () => {
+    test("collaborator CANNOT update secrets", async () => {
       const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "env-" + randomString(),
         projectId,
@@ -147,25 +149,47 @@ describe("Collaborator Access Control", () => {
         folderId: undefined,
       });
 
-      const newValue = "new-secret-value";
-      const newEncryptedValue = await encryptSecret(projectKey, newValue);
+      const newEncryptedValue = await encryptSecret(projectKey, "new-secret-value");
 
-      const { success } = await collaborator.asUser.mutation(api.secret.updateSecret, {
-        secretId,
-        updates: {
-          encryptedValue: newEncryptedValue,
-          valueType: "string" as SecretValueType,
-        },
-      });
+      await expectConvexError(
+        () =>
+          collaborator.asUser.mutation(api.secret.updateSecret, {
+            secretId,
+            updates: {
+              encryptedValue: newEncryptedValue,
+              valueType: "string" as SecretValueType,
+            },
+          }),
+        ErrorCode.INSUFFICIENT_PERMISSION,
+      );
 
-      expect(success).toBe(true);
-
-      const updatedSecret = await owner.asUser.query(api.secret.getSecret, { secretId });
-      const decryptedValue = await decryptSecret(projectKey, updatedSecret.encryptedValue);
-      expect(decryptedValue).toBe(newValue);
+      const unchanged = await owner.asUser.query(api.secret.getSecret, { secretId });
+      expect(await decryptSecret(projectKey, unchanged.encryptedValue)).toBe("old-value");
     });
 
-    test("collaborator can DELETE secrets", async () => {
+    test("collaborator CANNOT bulk update secrets", async () => {
+      const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
+        name: "env-" + randomString(),
+        projectId,
+      });
+
+      await expectConvexError(
+        async () =>
+          collaborator.asUser.mutation(api.secret.updateSecretBulk, {
+            environmentId,
+            secrets: [
+              {
+                key: "API_KEY_" + randomString(),
+                encryptedValue: await encryptSecret(projectKey, "value"),
+                valueType: "string",
+              },
+            ],
+          }),
+        ErrorCode.INSUFFICIENT_PERMISSION,
+      );
+    });
+
+    test("collaborator CANNOT delete secrets", async () => {
       const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "env-" + randomString(),
         projectId,
@@ -179,25 +203,26 @@ describe("Collaborator Access Control", () => {
         folderId: undefined,
       });
 
-      const { success } = await collaborator.asUser.mutation(api.secret.deleteSecret, {
-        secretId,
-      });
+      await expectConvexError(
+        () => collaborator.asUser.mutation(api.secret.deleteSecret, { secretId }),
+        ErrorCode.INSUFFICIENT_PERMISSION,
+      );
 
-      expect(success).toBe(true);
+      const stillThere = await owner.asUser.query(api.secret.getSecret, { secretId });
+      expect(stillThere.id).toBe(secretId);
     });
   });
 
-  describe("Environments - Collaborator CRUD", () => {
-    test("collaborator can CREATE environments", async () => {
-      const { id: environmentId } = await collaborator.asUser.mutation(
-        api.environment.createEnvironment,
-        {
-          name: "collab-env-" + randomString(),
-          projectId,
-        },
+  describe("Environments - Collaborators are read-only", () => {
+    test("collaborator CANNOT create environments", async () => {
+      await expectConvexError(
+        () =>
+          collaborator.asUser.mutation(api.environment.createEnvironment, {
+            name: "collab-env-" + randomString(),
+            projectId,
+          }),
+        ErrorCode.INSUFFICIENT_PERMISSION,
       );
-
-      expect(environmentId).toBeDefined();
     });
 
     test("collaborator can READ environment data", async () => {
@@ -213,35 +238,36 @@ describe("Collaborator Access Control", () => {
       expect(data.environment.id).toBe(environmentId);
     });
 
-    test("collaborator can UPDATE environments", async () => {
+    test("collaborator CANNOT update environments", async () => {
       const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "old-name",
         projectId,
       });
 
-      const { success } = await collaborator.asUser.mutation(api.environment.updateEnvironment, {
-        environmentId,
-        name: "new-name",
-      });
-
-      expect(success).toBe(true);
+      await expectConvexError(
+        () =>
+          collaborator.asUser.mutation(api.environment.updateEnvironment, {
+            environmentId,
+            name: "new-name",
+          }),
+        ErrorCode.INSUFFICIENT_PERMISSION,
+      );
     });
 
-    test("collaborator can DELETE empty environments", async () => {
+    test("collaborator CANNOT delete environments", async () => {
       const { id: environmentId } = await owner.asUser.mutation(api.environment.createEnvironment, {
         name: "temp-env-" + randomString(),
         projectId,
       });
 
-      const { success } = await collaborator.asUser.mutation(api.environment.deleteEnvironment, {
-        environmentId,
-      });
-
-      expect(success).toBe(true);
+      await expectConvexError(
+        () => collaborator.asUser.mutation(api.environment.deleteEnvironment, { environmentId }),
+        ErrorCode.INSUFFICIENT_PERMISSION,
+      );
     });
   });
 
-  describe("Folders - Collaborator CRUD", () => {
+  describe("Folders - Collaborators are read-only", () => {
     let environmentId: Id<"environment">;
 
     beforeEach(async () => {
@@ -252,40 +278,43 @@ describe("Collaborator Access Control", () => {
       environmentId = result.id;
     });
 
-    test("collaborator can CREATE folders", async () => {
-      const { id: folderId } = await collaborator.asUser.mutation(api.folder.createFolder, {
-        environmentId,
-        name: "collab-folder-" + randomString(),
-      });
-
-      expect(folderId).toBeDefined();
+    test("collaborator CANNOT create folders", async () => {
+      await expectConvexError(
+        () =>
+          collaborator.asUser.mutation(api.folder.createFolder, {
+            environmentId,
+            name: "collab-folder-" + randomString(),
+          }),
+        ErrorCode.INSUFFICIENT_PERMISSION,
+      );
     });
 
-    test("collaborator can UPDATE folders", async () => {
+    test("collaborator CANNOT update folders", async () => {
       const { id: folderId } = await owner.asUser.mutation(api.folder.createFolder, {
         environmentId,
         name: "old-folder",
       });
 
-      const { success } = await collaborator.asUser.mutation(api.folder.updateFolder, {
-        folderId,
-        name: "new-folder",
-      });
-
-      expect(success).toBe(true);
+      await expectConvexError(
+        () =>
+          collaborator.asUser.mutation(api.folder.updateFolder, {
+            folderId,
+            name: "new-folder",
+          }),
+        ErrorCode.INSUFFICIENT_PERMISSION,
+      );
     });
 
-    test("collaborator can DELETE empty folders", async () => {
+    test("collaborator CANNOT delete folders", async () => {
       const { id: folderId } = await owner.asUser.mutation(api.folder.createFolder, {
         environmentId,
         name: "temp-folder-" + randomString(),
       });
 
-      const { success } = await collaborator.asUser.mutation(api.folder.deleteFolder, {
-        folderId,
-      });
-
-      expect(success).toBe(true);
+      await expectConvexError(
+        () => collaborator.asUser.mutation(api.folder.deleteFolder, { folderId }),
+        ErrorCode.INSUFFICIENT_PERMISSION,
+      );
     });
   });
 

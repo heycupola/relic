@@ -45,6 +45,8 @@ const CONTENT_WIDTH = 66;
 const COMMAND_CATEGORIES = ["Navigate", "Create", "Manage", "View"];
 const OWNER_ONLY_MESSAGE = "Only the project owner can manage collaborators";
 const READ_ONLY_MESSAGE = "This project is read-only while it's restricted";
+const SHARED_READ_ONLY_MESSAGE =
+  "This project is shared with you as read-only. Ask the owner to make changes.";
 
 function isPlain(key: { ctrl: boolean; meta: boolean; option: boolean }) {
   return !key.ctrl && !key.meta && !key.option;
@@ -108,6 +110,8 @@ export function ProjectPage({
     liveStatus ?? (project?.isArchived ? "archived" : initialStatus);
   const displayName = project?.name ?? projectName;
   const isRestricted = projectStatus === "restricted" || projectStatus === "archived";
+  const isSharedWithMe = !!project && !isOwner;
+  const isReadOnly = isRestricted || isSharedWithMe;
 
   const location = useMemo<ProjectLocation>(
     () => ({ viewLevel, environmentId: selectedEnvId, folderId: selectedFolderId }),
@@ -266,6 +270,7 @@ export function ProjectPage({
 
   const whenWritable = (action: () => void) => {
     if (isRestricted) showError(READ_ONLY_MESSAGE);
+    else if (isSharedWithMe) showError(SHARED_READ_ONLY_MESSAGE);
     else action();
   };
 
@@ -312,9 +317,9 @@ export function ProjectPage({
       [];
     if (viewLevel === "environments") {
       cmds.push(
-        { key: "n", description: "Create environment", category: "Create", disabled: isRestricted },
-        { key: "u", description: "Rename environment", category: "Manage", disabled: isRestricted },
-        { key: "d", description: "Delete environment", category: "Manage", disabled: isRestricted },
+        { key: "n", description: "Create environment", category: "Create", disabled: isReadOnly },
+        { key: "u", description: "Rename environment", category: "Manage", disabled: isReadOnly },
+        { key: "d", description: "Delete environment", category: "Manage", disabled: isReadOnly },
         { key: "g", description: "Open dashboard", category: "Navigate" },
         { key: "esc", description: "Back to home", category: "Navigate" },
       );
@@ -324,24 +329,24 @@ export function ProjectPage({
           key: "n",
           description: "Create folder",
           category: "Create",
-          disabled: isRestricted,
+          disabled: isReadOnly,
         });
         if (selectedItem?.type === "folder") {
           cmds.push({
             key: "u",
             description: "Rename folder",
             category: "Manage",
-            disabled: isRestricted,
+            disabled: isReadOnly,
           });
         }
       }
       cmds.push(
-        { key: "e", description: "Edit secrets", category: "Manage", disabled: isRestricted },
+        { key: "e", description: "Edit secrets", category: "Manage", disabled: isReadOnly },
         {
           key: "d",
           description: selectedItem?.type === "folder" ? "Delete folder" : "Delete secret",
           category: "Manage",
-          disabled: isRestricted || !selectedItem,
+          disabled: isReadOnly || !selectedItem,
         },
         { key: "g", description: "Open dashboard", category: "Navigate" },
         { key: "esc", description: "Go back", category: "Navigate" },
@@ -479,7 +484,7 @@ export function ProjectPage({
       };
     }
 
-    const disabled = isDisabled || isRestricted;
+    const disabled = isDisabled || isReadOnly;
     const hasSelection = selectedItem !== undefined;
     const canOpen = selectedItem?.type === "env" || selectedItem?.type === "folder";
     const primary: Shortcut[] =
@@ -534,10 +539,10 @@ export function ProjectPage({
       : secretsError && `Couldn't load this environment: ${extractErrorMessage(secretsError)}`;
   const emptyMessage =
     viewLevel === "environments"
-      ? isRestricted
+      ? isReadOnly
         ? "No environments."
         : "No environments yet. Press n to create one."
-      : isRestricted
+      : isReadOnly
         ? "No secrets."
         : viewLevel === "environment"
           ? "No folders or secrets yet. Press e to add secrets."
@@ -633,7 +638,7 @@ export function ProjectPage({
               </text>
               <text fg={THEME_COLORS.textMuted}>{getItemCounts()}</text>
             </box>
-            {isRestricted && (
+            {isRestricted ? (
               <box height={1} width={CONTENT_WIDTH}>
                 <text fg={THEME_COLORS.warning}>
                   {projectStatus === "archived"
@@ -643,6 +648,14 @@ export function ProjectPage({
                       : "Restricted by the owner's plan. Values are read-only."}
                 </text>
               </box>
+            ) : (
+              isSharedWithMe && (
+                <box height={1} width={CONTENT_WIDTH}>
+                  <text fg={THEME_COLORS.textMuted}>
+                    Read-only. Only the owner can change this project.
+                  </text>
+                </box>
+              )
             )}
           </box>
 
