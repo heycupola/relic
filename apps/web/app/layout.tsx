@@ -128,6 +128,7 @@ export default function RootLayout({
       </head>
       <body
         className={`${geist.variable} ${geistMono.variable} ${spaceGrotesk.variable} font-sans antialiased`}
+        suppressHydrationWarning
       >
         {process.env.NODE_ENV === "development" && <Agentation />}
         <PostHogProvider>
