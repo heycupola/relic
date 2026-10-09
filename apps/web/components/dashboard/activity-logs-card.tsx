@@ -14,6 +14,7 @@ import {
   type LucideIcon,
   Pencil,
   Plus,
+  RotateCcw,
   Shield,
   Trash2,
   UserMinus,
@@ -55,6 +56,8 @@ interface ActionLog {
     pushTarget?: string;
     pushDestination?: string;
     pushDryRun?: boolean;
+    restoredVersion?: number;
+    wasDeleted?: boolean;
   };
 }
 
@@ -117,6 +120,19 @@ function describe(log: ActionLog): Described {
         subject: m.key,
         icon: Trash2,
         tone: "danger",
+        category: "secrets",
+      };
+    case "secret.restored":
+      return {
+        text: [
+          m.wasDeleted ? "Deleted secret restored" : "Secret restored",
+          m.restoredVersion && `to v${m.restoredVersion}`,
+        ]
+          .filter(Boolean)
+          .join(" "),
+        subject: m.key,
+        icon: RotateCcw,
+        tone: "success",
         category: "secrets",
       };
     case "secret.exported":
