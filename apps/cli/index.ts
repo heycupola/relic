@@ -13,6 +13,7 @@ import {
   serviceAccountList,
   serviceAccountRevoke,
 } from "./commands/service-account";
+import shell from "./commands/shell";
 import { telemetryDisable, telemetryEnable, telemetryStatus } from "./commands/telemetry";
 import upgrade from "./commands/upgrade";
 import whoami from "./commands/whoami";
@@ -54,7 +55,7 @@ const COMMAND_GROUPS = [
   },
   {
     label: "Secrets",
-    commands: ["run", "service-account"],
+    commands: ["run", "shell", "service-account"],
   },
   {
     label: "Tools",
@@ -97,6 +98,7 @@ function formatCustomHelp(): string {
   lines.push(`    ${pc.dim("$")} relic login`);
   lines.push(`    ${pc.dim("$")} relic init`);
   lines.push(`    ${pc.dim("$")} relic run -e production -- npm start`);
+  lines.push(`    ${pc.dim("$")} relic shell -e development`);
   lines.push("");
 
   lines.push(`  ${pc.dim("https://docs.withrelic.com")}`);
@@ -229,6 +231,26 @@ program
   .passThroughOptions()
   .addHelpText("after", RUN_HELP)
   .action((command: string[], options: RunOptions) => run(command, options));
+
+program
+  .command("shell")
+  .description("Open a subshell with secrets loaded as environment variables")
+  .requiredOption("-e, --environment <name>", "Environment name (required)")
+  .option("-f, --folder <name>", "Folder name (optional)")
+  .option("-s, --scope <scope>", "Scope filter: client, server, or shared (optional)")
+  .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
+  .option("--force", "Open a nested shell even if already inside a relic shell")
+  .action(
+    (options: {
+      environment: string;
+      folder?: string;
+      scope?: SecretScope;
+      project?: string;
+      force?: boolean;
+    }) => {
+      shell(options);
+    },
+  );
 
 program
   .command("version")
