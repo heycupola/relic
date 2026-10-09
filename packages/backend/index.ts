@@ -6,3 +6,4 @@ export type { DataModel, Doc, Id, TableNames } from "./convex/_generated/dataMod
 
 // Re-export enums and types from lib
 export { ApiKeyScope, EmailKind, ErrorSeverity, SecretValueType } from "./convex/lib/types";
+export * from "./convex/lib/rotation";

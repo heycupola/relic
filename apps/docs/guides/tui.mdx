@@ -48,6 +48,20 @@ Folders are optional groupings inside an environment. Useful for organizing secr
 
 Secrets are displayed with masked values by default. Press `v` to toggle visibility. Press `d` to delete a secret. Press `t` to see a secret's previous versions and restore one. See [Secret History](/guides/secret-history).
 
+### Rotation
+
+Each secret shows how long ago its value last changed on the right side of its row.
+
+| Indicator | Meaning                        |
+| --------- | ------------------------------ |
+| `12d`     | Value age, no action needed    |
+| `~ 80d`   | Due for rotation soon (yellow) |
+| `! 120d`  | Overdue for rotation (red)     |
+
+Press `r` on a secret to set how often it should be rotated, or press `r` on an environment (or inside it with no secret selected) to set a policy for every secret in that environment. Enter a number of days, or `0` to clear the policy. Environments with a policy show it as `↻ 90d`.
+
+See [Secret Rotation](/guides/rotation) for how ages and due dates are calculated.
+
 ### Collaborators
 
 Press `c` from any environment view to manage collaborators. You can add teammates by email, revoke access, or revoke with key rotation. See [Project Collaboration](/guides/project-collaboration) for details.

@@ -3,6 +3,11 @@ import type { ContainerKind, ItemRef } from "../../hooks/useProjectItemActions";
 import type { ViewLevel } from "../../types/models";
 import { THEME_COLORS } from "../../utils/constants";
 import type { ProjectItem } from "../../utils/projectItems";
+import {
+  formatPolicyLabel,
+  getSecretRotationBadge,
+  type RotationBadge,
+} from "../../utils/rotation";
 import { truncate } from "../../utils/ui";
 import { InlineInput } from "../forms/InlineInput";
 import { DeleteConfirmation } from "../shared/DeleteConfirmation";
@@ -27,6 +32,7 @@ interface ProjectItemListProps {
   scrollOffset: number;
   pageSize: number;
   showSecrets: boolean;
+  environmentRotateEveryDays?: number;
   isLoading?: boolean;
   error?: string | null;
   emptyMessage: string;
@@ -49,13 +55,16 @@ function SecretRow({
   item,
   isSelected,
   showSecrets,
+  trailingWidth,
 }: {
   item: Extract<ProjectItem, { type: "secret" }>;
   isSelected: boolean;
   showSecrets: boolean;
+  trailingWidth: number;
 }) {
   const key = truncate(item.name, MAX_SECRET_KEY_LENGTH);
-  const valueRoom = LIST_WIDTH - ROW_PREFIX_WIDTH - key.length - 2 - item.secretType.length - 3;
+  const valueRoom =
+    LIST_WIDTH - ROW_PREFIX_WIDTH - key.length - 2 - item.secretType.length - 3 - trailingWidth;
   const value = truncate(displayValue(item, showSecrets), Math.max(1, valueRoom));
 
   return (
@@ -73,30 +82,44 @@ function ItemRow({
   item,
   isSelected,
   showSecrets,
+  environmentRotateEveryDays,
 }: {
   item: ProjectItem;
   isSelected: boolean;
   showSecrets: boolean;
+  environmentRotateEveryDays?: number;
 }) {
   const indicator = TYPE_INDICATORS[item.type];
   const canEnter = item.type !== "secret";
+  const badge: RotationBadge | null =
+    item.type === "secret" ? getSecretRotationBadge(item, environmentRotateEveryDays) : null;
+  const policyLabel = item.type === "env" ? formatPolicyLabel(item.rotateEveryDays) : null;
+  const trailing =
+    badge ?? (policyLabel ? { text: policyLabel, color: THEME_COLORS.textDim } : null);
+  const trailingWidth = trailing ? trailing.text.length + 1 : 0;
 
   return (
-    <box height={1} width={LIST_WIDTH}>
+    <box height={1} width={LIST_WIDTH} flexDirection="row" justifyContent="space-between">
       <text>
         <span fg={isSelected ? THEME_COLORS.primary : THEME_COLORS.textDim}>
           {isSelected && canEnter ? "› " : "  "}
         </span>
         <span fg={indicator.color}>{indicator.prefix}</span>
         {item.type === "secret" ? (
-          <SecretRow item={item} isSelected={isSelected} showSecrets={showSecrets} />
+          <SecretRow
+            item={item}
+            isSelected={isSelected}
+            showSecrets={showSecrets}
+            trailingWidth={trailingWidth}
+          />
         ) : (
           <span fg={isSelected ? THEME_COLORS.text : THEME_COLORS.textMuted}>
             {" "}
-            {truncate(item.name, LIST_WIDTH - ROW_PREFIX_WIDTH)}
+            {truncate(item.name, LIST_WIDTH - ROW_PREFIX_WIDTH - trailingWidth)}
           </span>
         )}
       </text>
+      {trailing && <text fg={trailing.color}>{trailing.text}</text>}
     </box>
   );
 }
@@ -108,6 +131,7 @@ export function ProjectItemList({
   scrollOffset,
   pageSize,
   showSecrets,
+  environmentRotateEveryDays,
   isLoading = false,
   error = null,
   emptyMessage,
@@ -164,7 +188,12 @@ export function ProjectItemList({
                     iconColor={THEME_COLORS.accent}
                   />
                 ) : (
-                  <ItemRow item={item} isSelected={isSelected} showSecrets={showSecrets} />
+                  <ItemRow
+                    item={item}
+                    isSelected={isSelected}
+                    showSecrets={showSecrets}
+                    environmentRotateEveryDays={environmentRotateEveryDays}
+                  />
                 )}
                 <DeleteConfirmation
                   itemType={

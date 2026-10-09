@@ -15,6 +15,7 @@ import {
   ProjectsOverviewCard,
 } from "@/components/dashboard/projects-overview-card";
 import { QuickActionsCard } from "@/components/dashboard/quick-actions-card";
+import { RotationCard } from "@/components/dashboard/rotation-card";
 import { ServiceAccountsCard } from "@/components/dashboard/service-accounts-card";
 import { type Stat, StatStrip } from "@/components/dashboard/stat-strip";
 import { Dialog } from "@/components/dialog";
@@ -80,6 +81,7 @@ export default function DashboardPage() {
   );
   const apiKeysData = useQuery(api.apiKey.listApiKeys, enabled);
   const billing = useQuery(api.billing.getBillingOverview, enabled);
+  const rotationAlerts = useQuery(api.rotation.listRotationAlerts, enabled);
   const {
     logs: actionLogs,
     isLoading: logsLoading,
@@ -287,6 +289,11 @@ export default function DashboardPage() {
                 isLoadingMore={isLoadingMore}
                 onLoadMore={loadMore}
               />
+            )}
+            {rotationAlerts === undefined ? (
+              <CardSkeleton label="rotation" rows={2} />
+            ) : (
+              <RotationCard alerts={rotationAlerts} />
             )}
           </div>
           <aside className="min-w-0 space-y-4 sm:space-y-5" aria-label="Plan and tools">

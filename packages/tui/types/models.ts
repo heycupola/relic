@@ -12,6 +12,7 @@ export interface Project {
 export interface Environment {
   id: string;
   name: string;
+  rotateEveryDays?: number;
 }
 
 export interface Folder {
@@ -29,6 +30,8 @@ export interface Secret {
   scope?: SecretScope;
   folderId?: string;
   environmentId: string;
+  valueChangedAt?: number;
+  rotateEveryDays?: number;
 }
 
 export interface SharedUser {

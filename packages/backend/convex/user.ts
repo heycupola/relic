@@ -451,6 +451,12 @@ export const _cascadeDeleteUserData = internalMutation({
         .unique();
       if (billingSync) await ctx.db.delete(billingSync._id);
 
+      const rotationDigest = await ctx.db
+        .query("rotationDigestSubscription")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .first();
+      if (rotationDigest) await ctx.db.delete(rotationDigest._id);
+
       phase = "ownLogs";
     }
 

@@ -45,6 +45,7 @@ export function useProjectPage(projectId: string) {
     create: createEnv,
     update: updateEnv,
     remove: removeEnv,
+    setRotationPolicy: setEnvRotationPolicy,
   } = useEnvironments(projectId);
 
   // NOTE: Owners use project.encryptedProjectKey (encrypted with their public key).
@@ -108,6 +109,7 @@ export function useProjectPage(projectId: string) {
     updateSecret,
     updateSecretBulk,
     deleteSecret,
+    setSecretRotationPolicy,
   } = useSecrets(projectKey, encryptedPrivateKey, salt, reloadProjectKey);
 
   const { shareProject, revokeShare, revokeShareWithRotation } = useSharing(
@@ -147,6 +149,7 @@ export function useProjectPage(projectId: string) {
     createEnv,
     updateEnv,
     removeEnv,
+    setEnvRotationPolicy,
     createFolder,
     updateFolder,
     deleteFolder,
@@ -154,6 +157,7 @@ export function useProjectPage(projectId: string) {
     updateSecret,
     updateSecretBulk,
     deleteSecret,
+    setSecretRotationPolicy,
     shareProject,
     revokeShare,
     revokeShareWithRotation,

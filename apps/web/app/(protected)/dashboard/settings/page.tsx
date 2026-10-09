@@ -1,8 +1,16 @@
 "use client";
 
 import { api } from "@repo/backend";
-import { useAction, useQuery } from "convex/react";
-import { AlertTriangle, ArrowRight, ExternalLink, KeyRound, ShieldCheck } from "lucide-react";
+import { useAction, useMutation, useQuery } from "convex/react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Bell,
+  BellOff,
+  ExternalLink,
+  KeyRound,
+  ShieldCheck,
+} from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { useBillingPortal } from "@/components/dashboard/plan-card";
@@ -42,6 +50,29 @@ export default function SettingsPage() {
   const deleteAccountAction = useAction(api.user.deleteAccount);
   const portal = useBillingPortal();
   const checkout = useProCheckout();
+  const digestPreference = useQuery(
+    api.rotation.getRotationDigestPreference,
+    session?.user ? {} : "skip",
+  );
+  const setDigestPreference = useMutation(api.rotation.setRotationDigestPreference);
+  const [isSavingDigest, setIsSavingDigest] = useState(false);
+  const [digestError, setDigestError] = useState("");
+
+  const handleToggleDigest = useCallback(async () => {
+    if (!digestPreference) return;
+    const enabled = !digestPreference.enabled;
+    setIsSavingDigest(true);
+    setDigestError("");
+    try {
+      await setDigestPreference({ enabled });
+      trackWebEvent("web_rotation_digest_toggled", { enabled });
+    } catch (error) {
+      console.error("Failed to update rotation digest:", error);
+      setDigestError("Failed to update notifications. Please try again.");
+    } finally {
+      setIsSavingDigest(false);
+    }
+  }, [digestPreference, setDigestPreference]);
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmEmail, setDeleteConfirmEmail] = useState("");
@@ -84,7 +115,7 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="~/dashboard/settings"
         title="Settings"
-        description="Your account, plan, and encryption keys."
+        description="Your account, plan, notifications, and encryption keys."
       />
 
       {userData === undefined ? (
@@ -221,6 +252,35 @@ export default function SettingsPage() {
                 )}
               </p>
             </div>
+          </DashboardCard>
+
+          <DashboardCard
+            eyebrow="notifications"
+            title="Rotation digest"
+            description="Weekly email on Mondays listing secrets that are overdue for rotation. It includes secret, project, and environment names, never values."
+          >
+            <button
+              type="button"
+              onClick={() => void handleToggleDigest()}
+              disabled={digestPreference === undefined || isSavingDigest}
+              aria-pressed={digestPreference?.enabled ?? false}
+              aria-busy={isSavingDigest}
+              className={`flex items-center justify-center gap-2 px-4 py-2 text-sm ${secondaryButton}`}
+            >
+              {digestPreference?.enabled ? (
+                <BellOff className="size-3.5" aria-hidden="true" />
+              ) : (
+                <Bell className="size-3.5" aria-hidden="true" />
+              )}
+              {digestPreference?.enabled
+                ? "Turn off weekly rotation digest"
+                : "Turn on weekly rotation digest"}
+            </button>
+            {digestError && (
+              <p role="alert" className={`mt-3 text-xs ${tone.danger}`}>
+                {digestError}
+              </p>
+            )}
           </DashboardCard>
 
           <section

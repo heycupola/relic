@@ -65,5 +65,24 @@ export function useEnvironments(projectId: string) {
     [fetch],
   );
 
-  return { environments, isLoading, error, refetch: fetch, create, update, remove };
+  const setRotationPolicy = useCallback(
+    async (environmentId: string, rotateEveryDays: number | null) => {
+      const api = getProtectedApi();
+      await api.ensureAuth();
+      await api.setEnvironmentRotationPolicy(environmentId, rotateEveryDays);
+      await fetch();
+    },
+    [fetch],
+  );
+
+  return {
+    environments,
+    isLoading,
+    error,
+    refetch: fetch,
+    create,
+    update,
+    remove,
+    setRotationPolicy,
+  };
 }

@@ -177,7 +177,11 @@ http.route({
 
     if (!userId || userId.length > 64 || !emailKind) return;
 
-    if (payload.type === "email.delivered" && emailKind !== EmailKind.AccountDeleted) {
+    if (
+      payload.type === "email.delivered" &&
+      emailKind !== EmailKind.AccountDeleted &&
+      emailKind !== EmailKind.RotationDigest
+    ) {
       await ctx.runMutation(internal.user._handleEmailDelivered, {
         userId: userId as BetterAuthId<"user">,
         emailKind,
@@ -402,6 +406,38 @@ http.route({
         environmentName,
         folderName: optionalString(body.folderName),
         scope: optionalScope(body.scope),
+      });
+
+      return json(result);
+    } catch (error) {
+      return toHttpErrorResponse(error);
+    }
+  }),
+});
+
+http.route({
+  path: "/api/sa/rotation/status",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const token = getBearerToken(request);
+    if (!token) return missingAuth();
+
+    const body = await readJsonBody(request);
+    if (!body) return invalidBody();
+
+    try {
+      const sa = await ctx.runMutation(internal.serviceAccount._validateServiceToken, {
+        hashedToken: await hashKey(token),
+        clientIp: getClientIp(request),
+      });
+      if (!sa.ok) return credentialFailureResponse(sa);
+
+      const oidcFailure = await verifyServiceAccountOidc(sa, request.headers.get("X-Oidc-Token"));
+      if (oidcFailure) return oidcFailure;
+
+      const result = await ctx.runQuery(internal.rotation._getRotationStatusForServiceAccount, {
+        projectId: sa.projectId,
+        environmentName: optionalString(body.environmentName),
       });
 
       return json(result);

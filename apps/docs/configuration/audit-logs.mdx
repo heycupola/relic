@@ -77,6 +77,12 @@ Logs can be queried by:
   (underscore) reflects the current API. This will be aligned in a future release.
 </Note>
 
+### Rotation
+
+| Action                    | Description                                               |
+| ------------------------- | --------------------------------------------------------- |
+| `rotation.policy_updated` | Rotation policy set or cleared on a secret or environment |
+
 ### Sharing & Collaboration
 
 | Action              | Description                                     |
@@ -114,6 +120,7 @@ Each log entry includes contextual metadata depending on the action type:
 | `apiKeyPrefix`                         | API key create/revoke                   |
 | `pushTarget` / `pushDestination`       | Platform push (`vercel`, `cloudflare`, `github`, `fly`) and its project, Worker, repository, or app |
 | `pushDryRun`                           | Platform push run with `--dry-run`      |
+| `rotateEveryDays`                      | Rotation policy set (absent if cleared) |
 
 ## Log Entry Structure
 

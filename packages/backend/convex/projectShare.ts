@@ -24,6 +24,8 @@ import {
 } from "./lib/data";
 import { alreadyExistsError, createError, ErrorCode, notFoundError } from "./lib/errors";
 import { createLogger } from "./lib/logger";
+import { inferValueChangedAt } from "./lib/rotation";
+import { loadKeyRotationTimestamps } from "./lib/rotationData";
 import { protectedAction, protectedQuery } from "./lib/middleware";
 import { ADD_ON_PRICES_USD, getPlanState, PLANS, paidSharesFor } from "./lib/plans";
 import { checkRateLimit } from "./lib/rateLimit";
@@ -384,6 +386,10 @@ export const _revokeShareWithRotation = internalMutation({
     const now = Date.now();
     const oldKeyVersion = project.keyVersion;
     const newKeyVersion = oldKeyVersion + 1;
+    const secretsById = new Map(secrets.map((s) => [s._id, s]));
+    const keyRotationTimestamps = secrets.some((s) => s.valueChangedAt === undefined)
+      ? await loadKeyRotationTimestamps(ctx, project._id)
+      : [];
 
     await revokeAndCount(ctx, share);
     await ctx.db.patch(project._id, {
@@ -402,9 +408,14 @@ export const _revokeShareWithRotation = internalMutation({
       });
     }
     for (const { secretId, newEncryptedValue } of args.reEncryptedSecrets) {
+      // Re-encryption keeps the plaintext, so pin the value age before updatedAt moves.
+      const existing = secretsById.get(secretId);
       await ctx.db.patch(secretId, {
         encryptedValue: newEncryptedValue,
         encryptionKeyVersion: newKeyVersion,
+        valueChangedAt:
+          existing?.valueChangedAt ??
+          (existing ? inferValueChangedAt(existing, keyRotationTimestamps) : undefined),
         updatedAt: now,
         updatedBy: args.userId,
       });

@@ -1,5 +1,11 @@
 import { CONVEX_SITE_URL, CONVEX_URL, ensureValidJwt, SITE_URL } from "@repo/auth";
-import { api, type Id, type TableNames } from "@repo/backend";
+import {
+  api,
+  type Id,
+  type RotationPolicySource,
+  type RotationStatus,
+  type TableNames,
+} from "@repo/backend";
 import { ConvexHttpClient } from "convex/browser";
 import { trackCliError } from "./telemetry";
 import type { SecretScope } from "./types";
@@ -64,8 +70,33 @@ export interface ProjectListItem {
 export interface Environment {
   id: string;
   name: string;
+  slug?: string;
   projectId: string;
   color?: string;
+  rotateEveryDays?: number;
+}
+
+export interface SecretRotationEntry {
+  secretId: string;
+  key: string;
+  environmentId: string;
+  environmentName: string;
+  folderId: string | null;
+  folderName: string | null;
+  valueChangedAt: number;
+  ageDays: number;
+  rotateEveryDays: number | null;
+  policySource: RotationPolicySource | null;
+  status: RotationStatus;
+  dueAt: number | null;
+  daysUntilDue: number | null;
+}
+
+export interface ProjectRotationStatus {
+  projectId: string;
+  projectName: string;
+  generatedAt: number;
+  secrets: SecretRotationEntry[];
 }
 
 export interface Folder {
@@ -309,9 +340,58 @@ export class ProtectedApi {
     return result.map((e) => ({
       id: String(e.id),
       name: e.name,
+      slug: e.slug,
       projectId: String(e.projectId),
       color: e.color,
+      rotateEveryDays: e.rotateEveryDays,
     }));
+  }
+
+  async getRotationStatus(
+    projectId: string,
+    environmentId?: string,
+  ): Promise<ProjectRotationStatus> {
+    const result = await this.withAuth(() =>
+      this.client.query(api.rotation.getProjectRotationStatus, {
+        projectId: toId<"project">(projectId),
+        environmentId: environmentId ? toId<"environment">(environmentId) : undefined,
+      }),
+    );
+    return {
+      projectId: String(result.projectId),
+      projectName: result.projectName,
+      generatedAt: result.generatedAt,
+      secrets: result.secrets.map((s) => ({
+        ...s,
+        secretId: String(s.secretId),
+        environmentId: String(s.environmentId),
+        folderId: s.folderId ? String(s.folderId) : null,
+      })),
+    };
+  }
+
+  async setSecretRotationPolicy(
+    secretId: string,
+    rotateEveryDays: number | null,
+  ): Promise<{ success: boolean }> {
+    return await this.withAuth(() =>
+      this.client.mutation(api.rotation.setSecretRotationPolicy, {
+        secretId: toId<"secret">(secretId),
+        rotateEveryDays,
+      }),
+    );
+  }
+
+  async setEnvironmentRotationPolicy(
+    environmentId: string,
+    rotateEveryDays: number | null,
+  ): Promise<{ success: boolean }> {
+    return await this.withAuth(() =>
+      this.client.mutation(api.rotation.setEnvironmentRotationPolicy, {
+        environmentId: toId<"environment">(environmentId),
+        rotateEveryDays,
+      }),
+    );
   }
 
   async getEnvironmentData(environmentId: string): Promise<EnvironmentData> {
@@ -685,6 +765,19 @@ export async function listSecretNamesViaServiceToken(
   oidcToken?: string,
 ): Promise<SecretNames> {
   return requestSecretNames("/api/sa/secrets/names", {
+    token: serviceToken,
+    body,
+    headers: oidcToken ? { "X-Oidc-Token": oidcToken } : undefined,
+    proPlanMessage: "Service accounts require a Pro plan.",
+  });
+}
+
+export async function getRotationStatusViaServiceToken(
+  serviceToken: string,
+  body: { environmentName?: string },
+  oidcToken?: string,
+): Promise<ProjectRotationStatus> {
+  return requestSiteApi("/api/sa/rotation/status", {
     token: serviceToken,
     body,
     headers: oidcToken ? { "X-Oidc-Token": oidcToken } : undefined,

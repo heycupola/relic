@@ -9,6 +9,8 @@ import { alreadyExistsError, createError, ErrorCode, notFoundError } from "./lib
 import { generateSlug } from "./lib/helpers";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
+import { inferValueChangedAt } from "./lib/rotation";
+import { loadKeyRotationTimestamps } from "./lib/rotationData";
 import { ErrorSeverity, type ProtectedMutationCtx, type ProtectedQueryCtx } from "./lib/types";
 import schema from "./schema";
 
@@ -40,6 +42,7 @@ export const getProjectEnvironments = protectedQuery({
       description: v.optional(v.string()),
       color: v.optional(v.string()),
       sortOrder: v.number(),
+      rotateEveryDays: v.optional(v.number()),
       createdBy: v.string(),
       createdAt: v.number(),
       updatedAt: v.number(),
@@ -65,6 +68,7 @@ export const getProjectEnvironments = protectedQuery({
         description: environment.description,
         color: environment.color,
         sortOrder: environment.sortOrder,
+        rotateEveryDays: environment.rotateEveryDays,
         createdBy: environment.createdBy,
         createdAt: environment.createdAt,
         updatedAt: environment.updatedAt,
@@ -283,6 +287,7 @@ export const getEnvironmentData = protectedQuery({
       description: v.optional(v.string()),
       color: v.optional(v.string()),
       sortOrder: v.number(),
+      rotateEveryDays: v.optional(v.number()),
       createdBy: v.string(),
       createdAt: v.number(),
       updatedAt: v.number(),
@@ -316,6 +321,8 @@ export const getEnvironmentData = protectedQuery({
         encryptionKeyVersion: v.number(),
         tags: v.optional(v.array(v.string())),
         isDeleted: v.boolean(),
+        valueChangedAt: v.number(),
+        rotateEveryDays: v.optional(v.number()),
         createdBy: v.string(),
         createdAt: v.number(),
         updatedBy: v.string(),
@@ -347,6 +354,9 @@ export const getEnvironmentData = protectedQuery({
         environmentId: args.environmentId,
       },
     );
+    const keyRotationTimestamps = secrets.some((secret) => secret.valueChangedAt === undefined)
+      ? await loadKeyRotationTimestamps(ctx, project._id)
+      : [];
 
     return {
       environment: {
@@ -357,6 +367,7 @@ export const getEnvironmentData = protectedQuery({
         description: environment.description,
         color: environment.color,
         sortOrder: environment.sortOrder,
+        rotateEveryDays: environment.rotateEveryDays,
         createdBy: environment.createdBy,
         createdAt: environment.createdAt,
         updatedAt: environment.updatedAt,
@@ -387,6 +398,8 @@ export const getEnvironmentData = protectedQuery({
         encryptionKeyVersion: secret.encryptionKeyVersion,
         tags: secret.tags,
         isDeleted: secret.isDeleted,
+        valueChangedAt: inferValueChangedAt(secret, keyRotationTimestamps),
+        rotateEveryDays: secret.rotateEveryDays,
         createdBy: secret.createdBy,
         createdAt: secret.createdAt,
         updatedBy: secret.updatedBy,

@@ -267,6 +267,17 @@ export function useSecrets(
     [secrets, loadEnvironment],
   );
 
+  const setSecretRotationPolicy = useCallback(
+    async (secretId: string, rotateEveryDays: number | null) => {
+      const secret = secrets.find((s) => s.id === secretId);
+      const api = getProtectedApi();
+      await api.ensureAuth();
+      await api.setSecretRotationPolicy(secretId, rotateEveryDays);
+      if (secret) await loadEnvironment(secret.environmentId);
+    },
+    [secrets, loadEnvironment],
+  );
+
   return {
     folders,
     secrets,
@@ -283,5 +294,6 @@ export function useSecrets(
     updateSecret,
     updateSecretBulk,
     deleteSecret,
+    setSecretRotationPolicy,
   };
 }

@@ -1,0 +1,132 @@
+---
+title: Secret Rotation
+description: Track how old each secret value is, set rotation policies, and catch overdue secrets in CI.
+---
+
+Relic records when each secret's value last changed and lets you set how often it should be rotated. You can see the age of every secret in the TUI, the CLI, and the web dashboard, and fail a CI job when something is overdue.
+
+Rotation tracking only uses metadata: secret names, timestamps, and policies. Values stay encrypted on your device and are never decrypted or sent anywhere to compute ages.
+
+## How age is tracked
+
+Each secret has a value age, measured from the last time its value changed.
+
+| Action                                                            | Resets the age |
+| ----------------------------------------------------------------- | -------------- |
+| Creating a secret                                                 | Yes            |
+| Saving a new value                                                | Yes            |
+| Renaming a secret                                                 | No             |
+| Moving a secret to another folder                                 | No             |
+| Changing a secret's scope                                         | No             |
+| Project key rotation (for example, after revoking a collaborator) | No             |
+
+Because the server only sees ciphertext, a value counts as changed when its ciphertext changes. The TUI reuses the stored ciphertext when a value is unchanged, so editing other fields doesn't reset the age.
+
+<Note>
+  The TUI bulk editor treats a renamed key as a deleted secret plus a new one, so renaming a key
+  inside the bulk editor resets its age.
+</Note>
+
+### Secrets created before rotation tracking
+
+Secrets written before rotation tracking existed don't have a recorded value age. Relic infers one from the secret's last update time, ignoring updates caused by project key rotation. If a secret was renamed or moved before tracking was enabled, its age may be shorter than the real value age.
+
+## Rotation policies
+
+A policy is a whole number of days between 1 and 3650. You can set one on an environment, on a single secret, or both. A secret policy overrides its environment's policy.
+
+Each secret gets one of these statuses:
+
+| Status      | Meaning                                                                |
+| ----------- | ---------------------------------------------------------------------- |
+| `ok`        | The value is younger than its policy and not close to the due date     |
+| `due soon`  | The due date is within 20% of the policy, capped between 1 and 14 days |
+| `overdue`   | The value is as old as its policy or older                             |
+| `no policy` | No secret or environment policy applies                                |
+
+For example, with a 90-day policy a secret is due soon from day 76 and overdue from day 90.
+
+## Set a policy
+
+<Tabs>
+  <Tab title="CLI">
+    ```bash
+    # Every secret in production should rotate every 90 days
+    relic rotation set -e production --every 90
+
+    # Stripe keys rotate every 30 days
+    relic rotation set STRIPE_SECRET_KEY -e production --every 30
+
+    # A secret inside a folder
+    relic rotation set DATABASE_URL -e production -f database --every 180
+
+    # Remove a policy
+    relic rotation clear STRIPE_SECRET_KEY -e production
+    relic rotation clear -e production
+    ```
+  </Tab>
+  <Tab title="TUI">
+    Select a secret and press `r` to set its policy. Press `r` on an environment, or on a folder or
+    empty space inside an environment, to set the environment policy.
+
+    Enter the number of days and press `Enter`. Enter `0` to clear the policy.
+  </Tab>
+</Tabs>
+
+Policy changes are recorded in the [audit log](/configuration/audit-logs) as `rotation.policy_updated`.
+
+## Check rotation status
+
+### CLI
+
+```bash
+relic rotation status
+relic rotation status -e production
+relic rotation status --json
+```
+
+```text
+  KEY                    ENV         AGE  POLICY     STATUS
+  STRIPE_SECRET_KEY      production  41d  30d        overdue
+  database/DATABASE_URL  production  80d  90d (env)  due soon
+  SENTRY_DSN             production  12d  90d (env)  ok
+```
+
+`(env)` means the policy comes from the environment.
+
+### TUI
+
+Each secret shows its value age on the right of the row. Overdue secrets are marked with `!` in red, and secrets that are due soon with `~` in yellow. Environments with a policy show it as `↻ 90d`.
+
+### Web dashboard
+
+The **Rotation** card on the dashboard lists overdue and due-soon secrets across all projects you own or have been shared with, showing each secret's project and environment.
+
+## Fail CI on overdue secrets
+
+Add `--fail-on-overdue` to exit with code `1` when any secret is overdue. Secrets that are due soon don't fail the check.
+
+In CI, `relic rotation status` authenticates with a [service account](/guides/service-accounts) token. The token already identifies the project, so `--project` isn't needed, and OIDC policies are enforced the same way as for `relic run`. The check only reads names and timestamps and never downloads secret values.
+
+```yaml
+- name: Check secret rotation
+  env:
+    RELIC_SERVICE_TOKEN: ${{ secrets.RELIC_SERVICE_TOKEN }}
+  run: relic rotation status -e production --fail-on-overdue
+```
+
+Without `RELIC_SERVICE_TOKEN`, the command uses your `relic login` session. `relic rotation set` and `relic rotation clear` always require a session.
+
+| Exit code | Meaning                                                   |
+| --------- | --------------------------------------------------------- |
+| `0`       | No overdue secrets, or `--fail-on-overdue` was not passed |
+| `1`       | At least one secret is overdue                            |
+| `2`       | The status could not be loaded                            |
+
+## Weekly digest
+
+You can opt in to a weekly email listing your overdue secrets. Turn it on from **Settings > Notifications** in the web dashboard.
+
+- The digest is sent on Mondays and only when at least one secret is overdue.
+- It lists up to 25 secrets with their project, environment, age, and policy.
+- It includes secret names but never values.
