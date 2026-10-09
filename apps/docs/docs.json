@@ -60,6 +60,7 @@
         "pages": [
           "guides/cli",
           "guides/local-development",
+          "guides/check",
           "guides/tui",
           "guides/importing",
           "guides/project-collaboration",

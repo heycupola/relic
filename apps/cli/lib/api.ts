@@ -123,6 +123,21 @@ export interface BulkUpdateResult {
   secretIds: string[];
 }
 
+export interface SecretNamesRequest {
+  environmentName: string;
+  folderName?: string;
+  scope?: SecretScope;
+}
+
+export interface SecretNames {
+  secrets: {
+    key: string;
+    scope: SecretScope;
+    valueType: "string" | "number" | "boolean";
+  }[];
+  count: number;
+}
+
 export interface FullUser extends User {
   publicKey?: string;
   encryptedPrivateKey?: string;
@@ -399,6 +414,18 @@ export class ProtectedApi {
     };
   }
 
+  async listSecretNames(args: SecretNamesRequest & { projectId: string }): Promise<SecretNames> {
+    const result = await this.withAuth(() =>
+      this.client.query(api.secret.listSecretNames, {
+        projectId: toId<"project">(args.projectId),
+        environmentName: args.environmentName,
+        folderName: args.folderName,
+        scope: args.scope,
+      }),
+    );
+    return { secrets: result.secrets, count: result.count };
+  }
+
   async createServiceAccount(args: {
     projectId: string;
     name: string;
@@ -558,6 +585,38 @@ export async function exportSecretsViaServiceToken(
   oidcToken?: string,
 ): Promise<ServiceAccountExportResponse> {
   return requestSiteApi("/api/sa/secrets/export", {
+    token: serviceToken,
+    body,
+    headers: oidcToken ? { "X-Oidc-Token": oidcToken } : undefined,
+    proPlanMessage: "Service accounts require a Pro plan.",
+  });
+}
+
+async function requestSecretNames(
+  path: string,
+  options: Parameters<typeof requestSiteApi>[1],
+): Promise<SecretNames> {
+  const result = await requestSiteApi<SecretNames>(path, options);
+  return { secrets: result.secrets, count: result.count };
+}
+
+export async function listSecretNamesViaApiKey(
+  apiKey: string,
+  body: SecretNamesRequest & { projectId: string },
+): Promise<SecretNames> {
+  return requestSecretNames("/api/secrets/names", {
+    token: apiKey,
+    body,
+    proPlanMessage: "API keys require a Pro plan.",
+  });
+}
+
+export async function listSecretNamesViaServiceToken(
+  serviceToken: string,
+  body: SecretNamesRequest,
+  oidcToken?: string,
+): Promise<SecretNames> {
+  return requestSecretNames("/api/sa/secrets/names", {
     token: serviceToken,
     body,
     headers: oidcToken ? { "X-Oidc-Token": oidcToken } : undefined,

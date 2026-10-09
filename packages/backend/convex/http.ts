@@ -63,6 +63,36 @@ function optionalScope(value: unknown): Scope | undefined {
 const missingAuth = () => json({ error: "Missing or invalid Authorization header" }, 401);
 const invalidBody = () => json({ error: "Invalid JSON body" }, 400);
 
+async function verifyServiceAccountOidc(
+  sa: { oidcIssuer?: string; oidcSubjectPattern?: string; oidcAudience?: string },
+  oidcToken: string | null,
+): Promise<Response | null> {
+  if (!sa.oidcIssuer || !sa.oidcSubjectPattern) return null;
+
+  if (!oidcToken) {
+    return json(
+      {
+        error: "OIDC token required. This service account has an OIDC policy configured.",
+        code: "OIDC_TOKEN_REQUIRED",
+      },
+      401,
+    );
+  }
+
+  const { validateOidcToken } = await import("./lib/oidc");
+  const oidcResult = await validateOidcToken(
+    oidcToken,
+    sa.oidcIssuer,
+    sa.oidcSubjectPattern,
+    sa.oidcAudience,
+  );
+  if (!oidcResult.valid) {
+    return json({ error: oidcResult.error, code: "OIDC_VALIDATION_FAILED" }, 403);
+  }
+
+  return null;
+}
+
 /** Verifies a Svix-signed webhook, skips duplicate deliveries, and records successful ones. */
 function svixWebhook(
   source: "autumn" | "resend",
@@ -276,29 +306,8 @@ http.route({
       });
       if (!sa.ok) return credentialFailureResponse(sa);
 
-      if (sa.oidcIssuer && sa.oidcSubjectPattern) {
-        const oidcToken = request.headers.get("X-Oidc-Token");
-        if (!oidcToken) {
-          return json(
-            {
-              error: "OIDC token required. This service account has an OIDC policy configured.",
-              code: "OIDC_TOKEN_REQUIRED",
-            },
-            401,
-          );
-        }
-
-        const { validateOidcToken } = await import("./lib/oidc");
-        const oidcResult = await validateOidcToken(
-          oidcToken,
-          sa.oidcIssuer,
-          sa.oidcSubjectPattern,
-          sa.oidcAudience,
-        );
-        if (!oidcResult.valid) {
-          return json({ error: oidcResult.error, code: "OIDC_VALIDATION_FAILED" }, 403);
-        }
-      }
+      const oidcFailure = await verifyServiceAccountOidc(sa, request.headers.get("X-Oidc-Token"));
+      if (oidcFailure) return oidcFailure;
 
       const result = await ctx.runMutation(internal.secret._exportSecretsForServiceAccount, {
         serviceAccountId: sa.serviceAccountId,
@@ -316,6 +325,86 @@ http.route({
         encryptedPrivateKey: sa.encryptedPrivateKey,
         salt: sa.salt,
       });
+    } catch (error) {
+      return toHttpErrorResponse(error);
+    }
+  }),
+});
+
+http.route({
+  path: "/api/secrets/names",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const token = getBearerToken(request);
+    if (!token) return missingAuth();
+
+    const body = await readJsonBody(request);
+    if (!body) return invalidBody();
+
+    const projectId = optionalString(body.projectId);
+    const environmentName = optionalString(body.environmentName);
+    if (!projectId || !environmentName) {
+      return json({ error: "projectId and environmentName are required" }, 400);
+    }
+
+    try {
+      const auth = await ctx.runMutation(internal.apiKey._validateApiKey, {
+        hashedApiKey: await hashKey(token),
+        requiredScopes: ["secrets.read"],
+        clientIp: getClientIp(request),
+        requestedProjectId: projectId,
+      });
+      if (!auth.ok) return credentialFailureResponse(auth);
+
+      const ids = await ctx.runQuery(internal.secret._normalizeExportIds, { projectId });
+      if (!ids) return json({ error: "Invalid projectId", code: "INVALID_ARGUMENTS" }, 400);
+
+      const result = await ctx.runQuery(internal.secret._listSecretNamesForUser, {
+        userId: auth.userId,
+        projectId: ids.projectId,
+        environmentName,
+        folderName: optionalString(body.folderName),
+        scope: optionalScope(body.scope),
+      });
+
+      return json(result);
+    } catch (error) {
+      return toHttpErrorResponse(error);
+    }
+  }),
+});
+
+http.route({
+  path: "/api/sa/secrets/names",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const token = getBearerToken(request);
+    if (!token) return missingAuth();
+
+    const body = await readJsonBody(request);
+    if (!body) return invalidBody();
+
+    const environmentName = optionalString(body.environmentName);
+    if (!environmentName) return json({ error: "environmentName is required" }, 400);
+
+    try {
+      const sa = await ctx.runMutation(internal.serviceAccount._validateServiceToken, {
+        hashedToken: await hashKey(token),
+        clientIp: getClientIp(request),
+      });
+      if (!sa.ok) return credentialFailureResponse(sa);
+
+      const oidcFailure = await verifyServiceAccountOidc(sa, request.headers.get("X-Oidc-Token"));
+      if (oidcFailure) return oidcFailure;
+
+      const result = await ctx.runQuery(internal.secret._listSecretNamesForServiceAccount, {
+        projectId: sa.projectId,
+        environmentName,
+        folderName: optionalString(body.folderName),
+        scope: optionalScope(body.scope),
+      });
+
+      return json(result);
     } catch (error) {
       return toHttpErrorResponse(error);
     }

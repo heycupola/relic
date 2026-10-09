@@ -224,6 +224,40 @@ relic push -e staging --target cloudflare --wrangler-env staging
 relic push -e production --target github --github-env production --yes
 ```
 
+### `relic check`
+
+Check that every key your app needs exists in an environment before you deploy. Relic compares secret names only; it never fetches or decrypts values, so it doesn't need your password.
+
+```bash
+relic check -e <environment> [options]
+```
+
+Required keys come from `.env.example`, `.env.sample`, and `.env.template` next to `relic.toml`, plus any env reads found by `--scan`. The command exits with code `1` when a required key is missing.
+
+| Flag                | Description                                                                    |
+| ------------------- | ------------------------------------------------------------------------------ |
+| `-e, --environment` | Environment name (required)                                                    |
+| `-f, --folder`      | Folder name                                                                    |
+| `-s, --scope`       | Scope filter: `client`, `server`, or `shared`                                  |
+| `-p, --project`     | Project ID (overrides `relic.toml`)                                            |
+| `--from <file>`     | Read required keys from this file instead of the default templates. Repeatable |
+| `--scan [paths...]` | Also scan source files for env reads. Defaults to the project root             |
+| `--ignore <keys>`   | Keys to skip, comma-separated. `*` matches any characters. Repeatable          |
+| `--compare <env>`   | Show key names that exist in only one of the two environments                  |
+| `--strict`          | Also fail on unused keys and on differences found by `--compare`               |
+| `--json`            | Print the result as JSON                                                       |
+
+**Examples:**
+
+```bash
+relic check -e production
+relic check -e production --scan src
+relic check -e staging -f api --from services/api/.env.example
+relic check -e staging --compare production
+```
+
+See [Checking required keys](/guides/check) for how keys are discovered, the JSON format, and CI usage.
+
 ### `relic telemetry`
 
 Manage anonymous usage telemetry.
@@ -245,6 +279,15 @@ project_id = "your-project-id"
 ```
 
 The CLI walks up from the current directory to find `relic.toml`. You can override the project ID with `--project` (highest precedence) or `RELIC_PROJECT_ID`.
+
+An optional `[check]` table configures [`relic check`](/guides/check):
+
+```toml
+project_id = "your-project-id"
+
+[check]
+ignore = ["NODE_ENV", "PORT"]
+```
 
 ## Caching
 

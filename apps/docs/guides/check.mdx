@@ -1,0 +1,143 @@
+---
+title: Checking Required Keys
+sidebarTitle: Checking Keys
+description: Catch missing environment variables before a deploy fails with relic check.
+---
+
+`relic check` compares the keys your app needs with the secrets stored in a Relic environment. Run it before a deploy, in CI, or in a pre-push hook so a missing key fails the pipeline instead of the release.
+
+The command reads secret **names** only. Values are never requested, decrypted, or printed, so `relic check` works without your password and without `RELIC_PASSWORD`.
+
+```bash
+relic check -e production
+```
+
+## Where Required Keys Come From
+
+Relic merges every source it finds into one list of required keys.
+
+1. **Env templates.** `.env.example`, `.env.sample`, and `.env.template` in the directory that contains `relic.toml`. Relic reads the key names and ignores the values. Commented-out lines are skipped.
+2. **`--from <file>`.** Use one or more specific files instead of the default templates. Paths are relative to the current directory.
+3. **`--scan [paths...]`.** Statically scan source files for env reads. Without paths, Relic scans the project root.
+
+```bash
+relic check -e production --from apps/api/.env.example --from apps/web/.env.example
+relic check -e production --scan src scripts
+```
+
+### What `--scan` Detects
+
+| Language              | Patterns                                                                                      |
+| --------------------- | --------------------------------------------------------------------------------------------- |
+| JavaScript/TypeScript | `process.env.X`, `process.env["X"]`, `import.meta.env.X`, `Bun.env.X`, `const { X } = process.env` |
+| Python                | `os.environ["X"]`, `os.getenv("X")`, `os.environ.get("X")`                                    |
+
+Scanned extensions are `.js`, `.jsx`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts`, `.cts`, `.vue`, `.svelte`, `.astro`, and `.py`.
+
+Inside a git repository, Relic lists files with git, so everything in `.gitignore` is skipped. Outside git, Relic applies the patterns in the root `.gitignore` itself (negated `!` patterns are not supported). Dependency and build directories such as `node_modules`, `dist`, `build`, `.next`, `coverage`, and `.venv` are always skipped. Vite built-ins (`import.meta.env.MODE`, `DEV`, `PROD`, `SSR`, `BASE_URL`) are not treated as required.
+
+<Note>
+  The scanner finds literal key names. Dynamic reads like `process.env[name]` are not detected, and
+  reads with a fallback value (`os.getenv("PORT", "3000")`) still count as required. Add keys you
+  don't need in Relic to the ignore list.
+</Note>
+
+## Ignoring Keys
+
+Some variables are set by your platform or tooling rather than Relic. Skip them in `relic.toml`:
+
+```toml
+project_id = "your-project-id"
+
+[check]
+ignore = ["NODE_ENV", "PORT", "VERCEL_*"]
+```
+
+You can also pass `--ignore`, which is merged with the config. Separate names with commas or repeat the flag. `*` matches any characters.
+
+```bash
+relic check -e production --scan --ignore CI,GITHUB_*
+```
+
+Ignored keys are excluded from every part of the report.
+
+## Reading the Output
+
+```text
+  relic check production
+  Required keys from .env.example, scan of . (42 files)
+
+  Missing (2)
+    REDIS_URL   src/cache.ts:4
+    STRIPE_KEY  .env.example
+
+  Unused (1)
+    LEGACY_TOKEN
+
+  ✗ 3/5 required keys present, 2 missing, 1 unused
+```
+
+- **Missing**: required by your code or templates, but not in the environment. Each key shows where it was found.
+- **Unused**: in the environment, but not required by any source. This is informational unless you pass `--strict`.
+
+Without `--folder`, Relic checks the secrets at the root of the environment, which matches what `relic run` injects. Use `-f` and `-s` to check the same folder and scope you pass to `relic run`.
+
+## Comparing Environments
+
+Use `--compare` to see which key names exist in only one of two environments, for example before promoting staging to production:
+
+```bash
+relic check -e staging --compare production
+```
+
+`--compare` works on its own or together with the required-key sources. Folder and scope filters apply to both environments.
+
+## Exit Codes
+
+| Code | Meaning                                                                                                   |
+| ---- | --------------------------------------------------------------------------------------------------------- |
+| `0`  | Every required key exists                                                                                 |
+| `1`  | A required key is missing, the check couldn't run, or `--strict` found unused keys or `--compare` differences |
+
+## JSON Output
+
+`--json` prints a machine-readable report to stdout. Errors are printed as `{ "ok": false, "error": "..." }`.
+
+```json
+{
+  "ok": false,
+  "strict": false,
+  "environment": "production",
+  "folder": null,
+  "scope": null,
+  "sources": [
+    { "type": "file", "path": ".env.example", "keys": 4 },
+    { "type": "scan", "path": ".", "keys": 3, "filesScanned": 42 }
+  ],
+  "ignored": ["NODE_ENV"],
+  "required": {
+    "total": 5,
+    "present": 3,
+    "missing": [
+      { "key": "REDIS_URL", "locations": ["src/cache.ts:4"] },
+      { "key": "STRIPE_KEY", "locations": [".env.example"] }
+    ],
+    "unused": ["LEGACY_TOKEN"]
+  },
+  "compare": null
+}
+```
+
+`required` is `null` when only `--compare` is used. With `--compare`, `compare` contains `base`, `other`, `onlyInBase`, and `onlyInOther`.
+
+## Authentication
+
+`relic check` uses the same credentials as `relic run` and makes one request per environment.
+
+| Mode            | Setup                                       | Project                                                   |
+| --------------- | ------------------------------------------- | --------------------------------------------------------- |
+| Session         | `relic login`                               | `--project`, `RELIC_PROJECT_ID`, or `relic.toml`          |
+| Service account | `RELIC_SERVICE_TOKEN` (plus OIDC if configured) | The project the service account belongs to             |
+| API key         | `RELIC_API_KEY` with the `secrets.read` scope | `--project`, `RELIC_PROJECT_ID`, or `relic.toml`        |
+
+See [CI/CD Integration](/guides/ci-cd-integration#check-for-missing-keys-before-deploying) for a pipeline example.
