@@ -47,6 +47,13 @@ List all projects you own or have been shared with, including their environments
 relic projects
 ```
 
+| Flag            | Description                                            |
+| --------------- | ------------------------------------------------------ |
+| `--json`        | Print projects, environments, and folders as JSON      |
+| `-p, --project` | Only show the project with this ID                     |
+
+With `--json`, errors are printed as `{"error": {"code": "...", "message": "..."}}` and the command exits with code 1. Codes include `not_logged_in` and `project_not_found`.
+
 ### `relic init`
 
 Initialize Relic in the current project. Creates `relic.toml` and a `.relic/` cache directory.
@@ -288,6 +295,46 @@ relic guard scan --staged
 relic guard scan --range origin/main..HEAD -e production
 relic guard scan src --json
 ```
+
+### `relic secrets`
+
+List the secret names in an environment. Values are never fetched or printed.
+
+```bash
+relic secrets -e <environment> [options]
+```
+
+| Flag                | Description                                   |
+| ------------------- | --------------------------------------------- |
+| `-e, --environment` | Environment name (required)                   |
+| `-f, --folder`      | Only list secrets in this folder              |
+| `-s, --scope`       | Scope filter: `client`, `server`, or `shared` |
+| `-p, --project`     | Project ID (overrides `relic.toml`)           |
+| `--json`            | Print machine-readable JSON                   |
+
+```bash
+relic secrets -e development --json
+```
+
+```json
+{
+  "projectId": "jx7abc123",
+  "environment": "development",
+  "folder": null,
+  "folders": ["database"],
+  "secrets": [
+    { "name": "DATABASE_URL", "scope": "server", "folder": "database" },
+    { "name": "PUBLIC_API_URL", "scope": "client", "folder": null }
+  ]
+}
+```
+
+With `--json`, errors are printed as `{"error": {"code": "...", "message": "..."}}` and the command exits with code 1. Codes include `not_logged_in`, `no_config`, `environment_not_found`, `folder_not_found`, and `invalid_option`.
+
+<Info>
+  `relic secrets` uses your `relic login` session. It does not support `RELIC_API_KEY` or
+  `RELIC_SERVICE_TOKEN`.
+</Info>
 
 ### `relic telemetry`
 
