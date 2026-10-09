@@ -53,7 +53,7 @@
         "@opentui/core-win32-x64": "0.5.17",
       },
       "peerDependencies": {
-        "typescript": "^5",
+        "typescript": ">=5",
       },
     },
     "apps/docs": {
@@ -209,7 +209,7 @@
         "react-devtools-core": "7",
       },
       "peerDependencies": {
-        "typescript": "^5",
+        "typescript": ">=5",
       },
     },
     "packages/typescript-config": {

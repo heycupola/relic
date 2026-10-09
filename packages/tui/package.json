@@ -31,6 +31,6 @@
     "react-devtools-core": "7"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": ">=5"
   }
 }

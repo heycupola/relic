@@ -59,7 +59,7 @@
     "zod": "catalog:"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": ">=5"
   },
   "optionalDependencies": {
     "@opentui/core-darwin-arm64": "0.5.17",
