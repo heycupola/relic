@@ -24,4 +24,11 @@ crons.daily(
   {},
 );
 
+crons.weekly(
+  "send-rotation-digest",
+  { dayOfWeek: "monday", hourUTC: 9, minuteUTC: 0 },
+  internal.rotation._sendWeeklyRotationDigests,
+  {},
+);
+
 export default crons;

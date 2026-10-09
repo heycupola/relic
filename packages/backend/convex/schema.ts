@@ -63,6 +63,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     color: v.optional(v.string()),
     sortOrder: v.number(),
+    rotateEveryDays: v.optional(v.number()),
     createdBy: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -98,6 +99,9 @@ export default defineSchema({
     encryptionKeyVersion: v.number(),
     tags: v.optional(v.array(v.string())),
     isDeleted: v.boolean(),
+    // Unset on rows written before rotation tracking; see inferValueChangedAt.
+    valueChangedAt: v.optional(v.number()),
+    rotateEveryDays: v.optional(v.number()),
     createdBy: v.string(),
     createdAt: v.number(),
     updatedBy: v.string(),
@@ -184,6 +188,7 @@ export default defineSchema({
       v.literal("serviceaccount.created"),
       v.literal("serviceaccount.revoked"),
       v.literal("serviceaccount.oidc_updated"),
+      v.literal("rotation.policy_updated"),
     ),
     metadata: v.optional(
       v.object({
@@ -214,6 +219,7 @@ export default defineSchema({
         pushTarget: v.optional(v.string()),
         pushDestination: v.optional(v.string()),
         pushDryRun: v.optional(v.boolean()),
+        rotateEveryDays: v.optional(v.number()),
       }),
     ),
     timestamp: v.number(),
@@ -288,4 +294,9 @@ export default defineSchema({
     projectsDeleted: v.number(),
     sharesRevoked: v.number(),
   }).index("by_anonymousId", ["anonymousId"]),
+  rotationDigestSubscription: defineTable({
+    userId: v.string(),
+    lastSentAt: v.optional(v.number()),
+    createdAt: v.number(),
+  }).index("by_user", ["userId"]),
 });

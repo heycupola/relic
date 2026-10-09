@@ -48,5 +48,6 @@ export enum EmailKind {
   CollaboratorAdded = "collaborator-added",
   GracePeriodStarted = "grace-period-started",
   PlanUpgraded = "plan-upgraded",
+  RotationDigest = "rotation-digest",
   Welcome = "welcome",
 }

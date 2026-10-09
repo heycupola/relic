@@ -9,6 +9,8 @@ import {
   CollaboratorAddedEmail,
   GracePeriodStartedEmail,
   PlanUpgradedEmail,
+  RotationDigestEmail,
+  type RotationDigestItem,
   WelcomeEmail,
 } from "./lib/emails/index";
 import { createLogger } from "./lib/logger";
@@ -63,6 +65,13 @@ type EmailData =
       userName: string;
     }
   | {
+      kind: EmailKind.RotationDigest;
+      userName: string;
+      overdue: RotationDigestItem[];
+      overdueCount: number;
+      dueSoonCount: number;
+    }
+  | {
       kind: EmailKind.Welcome;
       userName: string;
     };
@@ -110,6 +119,17 @@ async function renderEmailTemplate(data: EmailData): Promise<string> {
           dashboardUrl: getDashboardUrl(),
         }),
       );
+    case EmailKind.RotationDigest:
+      return await render(
+        RotationDigestEmail({
+          userName: data.userName,
+          overdue: data.overdue,
+          overdueCount: data.overdueCount,
+          dueSoonCount: data.dueSoonCount,
+          dashboardUrl: getDashboardUrl(),
+          settingsUrl: `${getDashboardUrl()}/settings`,
+        }),
+      );
     case EmailKind.Welcome:
       return await render(
         WelcomeEmail({
@@ -136,6 +156,8 @@ function getEmailSubject(kind: EmailKind): string {
       return "Your Relic plan has changed";
     case EmailKind.PlanUpgraded:
       return "Welcome to Relic Pro";
+    case EmailKind.RotationDigest:
+      return "Secrets due for rotation";
     case EmailKind.Welcome:
       return "Welcome to Relic";
   }

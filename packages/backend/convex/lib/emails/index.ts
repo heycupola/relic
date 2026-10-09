@@ -3,4 +3,5 @@ export { default as AccountDeletedEmail } from "./account_deleted.js";
 export { default as CollaboratorAddedEmail } from "./collaborator_added.js";
 export { default as GracePeriodStartedEmail } from "./grace_period_started.js";
 export { default as PlanUpgradedEmail } from "./plan_upgraded.js";
+export { default as RotationDigestEmail, type RotationDigestItem } from "./rotation_digest.js";
 export { default as WelcomeEmail } from "./welcome.js";

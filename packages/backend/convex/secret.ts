@@ -10,6 +10,8 @@ import { generateSlug } from "./lib/helpers";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { buildExportAudit, type PushAudit, pushAuditValidator } from "./lib/push";
 import { checkRateLimit } from "./lib/rateLimit";
+import { inferValueChangedAt } from "./lib/rotation";
+import { loadKeyRotationTimestamps } from "./lib/rotationData";
 import {
   ErrorSeverity,
   type ProtectedMutationCtx,
@@ -1449,6 +1451,7 @@ export const _insertSecret = internalMutation({
       // tags: args.tags,
       scope: args.scope,
       isDeleted: false,
+      valueChangedAt: now,
       createdBy: args.createdBy,
       createdAt: now,
       updatedBy: args.createdBy,
@@ -1516,6 +1519,7 @@ export const _updateSecret = internalMutation({
       valueType?: SecretValueType;
       scope?: "client" | "server" | "shared";
       isDeleted?: boolean;
+      valueChangedAt?: number;
       // description?: string;
       // tags?: string[];
     } = {
@@ -1523,9 +1527,24 @@ export const _updateSecret = internalMutation({
       updatedAt: now,
     };
 
+    const existing = await ctx.db.get(args.secretId);
+
     if (args.updates.key !== undefined) updates.key = args.updates.key;
     if (args.updates.encryptedValue !== undefined)
       updates.encryptedValue = args.updates.encryptedValue;
+
+    // Values are opaque here; clients reuse the stored ciphertext when the value is unchanged.
+    if (
+      args.updates.encryptedValue !== undefined &&
+      existing?.encryptedValue !== args.updates.encryptedValue
+    ) {
+      updates.valueChangedAt = now;
+    } else if (existing && existing.valueChangedAt === undefined) {
+      updates.valueChangedAt = inferValueChangedAt(
+        existing,
+        await loadKeyRotationTimestamps(ctx, existing.projectId),
+      );
+    }
     if (args.updates.encryptionKeyVersion !== undefined)
       updates.encryptionKeyVersion = args.updates.encryptionKeyVersion;
     if (args.updates.valueType !== undefined) updates.valueType = args.updates.valueType;
@@ -1592,11 +1611,26 @@ export const _reEncryptSecretsForKeyRotation = internalMutation({
 
     let totalEncrypted = 0;
     const now = Date.now();
+    const keyRotationTimestampsByProject = new Map<Id<"project">, number[]>();
 
     for (const { secretId, newEncryptedValue, newEncryptionKeyVersion } of args.secrets) {
+      const existing = await ctx.db.get(secretId);
+
+      // Re-encryption keeps the plaintext, so pin the value age before updatedAt moves.
+      let valueChangedAt = existing?.valueChangedAt;
+      if (existing && valueChangedAt === undefined) {
+        let keyRotationTimestamps = keyRotationTimestampsByProject.get(existing.projectId);
+        if (!keyRotationTimestamps) {
+          keyRotationTimestamps = await loadKeyRotationTimestamps(ctx, existing.projectId);
+          keyRotationTimestampsByProject.set(existing.projectId, keyRotationTimestamps);
+        }
+        valueChangedAt = inferValueChangedAt(existing, keyRotationTimestamps);
+      }
+
       await ctx.db.patch(secretId, {
         encryptedValue: newEncryptedValue,
         encryptionKeyVersion: newEncryptionKeyVersion,
+        valueChangedAt,
         updatedAt: now,
         updatedBy: args.userId,
       });
