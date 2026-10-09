@@ -12,7 +12,7 @@ int32_t run_with_secrets(const char *command_json, const char *secrets_json);
 
 - `command_json`: JSON array of strings (command + arguments), e.g. `["npm", "run", "deploy"]`
 - `secrets_json`: JSON object of key-value pairs, e.g. `{"DATABASE_URL": "postgres://..."}`
-- Returns the child process exit code (0-255), or `-1` on error
+- Returns the child process exit code (0-255, or 128 + N when the child is killed by signal N), or `-1` on error
 
 ## Security
 

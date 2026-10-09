@@ -47,7 +47,7 @@ const INHERITED_ENV_KEYS: &[&str] = &[
 /// * `secrets_json` - JSON object: `{"SECRET_KEY": "secret_value"}`
 ///
 /// # Returns
-/// * Exit code of the process (0-255), or -1 on error
+/// * Exit code of the process (0-255, or 128 + N when killed by signal N), or -1 on error
 ///
 /// # Safety
 /// Both pointers must be valid null-terminated C strings or null.
@@ -127,12 +127,8 @@ fn run_with_secrets_impl(
         cmd.env(key, value.as_str());
     }
 
-    // Install signal forwarding before spawning
     #[cfg(unix)]
-    unsafe {
-        libc::signal(libc::SIGTERM, forward_signal as libc::sighandler_t);
-        libc::signal(libc::SIGINT, forward_signal as libc::sighandler_t);
-    }
+    let _signals = SignalForwarding::install();
 
     let mut child = cmd
         .spawn()
@@ -140,13 +136,55 @@ fn run_with_secrets_impl(
 
     CHILD_PID.store(child.id(), std::sync::atomic::Ordering::SeqCst);
 
-    let status = child
-        .wait()
-        .map_err(|e| format!("failed to wait for '{}': {}", program, e))?;
+    let status = child.wait();
 
     CHILD_PID.store(0, std::sync::atomic::Ordering::SeqCst);
 
-    Ok(status.code().unwrap_or(-1))
+    let status = status.map_err(|e| format!("failed to wait for '{}': {}", program, e))?;
+
+    Ok(exit_code(status))
+}
+
+/// Shell convention: a child terminated by signal N exits with 128 + N.
+fn exit_code(status: std::process::ExitStatus) -> i32 {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(signal) = status.signal() {
+            return 128 + signal;
+        }
+    }
+    status.code().unwrap_or(1)
+}
+
+/// Forwards SIGINT/SIGTERM to the child while alive; restores the previous handlers on drop.
+#[cfg(unix)]
+struct SignalForwarding {
+    previous_int: libc::sighandler_t,
+    previous_term: libc::sighandler_t,
+}
+
+#[cfg(unix)]
+impl SignalForwarding {
+    fn install() -> Self {
+        let handler = forward_signal as unsafe extern "C" fn(libc::c_int) as libc::sighandler_t;
+        unsafe {
+            Self {
+                previous_int: libc::signal(libc::SIGINT, handler),
+                previous_term: libc::signal(libc::SIGTERM, handler),
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for SignalForwarding {
+    fn drop(&mut self) {
+        unsafe {
+            libc::signal(libc::SIGINT, self.previous_int);
+            libc::signal(libc::SIGTERM, self.previous_term);
+        }
+    }
 }
 
 fn parse_json_ptr<T: serde::de::DeserializeOwned>(
@@ -241,6 +279,23 @@ mod tests {
         let cmd = CString::new(r#"["this_program_does_not_exist_xyz"]"#).unwrap();
         let code = run_with_secrets(cmd.as_ptr(), std::ptr::null());
         assert_eq!(code, -1);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn propagates_exit_code() {
+        let cmd = CString::new(r#"["sh", "-c", "exit 7"]"#).unwrap();
+        assert_eq!(run_with_secrets(cmd.as_ptr(), std::ptr::null()), 7);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn signal_terminated_child_exits_with_128_plus_signal() {
+        let cmd = CString::new(r#"["sh", "-c", "kill -TERM $$"]"#).unwrap();
+        assert_eq!(
+            run_with_secrets(cmd.as_ptr(), std::ptr::null()),
+            128 + libc::SIGTERM
+        );
     }
 
     #[test]
