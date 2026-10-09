@@ -9,6 +9,7 @@ import { CommandPaletteModal } from "../components/modals/CommandPaletteModal";
 import { ConfirmPaymentModal } from "../components/modals/ConfirmPaymentModal";
 import { ManageCollaboratorsModal } from "../components/modals/ManageCollaboratorsModal";
 import { ProWelcomeModal } from "../components/modals/ProWelcomeModal";
+import { SecretHistoryModal } from "../components/modals/SecretHistoryModal";
 import { PasswordInput } from "../components/PasswordInput";
 import { ProjectItemList } from "../components/project/ProjectItemList";
 import { GuideBar } from "../components/shared/GuideBar";
@@ -170,6 +171,7 @@ export function ProjectPage({
     },
   });
   const selectedItem = items[navigation.selectedIndex];
+  const selectedSecret = selectedItem?.type === "secret" ? selectedItem : null;
 
   const leaveEnvironment = () => {
     setShowSecrets(false);
@@ -275,6 +277,10 @@ export function ProjectPage({
     else setActiveModal("manageCollaborators");
   };
 
+  const openHistory = () => {
+    if (selectedSecret) setActiveModal("secretHistory");
+  };
+
   const startCreate = () =>
     whenWritable(() => {
       if (viewLevel === "environments") itemActions.setCreatingItem("env");
@@ -347,6 +353,9 @@ export function ProjectPage({
         { key: "esc", description: "Go back", category: "Navigate" },
         { key: "v", description: showSecrets ? "Hide values" : "Show values", category: "View" },
       );
+      if (selectedSecret) {
+        cmds.push({ key: "t", description: "Secret history", category: "View" });
+      }
     }
     cmds.push(
       {
@@ -385,6 +394,9 @@ export function ProjectPage({
       case "v":
         toggleSecrets();
         break;
+      case "t":
+        openHistory();
+        break;
       case "g":
         void openUrl(DASHBOARD_URL);
         break;
@@ -413,7 +425,13 @@ export function ProjectPage({
       return;
     }
 
-    if (activeModal === "commandPalette" || activeModal === "manageCollaborators") return;
+    if (
+      activeModal === "commandPalette" ||
+      activeModal === "manageCollaborators" ||
+      activeModal === "secretHistory"
+    ) {
+      return;
+    }
 
     if (confirmingDelete) {
       if (key.name === "y") void itemActions.deleteItem();
@@ -451,6 +469,8 @@ export function ProjectPage({
       openCollaborators();
     } else if (key.name === "v" && viewLevel !== "environments") {
       toggleSecrets();
+    } else if (key.name === "t") {
+      openHistory();
     } else if (key.name === "q") {
       renderer.destroy();
     } else if (key.sequence === "?") {
@@ -506,6 +526,7 @@ export function ProjectPage({
                 ]
               : []),
             { key: "d", description: "delete", disabled: disabled || !hasSelection },
+            ...(selectedSecret ? [{ key: "t", description: "history", disabled: isDisabled }] : []),
           ];
 
     const secondary: Shortcut[] = [
@@ -665,6 +686,18 @@ export function ProjectPage({
         pendingEmail={collaborators.pendingEmail}
         shareLimits={shareLimits}
         inputDisabled={payment.isModalOpen || proNotice.visible}
+      />
+
+      <SecretHistoryModal
+        visible={activeModal === "secretHistory"}
+        secretId={selectedSecret?.id ?? null}
+        secretKey={selectedSecret?.name ?? ""}
+        showValues={showSecrets}
+        isRestricted={isRestricted}
+        onRestored={() => {
+          if (selectedEnvId) void loadEnvironment(selectedEnvId);
+        }}
+        onClose={closeModal}
       />
 
       <CheckoutRedirectModal checkoutUrl={payment.checkoutUrl} onClose={payment.closeCheckout} />

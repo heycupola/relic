@@ -116,6 +116,39 @@ export interface Secret {
   updatedAt: number;
 }
 
+export type SecretChangeType = "updated" | "deleted" | "restored";
+
+export interface SecretVersion {
+  id: string;
+  version: number;
+  key: string;
+  encryptedValue: string;
+  valueType: SecretValueType;
+  scope: SecretScope;
+  changeType: SecretChangeType;
+  changedBy: string;
+  changedByEmail: string | null;
+  changedAt: number;
+}
+
+export interface SecretHistory {
+  secretId: string;
+  key: string;
+  isDeleted: boolean;
+  currentVersion: number | null;
+  encryptedValue: string | null;
+  updatedByEmail: string | null;
+  updatedAt: number;
+  versions: SecretVersion[];
+  encryptedProjectKey: string;
+  retentionLimit: number;
+}
+
+export interface SecretHistoryForRotation {
+  id: string;
+  encryptedValue: string;
+}
+
 export interface EnvironmentData {
   environment: Environment;
   folders: Folder[];

@@ -17,6 +17,8 @@ import type {
   ProjectLimits,
   ProjectListItem,
   Secret,
+  SecretHistory,
+  SecretHistoryForRotation,
   SecretScope,
   SecretValueType,
   ServiceAccount,
@@ -509,6 +511,7 @@ export class ProtectedApi {
     rewrappedShares: Array<{ shareId: string; newEncryptedProjectKey: string }>;
     reEncryptedSecrets: Array<{ secretId: string; newEncryptedValue: string }>;
     rewrappedServiceAccounts: Array<{ serviceAccountId: string; newEncryptedProjectKey: string }>;
+    reEncryptedHistory: Array<{ historyId: string; newEncryptedValue: string }>;
   }): Promise<void> {
     await this.withAuth(() =>
       this.client.action(api.projectShare.revokeShareWithRotation, {
@@ -526,6 +529,10 @@ export class ProtectedApi {
           serviceAccountId: toId<"serviceAccount">(s.serviceAccountId),
           newEncryptedProjectKey: s.newEncryptedProjectKey,
         })),
+        reEncryptedHistory: args.reEncryptedHistory.map((h) => ({
+          historyId: toId<"secretHistory">(h.historyId),
+          newEncryptedValue: h.newEncryptedValue,
+        })),
       }),
     );
   }
@@ -542,6 +549,66 @@ export class ProtectedApi {
       publicKey: sa.publicKey,
       revokedAt: sa.revokedAt,
     }));
+  }
+
+  async getSecretHistory(secretId: string): Promise<SecretHistory> {
+    const result = await this.withAuth(() =>
+      this.client.query(api.secretHistory.getSecretHistory, {
+        secretId: toId<"secret">(secretId),
+      }),
+    );
+    return {
+      secretId: String(result.secret.id),
+      key: result.secret.key,
+      isDeleted: result.secret.isDeleted,
+      currentVersion: result.secret.currentVersion,
+      encryptedValue: result.secret.encryptedValue,
+      updatedByEmail: result.secret.updatedByEmail,
+      updatedAt: result.secret.updatedAt,
+      versions: result.versions.map((entry) => ({
+        id: String(entry.id),
+        version: entry.version,
+        key: entry.key,
+        encryptedValue: entry.encryptedValue,
+        valueType: entry.valueType,
+        scope: entry.scope,
+        changeType: entry.changeType,
+        changedBy: entry.changedBy,
+        changedByEmail: entry.changedByEmail,
+        changedAt: entry.changedAt,
+      })),
+      encryptedProjectKey: result.encryptedProjectKey,
+      retentionLimit: result.retentionLimit,
+    };
+  }
+
+  async restoreSecretVersion(secretId: string, version: number): Promise<void> {
+    await this.withAuth(() =>
+      this.client.mutation(api.secretHistory.restoreSecretVersion, {
+        secretId: toId<"secret">(secretId),
+        version,
+      }),
+    );
+  }
+
+  async getAllSecretHistoryForProject(projectId: string): Promise<SecretHistoryForRotation[]> {
+    const entries: SecretHistoryForRotation[] = [];
+    let cursor: string | null = null;
+    let isDone = false;
+    while (!isDone) {
+      const result = await this.withAuth(() =>
+        this.client.query(api.secretHistory.getSecretHistoryForRotation, {
+          projectId: toId<"project">(projectId),
+          paginationOpts: { numItems: 500, cursor },
+        }),
+      );
+      for (const entry of result.page) {
+        entries.push({ id: String(entry.id), encryptedValue: entry.encryptedValue });
+      }
+      cursor = result.continueCursor;
+      isDone = result.isDone;
+    }
+    return entries;
   }
 
   async getProPlan(): Promise<{ url: string; hasPro: boolean }> {

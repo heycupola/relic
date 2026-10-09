@@ -53,6 +53,7 @@ export type ModalType =
   | "createFolder"
   | "createSecret"
   | "manageCollaborators"
+  | "secretHistory"
   | "commandPalette"
   | "bulkImport"
   | "logout"
