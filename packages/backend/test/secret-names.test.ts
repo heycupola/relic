@@ -6,7 +6,7 @@ import {
 } from "@repo/crypto";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { api, components } from "../convex/_generated/api";
+import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { hashKey } from "../convex/lib/crypto";
 import { ErrorCode } from "../convex/lib/errors.ts";
@@ -15,9 +15,10 @@ import {
   betterAuthModules,
   expectConvexError,
   getTestUsers,
-  mockAutumn,
+  mockBilling,
   modules,
   randomString,
+  setPlan,
   type TestUser,
 } from "./setup";
 
@@ -95,11 +96,8 @@ describe("Secret Names", () => {
     collaborator = testUsers[1]!;
     outsider = testUsers[2]!;
 
-    await owner.asUser.mutation(components.betterAuth.user.upgradeToPro, {
-      userId: owner.userId,
-    });
+    await setPlan(t, owner.userId, "pro");
 
-    mockAutumn.setFeature(owner.userId, "projects", 5);
     ({ encryptedProjectKey } = await createProjectKey(owner.publicKey!));
     const result = await owner.asUser.action(api.project.createProject, {
       encryptedProjectKey,
@@ -140,13 +138,10 @@ describe("Secret Names", () => {
   });
 
   afterEach(() => {
-    mockAutumn.reset();
+    mockBilling.reset();
   });
 
   async function shareWithCollaborator() {
-    mockAutumn.setBooleanFeature(owner.userId, "can_share_project", true);
-    mockAutumn.setFeature(owner.userId, "additional_shares", 5);
-
     const projectKey = await unwrapProjectKey(
       encryptedProjectKey,
       owner.encryptedPrivateKey!,
@@ -313,9 +308,7 @@ describe("Secret Names", () => {
     });
 
     test("rejects keys from users without project access", async () => {
-      await outsider.asUser.mutation(components.betterAuth.user.upgradeToPro, {
-        userId: outsider.userId,
-      });
+      await setPlan(t, outsider.userId, "pro");
       const apiKey = await createKey(outsider);
 
       const response = await namesViaHttp(apiKey, { projectId, environmentName: "production" });
