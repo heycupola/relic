@@ -72,6 +72,28 @@ jobs:
   Without OIDC, it can be omitted.
 </Note>
 
+### Check for Missing Keys Before Deploying
+
+Add a [`relic check`](/guides/check) step before the deploy. It fails the job when a key listed in `.env.example` or read in your source code is missing from the environment. It reads secret names only and never decrypts values.
+
+```yaml
+      - name: Check required secrets
+        env:
+          RELIC_SERVICE_TOKEN: ${{ secrets.RELIC_SERVICE_TOKEN }}
+        run: relic check -e production --scan src
+
+      - name: Deploy with secrets
+        env:
+          RELIC_SERVICE_TOKEN: ${{ secrets.RELIC_SERVICE_TOKEN }}
+        run: relic run -e production -- npm run deploy
+```
+
+To keep staging and production in sync, add `--compare` with `--strict` so any difference in key names fails the job:
+
+```bash
+relic check -e staging --compare production --strict
+```
+
 ## GitLab CI
 
 ```yaml

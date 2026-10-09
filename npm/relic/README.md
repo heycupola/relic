@@ -59,6 +59,7 @@ relic push -e production --target vercel --dry-run
 | `relic shell` | Open a subshell with secrets loaded |
 | `relic import` | Import secrets from a `.env`/JSON file, Doppler, Infisical, Vercel, or 1Password |
 | `relic push` | Sync secrets to Vercel, Cloudflare Workers, GitHub Actions, or Fly.io |
+| `relic check` | Check that required keys exist in an environment (names only) |
 | `relic service-account` | Create, list, and revoke service accounts for CI/CD |
 | `relic mcp` | Start the MCP server for AI assistants |
 | `relic upgrade` | Upgrade to the latest version |
@@ -92,6 +93,18 @@ By default the command only receives the secrets plus `PATH`, `HOME`, `USER`, `S
 | `-y, --yes` | Skip confirmation (required in CI) |
 
 See [Platform Sync](https://docs.withrelic.com/guides/platform-sync) for platform options and authentication.
+
+### `relic check`
+
+Catch missing keys before a deploy. Compares names from `.env.example` (and optionally your source code) with an environment, without decrypting anything, and exits `1` if a key is missing.
+
+```bash
+relic check -e production
+relic check -e production --scan src --ignore NODE_ENV,PORT
+relic check -e staging --compare production
+```
+
+See the [`relic check` guide](https://docs.withrelic.com/guides/check) for all options.
 
 ## CI/CD
 

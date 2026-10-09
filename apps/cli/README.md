@@ -22,6 +22,7 @@ bun install
 | `relic shell`                  | Open a subshell with secrets loaded                             |
 | `relic import`                 | Import secrets from a file or provider                          |
 | `relic push`                   | Sync secrets to a deploy platform                               |
+| `relic check`                  | Check required keys exist (names only)                          |
 | `relic service-account create` | Create a service account (CI/CD token, optional OIDC policy)    |
 | `relic service-account list`   | List service accounts for a project                             |
 | `relic service-account revoke` | Revoke a service account by `--name` or `--id`                  |
@@ -121,12 +122,42 @@ relic push -e staging --target cloudflare --wrangler-env staging
 relic push -e production --target github --github-env production --yes
 ```
 
+### `relic check`
+
+```bash
+relic check -e <environment> [options]
+```
+
+Compares required key names with the secrets in an environment. Never fetches or decrypts values. Required keys come from `.env.example`, `.env.sample`, and `.env.template` next to `relic.toml` (or `--from`), plus `--scan`. Exits `1` when a required key is missing.
+
+| Flag                | Description                                                      |
+| ------------------- | ---------------------------------------------------------------- |
+| `-e, --environment` | Environment name (required)                                      |
+| `-f, --folder`      | Folder name                                                      |
+| `-s, --scope`       | `client`, `server`, or `shared`                                  |
+| `-p, --project`     | Project ID (overrides `relic.toml`)                              |
+| `--from <file>`     | Read required keys from a file instead of the templates (repeat) |
+| `--scan [paths...]` | Scan JS/TS/Python sources for env reads                          |
+| `--ignore <keys>`   | Keys to skip, comma-separated, `*` wildcards (repeat)            |
+| `--compare <env>`   | Show key names that exist in only one environment                |
+| `--strict`          | Also fail on unused keys and `--compare` differences             |
+| `--json`            | Machine-readable output                                          |
+
+```bash
+relic check -e production --scan src
+relic check -e staging --compare production
+```
+
 ## Configuration
 
 `relic.toml` in project root:
 
 ```toml
 project_id = "<uuid>"
+
+# Optional: keys relic check should skip
+[check]
+ignore = ["NODE_ENV", "PORT"]
 ```
 
 Created by `relic init`. The CLI walks up from the current directory to find it.
@@ -216,16 +247,20 @@ deploy:
 │   ├── shell.ts        # relic shell
 │   ├── import.ts       # relic import
 │   ├── push.ts         # relic push
+│   ├── check.ts        # relic check
 │   └── telemetry.ts    # relic telemetry
 ├── lib/
 │   ├── api.ts          # Convex API client, secret export
+│   ├── check.ts        # relic check report building and output
 │   ├── cli.ts          # Shared messages, auth/error helpers
 │   ├── config.ts       # relic.toml loading/saving
 │   ├── env.ts          # Child environment helpers (RELIC_* stripping)
+│   ├── env-keys.ts     # Env template parsing and source scanning
 │   ├── telemetry.ts    # Sanitized error tracking, flush-before-exit
 │   ├── crypto.ts       # Secret encryption/decryption helpers
 │   ├── import-plan.ts  # Import plan, conflict handling, batched upload
 │   ├── import-sources.ts # File, stdin, and provider readers for relic import
+│   ├── oidc.ts         # CI OIDC token resolution
 │   ├── push/           # relic push plan, adapters (vercel, cloudflare, github, fly)
 │   └── types.ts        # SecretScope type
 ├── mcp/
