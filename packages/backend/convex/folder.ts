@@ -164,6 +164,10 @@ export const deleteFolder = protectedMutation({
       });
     }
 
+    await ctx.runMutation(internal.secretHistory._deleteHistoryForFolder, {
+      folderId: args.folderId,
+    });
+
     await ctx.runMutation(internal.folder._deleteFolder, {
       folderId: args.folderId,
     });

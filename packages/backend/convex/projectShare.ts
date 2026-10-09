@@ -30,6 +30,7 @@ import { checkRateLimit } from "./lib/rateLimit";
 import { EmailKind, ErrorSeverity } from "./lib/types";
 import { createCheckoutUrlSafely } from "./project";
 import schema from "./schema";
+import { rotateProjectHistory } from "./secretHistory";
 
 const log = createLogger("projectShare");
 
@@ -315,6 +316,9 @@ const rotationArgs = {
       v.object({ serviceAccountId: v.id("serviceAccount"), newEncryptedProjectKey: v.string() }),
     ),
   ),
+  reEncryptedHistory: v.optional(
+    v.array(v.object({ historyId: v.id("secretHistory"), newEncryptedValue: v.string() })),
+  ),
 };
 
 function assertCovers(expected: string[], provided: string[], what: string) {
@@ -406,6 +410,13 @@ export const _revokeShareWithRotation = internalMutation({
       });
     }
 
+    const { historyReEncrypted, historyPurged } = await rotateProjectHistory(
+      ctx,
+      project._id,
+      args.reEncryptedHistory ?? [],
+      newKeyVersion,
+    );
+
     await invalidateProjectCache(ctx, project._id);
 
     await ctx.db.insert("keyRotation", {
@@ -416,6 +427,8 @@ export const _revokeShareWithRotation = internalMutation({
       reason: "share_revoked",
       secretsReEncrypted: args.reEncryptedSecrets.length,
       sharesUpdated: args.rewrappedShares.length,
+      historyReEncrypted,
+      historyPurged,
       createdAt: now,
     });
 
@@ -433,6 +446,8 @@ export const _revokeShareWithRotation = internalMutation({
         newKeyVersion,
         secretsReEncrypted: args.reEncryptedSecrets.length,
         sharesUpdated: args.rewrappedShares.length,
+        historyReEncrypted,
+        historyPurged,
       },
     });
     await requestUsageSync(ctx, args.userId);
@@ -443,6 +458,8 @@ export const _revokeShareWithRotation = internalMutation({
       secretsReEncrypted: args.reEncryptedSecrets.length,
       sharesRewrapped: args.rewrappedShares.length,
       serviceAccountsRewrapped: rewrappedServiceAccounts.length,
+      historyReEncrypted,
+      historyPurged,
     });
     return { success: true };
   },

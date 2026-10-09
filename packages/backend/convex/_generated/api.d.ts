@@ -45,6 +45,7 @@ import type * as projectShare from "../projectShare.js";
 import type * as rateLimiter from "../rateLimiter.js";
 import type * as resend from "../resend.js";
 import type * as secret from "../secret.js";
+import type * as secretHistory from "../secretHistory.js";
 import type * as serviceAccount from "../serviceAccount.js";
 import type * as user from "../user.js";
 import type * as userKey from "../userKey.js";
@@ -94,6 +95,7 @@ declare const fullApi: ApiFromModules<{
   rateLimiter: typeof rateLimiter;
   resend: typeof resend;
   secret: typeof secret;
+  secretHistory: typeof secretHistory;
   serviceAccount: typeof serviceAccount;
   user: typeof user;
   userKey: typeof userKey;

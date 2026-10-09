@@ -249,6 +249,10 @@ export const deleteEnvironment = protectedMutation({
       });
     }
 
+    await ctx.runMutation(internal.secretHistory._deleteHistoryForEnvironment, {
+      environmentId: args.environmentId,
+    });
+
     await ctx.runMutation(internal.environment._deleteEnvironmentById, {
       environmentId: args.environmentId,
     });

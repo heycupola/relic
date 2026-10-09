@@ -332,6 +332,11 @@ export const _cascadeDeleteUserData = internalMutation({
               .take(n),
           (n: number) =>
             ctx.db
+              .query("secretHistory")
+              .withIndex("by_project", (q) => q.eq("projectId", projectId))
+              .take(n),
+          (n: number) =>
+            ctx.db
               .query("folder")
               .withIndex("by_project", (q) => q.eq("projectId", projectId))
               .take(n),

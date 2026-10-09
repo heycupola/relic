@@ -164,6 +164,7 @@ Every project has its own AES-256 key (the "project key"). This key encrypts and
 | Data                | Server sees                        |
 | ------------------- | ---------------------------------- |
 | Secret values       | Encrypted (AES-256-GCM ciphertext) |
+| Previous values     | Encrypted (AES-256-GCM ciphertext) |
 | Secret keys (names) | Plaintext                          |
 | Project key         | Encrypted (RSA-wrapped)            |
 | User private key    | Encrypted (AES-256-GCM + Argon2id) |
@@ -207,9 +208,15 @@ When a collaborator is revoked, their share record is marked as revoked. However
   <Step title="Generate new project key">
     A new AES-256 project key is generated on the owner's device.
   </Step>
-  <Step title="Re-encrypt all secrets">
-    Every secret in the project is decrypted with the old key and re-encrypted with the new key.
-    This happens entirely on the owner's device.
+  <Step title="Re-encrypt all secrets and history">
+    Every secret in the project, including the previous versions kept in [secret
+    history](/guides/secret-history), is decrypted with the old key and re-encrypted with the new
+    key. This happens entirely on the owner's device.
+  </Step>
+  <Step title="Purge anything left on the old key">
+    The server deletes any history entry that is still encrypted with the old key (for example,
+    when an older client didn't send re-encrypted history) and clears leftover ciphertext from
+    deleted secrets. After rotation, no stored ciphertext can be decrypted with the old key.
   </Step>
   <Step title="Re-wrap for remaining collaborators">
     The new project key is wrapped with each remaining collaborator's public key and updated on the
@@ -226,6 +233,13 @@ When a collaborator is revoked, their share record is marked as revoked. However
   secrets, you can revoke without rotation. If you want to ensure they cannot decrypt anything going
   forward, use revoke with rotation.
 </Warning>
+
+<Note>
+  Without rotation, the revoked collaborator still holds the old project key. Rotation is what makes
+  both current values and secret history unreadable to them. History entries the owner's device
+  can't re-encrypt are deleted rather than kept under the old key, so a rotation may shorten
+  history.
+</Note>
 
 ## Service Accounts (Machine Identity)
 

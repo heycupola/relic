@@ -3,6 +3,7 @@ import { Command, CommanderError, Help } from "commander";
 import pc from "picocolors";
 import check, { type CheckOptions } from "./commands/check";
 import { type GuardScanOptions, guardInstall, guardScan, guardUninstall } from "./commands/guard";
+import { history, rollback } from "./commands/history";
 import importSecrets, { type ImportOptions } from "./commands/import";
 import init from "./commands/init";
 import login from "./commands/login";
@@ -61,7 +62,18 @@ const COMMAND_GROUPS = [
   },
   {
     label: "Secrets",
-    commands: ["run", "shell", "import", "push", "check", "guard", "secrets", "service-account"],
+    commands: [
+      "run",
+      "shell",
+      "import",
+      "push",
+      "check",
+      "guard",
+      "secrets",
+      "history",
+      "rollback",
+      "service-account",
+    ],
   },
   {
     label: "Tools",
@@ -388,6 +400,52 @@ program
   .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
   .option("--json", "Output machine-readable JSON")
   .action((options: SecretsOptions) => secrets(options));
+
+program
+  .command("history")
+  .description("List previous versions of a secret")
+  .requiredOption("-e, --environment <name>", "Environment name (required)")
+  .option("-f, --folder <name>", "Folder name (optional)")
+  .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
+  .option("--reveal", "Decrypt values locally and print them")
+  .option("--json", "Print machine-readable JSON")
+  .option("-y, --yes", "Skip the --reveal confirmation")
+  .argument("<key>", "Secret key")
+  .action(
+    (
+      key: string,
+      options: {
+        environment: string;
+        folder?: string;
+        project?: string;
+        reveal?: boolean;
+        json?: boolean;
+        yes?: boolean;
+      },
+    ) => history(key, options),
+  );
+
+program
+  .command("rollback")
+  .description("Restore a previous version of a secret")
+  .requiredOption("-e, --environment <name>", "Environment name (required)")
+  .requiredOption("--to <version>", "Version to restore (see relic history)")
+  .option("-f, --folder <name>", "Folder name (optional)")
+  .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
+  .option("-y, --yes", "Skip the confirmation prompt")
+  .argument("<key>", "Secret key")
+  .action(
+    (
+      key: string,
+      options: {
+        environment: string;
+        to: string;
+        folder?: string;
+        project?: string;
+        yes?: boolean;
+      },
+    ) => rollback(key, options),
+  );
 
 program
   .command("version")

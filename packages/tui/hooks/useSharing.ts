@@ -85,13 +85,14 @@ export function useSharing(
       const api = getProtectedApi();
       await api.ensureAuth();
 
-      const [currentProjectKey, currentUser, { shares }, serviceAccounts, allSecrets] =
+      const [currentProjectKey, currentUser, { shares }, serviceAccounts, allSecrets, history] =
         await Promise.all([
           getProjectKey(encryptedProjectKeySource, encryptedPrivateKey, salt),
           api.getCurrentUser(),
           api.listProjectShares(projectId),
           api.listServiceAccounts(projectId),
           api.getAllSecretsForProject(projectId),
+          api.getAllSecretHistoryForProject(projectId),
         ]);
       if (!currentUser.publicKey) throw new Error("Current user has no public key");
 
@@ -102,6 +103,7 @@ export function useSharing(
         shares,
         serviceAccounts,
         secrets: allSecrets,
+        history,
       });
 
       await withTransientRetry(() => api.revokeShareWithRotation({ shareId, ...payload }));

@@ -64,6 +64,7 @@
           "guides/tui",
           "guides/importing",
           "guides/editor",
+          "guides/secret-history",
           "guides/project-collaboration",
           "guides/service-accounts",
           "guides/oidc",
