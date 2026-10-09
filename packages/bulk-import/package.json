@@ -1,0 +1,27 @@
+{
+  "name": "@repo/bulk-import",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "./index.ts",
+  "module": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "lint": "oxlint .",
+    "format": "oxfmt .",
+    "check-types": "tsc --noEmit",
+    "test": "bun test",
+    "lint:fix": "oxlint . --fix",
+    "format:check": "oxfmt --check ."
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "*",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

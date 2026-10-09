@@ -19,6 +19,7 @@
     "@opentui/core": "^0.5.17",
     "@opentui/react": "^0.5.17",
     "@repo/auth": "*",
+    "@repo/bulk-import": "*",
     "@repo/logger": "*",
     "convex": "catalog:",
     "open": "catalog:",

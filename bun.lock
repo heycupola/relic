@@ -158,6 +158,17 @@
         "typescript": ">=5",
       },
     },
+    "packages/bulk-import": {
+      "name": "@repo/bulk-import",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@repo/typescript-config": "*",
+        "@types/bun": "latest",
+      },
+      "peerDependencies": {
+        "typescript": "^5",
+      },
+    },
     "packages/crypto": {
       "name": "@repo/crypto",
       "version": "0.0.0",
@@ -197,6 +208,7 @@
         "@opentui/core": "^0.5.17",
         "@opentui/react": "^0.5.17",
         "@repo/auth": "*",
+        "@repo/bulk-import": "*",
         "@repo/logger": "*",
         "convex": "catalog:",
         "open": "catalog:",
@@ -1029,6 +1041,8 @@
     "@repo/auth": ["@repo/auth@workspace:packages/auth"],
 
     "@repo/backend": ["@repo/backend@workspace:packages/backend"],
+
+    "@repo/bulk-import": ["@repo/bulk-import@workspace:packages/bulk-import"],
 
     "@repo/cli": ["@repo/cli@workspace:apps/cli"],
 
