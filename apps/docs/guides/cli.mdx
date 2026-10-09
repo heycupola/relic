@@ -196,6 +196,34 @@ relic import vercel -e production
 
 See [Migrating to Relic](/guides/importing) for provider flags, conflict handling, and parsing rules.
 
+### `relic push`
+
+Sync an environment's secrets into a deploy platform's secret store. Supported targets are Vercel, Cloudflare Workers, GitHub Actions, and Fly.io. See [Platform Sync](/guides/platform-sync) for authentication and platform options.
+
+```bash
+relic push -e <environment> --target <platform> [options]
+```
+
+| Flag                | Description                                                         |
+| ------------------- | ------------------------------------------------------------------- |
+| `-e, --environment` | Environment name (required)                                         |
+| `-t, --target`      | `vercel`, `cloudflare`, `github`, or `fly` (required)               |
+| `-f, --folder`      | Folder name                                                         |
+| `-s, --scope`       | Scopes to include, comma separated: `client`, `server`, `shared`    |
+| `-p, --project`     | Project ID (overrides `RELIC_PROJECT_ID` and `relic.toml`)          |
+| `--dry-run`         | Print the plan (names only) and exit                                |
+| `--prune`           | Delete platform secrets that aren't in Relic                        |
+| `-y, --yes`         | Skip confirmation. Required in CI and non-interactive shells        |
+
+**Examples:**
+
+```bash
+relic push -e production --target vercel --dry-run
+relic push -e production --target vercel --scope client,shared
+relic push -e staging --target cloudflare --wrangler-env staging
+relic push -e production --target github --github-env production --yes
+```
+
 ### `relic telemetry`
 
 Manage anonymous usage telemetry.

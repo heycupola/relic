@@ -40,6 +40,9 @@ relic run -e production -s client -- npm run build
 
 # Open a subshell with secrets loaded (type `exit` to leave)
 relic shell -e development
+
+# Sync secrets to a deploy platform
+relic push -e production --target vercel --dry-run
 ```
 
 ## Commands
@@ -55,6 +58,7 @@ relic shell -e development
 | `relic run` | Run a command with secrets injected |
 | `relic shell` | Open a subshell with secrets loaded |
 | `relic import` | Import secrets from a `.env`/JSON file, Doppler, Infisical, Vercel, or 1Password |
+| `relic push` | Sync secrets to Vercel, Cloudflare Workers, GitHub Actions, or Fly.io |
 | `relic service-account` | Create, list, and revoke service accounts for CI/CD |
 | `relic mcp` | Start the MCP server for AI assistants |
 | `relic upgrade` | Upgrade to the latest version |
@@ -74,6 +78,20 @@ relic shell -e development
 By default the command only receives the secrets plus `PATH`, `HOME`, `USER`, `SHELL`, `TERM`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR`, and `TZ`. Options after the command name are passed to the command; use `--` to separate them explicitly.
 
 `relic shell` accepts the same options, plus `--force` to open a nested shell.
+
+### `relic push` options
+
+| Flag | Description |
+|------|-------------|
+| `-e, --environment` | Environment name (required) |
+| `-t, --target` | `vercel`, `cloudflare`, `github`, or `fly` (required) |
+| `-f, --folder` | Folder name |
+| `-s, --scope` | Comma separated: `client`, `server`, `shared` |
+| `--dry-run` | Print the plan (names only) and exit |
+| `--prune` | Delete platform secrets that are not in Relic |
+| `-y, --yes` | Skip confirmation (required in CI) |
+
+See [Platform Sync](https://docs.withrelic.com/guides/platform-sync) for platform options and authentication.
 
 ## CI/CD
 
