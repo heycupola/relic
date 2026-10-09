@@ -14,7 +14,8 @@
     "format": "oxfmt .",
     "test": "bun test",
     "lint:fix": "oxlint . --fix",
-    "format:check": "oxfmt --check ."
+    "format:check": "oxfmt --check .",
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "@repo/backend": "*",
@@ -27,6 +28,6 @@
     "@types/bun": "^1.4.2"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": ">=5"
   }
 }

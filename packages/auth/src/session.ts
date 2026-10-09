@@ -14,7 +14,7 @@ async function ensureConfigDir(): Promise<void> {
     if (process.platform !== "win32") {
       await chmod(CONFIG_DIR, 0o700);
     }
-  } catch (_) {
+  } catch {
     void 0;
   }
 }
@@ -43,7 +43,7 @@ export async function clearSession(): Promise<void> {
     if (await file.exists()) {
       await unlink(SESSION_FILE);
     }
-  } catch (_) {
+  } catch {
     void 0;
   }
 }

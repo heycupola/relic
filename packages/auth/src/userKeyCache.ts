@@ -20,7 +20,7 @@ async function ensureConfigDir(): Promise<void> {
     if (process.platform !== "win32") {
       await chmod(CONFIG_DIR, 0o700);
     }
-  } catch (_) {
+  } catch {
     void 0;
   }
 }
@@ -69,7 +69,7 @@ export function getCachedUserKeys(db: Database): CachedUserKeys | null {
       publicKey: row.public_key ?? undefined,
       keysUpdatedAt: row.keys_updated_at,
     };
-  } catch (_) {
+  } catch {
     return null;
   }
 }
@@ -79,7 +79,7 @@ export function cacheUserKeys(db: Database, keys: CachedUserKeys): void {
     db.prepare(
       "INSERT OR REPLACE INTO user_keys (id, encrypted_private_key, salt, public_key, keys_updated_at) VALUES (1, ?, ?, ?, ?)",
     ).run(keys.encryptedPrivateKey, keys.salt, keys.publicKey ?? null, keys.keysUpdatedAt);
-  } catch (_) {
+  } catch {
     void 0;
   }
 }
@@ -87,7 +87,7 @@ export function cacheUserKeys(db: Database, keys: CachedUserKeys): void {
 export function clearCachedUserKeys(db: Database): void {
   try {
     db.prepare("DELETE FROM user_keys").run();
-  } catch (_) {
+  } catch {
     void 0;
   }
 }

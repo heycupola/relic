@@ -764,9 +764,7 @@ describe("Service Account Keys", () => {
   test("unwrapProjectKeyWithServiceToken full chain", async () => {
     const userPassword = "user-password-123";
     const userKeys = await createUserKeys(userPassword);
-    const { projectKey, encryptedProjectKey: ownerEncProjectKey } = await createProjectKey(
-      userKeys.publicKey,
-    );
+    const { projectKey } = await createProjectKey(userKeys.publicKey);
 
     const token = "rsk_" + "f".repeat(64);
     const saKeys = await createServiceAccountKeys(token);

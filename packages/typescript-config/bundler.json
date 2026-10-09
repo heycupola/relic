@@ -3,6 +3,7 @@
   "extends": "./base.json",
   "compilerOptions": {
     "lib": ["ESNext"],
+    "types": ["bun"],
     "target": "ESNext",
     "module": "Preserve",
     "moduleResolution": "bundler",
@@ -11,6 +12,8 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
     "noFallthroughCasesInSwitch": true,
     "noImplicitOverride": true,
     "noUnusedLocals": false,
