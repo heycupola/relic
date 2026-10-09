@@ -7,7 +7,7 @@ import {
   validateSession,
 } from "@repo/auth";
 import { createLogger, trackEvent } from "@repo/logger";
-import type { SecretScope } from "lib/types";
+import type { SecretScope } from "../lib/types";
 import ora from "ora";
 import pc from "picocolors";
 import { getApi, type ProtectedApi } from "../lib/api";
