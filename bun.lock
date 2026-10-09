@@ -32,6 +32,7 @@
         "@clack/prompts": "^1.8.1",
         "@repo/auth": "*",
         "@repo/backend": "*",
+        "@repo/bulk-import": "*",
         "@repo/crypto": "*",
         "@repo/logger": "*",
         "@repo/tui": "*",

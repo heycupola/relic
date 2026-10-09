@@ -1,0 +1,243 @@
+---
+title: Leak Guard
+description: Block commits that contain dotenv files or the values of your Relic secrets.
+---
+
+`relic guard` stops secrets from reaching your git history. It runs two checks:
+
+- **Dotenv files**: flags committed or staged `.env`, `.env.local`, `.env.production`, `*.env`, and `.dev.vars` files.
+- **Relic values**: decrypts your linked project's secrets on your device and searches for exact occurrences of their values in the content being committed.
+
+Matching happens locally. File contents are never sent anywhere, and findings show only the secret's key name, the file, the line, and a masked preview such as `sk********`.
+
+## Quick Start
+
+<Steps>
+  <Step title="Link your project">
+    Run `relic init` at the repository root so the guard knows which project's secrets to match.
+    Without `relic.toml`, only the dotenv check runs.
+  </Step>
+  <Step title="Install the pre-commit hook">
+    ```bash
+    relic guard install
+    ```
+
+    Every `git commit` now runs `relic guard scan --staged` and is blocked when it finds a leak.
+
+  </Step>
+  <Step title="Scan the existing tree">
+    ```bash
+    relic guard scan
+    ```
+  </Step>
+</Steps>
+
+## Scanning
+
+```bash
+relic guard scan [paths...] [options]
+```
+
+| Flag                       | Description                                                                 |
+| -------------------------- | --------------------------------------------------------------------------- |
+| `--staged`                 | Scan staged content, read from the git index rather than the working tree   |
+| `--range <rev-range>`      | Scan lines added by each commit in a range, such as `origin/main..HEAD`     |
+| `-e, --environment <name>` | Environment whose values to match. Repeatable. Defaults to all environments |
+| `-p, --project <id>`       | Project ID (overrides `relic.toml` and `RELIC_PROJECT_ID`)                  |
+| `--min-length <n>`         | Skip secret values shorter than `n` characters (default: `8`)               |
+| `--no-values`              | Only run the dotenv check                                                   |
+| `--require-values`         | Fail when secret values can't be loaded                                     |
+| `--json`                   | Print machine-readable results                                              |
+
+Without `--staged` or `--range`, the guard scans the given paths (default: the current directory). Inside a git repository it scans tracked files plus untracked files that aren't gitignored, so a gitignored local `.env` is not reported.
+
+**Examples:**
+
+```bash
+relic guard scan                              # Whole working tree
+relic guard scan src config                   # Specific directories
+relic guard scan --staged                     # What you're about to commit
+relic guard scan --range origin/main..HEAD    # Commits on your branch
+relic guard scan --staged -e production -e staging
+```
+
+### Exit Codes
+
+| Code | Meaning                                                                       |
+| ---- | ----------------------------------------------------------------------------- |
+| `0`  | No findings                                                                   |
+| `1`  | One or more findings                                                          |
+| `2`  | Usage or git error, or `--require-values` was set and values couldn't be read |
+
+### Output
+
+```text
+  ✗ relic guard  2 findings in 3 files (staged)
+
+  .env.production
+    dotenv file  should not be committed
+
+  src/billing.ts:4:24
+    STRIPE_SECRET_KEY (production)  sk********
+
+  Matched 14 secret values from: development, production
+```
+
+With `--json`, each finding includes `type` (`dotenv` or `value`), `file`, and for value findings `line`, `column`, `secrets` (key and environment), and `preview`. Range scans add the `commit` SHA.
+
+## Value Matching
+
+The guard decrypts secrets the same way `relic run` does, then builds an Aho-Corasick automaton over all values and scans every file in a single pass. Decrypted values stay in memory for the duration of the scan and are never written to disk.
+
+To avoid noise, it skips values that:
+
+- are shorter than the minimum length (default `8`)
+- are booleans, numbers, or common literals like `production`
+- point at local hosts, such as `http://localhost:3000` or `postgres://user:pass@127.0.0.1/db`
+- repeat a single character
+
+### When Values Can't Be Loaded
+
+If you're logged out, offline, or the repository has no `relic.toml`, the dotenv check still runs and the output says that value matching was skipped. The commit is not blocked for that reason. Pass `--require-values` to fail instead, which is useful in CI.
+
+Value loading times out after 20 seconds so a slow network can't hang your commit.
+
+### Authentication
+
+| Mode                                  | Environments                                         |
+| ------------------------------------- | ---------------------------------------------------- |
+| Session (`relic login`)               | All environments you can access, or those set by `-e` |
+| `RELIC_SERVICE_TOKEN`                 | Requires `-e`. Matches root-level secrets only        |
+| `RELIC_API_KEY` + `RELIC_PASSWORD`    | Requires `-e`. Matches root-level secrets only        |
+
+<Note>
+  Service account exports are rate limited to 6 requests per minute with a burst of 3. Each `-e`
+  flag costs one request, so pass at most three environments per CI run.
+</Note>
+
+## Ignoring Findings
+
+Add a `relic-guard-ignore` comment anywhere on a line to skip value findings on that line:
+
+```ts
+const fixture = "sk_test_4eC39HqLyjWDarjtT1zdp7dc"; // relic-guard-ignore
+```
+
+To skip whole files or directories, create a `.relicguardignore` file at the repository root. It uses gitignore syntax:
+
+```gitignore
+# Recorded HTTP fixtures
+test/fixtures/
+*.snap
+!keep.snap
+```
+
+## Configuration
+
+Add a `[guard]` section to `relic.toml`:
+
+```toml
+project_id = "your-project-id"
+
+[guard]
+allow = ["test/.env.test", "examples/**/.env"]
+min_length = 12
+```
+
+| Key          | Description                                                                                     |
+| ------------ | ----------------------------------------------------------------------------------------------- |
+| `allow`      | Gitignore-style patterns for dotenv files that may be committed. Value matching still applies   |
+| `min_length` | Minimum secret length to match. `--min-length` overrides it                                     |
+
+`.env.example`, `.env.sample`, and `.env.template` (and names like `.env.local.example`) are always allowed.
+
+## Pre-commit Hooks
+
+```bash
+relic guard install      # Add the hook
+relic guard uninstall    # Remove it
+```
+
+`relic guard install` writes `.git/hooks/pre-commit`. If a pre-commit hook already exists, it's moved to `pre-commit.pre-relic` and still runs first. `relic guard uninstall` restores it.
+
+If the repository uses a hook manager, the guard prints the snippet to add instead of writing hooks:
+
+<Tabs>
+  <Tab title="Lefthook">
+    ```yaml lefthook.yml
+    pre-commit:
+      commands:
+        relic-guard:
+          run: relic guard scan --staged
+    ```
+
+    For lefthook, `relic guard install` offers to add this for you. Pass `--yes` to skip the prompt.
+
+  </Tab>
+  <Tab title="Husky">
+    Add this line to `.husky/pre-commit`:
+
+    ```bash .husky/pre-commit
+    relic guard scan --staged
+    ```
+
+  </Tab>
+  <Tab title="pre-commit">
+    ```yaml .pre-commit-config.yaml
+    repos:
+      - repo: local
+        hooks:
+          - id: relic-guard
+            name: relic guard
+            entry: relic guard scan --staged
+            language: system
+            pass_filenames: false
+    ```
+  </Tab>
+</Tabs>
+
+<Info>
+  The installed hook skips the scan with a warning when `relic` isn't on your `PATH`, so teammates
+  without Relic can still commit.
+</Info>
+
+## CI
+
+Scan every commit in a pull request so a secret that was added and later removed is still caught. Use a [service account](/guides/service-accounts) for value matching.
+
+```yaml .github/workflows/leak-guard.yml
+name: Leak guard
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Relic
+        run: bun add -g relic
+
+      - name: Scan pull request commits
+        env:
+          RELIC_SERVICE_TOKEN: ${{ secrets.RELIC_SERVICE_TOKEN }}
+        run: relic guard scan --range "origin/${{ github.base_ref }}..HEAD" -e production --require-values
+```
+
+<Warning>
+  `fetch-depth: 0` is required. A shallow clone doesn't contain the base branch, so the range can't
+  be resolved.
+</Warning>
+
+Pull requests from forks don't receive repository secrets. Drop `--require-values` if you accept fork contributions; the dotenv check still runs for them.

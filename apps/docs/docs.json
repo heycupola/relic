@@ -67,7 +67,8 @@
           "guides/service-accounts",
           "guides/oidc",
           "guides/ci-cd-integration",
-          "guides/platform-sync"
+          "guides/platform-sync",
+          "guides/leak-guard"
         ]
       },
       {

@@ -175,6 +175,16 @@ relic run -e production -f web -- npm run build
 
 Useful in monorepos where different services need different secrets from the same environment.
 
+## Leak Scanning
+
+Run `relic guard` on pull requests to fail the build when a commit adds a dotenv file or the value of one of your secrets:
+
+```bash
+relic guard scan --range "origin/main..HEAD" -e production --require-values
+```
+
+See [Leak Guard](/guides/leak-guard#ci) for a complete GitHub Actions workflow.
+
 ## Security Considerations
 
 <Warning>

@@ -258,6 +258,37 @@ relic check -e staging --compare production
 
 See [Checking required keys](/guides/check) for how keys are discovered, the JSON format, and CI usage.
 
+### `relic guard`
+
+Block commits that contain dotenv files or the values of your Relic secrets. Matching happens on your device. See [Leak Guard](/guides/leak-guard) for details.
+
+```bash
+relic guard scan [paths...] [options]   # Scan files, staged changes, or a commit range
+relic guard install                     # Add a pre-commit hook
+relic guard uninstall                   # Remove the pre-commit hook
+```
+
+| Flag                  | Description                                                     |
+| --------------------- | --------------------------------------------------------------- |
+| `--staged`            | Scan staged content from the git index                          |
+| `--range <rev-range>` | Scan lines added in a commit range                              |
+| `-e, --environment`   | Environment whose values to match (repeatable, default: all)    |
+| `-p, --project`       | Project ID (overrides `relic.toml`)                             |
+| `--min-length`        | Skip secret values shorter than this (default: `8`)             |
+| `--no-values`         | Only check for dotenv files                                     |
+| `--require-values`    | Fail when secret values can't be loaded                         |
+| `--json`              | Print results as JSON                                           |
+
+The command exits with `1` when it finds a leak and `2` on errors.
+
+**Examples:**
+
+```bash
+relic guard scan --staged
+relic guard scan --range origin/main..HEAD -e production
+relic guard scan src --json
+```
+
 ### `relic telemetry`
 
 Manage anonymous usage telemetry.
@@ -287,6 +318,14 @@ project_id = "your-project-id"
 
 [check]
 ignore = ["NODE_ENV", "PORT"]
+```
+
+An optional `[guard]` table configures [`relic guard`](/guides/leak-guard):
+
+```toml
+[guard]
+allow = ["test/.env.test"]  # dotenv files that may be committed
+min_length = 8
 ```
 
 ## Caching

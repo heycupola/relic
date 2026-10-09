@@ -2,6 +2,7 @@ import { initLogger, isFirstRun, saveTelemetryPreference } from "@repo/logger";
 import { Command, CommanderError, Help } from "commander";
 import pc from "picocolors";
 import check, { type CheckOptions } from "./commands/check";
+import { type GuardScanOptions, guardInstall, guardScan, guardUninstall } from "./commands/guard";
 import importSecrets, { type ImportOptions } from "./commands/import";
 import init from "./commands/init";
 import login from "./commands/login";
@@ -59,7 +60,7 @@ const COMMAND_GROUPS = [
   },
   {
     label: "Secrets",
-    commands: ["run", "shell", "import", "push", "check", "service-account"],
+    commands: ["run", "shell", "import", "push", "check", "guard", "service-account"],
   },
   {
     label: "Tools",
@@ -337,6 +338,40 @@ program
   .action((options: CheckOptions) => {
     check(options);
   });
+
+const guardCmd = program
+  .command("guard")
+  .description("Block commits that leak secrets or dotenv files");
+
+guardCmd
+  .command("scan")
+  .description("Scan files, staged changes, or a commit range for leaked secrets")
+  .argument("[paths...]", "Files or directories to scan (default: current directory)")
+  .option("--staged", "Scan staged content from the git index")
+  .option("--range <rev-range>", "Scan lines added in a commit range (e.g. origin/main..HEAD)")
+  .option(
+    "-e, --environment <name>",
+    "Environment whose values to match (repeatable, default: all)",
+    collect,
+  )
+  .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
+  .option("--min-length <n>", "Skip secret values shorter than this (default: 8)")
+  .option("--no-values", "Only check for dotenv files, skip secret value matching")
+  .option("--require-values", "Fail when secret values can't be loaded")
+  .option("--json", "Print results as JSON")
+  .action((paths: string[], options: GuardScanOptions) => guardScan(paths, options));
+
+guardCmd
+  .command("install")
+  .description("Add a pre-commit hook that runs relic guard scan --staged")
+  .option("-y, --yes", "Edit hook manager config (lefthook.yml) without asking")
+  .action((options: { yes?: boolean }) => guardInstall(options));
+
+guardCmd
+  .command("uninstall")
+  .description("Remove the relic guard pre-commit hook")
+  .option("-y, --yes", "Edit hook manager config (lefthook.yml) without asking")
+  .action((options: { yes?: boolean }) => guardUninstall(options));
 
 program
   .command("version")
