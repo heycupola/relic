@@ -6,6 +6,8 @@
       "@repo/backend/*": ["../backend/*"],
       "@repo/auth": ["../auth/index.ts"],
       "@repo/auth/*": ["../auth/*"],
+      "@repo/bulk-import": ["../bulk-import/index.ts"],
+      "@repo/bulk-import/*": ["../bulk-import/*"],
       "@repo/crypto": ["../crypto/index.ts"],
       "@repo/crypto/*": ["../crypto/*"],
       "@repo/logger": ["../logger/index.ts"],

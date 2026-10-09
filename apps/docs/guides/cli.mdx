@@ -161,6 +161,41 @@ relic shell -e staging -f database
 
 The shell sets `RELIC_SHELL=1` and `RELIC_ENVIRONMENT` so you can show the active environment in your prompt. See [Local Development](/guides/local-development) for prompt snippets and details.
 
+### `relic import`
+
+Import secrets into an environment from a dotenv file, JSON, stdin, Doppler, Infisical, Vercel, or 1Password. Values are encrypted on your device before upload. Relic prints a plan with secret names only and asks before changing existing secrets.
+
+```bash
+relic import [source] -e <environment> [options]
+```
+
+`source` defaults to `.env`. Use a file path, `-` for stdin, or `doppler`, `infisical`, `vercel`, `1password`.
+
+| Flag                | Description                                                         |
+| ------------------- | ------------------------------------------------------------------- |
+| `-e, --environment` | Target environment (required)                                       |
+| `-f, --folder`      | Target folder                                                       |
+| `-p, --project`     | Project ID (overrides `relic.toml`)                                 |
+| `-s, --scope`       | Default scope for imported secrets: `client`, `server`, or `shared` |
+| `--format`          | `env` or `json` for files and stdin                                 |
+| `--overwrite`       | Replace existing secrets that have different values                 |
+| `--skip-existing`   | Keep existing secrets and import only new ones                      |
+| `--dry-run`         | Print the plan without importing                                    |
+| `-y, --yes`         | Skip confirmation prompts                                           |
+| `--delete-source`   | Delete the source file after a successful import (asks first)       |
+
+**Examples:**
+
+```bash
+relic import -e development
+relic import .env.production -e production --dry-run
+cat secrets.json | relic import - -e staging --skip-existing
+relic import doppler -e production --doppler-project web --doppler-config prd
+relic import vercel -e production
+```
+
+See [Migrating to Relic](/guides/importing) for provider flags, conflict handling, and parsing rules.
+
 ### `relic telemetry`
 
 Manage anonymous usage telemetry.

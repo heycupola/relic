@@ -61,6 +61,7 @@
           "guides/cli",
           "guides/local-development",
           "guides/tui",
+          "guides/importing",
           "guides/project-collaboration",
           "guides/service-accounts",
           "guides/oidc",

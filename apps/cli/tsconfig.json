@@ -6,6 +6,8 @@
       "@repo/auth/*": ["../../packages/auth/*"],
       "@repo/backend": ["../../packages/backend/index.ts"],
       "@repo/backend/*": ["../../packages/backend/*"],
+      "@repo/bulk-import": ["../../packages/bulk-import/index.ts"],
+      "@repo/bulk-import/*": ["../../packages/bulk-import/*"],
       "@repo/crypto": ["../../packages/crypto/index.ts"],
       "@repo/crypto/*": ["../../packages/crypto/*"],
       "@repo/tui": ["./tui.d.ts"]
