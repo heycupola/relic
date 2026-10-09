@@ -1,9 +1,12 @@
 import { exec, execSync } from "node:child_process";
+import { dirname } from "node:path";
 import { trackEvent } from "@repo/logger";
 import ora from "ora";
 import pc from "picocolors";
+import { exitWithTelemetry } from "../lib/telemetry";
 import pkg from "../package.json";
 import {
+  CURL_INSTALL_COMMAND,
   detectInstallMethodFromExecutablePath,
   type InstallMethod,
   resolveExecutablePath,
@@ -19,13 +22,22 @@ function tryExec(cmd: string): Promise<string> {
   });
 }
 
-async function detectInstallMethod(): Promise<InstallMethod> {
-  const exePath = resolveExecutablePath();
-  if (exePath) {
+/** `argv[0]` for script installs; `execPath` for standalone binaries (where `argv[0]` is "bun"). */
+function executableCandidates(): string[] {
+  const candidates = [resolveExecutablePath(), resolveRealPath(process.execPath)];
+  return [...new Set(candidates.filter((path): path is string => !!path))];
+}
+
+async function detectInstallMethod(): Promise<{ method: InstallMethod; exePath: string | null }> {
+  for (const exePath of executableCandidates()) {
     const fromExecutable = detectInstallMethodFromExecutablePath(exePath);
-    if (fromExecutable) return fromExecutable;
+    if (fromExecutable) return { method: fromExecutable, exePath };
   }
 
+  return { method: await probeInstallMethod(), exePath: null };
+}
+
+async function probeInstallMethod(): Promise<InstallMethod> {
   try {
     await tryExec("brew list relic 2>/dev/null");
     return "homebrew";
@@ -105,13 +117,23 @@ const UPGRADE_COMMANDS: Record<Exclude<InstallMethod, "unknown">, string> = {
   homebrew: "brew upgrade relic",
   npm: "npm install -g relic@latest",
   bun: "bun install -g relic@latest",
+  curl: CURL_INSTALL_COMMAND,
 };
+
+/** The install script honours `RELIC_INSTALL_DIR`; reuse the directory of the running binary. */
+function upgradeEnv(method: InstallMethod, exePath: string | null): NodeJS.ProcessEnv {
+  if (method !== "curl" || !exePath) return process.env;
+  return { ...process.env, RELIC_INSTALL_DIR: dirname(dirname(exePath)) };
+}
 
 export default async function upgrade() {
   const spinner = ora("Checking for updates...").start();
   const runningExe = resolveExecutablePath();
 
-  const [method, latestVersion] = await Promise.all([detectInstallMethod(), getLatestVersion()]);
+  const [{ method, exePath }, latestVersion] = await Promise.all([
+    detectInstallMethod(),
+    getLatestVersion(),
+  ]);
 
   const currentVersion = pkg.version;
 
@@ -135,6 +157,7 @@ export default async function upgrade() {
     console.log(`  ${pc.dim("Upgrade manually using one of:")}`);
     console.log(`    ${pc.cyan("brew upgrade relic")}`);
     console.log(`    ${pc.cyan("npm install -g relic@latest")}`);
+    console.log(`    ${pc.cyan(CURL_INSTALL_COMMAND)}`);
     console.log();
     console.log(
       `  ${pc.dim("Or download from")} ${pc.white("https://github.com/heycupola/relic/releases")}`,
@@ -154,7 +177,7 @@ export default async function upgrade() {
     : `Upgrading via ${method}...`;
 
   try {
-    execSync(upgradeCmd, { stdio: "inherit" });
+    execSync(upgradeCmd, { stdio: "inherit", env: upgradeEnv(method, exePath) });
     spinner.succeed(
       latestVersion
         ? `Upgraded to ${pc.green(`v${latestVersion}`)} via ${method}`
@@ -175,6 +198,6 @@ export default async function upgrade() {
       method,
       success: false,
     });
-    process.exit(1);
+    await exitWithTelemetry(1);
   }
 }

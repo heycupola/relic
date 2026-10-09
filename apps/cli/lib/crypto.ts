@@ -1,6 +1,7 @@
 import { getPasswordFromStorage } from "@repo/auth";
 import { decryptSecret, unwrapProjectKey } from "@repo/crypto";
-import { trackError } from "@repo/logger";
+import { NO_PASSWORD_MESSAGE } from "./cli";
+import { trackCliError } from "./telemetry";
 
 export class ProjectKeyError extends Error {
   constructor(
@@ -20,10 +21,7 @@ export async function getProjectKey(
 ): Promise<CryptoKey> {
   const password = await getPasswordFromStorage();
   if (!password) {
-    throw new ProjectKeyError(
-      "No password available. Run 'relic login' and set up your password first.",
-      "NO_PASSWORD",
-    );
+    throw new ProjectKeyError(NO_PASSWORD_MESSAGE, "NO_PASSWORD");
   }
 
   try {
@@ -31,7 +29,7 @@ export async function getProjectKey(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    trackError("cli", error, { action: "decrypt_project_key" });
+    trackCliError(error, { action: "decrypt_project_key" });
 
     if (errorMessage.includes("DECRYPTION_FAILED") || errorMessage.includes("incorrect password")) {
       throw new ProjectKeyError(
@@ -72,7 +70,7 @@ export async function decryptSecrets(
       const value = await decryptSecretValue(projectKey, secret.encryptedValue);
       decrypted.push({ key: secret.key, value });
     } catch (error) {
-      trackError("cli", error, { action: "decrypt_secret" });
+      trackCliError(error, { action: "decrypt_secret" });
       throw new Error(`Failed to decrypt secret "${secret.key}": ${error}`);
     }
   }

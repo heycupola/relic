@@ -143,19 +143,25 @@ Reads `relic.toml` from the current directory and returns the project ID and con
 
 ### `run-with-secrets`
 
-Runs a command with decrypted secrets injected as environment variables. Returns the command's stdout, stderr, and exit code.
+Runs a command with decrypted secrets injected as environment variables. Returns the command's exit code, stdout, and stderr, with secret values redacted.
 
-| Parameter     | Required | Description                                                 |
-| ------------- | -------- | ----------------------------------------------------------- |
-| `command`     | Yes      | Command and arguments (e.g. `["npm", "run", "dev"]`)        |
-| `environment` | Yes      | Environment name                                            |
-| `folder`      | No       | Folder name                                                 |
-| `scope`       | No       | Scope filter: `client`, `server`, or `shared`               |
-| `projectId`   | No       | Project ID (defaults to `relic.toml` or `RELIC_PROJECT_ID`) |
+| Parameter        | Required | Description                                                       |
+| ---------------- | -------- | ----------------------------------------------------------------- |
+| `command`        | Yes      | Command and arguments (e.g. `["npm", "test"]`)                    |
+| `environment`    | Yes      | Environment name                                                  |
+| `folder`         | No       | Folder name                                                       |
+| `scope`          | No       | Scope filter: `client`, `server`, or `shared`                     |
+| `projectId`      | No       | Project ID (defaults to `relic.toml` or `RELIC_PROJECT_ID`)       |
+| `timeoutSeconds` | No       | Kill the command after this many seconds (default `120`, max `600`) |
+
+- **Redaction**: every decrypted secret value of 4 or more characters is replaced with `[REDACTED:KEY]` in stdout and stderr before the output is returned.
+- **Credentials**: the command inherits the MCP server's environment minus all `RELIC_*` variables, so `RELIC_PASSWORD`, `RELIC_API_KEY`, and `RELIC_SERVICE_TOKEN` are not visible to it.
+- **Limits**: each stream is capped at 50,000 characters. On timeout the command (and its child processes) is killed and the partial output is returned with `timedOut: true`.
 
 <Warning>
-  Secret values are decrypted locally and injected into the child process environment. They are
-  **never** included in the tool response — only the command output is returned to the AI.
+  Redaction is best effort. It only catches verbatim values: a command that encodes, splits, or
+  transforms a secret (for example `base64`, or printing it character by character) can still reveal
+  it to the AI. Only let the assistant run commands you would be comfortable sharing the output of.
 </Warning>
 
 ## Security Model
@@ -164,11 +170,11 @@ The MCP server inherits Relic's client-side encryption. All decryption happens l
 
 | Guarantee                        | How                                                                                                            |
 | -------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Secret values never reach the AI | `list-secrets` returns names only; `run-with-secrets` returns command output only                              |
+| Secret values are kept from the AI | `list-secrets` returns names only; `run-with-secrets` redacts secret values from command output (best effort) |
 | Client-side decryption           | Secrets are decrypted on your device using your password and keys                                              |
 | No disk writes                   | Secrets are held in memory for the duration of the command                                                     |
 | Session-based auth               | The MCP server reuses your existing `relic login` session                                                      |
-| Service token support            | Set `RELIC_SERVICE_TOKEN` for CI-like environments. OIDC tokens are auto-detected.                             |
+| Service token support            | Set `RELIC_SERVICE_TOKEN` for CI-like environments. OIDC: automatic in GitHub Actions, else `RELIC_OIDC_TOKEN`.                             |
 | API key support (deprecated)     | `RELIC_API_KEY` + `RELIC_PASSWORD` still works but [service tokens](/guides/service-accounts) are recommended. |
 
 ## Example Usage
@@ -180,4 +186,4 @@ Once configured, you can ask your AI assistant things like:
 - _"Run my test suite with staging secrets"_
 - _"Which project is this directory linked to?"_
 
-The assistant will use the appropriate MCP tool and return the results without ever seeing your secret values.
+The assistant will use the appropriate MCP tool and return the results with secret values redacted.

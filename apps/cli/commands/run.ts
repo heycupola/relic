@@ -1,5 +1,6 @@
 import { ptr } from "bun:ffi";
 import type { Database } from "bun:sqlite";
+import { existsSync } from "node:fs";
 import {
   cacheUserKeys,
   clearCachedUserKeys,
@@ -31,32 +32,37 @@ import {
   fetchUserKeysViaApiKey,
   getApi,
   ProPlanRequiredError,
+  REQUEST_TIMEOUT_MS,
   type ProtectedApi,
   type SecretData,
 } from "../lib/api";
 import {
   failWithUpgradePrompt,
   getErrorMessage,
+  NO_KEYS_MESSAGE,
   NO_PASSWORD_MESSAGE,
   NOT_LOGGED_IN_MESSAGE,
   PROJECT_ID_REQUIRED_MESSAGE,
   resolveProjectIdFromEnv,
   resolveProjectIdWithConfig,
 } from "../lib/cli";
-import { findConfig } from "../lib/config";
 import { decryptSecrets, getProjectKey, ProjectKeyError } from "../lib/crypto";
+import { buildChildEnv } from "../lib/env";
+import { exitWithTelemetry } from "../lib/telemetry";
 import type { SecretScope } from "../lib/types";
 
 const log = createLogger("cli");
 
 const SECRET_SCOPES: readonly SecretScope[] = ["client", "server", "shared"];
-const NO_KEYS_MESSAGE = "No encryption keys found. Run 'relic' to set up your keys first.";
+const COMMAND_NOT_FOUND_EXIT_CODE = 127;
+const RUNNER_ERROR = -1;
 
 export interface RunOptions {
   environment: string;
   folder?: string;
   scope?: SecretScope;
   project?: string;
+  inheritEnv?: boolean;
 }
 
 export interface PrepareSecretsResult {
@@ -194,6 +200,7 @@ async function resolveOidcToken(): Promise<string | undefined> {
     try {
       const response = await fetch(`${requestUrl}&audience=relic`, {
         headers: { Authorization: `bearer ${requestToken}` },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
       if (response.ok) {
         const data = (await response.json()) as { value?: string };
@@ -204,6 +211,7 @@ async function resolveOidcToken(): Promise<string | undefined> {
     }
   }
 
+  // Legacy GitLab (< 17.0) predefined token; newer GitLab requires `id_tokens: RELIC_OIDC_TOKEN`.
   if (process.env.CI_JOB_JWT_V2) {
     return process.env.CI_JOB_JWT_V2;
   }
@@ -385,15 +393,18 @@ export function resolveProjectId(options: RunOptions): string | null {
   return resolveProjectIdFromEnv(options.project);
 }
 
-function failAndExit(spinner: Ora, message: string): never {
-  spinner.fail(pc.red(message));
-  process.exit(1);
-}
-
 async function prepareWithServiceToken(
   spinner: Ora,
   options: RunOptions,
 ): Promise<PrepareSecretsResult> {
+  if (options.project) {
+    console.error(
+      pc.yellow(
+        "  ⚠ `--project` is ignored with RELIC_SERVICE_TOKEN: service accounts are bound to one project.\n",
+      ),
+    );
+  }
+
   spinner.start("Authenticating with service token...");
   spinner.text = "Fetching secrets via service token...";
   return prepareSecretsWithServiceToken(options);
@@ -414,7 +425,7 @@ async function prepareWithApiKey(spinner: Ora, options: RunOptions): Promise<Pre
 
   const projectId = await resolveProjectIdWithConfig(options.project);
   if (!projectId) {
-    failAndExit(spinner, PROJECT_ID_REQUIRED_MESSAGE);
+    throw new Error(PROJECT_ID_REQUIRED_MESSAGE);
   }
 
   spinner.text = "Fetching secrets via API key...";
@@ -429,44 +440,58 @@ async function prepareWithSession(
 
   const sessionValidation = await validateSession();
   if (!sessionValidation.isValid || sessionValidation.isExpired) {
-    failAndExit(spinner, NOT_LOGGED_IN_MESSAGE);
+    throw new Error(NOT_LOGGED_IN_MESSAGE);
   }
 
   spinner.text = "Verifying password...";
   if (!(await hasPassword())) {
-    failAndExit(spinner, NO_PASSWORD_MESSAGE);
+    throw new Error(NO_PASSWORD_MESSAGE);
   }
 
   if (!(await getPasswordFromStorage())) {
-    failAndExit(spinner, "Could not retrieve password. Please re-authenticate.");
+    throw new Error("Could not retrieve password. Run `relic login` to re-authenticate.");
   }
 
   spinner.text = "Loading configuration...";
-  const configResult = await findConfig();
-  if (!configResult) {
-    failAndExit(spinner, "No relic.toml found. Run 'relic init' first.");
+  const projectId = await resolveProjectIdWithConfig(options.project);
+  if (!projectId) {
+    throw new Error(PROJECT_ID_REQUIRED_MESSAGE);
   }
 
-  const projectId = resolveProjectId(options) ?? configResult.config.project_id;
-
   spinner.text = "Preparing secrets...";
-  const db = await getCacheDb();
+  const db = await getCacheDb(projectId);
   const userKeyDb = await getUserKeyCacheDb();
   return prepareSecrets(projectId, options, db, userKeyDb, getApi());
 }
 
+/** Resolves like the runner does: the child's PATH (secrets may override it) or a direct path. */
+export function commandExists(program: string, path: string | undefined): boolean {
+  if (program.includes("/") || program.includes("\\")) {
+    return existsSync(program);
+  }
+  return Bun.which(program, { PATH: path ?? "" }) !== null;
+}
+
+/**
+ * The runner exits with the child's code, 128+N for signal N, or -1 when it could not start the
+ * command; -1 is reported as 127 (the shell convention for "command not found").
+ */
+export function toProcessExitCode(runnerExitCode: number): number {
+  return runnerExitCode === RUNNER_ERROR ? COMMAND_NOT_FOUND_EXIT_CODE : runnerExitCode;
+}
+
 async function executeCommand(
   command: string[],
-  secrets: Record<string, string>,
+  childEnv: Record<string, string>,
   count: number,
   startTime: number,
 ): Promise<never> {
   const runner = await RunnerBridge.getInstance();
 
   const commandBuffer = Buffer.from(`${JSON.stringify(command)}\0`, "utf-8");
-  const secretsBuffer = Buffer.from(`${JSON.stringify(secrets)}\0`, "utf-8");
+  const secretsBuffer = Buffer.from(`${JSON.stringify(childEnv)}\0`, "utf-8");
 
-  let exitCode = -1;
+  let exitCode = RUNNER_ERROR;
   try {
     exitCode = runner.runWithSecrets(ptr(commandBuffer), ptr(secretsBuffer));
   } finally {
@@ -474,31 +499,36 @@ async function executeCommand(
     secretsBuffer.fill(0);
   }
 
+  const processExitCode = toProcessExitCode(exitCode);
+  if (exitCode === RUNNER_ERROR) {
+    console.error(pc.red(`✖ Failed to start \`${command[0]}\``));
+  }
+
   trackEvent("cli_run_completed", {
     secret_count: count,
-    exit_code: exitCode,
+    exit_code: processExitCode,
     duration_ms: Date.now() - startTime,
   });
 
-  process.exit(exitCode);
+  return exitWithTelemetry(processExitCode);
 }
 
 export default async function run(command: string[], options: RunOptions) {
   if (!options.environment) {
-    console.error(pc.red("Error: --env is required"));
-    process.exit(1);
+    console.error(pc.red("Error: -e, --environment is required"));
+    await exitWithTelemetry(1);
   }
 
   if (command.length === 0) {
     console.error(pc.red("Error: No command specified"));
-    process.exit(1);
+    await exitWithTelemetry(1);
   }
 
   if (options.scope) {
     const scope = options.scope.toLowerCase() as SecretScope;
     if (!SECRET_SCOPES.includes(scope)) {
       console.error(pc.red("Error: --scope must be: client, server, or shared"));
-      process.exit(1);
+      await exitWithTelemetry(1);
     }
     options.scope = scope;
   }
@@ -508,6 +538,7 @@ export default async function run(command: string[], options: RunOptions) {
   trackEvent("cli_run_started", {
     has_folder: !!options.folder,
     has_scope: !!options.scope,
+    inherit_env: !!options.inheritEnv,
     mode,
   });
 
@@ -521,8 +552,20 @@ export default async function run(command: string[], options: RunOptions) {
           ? await prepareWithApiKey(spinner, options)
           : await prepareWithSession(spinner, options);
 
+    const childEnv = options.inheritEnv ? buildChildEnv(process.env, secrets) : secrets;
+    const program = command[0]!;
+    if (!commandExists(program, childEnv.PATH ?? process.env.PATH)) {
+      spinner.fail(pc.red(`command not found: ${program}`));
+      trackEvent("cli_run_completed", {
+        success: false,
+        exit_code: COMMAND_NOT_FOUND_EXIT_CODE,
+        duration_ms: Date.now() - startTime,
+      });
+      await exitWithTelemetry(COMMAND_NOT_FOUND_EXIT_CODE);
+    }
+
     spinner.succeed(pc.green(injectedMessage(count)));
-    await executeCommand(command, secrets, count, startTime);
+    await executeCommand(command, childEnv, count, startTime);
   } catch (err) {
     log.error("Run failed", err);
     trackEvent("cli_run_completed", { success: false, duration_ms: Date.now() - startTime });
@@ -531,6 +574,7 @@ export default async function run(command: string[], options: RunOptions) {
       await failWithUpgradePrompt(spinner, err.message, err.upgradeUrl);
     }
 
-    failAndExit(spinner, getErrorMessage(err));
+    spinner.fail(pc.red(getErrorMessage(err)));
+    await exitWithTelemetry(1);
   }
 }

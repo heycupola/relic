@@ -1,5 +1,7 @@
 import { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, test } from "bun:test";
+import { basename, join } from "node:path";
+import { getConfigDir } from "@repo/auth";
 import type { SecretData } from "../lib/api";
 import {
   cacheEnvironments,
@@ -9,6 +11,7 @@ import {
   getCachedEnvironmentId,
   getCachedFolderId,
   getCachedSecrets,
+  getGlobalCacheDbPath,
   initializeSchema,
   loadCachedEncryptedProjectKey,
   loadSecretsLastCachedTime,
@@ -157,5 +160,18 @@ describe("cache", () => {
 
     expect(result).toBeDefined();
     expect(result).toBeNull();
+  });
+});
+
+describe("getGlobalCacheDbPath", () => {
+  test("stores per-project caches under the user config directory", () => {
+    const path = getGlobalCacheDbPath("proj_123");
+    expect(path.endsWith(join("cache", "proj_123.db"))).toBe(true);
+    expect(path.startsWith(getConfigDir())).toBe(true);
+  });
+
+  test("never lets a project id escape the cache directory", () => {
+    const path = getGlobalCacheDbPath("../../etc/passwd");
+    expect(basename(path)).toBe("______etc_passwd.db");
   });
 });

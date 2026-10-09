@@ -1,9 +1,8 @@
 import * as p from "@clack/prompts";
-import { AuthenticationError } from "@repo/auth";
 import { createLogger, trackEvent } from "@repo/logger";
 import pc from "picocolors";
 import { getApi } from "../lib/api";
-import { getErrorMessage, hasActiveSession } from "../lib/cli";
+import { getErrorMessage, hasActiveSession, isAuthError } from "../lib/cli";
 import {
   configExists,
   createConfig,
@@ -12,6 +11,7 @@ import {
   saveConfig,
 } from "../lib/config";
 import { listAllProjects } from "../lib/projects";
+import { exitWithTelemetry } from "../lib/telemetry";
 
 const log = createLogger("cli");
 
@@ -42,7 +42,7 @@ export default async function init() {
     spinner.stop("Projects loaded");
 
     if (allProjects.length === 0) {
-      p.log.warn(pc.yellow("No projects found. Run `relic` to create a new project"));
+      p.log.warn(pc.yellow("No projects found. Run `relic` to open the TUI and create a project"));
       process.exit(1);
     }
 
@@ -77,7 +77,7 @@ export default async function init() {
   } catch (err) {
     spinner.error("Failed");
 
-    if (err instanceof AuthenticationError) {
+    if (isAuthError(err)) {
       p.log.error(pc.yellow("Not logged in"));
       p.outro(pc.dim("Run `relic login` to authenticate"));
       process.exit(1);
@@ -87,6 +87,6 @@ export default async function init() {
     trackEvent("cli_project_initialized", { success: false });
     const message = getErrorMessage(err, "Failed to initialize");
     p.log.error(pc.red(`Error: ${message}`));
-    process.exit(1);
+    await exitWithTelemetry(1);
   }
 }

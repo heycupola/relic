@@ -8,6 +8,7 @@ import {
 import { createLogger, trackEvent } from "@repo/logger";
 import ora from "ora";
 import pc from "picocolors";
+import { exitWithTelemetry } from "../lib/telemetry";
 
 const log = createLogger("cli");
 
@@ -93,12 +94,12 @@ export default async function login() {
       } else {
         spinner.fail(pc.red(`Error: ${result.error.message}`));
       }
-      process.exit(1);
+      await exitWithTelemetry(1);
     }
   } catch (err) {
     log.error("Login failed", err);
     trackEvent("cli_login_completed", { success: false });
     spinner.fail(pc.red(err instanceof Error ? err.message : String(err)));
-    process.exit(1);
+    await exitWithTelemetry(1);
   }
 }

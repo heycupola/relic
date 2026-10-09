@@ -1,8 +1,11 @@
 import { Database } from "bun:sqlite";
+import { mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { getConfigDir } from "@repo/auth";
 import type { SecretData } from "../lib/api";
-import { findConfig, getCacheDbPath } from "../lib/config";
+import { createRelicDir, findConfig, getCacheDbPath } from "../lib/config";
 
-let db: Database | null = null;
+const dbs = new Map<string, Database>();
 
 export function initializeSchema(db: Database): void {
   db.run(`
@@ -49,27 +52,46 @@ export function initializeSchema(db: Database): void {
   `);
 }
 
-export async function getCacheDb(): Promise<Database> {
-  if (db) return db;
+/** Cache location used when there is no `relic.toml` (project given via `--project` / env). */
+export function getGlobalCacheDbPath(projectId: string): string {
+  const safeId = projectId.replace(/[^A-Za-z0-9_-]/g, "_");
+  return join(getConfigDir(), "cache", `${safeId}.db`);
+}
 
+/**
+ * Opens the project cache: `.relic/cache.db` next to `relic.toml` when one exists, otherwise a
+ * per-project database in the user config directory.
+ */
+export async function getCacheDb(projectId?: string): Promise<Database> {
   const configResult = await findConfig();
-  if (!configResult) {
-    throw new Error("No relic.toml found. Run 'relic init' first.");
+
+  let cacheDbPath: string;
+  if (configResult) {
+    await createRelicDir(configResult.rootDir);
+    cacheDbPath = getCacheDbPath(configResult.rootDir);
+  } else if (projectId) {
+    cacheDbPath = getGlobalCacheDbPath(projectId);
+    await mkdir(dirname(cacheDbPath), { recursive: true, mode: 0o700 });
+  } else {
+    throw new Error("No relic.toml found. Run `relic init` first.");
   }
 
-  const cacheDbPath = getCacheDbPath(configResult.rootDir);
-  db = new Database(cacheDbPath, { create: true });
+  const existing = dbs.get(cacheDbPath);
+  if (existing) return existing;
+
+  const db = new Database(cacheDbPath, { create: true });
   db.run("PRAGMA journal_mode = WAL;");
   initializeSchema(db);
+  dbs.set(cacheDbPath, db);
 
   return db;
 }
 
 export function closeCacheDb(): void {
-  if (db) {
+  for (const db of dbs.values()) {
     db.close();
-    db = null;
   }
+  dbs.clear();
 }
 
 export function cacheProject(db: Database, projectId: string, encryptedProjectKey: string): void {

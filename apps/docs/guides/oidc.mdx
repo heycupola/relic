@@ -9,7 +9,7 @@ OIDC trust policies add identity verification to service accounts. When configur
 
 1. You create a service account with an OIDC policy (or add one later via the dashboard)
 2. The policy specifies which CI provider and identity can use this service account
-3. At runtime, the CLI auto-detects the OIDC token from the CI environment
+3. At runtime, the CLI sends the CI job's OIDC token (requested automatically in GitHub Actions; read from `RELIC_OIDC_TOKEN` elsewhere)
 4. The server validates both the service token AND the OIDC token before returning secrets
 
 Neither credential is sufficient alone — the service token handles decryption, the OIDC token proves identity.
@@ -65,6 +65,8 @@ Neither credential is sufficient alone — the service token handles decryption,
     ```
   </Step>
   <Step title="Add id_tokens to your CI config">
+    GitLab doesn't expose an OIDC token by default (the old `CI_JOB_JWT_V2` variable was removed in GitLab 17.0). Declare one named `RELIC_OIDC_TOKEN` with `id_tokens`. The `aud` value must match the service account's `--oidc-audience` if you set one; otherwise any audience works and `relic` is a good choice.
+
     ```yaml
     deploy:
       stage: deploy
@@ -123,13 +125,20 @@ Subject patterns control which CI identities can use the service account.
 
 ## Auto-Detection
 
-The CLI automatically detects OIDC tokens in supported environments:
+Only GitHub Actions is detected automatically:
 
-| Provider       | Detection Method                                  |
-| -------------- | ------------------------------------------------- |
-| GitHub Actions | Requests token via `ACTIONS_ID_TOKEN_REQUEST_URL` |
-| GitLab CI      | Reads `CI_JOB_JWT_V2` or `RELIC_OIDC_TOKEN`       |
-| Other          | Reads `RELIC_OIDC_TOKEN` environment variable     |
+| Provider       | Detection Method                                                                                      |
+| -------------- | ----------------------------------------------------------------------------------------------------- |
+| GitHub Actions | Requests a token (audience `relic`) via `ACTIONS_ID_TOKEN_REQUEST_URL`; needs `id-token: write`        |
+| GitLab CI      | Not automatic: reads `RELIC_OIDC_TOKEN`, which you define with `id_tokens` (see above)                 |
+| Other          | Reads the `RELIC_OIDC_TOKEN` environment variable                                                     |
+
+`RELIC_OIDC_TOKEN` always takes precedence. On self-managed GitLab older than 17.0, the legacy `CI_JOB_JWT_V2` variable is still used as a fallback.
+
+<Note>
+  In GitHub Actions the CLI requests tokens with audience `relic`. If you set a different
+  `--oidc-audience`, request the token yourself and pass it as `RELIC_OIDC_TOKEN`.
+</Note>
 
 ## Security Model
 

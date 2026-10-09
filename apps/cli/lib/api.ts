@@ -1,10 +1,45 @@
 import { CONVEX_SITE_URL, CONVEX_URL, ensureValidJwt, SITE_URL } from "@repo/auth";
 import { api, type Id, type TableNames } from "@repo/backend";
-import { trackError } from "@repo/logger";
 import { ConvexHttpClient } from "convex/browser";
+import { trackCliError } from "./telemetry";
 import type { SecretScope } from "./types";
 
 export const UPGRADE_URL = `${SITE_URL}/dashboard?action=upgrade`;
+
+export const REQUEST_TIMEOUT_MS = 30_000;
+
+export class NetworkError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "NetworkError";
+  }
+}
+
+function toNetworkError(err: unknown): NetworkError {
+  const name = err instanceof Error ? err.name : "";
+  if (name === "TimeoutError") {
+    return new NetworkError(
+      `Couldn't reach Relic (request timed out after ${REQUEST_TIMEOUT_MS / 1000}s).`,
+      { cause: err },
+    );
+  }
+  return new NetworkError("Couldn't reach Relic (network error).", { cause: err });
+}
+
+/** `fetch` with a hard timeout; transport failures become a `NetworkError`. */
+export async function fetchWithTimeout(
+  input: string | URL | Request,
+  init: RequestInit = {},
+): Promise<Response> {
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
+  try {
+    return await fetch(input, { ...init, signal });
+  } catch (err) {
+    if (init.signal?.aborted) throw err;
+    throw toNetworkError(err);
+  }
+}
 
 export interface User {
   id: string;
@@ -109,7 +144,9 @@ function toOptionalId<T extends TableNames>(id: string | undefined): Id<T> | und
 }
 
 export class ProtectedApi {
-  private client = new ConvexHttpClient(CONVEX_URL);
+  private client = new ConvexHttpClient(CONVEX_URL, {
+    fetch: fetchWithTimeout as typeof globalThis.fetch,
+  });
   private authPromise: Promise<void> | null = null;
 
   private async ensureAuth(): Promise<void> {
@@ -123,7 +160,7 @@ export class ProtectedApi {
         const token = await ensureValidJwt();
         this.client.setAuth(token);
       } catch (error) {
-        trackError("cli", error, { action: "cli_auth" });
+        trackCliError(error, { action: "cli_auth" });
         this.client.clearAuth();
         throw error;
       } finally {
@@ -411,7 +448,7 @@ async function requestSiteApi<T>(
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(`${CONVEX_SITE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${CONVEX_SITE_URL}${path}`, {
     method: options.body === undefined ? "GET" : "POST",
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),

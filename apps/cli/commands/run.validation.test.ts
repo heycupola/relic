@@ -77,7 +77,7 @@ mock.module("../ffi/bridge", () => ({
 // to other test files. run.test.ts needs real implementations. Our scope validation test
 // exits before any cache/auth usage, so no mocks are needed.
 
-const { default: run, resolveProjectId } = await import("./run");
+const { default: run, commandExists, resolveProjectId, toProcessExitCode } = await import("./run");
 
 describe("run validation", () => {
   let exitSpy: ReturnType<typeof spyOn>;
@@ -105,6 +105,18 @@ describe("run validation", () => {
     expect(exitSpy).toHaveBeenCalledWith(1);
     const output = errorSpy.mock.calls.map((c: unknown[]) => String(c[0])).join(" ");
     expect(output).toContain("--scope must be");
+  });
+
+  test("names the full environment flag when it is missing", async () => {
+    try {
+      await run(["echo", "hi"], { environment: "" });
+    } catch {
+      // process.exit throws
+    }
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    const output = errorSpy.mock.calls.map((c: unknown[]) => String(c[0])).join(" ");
+    expect(output).toContain("-e, --environment is required");
   });
 });
 
@@ -134,5 +146,29 @@ describe("resolveProjectId", () => {
     delete process.env.RELIC_PROJECT_ID;
     const result = resolveProjectId({ environment: "prod" });
     expect(result).toBeNull();
+  });
+});
+
+describe("toProcessExitCode", () => {
+  test("maps the runner's -1 (could not start) to 127", () => {
+    expect(toProcessExitCode(-1)).toBe(127);
+  });
+
+  test("passes through child exit codes and 128+N signal codes", () => {
+    expect(toProcessExitCode(0)).toBe(0);
+    expect(toProcessExitCode(3)).toBe(3);
+    expect(toProcessExitCode(130)).toBe(130);
+  });
+});
+
+describe("commandExists", () => {
+  test("finds commands on the given PATH", () => {
+    expect(commandExists("sh", process.env.PATH)).toBe(true);
+    expect(commandExists("definitely-not-a-real-command-xyz", process.env.PATH)).toBe(false);
+  });
+
+  test("checks explicit paths directly", () => {
+    expect(commandExists("/bin/sh", undefined)).toBe(true);
+    expect(commandExists("./does-not-exist.sh", process.env.PATH)).toBe(false);
   });
 });

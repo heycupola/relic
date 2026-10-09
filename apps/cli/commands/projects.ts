@@ -2,13 +2,9 @@ import { trackEvent } from "@repo/logger";
 import ora from "ora";
 import pc from "picocolors";
 import { getApi } from "../lib/api";
-import {
-  getErrorMessage,
-  hasActiveSession,
-  isAuthErrorMessage,
-  printNotLoggedIn,
-} from "../lib/cli";
+import { getErrorMessage, hasActiveSession, isAuthError, printNotLoggedIn } from "../lib/cli";
 import { loadProjectTree, type ProjectWithDetails } from "../lib/projects";
+import { exitWithTelemetry } from "../lib/telemetry";
 
 const TREE = {
   BRANCH: "├── ",
@@ -20,7 +16,7 @@ const TREE = {
 function renderProjectTree(projects: ProjectWithDetails[]): void {
   if (projects.length === 0) {
     console.log(pc.dim("No projects found"));
-    console.log(pc.dim("Create one at https://withrelic.com"));
+    console.log(pc.dim("Run `relic` to open the TUI and create a project"));
     return;
   }
 
@@ -75,7 +71,7 @@ export default async function projects() {
     if (!(await hasActiveSession())) {
       spinner.stop();
       printNotLoggedIn();
-      return;
+      await exitWithTelemetry(1);
     }
 
     spinner.text = "Fetching projects...";
@@ -87,13 +83,12 @@ export default async function projects() {
     spinner.stop();
     renderProjectTree(projectTree);
   } catch (err) {
-    const message = getErrorMessage(err, "Failed to fetch projects");
-    if (isAuthErrorMessage(message)) {
+    if (isAuthError(err)) {
       spinner.stop();
       printNotLoggedIn();
-      return;
+    } else {
+      spinner.fail(pc.red(`Error: ${getErrorMessage(err, "Failed to fetch projects")}`));
     }
-    spinner.fail(pc.red(`Error: ${message}`));
-    process.exit(1);
+    await exitWithTelemetry(1);
   }
 }
