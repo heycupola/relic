@@ -385,6 +385,39 @@ describe("prepareSecrets", () => {
     expect(allCached!.length).toBe(2);
   });
 
+  test("should bypass the cache and send push audit metadata for push exports", async () => {
+    cacheUserKeys(userKeyDb, MOCK_USER_KEYS);
+    seedSecretCache(db);
+    mockDecryptSecrets.mockImplementation(() =>
+      Promise.resolve([{ key: "API_KEY", value: "my-api-key" }]),
+    );
+
+    const api = createMockApi({
+      getSecretsCacheValidation: mock(() => Promise.resolve({ updatedAt: 1 })),
+      exportSecrets: mock(() =>
+        Promise.resolve({ ...MOCK_EXPORT_RESULT, secrets: [MOCK_SECRETS[0]!], count: 1 }),
+      ),
+    });
+    const push = { target: "vercel", destination: "prj_1 (production)" };
+
+    const result = await prepareSecrets(PROJECT_ID, DEFAULT_OPTIONS, db, userKeyDb, api, {
+      scopes: ["client", "shared"],
+      push,
+    });
+
+    expect(api.getSecretsCacheValidation).not.toHaveBeenCalled();
+    expect(api.exportSecrets).toHaveBeenCalledWith({
+      projectId: PROJECT_ID,
+      environmentName: "development",
+      folderName: undefined,
+      scope: undefined,
+      scopes: ["client", "shared"],
+      push,
+    });
+    expect(result.secrets).toEqual({ API_KEY: "my-api-key" });
+    expect(getCachedSecrets(db, PROJECT_ID, "env_123", undefined, undefined)).toHaveLength(2);
+  });
+
   test("should serve scoped request from cache after unscoped run", async () => {
     const api = createMockApi({
       getSecretsCacheValidation: mock(() => Promise.resolve({ updatedAt: 1 })),

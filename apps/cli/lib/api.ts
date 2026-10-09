@@ -152,6 +152,12 @@ export interface ExportSecretsResult {
   folderId: string | null;
 }
 
+export interface PushAuditInfo {
+  target: string;
+  destination?: string;
+  dryRun?: boolean;
+}
+
 function toId<T extends TableNames>(id: string): Id<T> {
   return id as Id<T>;
 }
@@ -368,6 +374,8 @@ export class ProtectedApi {
     folderName?: string;
     folderId?: string;
     scope?: SecretScope;
+    scopes?: SecretScope[];
+    push?: PushAuditInfo;
   }): Promise<ExportSecretsResult> {
     const result = await this.withAuth(() =>
       this.client.mutation(api.secret.exportSecrets, {
@@ -377,6 +385,8 @@ export class ProtectedApi {
         folderName: args.folderName,
         folderId: toOptionalId<"folder">(args.folderId),
         scope: args.scope,
+        scopes: args.scopes,
+        push: args.push,
       }),
     );
 
@@ -525,6 +535,8 @@ export async function exportSecretsViaApiKey(
     environmentName: string;
     folderName?: string;
     scope?: string;
+    scopes?: string[];
+    push?: PushAuditInfo;
   },
 ): Promise<ExportSecretsHttpResponse> {
   return requestSiteApi("/api/secrets/export", {
@@ -540,6 +552,8 @@ export async function exportSecretsViaServiceToken(
     environmentName?: string;
     folderName?: string;
     scope?: string;
+    scopes?: string[];
+    push?: PushAuditInfo;
   },
   oidcToken?: string,
 ): Promise<ServiceAccountExportResponse> {

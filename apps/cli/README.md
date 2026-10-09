@@ -21,6 +21,7 @@ bun install
 | `relic run`                    | Run a command with secrets injected                             |
 | `relic shell`                  | Open a subshell with secrets loaded                             |
 | `relic import`                 | Import secrets from a file or provider                          |
+| `relic push`                   | Sync secrets to a deploy platform                               |
 | `relic service-account create` | Create a service account (CI/CD token, optional OIDC policy)    |
 | `relic service-account list`   | List service accounts for a project                             |
 | `relic service-account revoke` | Revoke a service account by `--name` or `--id`                  |
@@ -94,6 +95,31 @@ cat secrets.json | relic import - -e staging --skip-existing
 ```
 
 See the [importing guide](https://docs.withrelic.com/guides/importing) for all sources and flags.
+
+### `relic push`
+
+```bash
+relic push -e <environment> --target <vercel|cloudflare|github|fly> [options]
+```
+
+| Flag                | Description                                           |
+| ------------------- | ----------------------------------------------------- |
+| `-e, --environment` | Environment name (required)                           |
+| `-t, --target`      | `vercel`, `cloudflare`, `github`, or `fly` (required) |
+| `-f, --folder`      | Folder name                                           |
+| `-s, --scope`       | Comma separated: `client`, `server`, `shared`         |
+| `-p, --project`     | Project ID (overrides `relic.toml`)                   |
+| `--dry-run`         | Print the plan (names only) and exit                  |
+| `--prune`           | Delete platform secrets that are not in Relic         |
+| `-y, --yes`         | Skip confirmation (required in CI)                    |
+
+Platform adapters live in `lib/push/`. Each implements `PlatformAdapter` (`list`, `upsert`, `delete`, optional `validate`) and is registered in `lib/push/index.ts`. Values are sent to platform APIs in memory or to platform CLIs on stdin, never as arguments or temp files.
+
+```bash
+relic push -e production --target vercel --dry-run
+relic push -e staging --target cloudflare --wrangler-env staging
+relic push -e production --target github --github-env production --yes
+```
 
 ## Configuration
 
@@ -189,6 +215,7 @@ deploy:
 │   ├── upgrade.ts      # relic upgrade
 │   ├── shell.ts        # relic shell
 │   ├── import.ts       # relic import
+│   ├── push.ts         # relic push
 │   └── telemetry.ts    # relic telemetry
 ├── lib/
 │   ├── api.ts          # Convex API client, secret export
@@ -199,6 +226,7 @@ deploy:
 │   ├── crypto.ts       # Secret encryption/decryption helpers
 │   ├── import-plan.ts  # Import plan, conflict handling, batched upload
 │   ├── import-sources.ts # File, stdin, and provider readers for relic import
+│   ├── push/           # relic push plan, adapters (vercel, cloudflare, github, fly)
 │   └── types.ts        # SecretScope type
 ├── mcp/
 │   ├── server.ts       # relic mcp (MCP tools)

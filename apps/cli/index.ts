@@ -6,6 +6,7 @@ import init from "./commands/init";
 import login from "./commands/login";
 import logout from "./commands/logout";
 import projects from "./commands/projects";
+import push from "./commands/push";
 import run, { type RunOptions } from "./commands/run";
 import {
   type ServiceAccountCreateOptions,
@@ -18,6 +19,7 @@ import shell, { type ShellOptions } from "./commands/shell";
 import { telemetryDisable, telemetryEnable, telemetryStatus } from "./commands/telemetry";
 import upgrade from "./commands/upgrade";
 import whoami from "./commands/whoami";
+import type { PushOptions } from "./lib/push/types";
 import pkg from "./package.json";
 
 await initLogger();
@@ -56,7 +58,7 @@ const COMMAND_GROUPS = [
   },
   {
     label: "Secrets",
-    commands: ["run", "shell", "import", "service-account"],
+    commands: ["run", "shell", "import", "push", "service-account"],
   },
   {
     label: "Tools",
@@ -100,6 +102,7 @@ function formatCustomHelp(): string {
   lines.push(`    ${pc.dim("$")} relic init`);
   lines.push(`    ${pc.dim("$")} relic run -e production -- npm start`);
   lines.push(`    ${pc.dim("$")} relic shell -e development`);
+  lines.push(`    ${pc.dim("$")} relic push -e production --target vercel --dry-run`);
   lines.push("");
 
   lines.push(`  ${pc.dim("https://docs.withrelic.com")}`);
@@ -275,6 +278,36 @@ program
   .option("--op-item <item>", "1Password item name or ID (1password source)")
   .option("--op-vault <vault>", "1Password vault (1password source)")
   .action((source: string | undefined, options: ImportOptions) => importSecrets(source, options));
+
+const collect = (value: string, previous: string[] = []) => [...previous, value];
+
+program
+  .command("push")
+  .description("Sync an environment's secrets to a deploy platform")
+  .requiredOption("-e, --environment <name>", "Environment name (required)")
+  .requiredOption("-t, --target <platform>", "Target platform: vercel, cloudflare, github, fly")
+  .option("-f, --folder <name>", "Folder name (optional)")
+  .option("-s, --scope <scopes>", "Scope filter, comma separated: client, server, shared")
+  .option("-p, --project <id>", "Project ID (optional, defaults to relic.toml or RELIC_PROJECT_ID)")
+  .option("--dry-run", "Print the plan (names only) and exit without writing")
+  .option("--prune", "Delete platform secrets that are not in Relic")
+  .option("-y, --yes", "Skip the confirmation prompt (required in CI and non-interactive shells)")
+  .option("--vercel-project <id>", "Vercel project ID or name (defaults to .vercel/project.json)")
+  .option("--vercel-team <id>", "Vercel team ID or slug (defaults to .vercel/project.json)")
+  .option(
+    "--vercel-target <target>",
+    "Vercel target: production, preview, development (repeatable or comma separated)",
+    collect,
+  )
+  .option("--worker <name>", "Cloudflare Worker name (defaults to the wrangler config)")
+  .option("--wrangler-env <env>", "Wrangler environment (as in wrangler --env)")
+  .option("--github-repo <owner/repo>", "GitHub repository (defaults to the current repo)")
+  .option("--github-env <name>", "GitHub environment for environment-level secrets")
+  .option("--fly-app <name>", "Fly app name (defaults to fly.toml)")
+  .option("--fly-stage", "Stage Fly secrets without restarting machines")
+  .action((options: PushOptions) => {
+    push(options);
+  });
 
 program
   .command("version")
