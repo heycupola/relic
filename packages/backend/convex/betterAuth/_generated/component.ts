@@ -1345,6 +1345,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         },
         Name
       >;
+      loadPlanReconcileCandidates: FunctionReference<
+        "query",
+        "internal",
+        { cursor: string | null; numItems: number },
+        { continueCursor: string; isDone: boolean; userIds: Array<string> },
+        Name
+      >;
       loadUserByEmail: FunctionReference<
         "query",
         "internal",

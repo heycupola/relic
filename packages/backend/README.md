@@ -54,25 +54,25 @@ Auth routes are registered by Better Auth.
 
 ## Server Functions
 
-| Module              | Scope                                                              |
-| ------------------- | ------------------------------------------------------------------ |
-| `user.ts`           | Current user, checkout/portal links, account deletion, cron emails |
-| `billing.ts`        | Plan refresh from Autumn, usage sync, billing overview             |
-| `userKey.ts`        | Encryption key storage and rotation                                |
-| `project.ts`        | Project CRUD, archive/unarchive, plan-gated creation               |
-| `projectShare.ts`   | Collaborator sharing, revocation, atomic key rotation              |
-| `serviceAccount.ts` | Service accounts, OIDC policies, token validation                  |
-| `environment.ts`    | Environment CRUD, reordering                                       |
-| `folder.ts`         | Folder CRUD                                                        |
-| `secret.ts`         | Secret CRUD, history, soft delete/restore, bulk operations, export |
-| `apiKey.ts`         | API key creation, revocation, validation                           |
-| `actionLog.ts`      | Audit log queries (by resource, by user)                           |
-| `deviceAuth.ts`     | Device code OAuth flow (code generation, polling, approval)        |
-| `emails.ts`         | Scheduled email delivery                                           |
-| `resend.ts`         | Email rendering and sending (React Email templates)                |
-| `webhook.ts`        | Webhook idempotency                                                |
-| `crons.ts`          | Restriction emails (03:00 UTC), webhook cleanup (04:00 UTC)        |
-| `rateLimiter.ts`    | Rate limit configuration                                           |
+| Module              | Scope                                                               |
+| ------------------- | ------------------------------------------------------------------- |
+| `user.ts`           | Current user, checkout/portal links, account deletion, cron emails  |
+| `billing.ts`        | Plan refresh from Autumn, usage sync, billing overview              |
+| `userKey.ts`        | Encryption key storage and rotation                                 |
+| `project.ts`        | Project CRUD, archive/unarchive, plan-gated creation                |
+| `projectShare.ts`   | Collaborator sharing, revocation, atomic key rotation               |
+| `serviceAccount.ts` | Service accounts, OIDC policies, token validation                   |
+| `environment.ts`    | Environment CRUD, reordering                                        |
+| `folder.ts`         | Folder CRUD                                                         |
+| `secret.ts`         | Secret CRUD, history, soft delete/restore, bulk operations, export  |
+| `apiKey.ts`         | API key creation, revocation, validation                            |
+| `actionLog.ts`      | Audit log queries (by resource, by user)                            |
+| `deviceAuth.ts`     | Device code OAuth flow (code generation, polling, approval)         |
+| `emails.ts`         | Scheduled email delivery                                            |
+| `resend.ts`         | Email rendering and sending (React Email templates)                 |
+| `webhook.ts`        | Webhook idempotency                                                 |
+| `crons.ts`          | Plan reconcile (02:00), restriction emails (03:00), cleanup (04:00) |
+| `rateLimiter.ts`    | Rate limit configuration                                            |
 
 ## Lib
 
@@ -114,7 +114,7 @@ Entitlements live on the user record (`hasPro`, `planDowngradedAt`) and are chec
 | Free | $0       | 1        | Sharing not available     | --                                       |
 | Pro  | $9/month | 5        | 5                         | $2 per extra project, $1 per extra share |
 
-A downgrade starts a 7-day grace period. After it ends, collaborators keep access only to the newest project within the Free allowance. Owners keep access to all their projects and can archive extras or upgrade. A daily cron emails affected owners.
+A downgrade starts a 7-day grace period. After it ends, collaborators keep access only to the newest project within the Free allowance. Owners keep access to all their projects and can archive extras or upgrade. A daily cron re-checks paying and grace-period users against Autumn (a safety net for missed webhooks), then emails affected owners.
 
 Required environment variables: `AUTUMN_SECRET_KEY`, `AUTUMN_WEBHOOK_SECRET`.
 

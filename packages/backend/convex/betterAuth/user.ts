@@ -171,6 +171,38 @@ export const loadUsersToRestrict = query({
   },
 });
 
+/** Users whose stored plan could be stale: paying users (paged) and, on the first page, anyone in a grace period. */
+export const loadPlanReconcileCandidates = query({
+  args: { cursor: v.union(v.string(), v.null()), numItems: v.number() },
+  returns: v.object({
+    userIds: v.array(v.string()),
+    continueCursor: v.string(),
+    isDone: v.boolean(),
+  }),
+  handler: async (ctx, { cursor, numItems }) => {
+    const page = await ctx.db
+      .query("user")
+      .withIndex("by_hasPro", (q) => q.eq("hasPro", true))
+      .paginate({ cursor, numItems });
+
+    const userIds = page.page.map((user) => user._id as string);
+
+    if (cursor === null) {
+      const inGrace = await ctx.db
+        .query("user")
+        .withIndex("by_planDowngradedAt", (q) =>
+          q.gt("planDowngradedAt", Date.now() - GRACE_PERIOD_MS),
+        )
+        .collect();
+      for (const user of inGrace) {
+        if (!user.hasPro) userIds.push(user._id);
+      }
+    }
+
+    return { userIds, continueCursor: page.continueCursor, isDone: page.isDone };
+  },
+});
+
 export const markAccessRestrictedEmailSent = mutation({
   args: { userId: v.id("user") },
   returns: v.null(),

@@ -133,6 +133,30 @@ describe("billing integration", () => {
     expect(overview.inGracePeriod).toBe(true);
   });
 
+  test("daily reconcile fixes plans that missed a webhook", async () => {
+    await setPlan(t, owner.userId, "pro");
+    await setPlan(t, other.userId, "pro");
+    mockBilling.setPro(owner.userId, false);
+    mockBilling.setPro(other.userId, true);
+
+    await t.action(internal.billing._reconcilePlans, {});
+
+    expect((await loadUser(owner.userId)).hasPro).toBe(false);
+    expect((await loadUser(owner.userId)).planDowngradedAt).toBeTypeOf("number");
+    expect((await loadUser(other.userId)).hasPro).toBe(true);
+  });
+
+  test("daily reconcile restores a resubscription during the grace period", async () => {
+    await setPlan(t, owner.userId, "pro");
+    mockBilling.setPro(owner.userId, false);
+    await t.action(internal.billing._refreshPlan, { userId: owner.userId });
+
+    mockBilling.setPro(owner.userId, true);
+    await t.action(internal.billing._reconcilePlans, {});
+
+    expect((await loadUser(owner.userId)).hasPro).toBe(true);
+  });
+
   test("usage sync tracks only the difference", async () => {
     vi.useFakeTimers();
     await setPlan(t, owner.userId, "pro");

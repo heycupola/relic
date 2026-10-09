@@ -243,6 +243,39 @@ export const _refreshPlan = internalAction({
   handler: async (ctx, { userId }) => refreshPlan(ctx, userId),
 });
 
+const RECONCILE_PAGE_SIZE = 50;
+
+/** Daily safety net for missed Autumn webhooks; walks candidates page by page. */
+export const _reconcilePlans = internalAction({
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
+  returns: v.null(),
+  handler: async (ctx, { cursor = null }) => {
+    const page = await ctx.runQuery(components.betterAuth.user.loadPlanReconcileCandidates, {
+      cursor,
+      numItems: RECONCILE_PAGE_SIZE,
+    });
+
+    let failed = 0;
+    for (const userId of page.userIds) {
+      try {
+        await refreshPlan(ctx, userId);
+      } catch (error) {
+        failed++;
+        log.warn("Plan reconcile failed", { userId, error: String(error) });
+      }
+    }
+
+    log.info("Plan reconcile page done", { checked: page.userIds.length, failed });
+
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(0, internal.billing._reconcilePlans, {
+        cursor: page.continueCursor,
+      });
+    }
+    return null;
+  },
+});
+
 type AutumnWebhookPayload = {
   type?: string;
   data?: {
