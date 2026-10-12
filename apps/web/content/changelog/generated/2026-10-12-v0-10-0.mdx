@@ -1,0 +1,44 @@
+---
+title: "v0.10.0"
+description: "Add `relic guard` to block commits that leak secrets. `relic guard scan` flags committed or staged dotenv files and exact occurrences of your decrypted Relic secret values,..."
+date: "2026-10-12T12:36:12Z"
+version: "v0.10.0"
+releaseUrl: "https://github.com/heycupola/relic/releases/tag/v0.10.0"
+githubTag: "v0.10.0"
+tags:
+  - release
+  - stable
+published: true
+---
+
+### Minor Changes
+
+- aac60a8: Add `relic guard` to block commits that leak secrets. `relic guard scan` flags committed or staged dotenv files and exact occurrences of your decrypted Relic secret values, matched locally with a multi-pattern search. It scans paths, staged content (`--staged`), or lines added in a commit range (`--range`), prints only key names, locations, and masked previews, supports `--json`, and exits non-zero on findings. `relic guard install` adds a pre-commit hook that chains any existing hook, or prints the snippet for lefthook, husky, and pre-commit (and can edit `lefthook.yml` with consent). Findings can be silenced with a `relic-guard-ignore` comment or a `.relicguardignore` file, and dotenv files can be allowed via `[guard] allow` in `relic.toml`.
+- aac60a8: Safer runs, clearer errors and a refreshed TUI.
+
+  - Endpoint overrides are now `RELIC_CONVEX_URL`, `RELIC_CONVEX_SITE_URL` and `RELIC_SITE_URL`, so a project's own `CONVEX_URL` no longer redirects the CLI.
+  - `relic run` accepts `--inherit-env` and exits with 127 when the command is not found; signal exits report 128+signal.
+  - MCP command runs redact secret values from output and time out instead of hanging.
+  - `whoami` and `projects` exit with 1 on authentication errors; `upgrade` recognizes curl installs.
+  - Shared projects are now read-only for collaborators; only the owner can create, rename or delete environments, folders and secrets.
+  - The TUI verifies your password on unlock, decrypts values on demand, rejects writes made against a rotated project key and adds shortcuts for editing, saving and navigation.
+
+- aac60a8: Add `relic check` to catch missing environment variables before a deploy. It compares required key names from `.env.example`, `.env.sample`, `.env.template`, `--from` files, and optional `--scan` of JS/TS/Python sources with the secrets in an environment, and exits non-zero when a key is missing. `--compare <env>` shows key-name drift between two environments, `--strict` also fails on unused keys and drift, and `--json` prints a machine-readable report. Keys can be skipped with `--ignore` or `[check] ignore` in `relic.toml`. The command reads names only and never fetches or decrypts values; the backend adds a names-only `secret.listSecretNames` query plus `/api/secrets/names` (API key) and `/api/sa/secrets/names` (service token) routes that enforce the same access rules as export.
+- aac60a8: Add `relic import` for moving secrets into Relic in one command. It reads dotenv files (comments, `export`, all quote styles, multiline values, escapes), JSON in the TUI format or as a flat object, stdin, and the Doppler, Infisical, Vercel, and 1Password sources. Values are encrypted on your device before upload. A names-only plan shows new, changed, unchanged, skipped, and invalid secrets, and `--overwrite`, `--skip-existing`, and `--dry-run` control what gets written.
+- aac60a8: Add `relic push` to sync an environment's secrets into a deploy platform's secret store. Supported targets are Vercel (REST API, using `VERCEL_TOKEN` or the Vercel CLI login), Cloudflare Workers (`wrangler secret bulk` on stdin, with a `CLOUDFLARE_API_TOKEN` API fallback), GitHub Actions (`gh secret set`, repository or environment level), and Fly.io (`fly secrets import`). Values are decrypted locally and sent only to the platform, never written to disk or printed. A names-only plan is shown before writing, `--dry-run` stops after the plan, production-like targets ask for confirmation, CI requires `--yes`, and `--prune` is the only way platform secrets get deleted. `--scope` accepts several scopes, such as `client,shared`.
+
+  The secret export endpoints accept an optional `scopes` array and `push` metadata. Push exports record a new `secrets.pushed` audit log action with the target, destination, and count (never values), shown in the dashboard activity feed.
+
+- aac60a8: Add `relic shell` to open an interactive subshell with decrypted secrets in its environment, so local commands like `bun run dev` work without a `relic run` prefix or a `.env` file. It accepts the same `-e`, `-f`, `-s`, `-p`, and `--inherit-env` flags as `relic run`, reuses its session, service token, and API key auth plus the local cache, and starts `$SHELL` (falling back to `/bin/sh`, or `%COMSPEC%` on Windows) through the Rust runner so values are never written to disk. The shell sets `RELIC_SHELL=1`, `RELIC_ENVIRONMENT`, and, when known, `RELIC_PROJECT_ID`, `RELIC_FOLDER`, and `RELIC_SCOPE` for prompt integration, refuses to nest unless `--force` is passed, and forwards the shell's exit code.
+- aac60a8: Add secret rotation tracking. Each secret now records when its value last changed (renames, moves, scope changes, and project key rotation don't reset it), and rotation policies can be set per environment or per secret, with the secret policy taking precedence. New `relic rotation status`, `relic rotation set`, and `relic rotation clear` commands report ages and statuses, and `--fail-on-overdue` fails CI when a secret is overdue, using either a session or `RELIC_SERVICE_TOKEN`. The TUI shows value age and due or overdue markers next to secrets, and `r` sets a policy from the secret or environment view. The web dashboard lists overdue and due-soon secrets, and an opt-in weekly email digest lists overdue secrets. Only names, timestamps, and policies are used; values are never decrypted. Existing secrets are backfilled with `rotation:_backfillValueChangedAt`.
+- aac60a8: Add secret history and rollback. Updates and deletes (single and bulk) now keep the previous encrypted value, and deleted secrets can be restored. Retention keeps the last 10 versions per secret on Free and 50 on Pro, based on the project owner's plan. New `relic history` and `relic rollback` commands, and a TUI history view (`t`) with restore. Restores are logged as `secret.restored`. Key rotation re-encrypts history on the owner's device, and the server purges any history left on the old key.
+- aac60a8: Add `relic secrets -e <env>` to list secret names and scopes in an environment (never values), and `--json` output for `relic secrets` and `relic projects` (plus `relic projects --project <id>`). JSON errors are printed as `{"error": {"code", "message"}}` with exit code 1, so editors and scripts can tell "not logged in" from other failures.
+- 19a539d: Add beta support for Windows. `relic run` now starts commands on Windows with a cleared environment and an allowlist of system variables, finds `.cmd` and `.bat` shims such as `npm.cmd` through `PATHEXT`, stays alive through Ctrl+C to report the command's exit code, and loads the runner and TUI libraries correctly from the standalone `relic.exe`. Config lives in `%APPDATA%\relic`, the password file fallback is restricted to the current user on every platform, and `relic upgrade` detects the binary that is actually running (including Scoop and install-script installs) and explains how to upgrade when Windows locks `relic.exe`. A PowerShell installer is available at `irm https://withrelic.com/install.ps1 | iex`.
+
+### Patch Changes
+
+- 19a539d: `relic run` now shows the backend's error message, such as "Environment not found", instead of the generic "Server Error". When the environment is missing, it also explains how to create it or pick an existing one.
+
+---
+
+[View release on GitHub](https://github.com/heycupola/relic/releases/tag/v0.10.0)
