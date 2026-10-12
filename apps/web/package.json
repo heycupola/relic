@@ -29,7 +29,7 @@
     "convex": "catalog:",
     "gray-matter": "^4.0.3",
     "lucide-react": "^1.54.0",
-    "next": "16.4.0",
+    "next": "16.3.8",
     "postcss": "catalog:",
     "posthog-js": "^1.438.4",
     "react": "catalog:",
