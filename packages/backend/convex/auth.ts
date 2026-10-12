@@ -97,7 +97,13 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) =>
         clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
       },
     },
-    plugins: [convex({ authConfig }), deviceAuthorization(), lastLoginMethod()],
+    plugins: [
+      // Production still has EdDSA keys from before the 0.10 RS256 switch.
+      // On the next token request, replace them so signing succeeds.
+      convex({ authConfig, jwksRotateOnTokenGenerationError: true }),
+      deviceAuthorization(),
+      lastLoginMethod(),
+    ],
   }) satisfies BetterAuthOptions;
 
 export const createAuth = (ctx: GenericCtx<DataModel>) => betterAuth(createAuthOptions(ctx));
