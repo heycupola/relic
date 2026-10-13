@@ -17,6 +17,15 @@ const LINKS = [
   { href: "mailto:support@withrelic.com", label: "Email support", icon: Mail, external: false },
 ] as const;
 
+function Command({ command, hint }: { command: string; hint: string }) {
+  return (
+    <li className="space-y-1">
+      <CommandLine command={command} />
+      <p className="text-[11px] text-muted-foreground">{hint}</p>
+    </li>
+  );
+}
+
 export function QuickActionsCard() {
   return (
     <DashboardCard
@@ -29,49 +38,55 @@ export function QuickActionsCard() {
         </>
       }
     >
-      <div className="space-y-5">
-        <InstallSection showWrapper={false} compact />
-
-        <div className="space-y-2">
-          <h3 className="text-xs font-medium text-foreground/70">Common commands</h3>
-          <ul className="space-y-2">
-            {COMMANDS.map(({ command, hint }) => (
-              <li key={command} className="space-y-1">
-                <CommandLine command={command} />
-                <p className="text-[11px] text-muted-foreground">{hint}</p>
-              </li>
-            ))}
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6">
+        <div className="min-w-0 space-y-2">
+          <h3 className="text-xs font-medium text-foreground/70">Install</h3>
+          <InstallSection showWrapper={false} compact />
+          <ul className="pt-1">
+            <Command command="relic login" hint="Sign in from your terminal" />
           </ul>
         </div>
 
-        <nav
-          aria-label="Help and resources"
-          className="-mx-4 -mb-4 border-t border-border sm:-mx-5 sm:-mb-5"
-        >
-          <ul className="divide-y divide-border">
-            {LINKS.map(({ href, label, icon: Icon, external }) => (
-              <li key={href}>
-                <a
-                  href={href}
-                  target={external ? "_blank" : undefined}
-                  rel={external ? "noopener noreferrer" : undefined}
-                  className={`group flex items-center gap-3 px-4 py-2.5 text-sm text-foreground/80 transition-colors hover:bg-muted/40 hover:text-foreground sm:px-5 ${focusRing}`}
-                >
-                  <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
-                  <span className="flex-1">
-                    {label}
-                    {external && <span className="sr-only"> (opens in a new tab)</span>}
-                  </span>
-                  <ArrowUpRight
-                    className="size-3.5 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground"
-                    aria-hidden="true"
-                  />
-                </a>
-              </li>
+        <div className="min-w-0 space-y-2">
+          <h3 className="text-xs font-medium text-foreground/70">Common commands</h3>
+          <ul className="space-y-2">
+            {COMMANDS.map(({ command, hint }) => (
+              <Command key={command} command={command} hint={hint} />
             ))}
           </ul>
-        </nav>
+        </div>
       </div>
+    </DashboardCard>
+  );
+}
+
+export function ResourcesCard() {
+  return (
+    <DashboardCard eyebrow="help" title="Resources" bodyClassName="p-0 sm:p-0">
+      <nav aria-label="Help and resources">
+        <ul className="divide-y divide-border">
+          {LINKS.map(({ href, label, icon: Icon, external }) => (
+            <li key={href}>
+              <a
+                href={href}
+                target={external ? "_blank" : undefined}
+                rel={external ? "noopener noreferrer" : undefined}
+                className={`group flex items-center gap-3 px-4 py-2.5 text-sm text-foreground/80 transition-colors hover:bg-muted/40 hover:text-foreground sm:px-5 ${focusRing}`}
+              >
+                <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+                <span className="flex-1">
+                  {label}
+                  {external && <span className="sr-only"> (opens in a new tab)</span>}
+                </span>
+                <ArrowUpRight
+                  className="size-3.5 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground"
+                  aria-hidden="true"
+                />
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
     </DashboardCard>
   );
 }

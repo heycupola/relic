@@ -76,7 +76,10 @@ export function InstallSection({ showWrapper = true, compact = false }: InstallS
   const installContent = (
     <div className={cn("overflow-hidden border-2 border-border bg-card", compact && "border")}>
       <div
-        className={cn("grid grid-cols-4 border-b-2 border-border sm:flex", compact && "border-b")}
+        className={cn(
+          "grid grid-cols-4 border-b-2 border-border",
+          compact ? "border-b" : "sm:flex",
+        )}
         role="tablist"
         aria-label="Installation methods"
       >
@@ -92,8 +95,8 @@ export function InstallSection({ showWrapper = true, compact = false }: InstallS
             aria-controls={`install-panel-${method.name}`}
             tabIndex={activeMethod.name === method.name ? 0 : -1}
             className={cn(
-              "font-mono text-xs uppercase transition-all focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-foreground border-r-2 border-border last:border-r-0 sm:last:border-r-2",
-              compact ? "py-2 sm:px-4 sm:py-2" : "py-3 sm:px-6 sm:py-3",
+              "font-mono text-xs uppercase transition-all focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-foreground border-r-2 border-border last:border-r-0",
+              compact ? "border-r py-2" : "py-3 sm:px-6 sm:py-3 sm:last:border-r-2",
               activeMethod.name === method.name
                 ? "bg-foreground text-background font-bold"
                 : "text-foreground/60 hover:text-foreground hover:bg-muted",
@@ -109,10 +112,11 @@ export function InstallSection({ showWrapper = true, compact = false }: InstallS
         id={`install-panel-${activeMethod.name}`}
         aria-labelledby={`install-tab-${activeMethod.name}`}
       >
-        <div className="flex items-center gap-2">
+        <div className={cn("flex items-center gap-2", compact && "justify-between")}>
           <code
             className={cn(
               "font-mono text-foreground whitespace-nowrap",
+              compact && "min-w-0 overflow-x-auto scrollbar-none",
               compact ? "text-xs" : "text-sm",
             )}
           >

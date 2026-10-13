@@ -14,7 +14,7 @@ import {
   type DashboardProject,
   ProjectsOverviewCard,
 } from "@/components/dashboard/projects-overview-card";
-import { QuickActionsCard } from "@/components/dashboard/quick-actions-card";
+import { QuickActionsCard, ResourcesCard } from "@/components/dashboard/quick-actions-card";
 import { RotationCard } from "@/components/dashboard/rotation-card";
 import { ServiceAccountsCard } from "@/components/dashboard/service-accounts-card";
 import { type Stat, StatStrip } from "@/components/dashboard/stat-strip";
@@ -57,6 +57,33 @@ function useUpgradeFromUrl(hasPro: boolean | undefined, onState: (state: Upgrade
 }
 
 const STATUS_ORDER = { owned: 0, shared: 0, restricted: 1, archived: 2 } as const;
+
+const GET_STARTED_DISMISSED_KEY = "relic:get-started-dismissed";
+/** Owners whose first project is older than this are past onboarding even if no secret shows up in the first page of activity. */
+const ESTABLISHED_AFTER_MS = 7 * 86_400_000;
+
+function useGetStartedDismissed() {
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    try {
+      setDismissed(localStorage.getItem(GET_STARTED_DISMISSED_KEY) === "1");
+    } catch {
+      // Storage can be unavailable (private mode, blocked cookies).
+    }
+  }, []);
+
+  const dismiss = () => {
+    setDismissed(true);
+    try {
+      localStorage.setItem(GET_STARTED_DISMISSED_KEY, "1");
+    } catch {
+      // Then it only stays hidden for this page view.
+    }
+  };
+
+  return [dismissed, dismiss] as const;
+}
 
 function greeting() {
   const hour = new Date().getHours();
@@ -147,6 +174,13 @@ export default function DashboardPage() {
   const showGraceNotice = billing?.inGracePeriod && excessProjects > 0;
   const showRestrictedNotice = billing?.isRestricted && excessProjects > 0;
   const isNewUser = !isLoading && projects.length === 0;
+
+  const [getStartedDismissed, dismissGetStarted] = useGetStartedDismissed();
+  const hasSecrets =
+    actionLogs.some((log) => log.action.startsWith("secret")) ||
+    ownedActive.some((p) => p.since !== undefined && Date.now() - p.since > ESTABLISHED_AFTER_MS);
+  const showGetStarted =
+    !isLoading && !logsLoading && !getStartedDismissed && !(projects.length > 0 && hasSecrets);
 
   const firstName = userData?.name?.trim().split(/\s+/)[0];
 
@@ -271,7 +305,13 @@ export default function DashboardPage() {
 
         <StatStrip stats={stats} isLoading={isLoading || logsLoading} />
 
-        {isNewUser && <GetStartedCard />}
+        {showGetStarted && (
+          <GetStartedCard
+            hasProject={projects.length > 0}
+            hasSecrets={hasSecrets}
+            onDismiss={dismissGetStarted}
+          />
+        )}
 
         <div className="grid grid-cols-1 items-start gap-4 sm:gap-5 lg:grid-cols-3">
           <div className="min-w-0 space-y-4 sm:space-y-5 lg:col-span-2">
@@ -290,11 +330,6 @@ export default function DashboardPage() {
                 onLoadMore={loadMore}
               />
             )}
-            {rotationAlerts === undefined ? (
-              <CardSkeleton label="rotation" rows={2} />
-            ) : (
-              <RotationCard alerts={rotationAlerts} />
-            )}
           </div>
           <aside className="min-w-0 space-y-4 sm:space-y-5" aria-label="Plan and tools">
             {isLoading ? (
@@ -307,9 +342,16 @@ export default function DashboardPage() {
                 activeApiKeys={activeApiKeys}
               />
             )}
-            <QuickActionsCard />
+            {rotationAlerts === undefined ? (
+              <CardSkeleton label="rotation" rows={2} />
+            ) : (
+              <RotationCard alerts={rotationAlerts} />
+            )}
+            <ResourcesCard />
           </aside>
         </div>
+
+        {!showGetStarted && <QuickActionsCard />}
 
         <section aria-labelledby="machine-access-heading" className="space-y-4 sm:space-y-5">
           <div className="flex items-center gap-4">
