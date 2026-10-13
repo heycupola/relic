@@ -43,7 +43,6 @@ export function PlanCard({ hasPro, projectsUsed, projectsIncluded, activeApiKeys
 
   return (
     <DashboardCard
-      eyebrow="plan"
       title={
         <span className="flex items-center gap-2">
           {hasPro ? "Relic Pro" : "Relic Free"}

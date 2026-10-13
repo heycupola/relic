@@ -53,20 +53,32 @@ function usePlanActivation(): Activation {
   return state;
 }
 
+/** Confirmations faster than this skip the "activating" status entirely, so the page doesn't flicker. */
+const PENDING_STATUS_DELAY_MS = 800;
+
+function useShowPendingStatus(activation: Activation) {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (activation !== "pending") return;
+    const timer = setTimeout(() => setShow(true), PENDING_STATUS_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [activation]);
+
+  return show;
+}
+
+// Reaching this page means checkout succeeded, so the heading stays the same while the plan activates.
+const PAID_COPY = {
+  title: "Welcome to Relic Pro",
+  subtitle: "Thanks for upgrading. Here's what you can do now.",
+};
+
 const COPY: Record<Activation, { title: string; subtitle: string; status?: string }> = {
-  pending: {
-    title: "Finishing your upgrade",
-    subtitle: "Thanks for upgrading. Here's what you get with Pro.",
-    status: "Activating your plan…",
-  },
-  active: {
-    title: "Welcome to Relic Pro",
-    subtitle: "Your upgrade is complete. Here's what you can do now.",
-    status: "Your Pro plan is active.",
-  },
+  pending: { ...PAID_COPY, status: "Activating your plan…" },
+  active: { ...PAID_COPY, status: "Your Pro plan is active." },
   delayed: {
-    title: "Payment received",
-    subtitle: "Thanks for upgrading. Here's what you get with Pro.",
+    ...PAID_COPY,
     status: "Your payment went through. Pro features will unlock in a moment.",
   },
   signed_out: {
@@ -80,6 +92,8 @@ export default function SubscriptionSuccessPage() {
   const tracked = useRef(false);
   const copy = COPY[activation];
   const signedOut = activation === "signed_out";
+  const showPendingStatus = useShowPendingStatus(activation);
+  const isPending = activation === "pending";
 
   useEffect(() => {
     if (activation !== "active" || tracked.current) return;
@@ -115,9 +129,24 @@ export default function SubscriptionSuccessPage() {
             <p className="text-sm text-muted-foreground" style={authSubtitleStyle}>
               {copy.subtitle}
             </p>
-            {copy.status && (
-              <p role="status" className="text-xs text-foreground/60">
-                {copy.status}
+            {!signedOut && (
+              <p
+                role="status"
+                className="flex min-h-4 items-center gap-1.5 text-xs text-foreground/60"
+              >
+                {isPending && !showPendingStatus ? null : (
+                  <>
+                    {isPending ? (
+                      <span
+                        className="size-3 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground motion-reduce:animate-none"
+                        aria-hidden="true"
+                      />
+                    ) : activation === "active" ? (
+                      <Check className="size-3.5 text-electric-ink" aria-hidden="true" />
+                    ) : null}
+                    {copy.status}
+                  </>
+                )}
               </p>
             )}
           </div>

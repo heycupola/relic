@@ -57,8 +57,6 @@ export function PlanBadge({ hasPro, className }: { hasPro: boolean; className?: 
 interface DashboardCardProps {
   title: ReactNode;
   description?: ReactNode;
-  /** Mono eyebrow shown above the title, e.g. `projects`. */
-  eyebrow?: string;
   action?: ReactNode;
   footer?: ReactNode;
   children: ReactNode;
@@ -70,7 +68,6 @@ interface DashboardCardProps {
 export function DashboardCard({
   title,
   description,
-  eyebrow,
   action,
   footer,
   children,
@@ -88,7 +85,6 @@ export function DashboardCard({
     >
       <header className="flex items-start justify-between gap-3 border-b border-border px-4 py-3.5 sm:px-5">
         <div className="min-w-0 space-y-0.5">
-          {eyebrow && <p className="font-mono text-[11px] text-electric-ink">{eyebrow}</p>}
           <h2
             id={headingId}
             className="truncate font-[family-name:var(--font-heading)] text-base font-semibold text-foreground"

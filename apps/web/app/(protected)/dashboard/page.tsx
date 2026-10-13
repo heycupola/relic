@@ -14,7 +14,7 @@ import {
   type DashboardProject,
   ProjectsOverviewCard,
 } from "@/components/dashboard/projects-overview-card";
-import { QuickActionsCard, ResourcesCard } from "@/components/dashboard/quick-actions-card";
+import { QuickActionsCard } from "@/components/dashboard/quick-actions-card";
 import { RotationCard } from "@/components/dashboard/rotation-card";
 import { ServiceAccountsCard } from "@/components/dashboard/service-accounts-card";
 import { type Stat, StatStrip } from "@/components/dashboard/stat-strip";
@@ -313,8 +313,8 @@ export default function DashboardPage() {
           />
         )}
 
-        <div className="grid grid-cols-1 items-start gap-4 sm:gap-5 lg:grid-cols-3">
-          <div className="min-w-0 space-y-4 sm:space-y-5 lg:col-span-2">
+        <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-3">
+          <div className="flex min-w-0 flex-col gap-4 sm:gap-5 lg:col-span-2">
             {isLoading ? (
               <CardSkeleton label="projects" rows={3} />
             ) : (
@@ -328,10 +328,11 @@ export default function DashboardPage() {
                 canLoadMore={canLoadMore}
                 isLoadingMore={isLoadingMore}
                 onLoadMore={loadMore}
+                className="lg:flex-1"
               />
             )}
           </div>
-          <aside className="min-w-0 space-y-4 sm:space-y-5" aria-label="Plan and tools">
+          <aside className="flex min-w-0 flex-col gap-4 sm:gap-5" aria-label="Plan and rotation">
             {isLoading ? (
               <CardSkeleton label="plan" rows={2} />
             ) : (
@@ -345,9 +346,8 @@ export default function DashboardPage() {
             {rotationAlerts === undefined ? (
               <CardSkeleton label="rotation" rows={2} />
             ) : (
-              <RotationCard alerts={rotationAlerts} />
+              <RotationCard alerts={rotationAlerts} className="lg:flex-1" />
             )}
-            <ResourcesCard />
           </aside>
         </div>
 

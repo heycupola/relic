@@ -69,6 +69,7 @@ interface ActivityLogsCardProps {
   canLoadMore?: boolean;
   isLoadingMore?: boolean;
   onLoadMore?: () => void;
+  className?: string;
 }
 
 type Category = "all" | "secrets" | "projects" | "team" | "access";
@@ -326,6 +327,7 @@ export function ActivityLogsCard({
   canLoadMore,
   isLoadingMore,
   onLoadMore,
+  className,
 }: ActivityLogsCardProps) {
   const [category, setCategory] = useState<Category>("all");
   const observerTarget = useRef<HTMLDivElement>(null);
@@ -361,13 +363,13 @@ export function ActivityLogsCard({
 
   return (
     <DashboardCard
-      eyebrow="activity"
       title="Recent activity"
       description="An audit trail of changes across your projects."
-      bodyClassName="p-0 sm:p-0"
+      className={className}
+      bodyClassName="flex min-h-0 flex-col p-0 sm:p-0"
     >
       {logs.length === 0 ? (
-        <div className="p-4 sm:p-5">
+        <div className="flex flex-1 items-center justify-center p-4 sm:p-5">
           <EmptyState icon={Activity} title="No activity yet">
             Changes to secrets, projects, collaborators, and keys will appear here.
           </EmptyState>
@@ -388,7 +390,13 @@ export function ActivityLogsCard({
               ]}
             />
           </div>
-          <div className={cn("max-h-[420px] overflow-y-auto", thinScrollbar)}>
+          {/* On lg the list takes no intrinsic height, so the sidebar sets the row height and the list fills it. */}
+          <div
+            className={cn(
+              "max-h-[420px] overflow-y-auto lg:h-0 lg:max-h-none lg:min-h-[280px] lg:flex-1",
+              thinScrollbar,
+            )}
+          >
             {groups.length === 0 ? (
               <p className="px-4 py-8 text-center text-sm text-muted-foreground sm:px-5">
                 No matching activity in what's loaded so far.

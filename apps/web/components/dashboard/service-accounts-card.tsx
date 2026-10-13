@@ -67,7 +67,6 @@ export function ServiceAccountsCard({ projects, hasPro }: ServiceAccountsCardPro
   return (
     <>
       <DashboardCard
-        eyebrow="service accounts"
         title="Service accounts"
         description="Passwordless access for CI/CD pipelines, optionally locked to an OIDC identity."
         action={

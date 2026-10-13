@@ -125,7 +125,7 @@ export default function SettingsPage() {
         </div>
       ) : (
         <div className="space-y-4 sm:space-y-5">
-          <DashboardCard eyebrow="profile" title="Account">
+          <DashboardCard title="Account">
             <dl className="divide-y divide-border">
               <Field label="Name">{userData.name || "—"}</Field>
               <Field label="Email">
@@ -147,7 +147,6 @@ export default function SettingsPage() {
           </DashboardCard>
 
           <DashboardCard
-            eyebrow="billing"
             title={
               <span className="flex items-center gap-2">
                 Plan
@@ -196,7 +195,6 @@ export default function SettingsPage() {
           </DashboardCard>
 
           <DashboardCard
-            eyebrow="security"
             title="Encryption"
             description="Secrets are encrypted on your device before they reach Relic. We can't read them."
           >
@@ -255,7 +253,6 @@ export default function SettingsPage() {
           </DashboardCard>
 
           <DashboardCard
-            eyebrow="notifications"
             title="Rotation digest"
             description="Weekly email on Mondays listing secrets that are overdue for rotation. It includes secret, project, and environment names, never values."
           >
@@ -289,7 +286,6 @@ export default function SettingsPage() {
           >
             <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
               <div className="space-y-1">
-                <p className={`font-mono text-[11px] ${tone.danger}`}>danger zone</p>
                 <h2
                   id="danger-zone-heading"
                   className="font-[family-name:var(--font-heading)] text-base font-semibold text-foreground"

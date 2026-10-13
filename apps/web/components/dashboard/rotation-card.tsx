@@ -25,6 +25,7 @@ interface RotationCardProps {
     dueSoonCount: number;
     truncated: boolean;
   };
+  className?: string;
 }
 
 function formatDue(alert: RotationAlert) {
@@ -34,12 +35,11 @@ function formatDue(alert: RotationAlert) {
   return `due in ${alert.daysUntilDue}d`;
 }
 
-export function RotationCard({ alerts }: RotationCardProps) {
+export function RotationCard({ alerts, className }: RotationCardProps) {
   const { items, overdueCount, dueSoonCount, truncated } = alerts;
 
   return (
     <DashboardCard
-      eyebrow="rotation"
       title="Secret rotation"
       action={
         items.length > 0 && (
@@ -59,12 +59,16 @@ export function RotationCard({ alerts }: RotationCardProps) {
           </>
         )
       }
-      bodyClassName={items.length > 0 ? "p-0 sm:p-0" : undefined}
+      className={className}
+      bodyClassName={items.length > 0 ? "p-0 sm:p-0" : "flex items-center justify-center"}
     >
       {items.length === 0 ? (
         <EmptyState icon={RefreshCw} title="Nothing due for rotation">
-          Set a policy with{" "}
-          <code className="font-mono">relic rotation set -e production --every 90</code>
+          Set a policy with
+          <code className="mt-1 block font-mono text-foreground/70">
+            <span className="whitespace-nowrap">relic rotation set</span>{" "}
+            <span className="whitespace-nowrap">-e production --every 90</span>
+          </code>
         </EmptyState>
       ) : (
         <ul className={`max-h-[320px] divide-y divide-border overflow-y-auto ${thinScrollbar}`}>

@@ -1,20 +1,10 @@
-import { ArrowUpRight, BookOpen, Download, Mail, Radio } from "lucide-react";
 import { InstallSection } from "@/components/install-section";
-import { SITE_DOCS_URL, SITE_RELEASES_URL, SITE_STATUS_URL } from "@/lib/site";
-import { focusRing } from "@/lib/styles";
 import { CommandLine, DashboardCard } from "./primitives";
 
 const COMMANDS = [
   { command: "relic init", hint: "Link the current directory to a project" },
   { command: "relic run -e production -- npm start", hint: "Run with secrets injected" },
   { command: "relic upgrade", hint: "Update the CLI" },
-] as const;
-
-const LINKS = [
-  { href: SITE_DOCS_URL, label: "Documentation", icon: BookOpen, external: true },
-  { href: SITE_RELEASES_URL, label: "Download binaries", icon: Download, external: true },
-  { href: SITE_STATUS_URL, label: "System status", icon: Radio, external: true },
-  { href: "mailto:support@withrelic.com", label: "Email support", icon: Mail, external: false },
 ] as const;
 
 function Command({ command, hint }: { command: string; hint: string }) {
@@ -29,7 +19,6 @@ function Command({ command, hint }: { command: string; hint: string }) {
 export function QuickActionsCard() {
   return (
     <DashboardCard
-      eyebrow="cli"
       title="Command line"
       description={
         <>
@@ -56,37 +45,6 @@ export function QuickActionsCard() {
           </ul>
         </div>
       </div>
-    </DashboardCard>
-  );
-}
-
-export function ResourcesCard() {
-  return (
-    <DashboardCard eyebrow="help" title="Resources" bodyClassName="p-0 sm:p-0">
-      <nav aria-label="Help and resources">
-        <ul className="divide-y divide-border">
-          {LINKS.map(({ href, label, icon: Icon, external }) => (
-            <li key={href}>
-              <a
-                href={href}
-                target={external ? "_blank" : undefined}
-                rel={external ? "noopener noreferrer" : undefined}
-                className={`group flex items-center gap-3 px-4 py-2.5 text-sm text-foreground/80 transition-colors hover:bg-muted/40 hover:text-foreground sm:px-5 ${focusRing}`}
-              >
-                <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
-                <span className="flex-1">
-                  {label}
-                  {external && <span className="sr-only"> (opens in a new tab)</span>}
-                </span>
-                <ArrowUpRight
-                  className="size-3.5 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground"
-                  aria-hidden="true"
-                />
-              </a>
-            </li>
-          ))}
-        </ul>
-      </nav>
     </DashboardCard>
   );
 }

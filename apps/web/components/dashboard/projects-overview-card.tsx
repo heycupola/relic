@@ -80,7 +80,6 @@ export function ProjectsOverviewCard({ projects }: { projects: DashboardProject[
 
   return (
     <DashboardCard
-      eyebrow="projects"
       title="Your projects"
       description="Everything you own or can access. Open the TUI to edit secrets."
       footer={

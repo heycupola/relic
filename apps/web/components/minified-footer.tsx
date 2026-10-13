@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { SITE_DOCS_URL, SITE_STATUS_URL } from "@/lib/site";
+import { SITE_DOCS_URL, SITE_RELEASES_URL, SITE_STATUS_URL } from "@/lib/site";
 
 const footerLinks: ReadonlyArray<{ href: string; label: string; external?: boolean }> = [
   { href: SITE_DOCS_URL, label: "Docs", external: true },
+  { href: SITE_RELEASES_URL, label: "Binaries", external: true },
   { href: SITE_STATUS_URL, label: "Status", external: true },
 ];
 

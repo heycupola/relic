@@ -54,7 +54,6 @@ export function ApiKeysCard({ apiKeys, projectNames, isLoading, hasPro }: ApiKey
   return (
     <>
       <DashboardCard
-        eyebrow="api keys"
         title="API keys"
         description="Personal tokens for scripts and integrations that read secrets over the API."
         action={
