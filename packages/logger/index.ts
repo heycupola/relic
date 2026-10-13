@@ -9,6 +9,7 @@ import {
   type LogLevel,
   saveTelemetryPreference,
 } from "./config";
+import { createConsoleReporter } from "./transports/console";
 import { clearLogFile, createFileReporter } from "./transports/file";
 import { captureEvent, shutdown } from "./transports/posthog";
 
@@ -57,17 +58,10 @@ export function createLogger(tag: string) {
   const cfg = getOrInitConfig();
   const level = LEVEL_MAP[cfg.level] ?? 3;
 
-  if (cfg.isDev && !cfg.isCI) {
-    const logger = createConsola({ level, defaults: { tag } });
-    logger.addReporter(createFileReporter(cfg.logFile));
-    return logger;
-  }
+  const reporters = [createFileReporter(cfg.logFile)];
+  if (cfg.isDev && !cfg.isCI) reporters.push(createConsoleReporter());
 
-  return createConsola({
-    level,
-    reporters: [createFileReporter(cfg.logFile)],
-    defaults: { tag },
-  });
+  return createConsola({ level, reporters, defaults: { tag } });
 }
 
 export function trackEvent(event: string, properties: Record<string, unknown> = {}): void {

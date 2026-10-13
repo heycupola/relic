@@ -173,7 +173,6 @@ export function ManageCollaboratorsModal({
           : [
               { key: "n", description: "add", disabled: busy },
               { key: "d", description: "revoke", disabled: busy || collaborators.length === 0 },
-              { key: "j/k", description: "move", disabled: busy || collaborators.length < 2 },
               { key: "esc", description: "close", disabled: isRunning },
             ]
       }

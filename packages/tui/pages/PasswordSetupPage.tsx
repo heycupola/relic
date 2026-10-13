@@ -3,11 +3,12 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { verifyPasswordWithExistingKeys } from "@repo/auth";
 import { createUserKeys } from "@repo/crypto";
 import { createLogger, trackEvent } from "@repo/logger";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getProtectedApi } from "../api";
 import { PasswordInput } from "../components/PasswordInput";
 import { Modal } from "../components/shared/Modal";
 import { useUserKeys } from "../convex/hooks/useUserKeys";
+import { useTaskQueue } from "../hooks/useTaskQueue";
 import { THEME_COLORS } from "../utils/constants";
 
 const logger = createLogger("tui");
@@ -38,6 +39,25 @@ export function PasswordSetupPage({
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [taskStatus, setTaskStatus] = useState<TaskStatus>(null);
   const [error, setError] = useState<string | null>(null);
+  const { setTaskPending, cancelTask } = useTaskQueue();
+  const showedTaskRef = useRef(false);
+
+  useEffect(() => {
+    if (taskStatus) {
+      setTaskPending(TASK_MESSAGES[taskStatus]);
+      showedTaskRef.current = true;
+    } else if (showedTaskRef.current) {
+      cancelTask();
+      showedTaskRef.current = false;
+    }
+  }, [taskStatus, setTaskPending, cancelTask]);
+
+  useEffect(
+    () => () => {
+      if (showedTaskRef.current) cancelTask();
+    },
+    [cancelTask],
+  );
 
   const complete = async (password: string) => {
     setTaskStatus("saving_password");
@@ -145,7 +165,9 @@ export function PasswordSetupPage({
         >
           <box height={1} marginTop={1}>
             <text fg={THEME_COLORS.text}>
-              {hasExistingKeys ? "Unlock master password" : "Create master password"}
+              <strong>
+                {hasExistingKeys ? "Unlock master password" : "Create master password"}
+              </strong>
             </text>
           </box>
 
@@ -164,28 +186,15 @@ export function PasswordSetupPage({
               width={FORM_WIDTH}
               disabled={isAnyModalOpen}
               error={error}
-              additionalShortcuts={[{ key: "^l", description: "logout", disabled: !!taskStatus }]}
+              additionalShortcuts={[{ key: "^l", description: "log out", disabled: !!taskStatus }]}
             />
           </box>
         </box>
       </box>
 
-      {taskStatus && (
-        <box
-          position="absolute"
-          bottom={0}
-          left={0}
-          width={width}
-          height={1}
-          backgroundColor={THEME_COLORS.header}
-        >
-          <text fg={THEME_COLORS.warning}>{TASK_MESSAGES[taskStatus]}</text>
-        </box>
-      )}
-
       <Modal
         visible={showLogoutModal}
-        title="Logout"
+        title="Log out"
         width={45}
         height={8}
         shortcuts={[
@@ -193,7 +202,7 @@ export function PasswordSetupPage({
           { key: "n", description: "no", disabled: !!taskStatus },
         ]}
       >
-        <text fg={THEME_COLORS.textMuted}>Are you sure you want to logout?</text>
+        <text fg={THEME_COLORS.textMuted}>Are you sure you want to log out?</text>
       </Modal>
     </box>
   );

@@ -3,7 +3,7 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { extractErrorMessage } from "@repo/auth";
 import { createLogger } from "@repo/logger";
 import { Component, type ReactNode } from "react";
-import { THEME_COLORS } from "../../utils/constants";
+import { KEY_SYMBOLS, THEME_COLORS } from "../../utils/constants";
 import { GuideBar } from "./GuideBar";
 
 const logger = createLogger("tui");
@@ -102,7 +102,7 @@ function ErrorScreen({
         <box marginTop={1}>
           <GuideBar
             shortcuts={[
-              { key: "↵", description: "go home" },
+              { key: KEY_SYMBOLS.enter, description: "go home" },
               { key: "q", description: "quit" },
             ]}
             customWidth={boxWidth - 4}

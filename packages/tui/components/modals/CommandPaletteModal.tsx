@@ -192,9 +192,7 @@ function CommandPaletteDisplay({
       width={modalWidth}
       headerRight={
         <text>
-          <span fg={THEME_COLORS.textDim}>[</span>
           <span fg={THEME_COLORS.primary}>esc</span>
-          <span fg={THEME_COLORS.textDim}>]</span>
           <span fg={THEME_COLORS.textMuted}> close</span>
         </text>
       }
@@ -236,11 +234,7 @@ function CommandPaletteDisplay({
                 </span>
                 <span fg={descriptionColor}>{item.command.description}</span>
               </text>
-              <text>
-                <span fg={THEME_COLORS.textDim}>[</span>
-                <span fg={keyColor}>{item.command.key}</span>
-                <span fg={THEME_COLORS.textDim}>]</span>
-              </text>
+              <text fg={keyColor}>{item.command.key}</text>
             </box>
           );
         })}

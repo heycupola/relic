@@ -7,7 +7,7 @@ import {
   validatePassword,
 } from "@repo/auth";
 import { useState } from "react";
-import { KEY_SYMBOLS, THEME_COLORS } from "../utils/constants";
+import { THEME_COLORS } from "../utils/constants";
 import { InlineInput } from "./forms/InlineInput";
 import { GuideBar } from "./shared/GuideBar";
 
@@ -199,14 +199,7 @@ export function PasswordInput({
           primary: [
             {
               shortcuts: [
-                ...(mode !== "verify" ? [{ key: "tab", description: "next field", disabled }] : []),
                 { key: "^v", description: showPassword ? "hide" : "show", disabled },
-                {
-                  key: KEY_SYMBOLS.enter,
-                  description:
-                    mode === "verify" ? "unlock" : mode === "change" ? "save" : "continue",
-                  disabled,
-                },
                 ...additionalShortcuts,
               ],
             },

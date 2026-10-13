@@ -216,7 +216,7 @@ export function BulkImportModal({
             const wrappedLinesBelow = allWrappedLines.length - (scrollOffset + visibleLines);
             if (wrappedLinesBelow > 0) {
               return (
-                <text fg={THEME_COLORS.textDim}>
+                <text fg={THEME_COLORS.textMuted}>
                   ... {wrappedLinesBelow} more line{wrappedLinesBelow > 1 ? "s" : ""} below
                 </text>
               );
