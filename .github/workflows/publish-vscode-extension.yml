@@ -154,5 +154,7 @@ jobs:
         working-directory: apps/vscode-extension
         run: |
           set -euo pipefail
-          bunx vsce publish --packagePath relic-vscode.vsix --no-dependencies --skip-duplicate --oidc
-          bunx ovsx publish --packagePath relic-vscode.vsix --skip-duplicate --trusted-publishing
+          status=0
+          bunx vsce publish --packagePath relic-vscode.vsix --no-dependencies --skip-duplicate --oidc || status=1
+          bunx ovsx publish --packagePath relic-vscode.vsix --skip-duplicate --trusted-publishing || status=1
+          exit "$status"
