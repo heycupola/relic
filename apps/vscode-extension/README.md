@@ -6,8 +6,8 @@ Relic is an end-to-end encrypted, zero-knowledge secrets layer. This extension n
 
 ## Install
 
-- [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=heycupola.relic-vscode)
-- [Open VSX](https://open-vsx.org/extension/heycupola/relic-vscode) for Cursor
+- [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=cupola.relic-vscode)
+- [Open VSX](https://open-vsx.org/extension/cupola/relic-vscode) for Cursor
 
 ## Requirements
 

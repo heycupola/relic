@@ -152,9 +152,16 @@ jobs:
 
       - name: Publish to Marketplace and Open VSX
         working-directory: apps/vscode-extension
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
         run: |
           set -euo pipefail
           status=0
           bunx vsce publish --packagePath relic-vscode.vsix --no-dependencies --skip-duplicate --oidc || status=1
-          bunx ovsx publish --packagePath relic-vscode.vsix --skip-duplicate --trusted-publishing || status=1
+          if [ -z "${OVSX_PAT:-}" ]; then
+            echo "OVSX_PAT is not configured."
+            status=1
+          else
+            bunx ovsx publish --packagePath relic-vscode.vsix --skip-duplicate || status=1
+          fi
           exit "$status"
