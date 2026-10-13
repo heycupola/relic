@@ -4,6 +4,11 @@ Run, debug, and test your code with [Relic](https://withrelic.com) secrets injec
 
 Relic is an end-to-end encrypted, zero-knowledge secrets layer. This extension never reads, shows, stores, or logs secret values. Everything that needs a value goes through the `relic` CLI, which decrypts on your machine and injects secrets straight into the process it starts. The extension only ever sees secret **names**.
 
+## Install
+
+- [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=heycupola.relic-vscode)
+- [Open VSX](https://open-vsx.org/extension/heycupola/relic-vscode) for Cursor
+
 ## Requirements
 
 - The [Relic CLI](https://docs.withrelic.com/introduction#installation), logged in with `relic login`.

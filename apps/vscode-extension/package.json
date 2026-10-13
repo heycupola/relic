@@ -1,7 +1,7 @@
 {
   "name": "relic-vscode",
   "displayName": "Relic",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Run, debug, and test your code with Relic secrets injected. No .env files.",
   "categories": [
@@ -47,6 +47,7 @@
     "@types/vscode": "~1.90.0",
     "@vscode/vsce": "^4.0.0",
     "esbuild": "^0.27.0",
+    "ovsx": "1.2.0",
     "smol-toml": "^1.6.0"
   },
   "contributes": {

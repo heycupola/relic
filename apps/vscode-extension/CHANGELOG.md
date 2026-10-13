@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Release the extension for installation from the VS Code Marketplace and Open VSX.
+
 ## 0.1.0
 
 - Status bar environment picker backed by `relic projects --json`.
