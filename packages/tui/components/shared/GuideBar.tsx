@@ -20,31 +20,25 @@ interface GuideItem extends Shortcut {
 }
 
 const HELP_ITEM: GuideItem = { key: "?", description: "help", isHelp: true };
+const ITEM_GAP = 2;
 
 function itemWidth(item: GuideItem): number {
-  return item.key.length + item.description.length + 3;
+  return item.key.length + 1 + item.description.length;
 }
 
-/** Packs items into rows that fit `width`, keeping primary and secondary items on separate rows. */
-function packRows(items: GuideItem[], width: number): GuideItem[][] {
-  const rows: GuideItem[][] = [];
-  let row: GuideItem[] = [];
-  let used = 0;
+function rowWidth(row: GuideItem[]): number {
+  return row.reduce((sum, item) => sum + itemWidth(item), 0) + ITEM_GAP * (row.length - 1);
+}
 
-  for (const item of items) {
-    const size = itemWidth(item);
-    const gap = row.length > 0 ? 1 : 0;
-    const startsSecondary = item.secondary && row.length > 0 && !row[row.length - 1]?.secondary;
-    if (row.length > 0 && (startsSecondary || used + gap + size > width)) {
-      rows.push(row);
-      row = [];
-      used = 0;
-    }
-    used += (row.length > 0 ? 1 : 0) + size;
-    row.push(item);
+/** Splits a section into the fewest evenly sized rows that fit `width`. */
+function layoutSection(items: GuideItem[], width: number): GuideItem[][] {
+  for (let rowCount = 1; rowCount <= items.length; rowCount++) {
+    const size = Math.ceil(items.length / rowCount);
+    const rows: GuideItem[][] = [];
+    for (let i = 0; i < items.length; i += size) rows.push(items.slice(i, i + size));
+    if (rows.every((row) => rowWidth(row) <= width)) return rows;
   }
-  if (row.length > 0) rows.push(row);
-  return rows;
+  return items.map((item) => [item]);
 }
 
 function GuideRow({ items, width }: { items: GuideItem[]; width: number }) {
@@ -57,16 +51,14 @@ function GuideRow({ items, width }: { items: GuideItem[]; width: number }) {
             : item.isHelp
               ? THEME_COLORS.accent
               : item.secondary
-                ? THEME_COLORS.textMuted
+                ? THEME_COLORS.text
                 : THEME_COLORS.primary;
           return (
             <span key={`${item.key}-${index}`}>
-              {index > 0 && <span> </span>}
-              <span fg={THEME_COLORS.textDim}>[</span>
+              {index > 0 && <span>{" ".repeat(ITEM_GAP)}</span>}
               <span fg={keyColor}>{item.key}</span>
-              <span fg={THEME_COLORS.textDim}>] </span>
               <span fg={item.disabled ? THEME_COLORS.textDim : THEME_COLORS.textMuted}>
-                {item.description}
+                {` ${item.description}`}
               </span>
             </span>
           );
@@ -79,17 +71,18 @@ function GuideRow({ items, width }: { items: GuideItem[]; width: number }) {
 export function GuideBar({ shortcuts, groups, customWidth, showHelp = false }: GuideBarProps) {
   const boxWidth = customWidth ?? 66;
 
-  const items: GuideItem[] = groups
-    ? [
-        ...groups.primary.flatMap((g) => g.shortcuts),
-        ...(showHelp ? [HELP_ITEM] : []),
-        ...groups.secondary.flatMap((g) => g.shortcuts.map((s) => ({ ...s, secondary: true }))),
-      ]
-    : [...(shortcuts ?? []), ...(showHelp ? [HELP_ITEM] : [])];
+  const primary: GuideItem[] = groups
+    ? groups.primary.flatMap((g) => g.shortcuts)
+    : [...(shortcuts ?? [])];
+  const secondary: GuideItem[] = groups
+    ? groups.secondary.flatMap((g) => g.shortcuts.map((s) => ({ ...s, secondary: true })))
+    : [];
+  if (showHelp) (secondary.length > 0 ? secondary : primary).push(HELP_ITEM);
 
-  if (items.length === 0) return null;
-
-  const rows = packRows(items, boxWidth);
+  const rows = [primary, secondary]
+    .filter((section) => section.length > 0)
+    .flatMap((section) => layoutSection(section, boxWidth));
+  if (rows.length === 0) return null;
 
   return (
     <box flexDirection="column" width={boxWidth}>

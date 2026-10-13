@@ -107,24 +107,31 @@ export function SecretHistoryModal({
       visible={true}
       title={`History · ${secretKey}`}
       width={76}
-      shortcuts={[
-        { key: "r", description: "restore", disabled: !canRestore },
-        { key: "esc", description: "close", disabled: isRunning },
-      ]}
+      shortcuts={
+        confirmingVersion !== null
+          ? [
+              { key: "y", description: "restore", disabled: isRunning },
+              { key: "n", description: "keep current", disabled: isRunning },
+            ]
+          : [
+              { key: "r", description: "restore", disabled: !canRestore },
+              { key: "esc", description: "close", disabled: isRunning },
+            ]
+      }
     >
       <box flexDirection="column" gap={1}>
         <box height={1} flexDirection="row" justifyContent="space-between">
           <text fg={THEME_COLORS.textMuted}>Versions</text>
-          <text fg={THEME_COLORS.textDim}>{retentionText}</text>
+          <text fg={THEME_COLORS.textMuted}>{retentionText}</text>
         </box>
 
         <box flexDirection="column">
           {isLoading && items.length === 0 ? (
-            <text fg={THEME_COLORS.textDim}>Loading history...</text>
+            <text fg={THEME_COLORS.textMuted}>Loading history...</text>
           ) : error ? (
             <text fg={THEME_COLORS.error}>{error}</text>
           ) : items.length <= 1 ? (
-            <text fg={THEME_COLORS.textDim}>
+            <text fg={THEME_COLORS.textMuted}>
               No previous versions yet. History starts with the next change.
             </text>
           ) : (
@@ -146,10 +153,10 @@ export function SecretHistoryModal({
                         {`v${item.version}`.padEnd(5)}
                       </span>
                       <span fg={THEME_COLORS.textMuted}>{item.label.padEnd(9)}</span>
-                      <span fg={THEME_COLORS.textDim}>
+                      <span fg={THEME_COLORS.textMuted}>
                         {formatHistoryTime(item.changedAt).padEnd(11)}
                       </span>
-                      <span fg={THEME_COLORS.textDim}>
+                      <span fg={THEME_COLORS.textMuted}>
                         {truncate(item.changedBy, 20).padEnd(21)}
                       </span>
                       <span fg={THEME_COLORS.text}>{value}</span>
@@ -160,12 +167,7 @@ export function SecretHistoryModal({
                       <text>
                         <span fg={THEME_COLORS.textDim}> └─ </span>
                         <span fg={THEME_COLORS.accent}>↺</span>
-                        <span fg={THEME_COLORS.text}> Restore v{item.version} as current? </span>
-                        <span fg={THEME_COLORS.textDim}>[</span>
-                        <span fg={THEME_COLORS.success}>y</span>
-                        <span fg={THEME_COLORS.textDim}>] yes [</span>
-                        <span fg={THEME_COLORS.error}>n</span>
-                        <span fg={THEME_COLORS.textDim}>] no</span>
+                        <span fg={THEME_COLORS.text}> Restore v{item.version} as current?</span>
                       </text>
                     </box>
                   )}

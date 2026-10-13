@@ -25,10 +25,7 @@ export function DeleteConfirmation({ itemType, itemName, visible }: DeleteConfir
         <span fg={THEME_COLORS.error}>✕</span>
         <span fg={THEME_COLORS.text}> {actionText} </span>
         <span fg={THEME_COLORS.accent}>{displayName}</span>
-        <span fg={THEME_COLORS.text}>? </span>
-        <span fg={THEME_COLORS.success}>y</span>
-        <span fg={THEME_COLORS.textDim}>/</span>
-        <span fg={THEME_COLORS.error}>n</span>
+        <span fg={THEME_COLORS.text}>?</span>
       </text>
     </box>
   );

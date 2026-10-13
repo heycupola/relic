@@ -26,13 +26,7 @@ import { useTaskQueue } from "../hooks/useTaskQueue";
 import { useRouter } from "../router";
 import type { Shortcut } from "../types/keyboard";
 import type { ModalType, ProjectStatus, ViewLevel } from "../types/models";
-import {
-  DASHBOARD_URL,
-  KEY_SYMBOLS,
-  STATUS_COLORS,
-  STATUS_ICONS,
-  THEME_COLORS,
-} from "../utils/constants";
+import { DASHBOARD_URL, STATUS_COLORS, STATUS_ICONS, THEME_COLORS } from "../utils/constants";
 import { buildProjectItems, type ProjectLocation, secretsInView } from "../utils/projectItems";
 import { POLICY_INPUT_MAX_LENGTH, parsePolicyInput } from "../utils/rotation";
 import { openUrl, truncate } from "../utils/ui";
@@ -569,15 +563,18 @@ export function ProjectPage({
 
     if (creatingItem || editingItem || editingPolicy) {
       return {
+        primary: [{ shortcuts: [{ key: "esc", description: "cancel", disabled: isDisabled }] }],
+        secondary: [],
+      };
+    }
+
+    if (confirmingDelete) {
+      return {
         primary: [
           {
             shortcuts: [
-              {
-                key: KEY_SYMBOLS.enter,
-                description: creatingItem ? "create" : "save",
-                disabled: isDisabled,
-              },
-              { key: "esc", description: "cancel", disabled: isDisabled },
+              { key: "y", description: "delete", disabled: isDisabled },
+              { key: "n", description: "keep", disabled: isDisabled },
             ],
           },
         ],
@@ -587,11 +584,9 @@ export function ProjectPage({
 
     const disabled = isDisabled || isReadOnly;
     const hasSelection = selectedItem !== undefined;
-    const canOpen = selectedItem?.type === "env" || selectedItem?.type === "folder";
     const primary: Shortcut[] =
       viewLevel === "environments"
         ? [
-            { key: KEY_SYMBOLS.enter, description: "open", disabled: isDisabled || !canOpen },
             { key: "n", description: "new environment", disabled },
             { key: "u", description: "rename", disabled: disabled || !hasSelection },
             { key: "d", description: "delete", disabled: disabled || !hasSelection },
@@ -733,7 +728,7 @@ export function ProjectPage({
 
           {editingPolicy && (
             <box flexDirection="column" width={CONTENT_WIDTH}>
-              <text fg={THEME_COLORS.textDim}>
+              <text fg={THEME_COLORS.textMuted}>
                 {"  "}Rotate <span fg={THEME_COLORS.text}>{truncate(editingPolicy.name, 30)}</span>{" "}
                 every N days · 0 clears
               </text>
@@ -792,7 +787,11 @@ export function ProjectPage({
 
           {(activeModal === "none" || activeModal === "commandPalette") && (
             <box marginTop={1}>
-              <GuideBar groups={getShortcuts()} customWidth={CONTENT_WIDTH} showHelp={true} />
+              <GuideBar
+                groups={getShortcuts()}
+                customWidth={CONTENT_WIDTH}
+                showHelp={!creatingItem && !editingItem && !editingPolicy && !confirmingDelete}
+              />
             </box>
           )}
         </box>

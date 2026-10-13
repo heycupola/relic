@@ -24,7 +24,7 @@ import { useProUpgradeNotice } from "../hooks/useProUpgradeNotice";
 import { useTaskQueue } from "../hooks/useTaskQueue";
 import { useRouter } from "../router";
 import type { ModalType } from "../types/models";
-import { DASHBOARD_URL, KEY_SYMBOLS, THEME_COLORS } from "../utils/constants";
+import { DASHBOARD_URL, THEME_COLORS } from "../utils/constants";
 import { openUrl } from "../utils/ui";
 
 const logger = createLogger("tui");
@@ -364,15 +364,18 @@ export function HomePage() {
 
     if (creatingProject || validatedEditingProject) {
       return {
+        primary: [{ shortcuts: [{ key: "esc", description: "cancel", disabled: isDisabled }] }],
+        secondary: [],
+      };
+    }
+
+    if (validatedConfirmingDelete) {
+      return {
         primary: [
           {
             shortcuts: [
-              {
-                key: KEY_SYMBOLS.enter,
-                description: creatingProject ? "create" : "save",
-                disabled: isDisabled,
-              },
-              { key: "esc", description: "cancel", disabled: isDisabled },
+              { key: "y", description: "archive", disabled: isDisabled },
+              { key: "n", description: "keep", disabled: isDisabled },
             ],
           },
         ],
@@ -386,7 +389,6 @@ export function HomePage() {
       primary: [
         {
           shortcuts: [
-            { key: KEY_SYMBOLS.enter, description: "open", disabled: isDisabled || !hasSelection },
             { key: "n", description: "new project", disabled: isDisabled },
             { key: "u", description: "rename", disabled: isDisabled || !canManage },
             { key: "d", description: "archive", disabled: isDisabled || !canManage },
@@ -494,7 +496,9 @@ export function HomePage() {
               <GuideBar
                 groups={getShortcuts()}
                 customWidth={52}
-                showHelp={!creatingProject && !validatedEditingProject}
+                showHelp={
+                  !creatingProject && !validatedEditingProject && !validatedConfirmingDelete
+                }
               />
             </box>
           )}

@@ -95,7 +95,7 @@ function ItemRow({
     item.type === "secret" ? getSecretRotationBadge(item, environmentRotateEveryDays) : null;
   const policyLabel = item.type === "env" ? formatPolicyLabel(item.rotateEveryDays) : null;
   const trailing =
-    badge ?? (policyLabel ? { text: policyLabel, color: THEME_COLORS.textDim } : null);
+    badge ?? (policyLabel ? { text: policyLabel, color: THEME_COLORS.textMuted } : null);
   const trailingWidth = trailing ? trailing.text.length + 1 : 0;
 
   return (
