@@ -1,12 +1,12 @@
 {
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "End-to-end encrypted secrets for developers and AI agents",
   "homepage": "https://withrelic.com",
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/heycupola/relic/releases/download/v0.11.0/relic-win32-x64.zip",
-      "hash": "2a82fe0b788e39e15cf04c11d488b36d00a04ba67ef80126a6c3942f16c64e06"
+      "url": "https://github.com/heycupola/relic/releases/download/v0.11.1/relic-win32-x64.zip",
+      "hash": "e7e98134f70575302056347b7fe8e5e94e1fb10a30f1cbaa6d6495b8d4259420"
     }
   },
   "bin": "relic.exe",
