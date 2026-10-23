@@ -1,10 +1,11 @@
-import Image from "next/image";
 import Link from "next/link";
 import type React from "react";
+import { focusRing } from "@/lib/styles";
 
-interface HeroAction {
+export interface ContentHeroLink {
   href: string;
   label: string;
+  icon?: React.ReactNode;
   external?: boolean;
 }
 
@@ -12,68 +13,49 @@ interface ContentHeroProps {
   eyebrow: string;
   title: string;
   description: string;
-  actions?: HeroAction[];
-  meta?: React.ReactNode;
+  links?: ContentHeroLink[];
+  children?: React.ReactNode;
 }
 
-export function ContentHero({ eyebrow, title, description, actions = [], meta }: ContentHeroProps) {
+export function ContentHero({
+  eyebrow,
+  title,
+  description,
+  links = [],
+  children,
+}: ContentHeroProps) {
   return (
-    <section className="border-b border-border">
-      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14 lg:px-12">
-        <div className="border-2 border-border bg-muted/40 px-5 py-5 sm:px-8 sm:py-8">
-          <div className="flex flex-col gap-8">
-            <div className="space-y-5">
-              <div className="flex items-center gap-3">
-                <Image
-                  src="/relic-logo-dark.svg"
-                  alt=""
-                  width={40}
-                  height={40}
-                  className="h-10 w-10 dark:hidden"
-                />
-                <Image
-                  src="/relic-logo-light.svg"
-                  alt=""
-                  width={40}
-                  height={40}
-                  className="h-10 w-10 hidden dark:block"
-                />
-                <span className="font-mono text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                  {eyebrow}
-                </span>
-              </div>
-              <div className="space-y-4">
-                <h1 className="max-w-4xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl md:text-5xl">
-                  {title}
-                </h1>
-                <p className="max-w-2xl text-base leading-relaxed text-foreground/65 sm:text-lg">
-                  {description}
-                </p>
-              </div>
-            </div>
+    <section aria-labelledby="content-hero-title" className="border-b border-border">
+      <div className="mx-auto max-w-5xl px-4 py-14 sm:px-6 sm:py-16 md:py-20 lg:px-12">
+        <p className="mb-4 font-mono text-xs text-foreground/60 sm:text-sm">{eyebrow}</p>
+        <h1
+          id="content-hero-title"
+          className="max-w-3xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl md:text-5xl"
+        >
+          {title}
+        </h1>
+        <p className="mt-5 max-w-2xl text-base text-foreground/60 text-pretty sm:mt-6 sm:text-lg">
+          {description}
+        </p>
 
-            {(actions.length > 0 || meta) && (
-              <div className="flex flex-col gap-4 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
-                {actions.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {actions.map((action) => (
-                      <Link
-                        key={action.href}
-                        href={action.href}
-                        target={action.external ? "_blank" : undefined}
-                        rel={action.external ? "noopener noreferrer" : undefined}
-                        className="border border-border px-3 py-2 text-sm text-foreground/80 transition-colors hover:bg-foreground hover:text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
-                      >
-                        {action.label}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-                {meta && <div className="text-sm text-muted-foreground">{meta}</div>}
-              </div>
-            )}
+        {links.length > 0 && (
+          <div className="mt-8 flex flex-wrap gap-2 sm:gap-3">
+            {links.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                target={link.external ? "_blank" : undefined}
+                rel={link.external ? "noopener noreferrer" : undefined}
+                className={`inline-flex items-center gap-2 border-2 border-border bg-background px-3.5 py-2 text-sm font-medium text-foreground transition-colors hover:border-foreground/40 hover:bg-muted/50 ${focusRing}`}
+              >
+                {link.icon}
+                {link.label}
+              </Link>
+            ))}
           </div>
-        </div>
+        )}
+
+        {children}
       </div>
     </section>
   );

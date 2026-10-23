@@ -3,7 +3,7 @@
 import { Menu, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { authClient } from "@/lib/auth";
 import { getCookieValue, SESSION_HINT_COOKIE } from "@/lib/cookies";
@@ -23,6 +23,8 @@ interface PublicNavLink {
 
 export function Header({ showLogout = false }: HeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const isCurrent = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const [hasSessionHint, setHasSessionHint] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -126,7 +128,8 @@ export function Header({ showLogout = false }: HeaderProps) {
                     href={link.href}
                     target={(link.external ?? false) ? "_blank" : undefined}
                     rel={(link.external ?? false) ? "noopener noreferrer" : undefined}
-                    className="transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground px-1"
+                    aria-current={isCurrent(link.href) ? "page" : undefined}
+                    className="transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground px-1 aria-[current=page]:text-foreground"
                   >
                     {link.label}
                   </Link>
@@ -167,7 +170,8 @@ export function Header({ showLogout = false }: HeaderProps) {
                   href={link.href}
                   target={(link.external ?? false) ? "_blank" : undefined}
                   rel={(link.external ?? false) ? "noopener noreferrer" : undefined}
-                  className="text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground px-1 py-2"
+                  aria-current={isCurrent(link.href) ? "page" : undefined}
+                  className="text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground px-1 py-2 aria-[current=page]:text-foreground"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {link.label}

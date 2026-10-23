@@ -14,10 +14,16 @@
   }
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  html:has([data-smooth-scroll]) {
+    scroll-behavior: smooth;
+  }
+}
+
 .content-prose {
   color: color-mix(in oklab, var(--foreground) 82%, transparent);
-  font-size: 1rem;
-  line-height: 1.8;
+  font-size: 1.0625rem;
+  line-height: 1.75;
 }
 
 .content-prose > :first-child {
@@ -39,13 +45,21 @@
 }
 
 .content-prose h2 {
-  margin-top: 2.5rem;
-  font-size: 1.875rem;
+  margin-top: 3rem;
+  font-size: 1.625rem;
+  line-height: 1.25;
 }
 
 .content-prose h3 {
-  margin-top: 2rem;
-  font-size: 1.35rem;
+  margin-top: 2.25rem;
+  font-size: 1.25rem;
+  line-height: 1.3;
+}
+
+.content-prose h2 + *,
+.content-prose h3 + *,
+.content-prose h4 + * {
+  margin-top: 0.875rem;
 }
 
 .content-prose h4 {
@@ -73,6 +87,45 @@
 
 .content-prose li + li {
   margin-top: 0.5rem;
+}
+
+.content-prose li::marker {
+  color: var(--muted-foreground);
+}
+
+.content-prose li > ul,
+.content-prose li > ol {
+  margin-top: 0.5rem;
+}
+
+.content-prose .code-block {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.content-prose-compact {
+  font-size: 0.9375rem;
+  line-height: 1.7;
+}
+
+.content-prose-compact > * + * {
+  margin-top: 1rem;
+}
+
+.content-prose-compact > ul > li + li,
+.content-prose-compact > ol > li + li {
+  margin-top: 0.875rem;
+}
+
+.content-prose .changelog-label {
+  margin-top: 2rem;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
 }
 
 .content-prose strong {

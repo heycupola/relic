@@ -36,9 +36,13 @@ export interface BlogPost extends BaseContentEntry {
   category: string;
 }
 
+export type ReleaseType = "major" | "minor" | "patch";
+
 export interface ChangelogEntry extends BaseContentEntry {
   collection: "changelog";
   version: string;
+  releaseType?: ReleaseType;
+  deprecated: boolean;
   releaseUrl?: string;
   githubTag?: string;
 }
@@ -227,6 +231,62 @@ function normalizeBaseEntry(
   };
 }
 
+const DEPRECATED_TITLE_PATTERN = /^\[deprecated\]\s*/i;
+const DEPRECATION_NOTICE_PATTERN =
+  /^## Deprecated\s*\n+This release is deprecated and no longer supported\.\s*\n+(?:Versions before [^\n]+\n(?:Please use [^\n]+\n)?)?/m;
+const RELEASE_LINK_FOOTER_PATTERN = /\n*(?:---\s*\n+)?\[View release on GitHub\]\([^)]+\)\s*$/;
+const COMMIT_PREFIX_PATTERN = /^(\s*[-*]\s+)[a-f0-9]{7,40}:\s+/gm;
+const LEADING_RULE_PATTERN = /^(?:\s*---\s*\n)+/;
+
+function getReleaseType(version: string): ReleaseType | undefined {
+  const match = /^v?(\d+)\.(\d+)\.(\d+)/.exec(version);
+  if (!match) return undefined;
+  const [, major, minor, patch] = match;
+  if (patch !== "0") return "patch";
+  if (minor !== "0" || major === "0") return "minor";
+  return "major";
+}
+
+/**
+ * Bolds the first sentence of long top-level bullets so release notes can be scanned
+ * by their summary line. Skips sentences whose inline markdown would be split.
+ */
+function emphasizeLeadSentences(body: string): string {
+  const lines = body.split("\n");
+
+  return lines
+    .map((line, index) => {
+      const match = /^([-*]\s+)(.+)$/.exec(line);
+      if (!match) return line;
+      const [, marker, text] = match as unknown as [string, string, string];
+      if (text.startsWith("**")) return line;
+
+      const end = text.search(/[.!?](?=\s+[A-Z`(])/);
+      const hasNestedList = /^\s+[-*]\s+/.test(
+        lines.slice(index + 1).find((next) => next.trim()) ?? "",
+      );
+      if (end === -1 && !hasNestedList) return line;
+
+      const lead = end === -1 ? text : text.slice(0, end + 1);
+      const rest = end === -1 ? "" : text.slice(end + 1);
+      const backticks = lead.match(/`/g)?.length ?? 0;
+      if (lead.length > 160 || backticks % 2 !== 0 || /[*[\]]/.test(lead)) return line;
+      return `${marker}**${lead}**${rest}`;
+    })
+    .join("\n");
+}
+
+function normalizeChangelogBody(body: string): string {
+  const cleaned = body
+    .replace(DEPRECATION_NOTICE_PATTERN, "")
+    .replace(RELEASE_LINK_FOOTER_PATTERN, "")
+    .replace(COMMIT_PREFIX_PATTERN, "$1")
+    .replace(LEADING_RULE_PATTERN, "")
+    .replace(/\n\s*---\s*$/, "")
+    .trim();
+  return emphasizeLeadSentences(cleaned);
+}
+
 function parseEntry(collection: ContentCollection, fileName: string, source: string): ContentEntry {
   const slug = fileName.replace(/\.(md|mdx)$/, "");
   const { data, content } = matter(source);
@@ -241,10 +301,17 @@ function parseEntry(collection: ContentCollection, fileName: string, source: str
     };
   }
 
+  const version =
+    toOptionalString(data.version) ?? base.title.replace(DEPRECATED_TITLE_PATTERN, "");
+
   return {
     ...base,
     collection: "changelog",
-    version: toOptionalString(data.version) ?? base.title,
+    body: normalizeChangelogBody(base.body),
+    version,
+    releaseType: getReleaseType(version),
+    deprecated:
+      DEPRECATED_TITLE_PATTERN.test(base.title) || DEPRECATION_NOTICE_PATTERN.test(content),
     releaseUrl: toOptionalString(data.releaseUrl),
     githubTag: toOptionalString(data.githubTag),
   };

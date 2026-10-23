@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { focusRing } from "@/lib/styles";
 
 interface EmptyStateAction {
   href: string;
@@ -7,64 +8,33 @@ interface EmptyStateAction {
 }
 
 interface ContentEmptyStateProps {
-  eyebrow: string;
   title: string;
   description: string;
-  hint: string;
   actions?: EmptyStateAction[];
 }
 
-export function ContentEmptyState({
-  eyebrow,
-  title,
-  description,
-  hint,
-  actions = [],
-}: ContentEmptyStateProps) {
+export function ContentEmptyState({ title, description, actions = [] }: ContentEmptyStateProps) {
   return (
-    <div className="overflow-hidden border-2 border-border bg-card">
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_240px]">
-        <div className="space-y-6 p-5 sm:p-8">
-          <div className="font-mono text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
-            {eyebrow}
-          </div>
-          <div className="space-y-3">
-            <h2 className="max-w-2xl text-2xl font-semibold tracking-tight text-balance text-foreground sm:text-3xl">
-              {title}
-            </h2>
-            <p className="max-w-2xl text-sm leading-relaxed text-foreground/65 sm:text-base">
-              {description}
-            </p>
-          </div>
-          {actions.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {actions.map((action) => (
-                <Link
-                  key={action.href}
-                  href={action.href}
-                  target={action.external ? "_blank" : undefined}
-                  rel={action.external ? "noopener noreferrer" : undefined}
-                  className="border border-border px-3 py-2 text-sm text-foreground/80 transition-colors hover:bg-foreground hover:text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
-                >
-                  {action.label}
-                </Link>
-              ))}
-            </div>
-          )}
+    <div className="border-2 border-dashed border-border px-5 py-12 text-center sm:px-8 sm:py-16">
+      <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">{title}</h2>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-foreground/60 text-pretty">
+        {description}
+      </p>
+      {actions.length > 0 && (
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          {actions.map((action) => (
+            <Link
+              key={action.href}
+              href={action.href}
+              target={action.external ? "_blank" : undefined}
+              rel={action.external ? "noopener noreferrer" : undefined}
+              className={`border-2 border-border px-3.5 py-2 text-sm font-medium text-foreground transition-colors hover:border-foreground/40 hover:bg-muted/50 ${focusRing}`}
+            >
+              {action.label}
+            </Link>
+          ))}
         </div>
-
-        <div className="border-t-2 border-border bg-muted/40 p-5 sm:p-8 lg:border-l-2 lg:border-t-0">
-          <div className="flex min-h-36 flex-col justify-between">
-            <div className="font-mono text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
-              Status
-            </div>
-            <div className="space-y-3">
-              <div className="text-4xl font-semibold tracking-tight text-foreground">00</div>
-              <p className="max-w-[16rem] text-sm leading-relaxed text-foreground/60">{hint}</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

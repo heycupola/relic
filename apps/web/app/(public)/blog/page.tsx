@@ -1,15 +1,17 @@
+import { ArrowRight, Rss } from "lucide-react";
 import type { Metadata } from "next";
-import { ContentCard } from "@/components/content-card";
 import { ContentEmptyState } from "@/components/content-empty-state";
 import { ContentHero } from "@/components/content-hero";
 import { ContentPageShell } from "@/components/content-page-shell";
 import { JsonLd } from "@/components/json-ld";
+import { PostList } from "@/components/post-list";
 import { getBlogPosts } from "@/lib/content";
 import { getBlogMetadata } from "@/lib/content-seo";
 import {
   BLOG_DESCRIPTION,
   BLOG_FEED_PATH,
   BLOG_TITLE,
+  CHANGELOG_PATH,
   getAbsoluteUrl,
   SITE_BRAND_NAME,
   SITE_URL,
@@ -19,7 +21,6 @@ export const metadata: Metadata = getBlogMetadata();
 
 export default async function BlogPage() {
   const posts = await getBlogPosts();
-  const [featuredPost, ...otherPosts] = posts;
   const structuredData = [
     {
       "@context": "https://schema.org",
@@ -68,51 +69,43 @@ export default async function BlogPage() {
     <ContentPageShell>
       <JsonLd data={structuredData} />
       <ContentHero
-        eyebrow="Journal"
+        eyebrow="Engineering notes · Product decisions · Security"
         title={BLOG_TITLE}
         description={BLOG_DESCRIPTION}
-        actions={[
-          { href: BLOG_FEED_PATH, label: "RSS Feed" },
-          { href: "/changelog", label: "Changelog" },
+        links={[
+          {
+            href: BLOG_FEED_PATH,
+            label: "RSS feed",
+            icon: <Rss className="h-4 w-4" aria-hidden="true" />,
+          },
+          {
+            href: CHANGELOG_PATH,
+            label: "Changelog",
+            icon: <ArrowRight className="h-4 w-4" aria-hidden="true" />,
+          },
         ]}
-        meta={
-          <span>
-            {posts.length} {posts.length === 1 ? "entry" : "entries"}
-          </span>
-        }
       />
 
-      <section className="border-b border-border">
-        <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10 lg:px-12">
+      <section aria-label="Posts" className="border-b border-border">
+        <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14 lg:px-12">
           {posts.length === 0 ? (
             <ContentEmptyState
-              eyebrow="No entries yet"
-              title="The journal is not live yet."
-              description="Long-form writing will appear here once the first posts are published. Until then, GitHub and the main product site are the best places to follow progress."
-              hint="Writing is in progress."
+              title="No posts yet"
+              description="Long-form writing will show up here once the first post is published. Until then, follow along on GitHub or the changelog."
               actions={[
-                { href: "/github", label: "View GitHub" },
-                { href: "/", label: "Back home" },
+                { href: CHANGELOG_PATH, label: "Changelog" },
+                { href: "/github", label: "GitHub" },
               ]}
             />
           ) : (
             <>
-              {featuredPost && (
-                <div className="mb-8">
-                  <div className="mb-3 font-mono text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
-                    Featured
-                  </div>
-                  <ContentCard entry={featuredPost} />
-                </div>
-              )}
-
-              {otherPosts.length > 0 && (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {otherPosts.map((post) => (
-                    <ContentCard key={post.slug} entry={post} />
-                  ))}
-                </div>
-              )}
+              <div className="mb-4 flex items-baseline justify-between gap-3 font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                <h2>All posts</h2>
+                <span>
+                  {posts.length} {posts.length === 1 ? "post" : "posts"}
+                </span>
+              </div>
+              <PostList posts={posts} />
             </>
           )}
         </div>

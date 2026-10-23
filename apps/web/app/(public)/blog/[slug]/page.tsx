@@ -41,7 +41,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
     notFound();
   }
 
-  const [content, adjacent] = await Promise.all([
+  const [{ content, headings }, adjacent] = await Promise.all([
     renderMdx(post.body),
     getAdjacentBlogPosts(post.slug),
   ]);
@@ -101,13 +101,10 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
     <ContentPageShell>
       <JsonLd data={structuredData} />
       <ArticleLayout
-        entry={post}
-        backHref="/blog"
-        backLabel="Back to blog"
-        previousHref={adjacent.previous?.href}
-        previousLabel={adjacent.previous?.title}
-        nextHref={adjacent.next?.href}
-        nextLabel={adjacent.next?.title}
+        post={post}
+        headings={headings}
+        previous={adjacent.previous}
+        next={adjacent.next}
       >
         {content}
       </ArticleLayout>
