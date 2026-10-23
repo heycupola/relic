@@ -1,6 +1,6 @@
 {
   "name": "@repo/cli",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "private": true,
   "description": "End-to-end encrypted secrets for developers and AI agents. Manage, share, and inject environment variables, sync to Vercel, Cloudflare, and more, and keep secrets out of AI prompts.",
   "keywords": [

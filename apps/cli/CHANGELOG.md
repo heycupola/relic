@@ -1,5 +1,12 @@
 # @repo/cli
 
+## 0.11.1
+
+### Patch Changes
+
+- 8fb270d: Ask for keychain access only once when the TUI starts. On macOS, opening the TUI used to show the "relic wants to access key com.relic.tui" prompt twice, because two parts of the TUI read the stored password at the same time before the first read finished. Concurrent reads now share a single keychain request.
+- c42f98a: Fix extra blank space in TUI modals. The password prompt and log out confirmation now fit their content. The change password dialog no longer leaves empty rows when the new password field isn't focused, and password requirements stay visible while you fill in the form. The secret editor drops an empty row under its status line, gives that row to the editor, and says "1 secret" instead of "1 secrets".
+
 ## 0.11.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @repo/auth
 
+## 0.0.2
+
+### Patch Changes
+
+- 8fb270d: Ask for keychain access only once when the TUI starts. On macOS, opening the TUI used to show the "relic wants to access key com.relic.tui" prompt twice, because two parts of the TUI read the stored password at the same time before the first read finished. Concurrent reads now share a single keychain request.
+
 ## 0.0.1
 
 ### Patch Changes
