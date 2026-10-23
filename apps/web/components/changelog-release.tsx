@@ -1,6 +1,7 @@
 import { cn } from "@repo/ui/lib/utils";
 import { ArrowUpRight } from "lucide-react";
 import type React from "react";
+import { ChangelogReleaseBody } from "@/components/changelog-release-body";
 import type { ChangelogEntry, ReleaseType } from "@/lib/content";
 import { focusRing } from "@/lib/styles";
 
@@ -98,7 +99,9 @@ export function ChangelogRelease({ entry, content, isLatest = false }: Changelog
         <div
           className={cn("content-prose content-prose-compact", entry.deprecated && "opacity-80")}
         >
-          {content}
+          <ChangelogReleaseBody slug={entry.slug} collapsible={entry.collapsible}>
+            {content}
+          </ChangelogReleaseBody>
         </div>
       </div>
     </article>

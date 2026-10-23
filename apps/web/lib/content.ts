@@ -38,11 +38,16 @@ export interface BlogPost extends BaseContentEntry {
 
 export type ReleaseType = "major" | "minor" | "patch";
 
+/** Plain-text length above which changelog entries collapse with “View all”. */
+export const CHANGELOG_COLLAPSE_PLAIN_TEXT_LIMIT = 720;
+
 export interface ChangelogEntry extends BaseContentEntry {
   collection: "changelog";
   version: string;
   releaseType?: ReleaseType;
   deprecated: boolean;
+  bodyPlainLength: number;
+  collapsible: boolean;
   releaseUrl?: string;
   githubTag?: string;
 }
@@ -303,15 +308,19 @@ function parseEntry(collection: ContentCollection, fileName: string, source: str
 
   const version =
     toOptionalString(data.version) ?? base.title.replace(DEPRECATED_TITLE_PATTERN, "");
+  const changelogBody = normalizeChangelogBody(base.body);
+  const bodyPlainLength = stripMarkdown(changelogBody).length;
 
   return {
     ...base,
     collection: "changelog",
-    body: normalizeChangelogBody(base.body),
+    body: changelogBody,
     version,
     releaseType: getReleaseType(version),
     deprecated:
       DEPRECATED_TITLE_PATTERN.test(base.title) || DEPRECATION_NOTICE_PATTERN.test(content),
+    bodyPlainLength,
+    collapsible: bodyPlainLength > CHANGELOG_COLLAPSE_PLAIN_TEXT_LIMIT,
     releaseUrl: toOptionalString(data.releaseUrl),
     githubTag: toOptionalString(data.githubTag),
   };
