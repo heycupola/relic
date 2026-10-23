@@ -7,7 +7,6 @@ import { getAbsoluteUrl } from "@/lib/site";
 import { focusRing, rowActionButton } from "@/lib/styles";
 import { ContentCta } from "./content-cta";
 import { CopyLinkButton } from "./copy-link-button";
-import { ReadingProgress } from "./reading-progress";
 import { TableOfContents } from "./table-of-contents";
 
 const ARTICLE_BODY_ID = "article-body";
@@ -65,8 +64,6 @@ export function ArticleLayout({ post, headings, previous, next, children }: Arti
 
   return (
     <>
-      <ReadingProgress targetId={ARTICLE_BODY_ID} />
-
       <header className="border-b border-border">
         <div className="mx-auto max-w-5xl px-4 pt-8 pb-12 sm:px-6 sm:pt-10 sm:pb-16 md:pb-20 lg:px-12">
           <nav aria-label="Breadcrumb">

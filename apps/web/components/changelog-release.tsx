@@ -88,14 +88,7 @@ export function ChangelogRelease({ entry, content, isLatest = false }: Changelog
         </div>
       </div>
 
-      <div className="relative pb-10 sm:pb-12 lg:border-l lg:border-border lg:pt-10 lg:pl-10">
-        <span
-          aria-hidden="true"
-          className={cn(
-            "absolute top-[2.9rem] -left-[5px] hidden h-[11px] w-[11px] lg:block",
-            isLatest ? "bg-foreground" : "border-2 border-border bg-background",
-          )}
-        />
+      <div className="pb-10 sm:pb-12 lg:border-l lg:border-border lg:pt-10 lg:pl-10">
         <div
           className={cn("content-prose content-prose-compact", entry.deprecated && "opacity-80")}
         >

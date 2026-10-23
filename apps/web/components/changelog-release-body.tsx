@@ -53,11 +53,11 @@ export function ChangelogReleaseBody({ slug, collapsible, children }: ChangelogR
         aria-expanded={expanded}
         aria-controls={panelId}
         onClick={() => setExpanded((open) => !open)}
-        className={`mt-4 inline-flex items-center gap-1.5 border-2 border-border bg-background px-3 py-2 font-mono text-xs uppercase tracking-[0.18em] text-foreground transition-colors hover:border-foreground/40 hover:bg-muted/50 ${focusRing}`}
+        className={`mt-4 inline-flex items-center gap-1 font-mono text-xs text-muted-foreground underline decoration-foreground/30 underline-offset-4 transition-colors hover:text-foreground hover:decoration-foreground ${focusRing}`}
       >
         {expanded ? "Show less" : "View all"}
         <ChevronDown
-          className={cn("h-4 w-4 transition-transform duration-200", expanded && "rotate-180")}
+          className={cn("h-3.5 w-3.5 transition-transform duration-200", expanded && "rotate-180")}
           aria-hidden="true"
         />
       </button>
