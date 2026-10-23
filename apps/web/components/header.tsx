@@ -1,12 +1,12 @@
 "use client";
 
-import { useConvexAuth } from "convex/react";
 import { Menu, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { authClient } from "@/lib/auth";
+import { getCookieValue, SESSION_HINT_COOKIE } from "@/lib/cookies";
 import { trackWebEvent } from "@/lib/posthog";
 import { BLOG_PATH, ENTERPRISE_URL, SITE_DOCS_URL } from "@/lib/site";
 import { LogoContextMenu } from "./logo-context-menu";
@@ -23,12 +23,19 @@ interface PublicNavLink {
 
 export function Header({ showLogout = false }: HeaderProps) {
   const router = useRouter();
-  const { isAuthenticated, isLoading } = useConvexAuth();
+  const { data: session, isPending: sessionPending } = authClient.useSession();
+  const [hasSessionHint, setHasSessionHint] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
   } | null>(null);
+
+  useEffect(() => {
+    setHasSessionHint(getCookieValue(SESSION_HINT_COOKIE) === "1");
+  }, []);
+
+  const showDashboardLink = sessionPending ? hasSessionHint : Boolean(session?.user);
 
   useEffect(() => {
     if (!mobileMenuOpen) return;
@@ -124,7 +131,7 @@ export function Header({ showLogout = false }: HeaderProps) {
                     {link.label}
                   </Link>
                 ))}
-                {!isLoading && isAuthenticated && (
+                {showDashboardLink && (
                   <Link
                     href="/dashboard"
                     className="transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground px-1"
@@ -166,7 +173,7 @@ export function Header({ showLogout = false }: HeaderProps) {
                   {link.label}
                 </Link>
               ))}
-              {!isLoading && isAuthenticated && (
+              {showDashboardLink && (
                 <Link
                   href="/dashboard"
                   className="text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground px-1 py-2"

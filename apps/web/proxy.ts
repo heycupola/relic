@@ -1,4 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { SESSION_HINT_COOKIE } from "@/lib/cookies";
+
+const SESSION_COOKIE_NAMES = ["better-auth.session_token", "__Secure-better-auth.session_token"];
 
 const EU_EEA_COUNTRIES = new Set([
   "AT",
@@ -46,6 +49,13 @@ export function proxy(request: NextRequest) {
     sameSite: "lax",
     maxAge: 86400,
   });
+
+  const hasSessionCookie = SESSION_COOKIE_NAMES.some((name) => request.cookies.has(name));
+  if (hasSessionCookie) {
+    response.cookies.set(SESSION_HINT_COOKIE, "1", { path: "/", sameSite: "lax" });
+  } else if (request.cookies.has(SESSION_HINT_COOKIE)) {
+    response.cookies.delete(SESSION_HINT_COOKIE);
+  }
 
   return response;
 }
