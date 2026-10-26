@@ -121,7 +121,8 @@ export function OidcPolicyDialog({
         serviceAccountId,
         oidcIssuer: issuer,
         oidcSubjectPattern: pattern,
-        oidcAudience: currentAudience || null,
+        // New policies require an audience; default matches CLI/GitHub token requests.
+        oidcAudience: currentAudience || "relic",
       });
       onClose();
     } catch (err) {

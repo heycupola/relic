@@ -73,6 +73,8 @@ function isValidPath(value: string, minSegments: number, maxSegments: number): b
   );
 }
 
+const DEFAULT_OIDC_AUDIENCE = "relic";
+
 export function resolveOidcArgs(options: OidcOptions): OidcArgs {
   if (options.github && options.gitlab) {
     throw new Error("Cannot use both `--github` and `--gitlab`.");
@@ -91,7 +93,7 @@ export function resolveOidcArgs(options: OidcOptions): OidcArgs {
     return {
       oidcIssuer: "https://token.actions.githubusercontent.com",
       oidcSubjectPattern: `repo:${options.github}:${ref}`,
-      oidcAudience: options.oidcAudience,
+      oidcAudience: options.oidcAudience ?? DEFAULT_OIDC_AUDIENCE,
     };
   }
 
@@ -107,14 +109,17 @@ export function resolveOidcArgs(options: OidcOptions): OidcArgs {
     return {
       oidcIssuer: "https://gitlab.com",
       oidcSubjectPattern: `project_path:${options.gitlab}:${ref}`,
-      oidcAudience: options.oidcAudience,
+      oidcAudience: options.oidcAudience ?? DEFAULT_OIDC_AUDIENCE,
     };
   }
 
+  const oidcIssuer = options.oidcIssuer;
+  const oidcSubjectPattern = options.oidcSubject;
+  const hasOidc = !!oidcIssuer || !!oidcSubjectPattern;
   return {
-    oidcIssuer: options.oidcIssuer,
-    oidcSubjectPattern: options.oidcSubject,
-    oidcAudience: options.oidcAudience,
+    oidcIssuer,
+    oidcSubjectPattern,
+    oidcAudience: hasOidc ? (options.oidcAudience ?? DEFAULT_OIDC_AUDIENCE) : options.oidcAudience,
   };
 }
 
@@ -190,11 +195,10 @@ function printOidcInstructions(options: OidcOptions, oidcArgs: OidcArgs): void {
       );
     }
   } else if (options.gitlab) {
-    const audience = oidcArgs.oidcAudience ?? "relic";
     console.log(pc.dim("  GitLab CI: add an ID token named RELIC_OIDC_TOKEN to your job:"));
     console.log(pc.dim("    id_tokens:"));
     console.log(pc.dim("      RELIC_OIDC_TOKEN:"));
-    console.log(pc.dim(`        aud: ${audience}`));
+    console.log(pc.dim(`        aud: ${oidcArgs.oidcAudience ?? DEFAULT_OIDC_AUDIENCE}`));
   } else {
     console.log(pc.dim("  Set `RELIC_OIDC_TOKEN` to your CI provider's OIDC token at runtime."));
   }

@@ -21,7 +21,13 @@ import { findConfig } from "../lib/config";
 import { buildChildEnv } from "../lib/env";
 import { loadProjectTree } from "../lib/projects";
 import pkg from "../package.json";
-import { DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS, runCommandCaptured } from "./run-command";
+import {
+  assertEnvDumpAllowed,
+  DEFAULT_TIMEOUT_SECONDS,
+  EnvDumpBlockedError,
+  MAX_TIMEOUT_SECONDS,
+  runCommandCaptured,
+} from "./run-command";
 
 function text(value: string) {
   return { content: [{ type: "text" as const, text: value }] };
@@ -195,7 +201,8 @@ server.registerTool(
     description:
       "Run a command with Relic secrets injected as environment variables and return its exit code, stdout and stderr. " +
       "Secret values are redacted from the returned output on a best-effort basis (verbatim matches of values with 4+ characters become [REDACTED:KEY]); " +
-      "encoded or transformed values are not caught, so avoid commands that print the environment. " +
+      "encoded, split, or transformed values are not caught. " +
+      "Common env-dump commands (env, printenv, bare set, PowerShell Env:) are refused unless allowDangerousEnvDump=true. " +
       "Relic credentials (RELIC_* variables) are not passed to the command. " +
       `The command is killed after timeoutSeconds (default ${DEFAULT_TIMEOUT_SECONDS}s) and partial output is returned.`,
     annotations: { readOnlyHint: false, destructiveHint: true },
@@ -217,10 +224,24 @@ server.registerTool(
         .describe(
           `Kill the command after this many seconds (default ${DEFAULT_TIMEOUT_SECONDS}, max ${MAX_TIMEOUT_SECONDS})`,
         ),
+      allowDangerousEnvDump: z
+        .boolean()
+        .optional()
+        .describe(
+          "Opt in to run common env-dump commands (env, printenv, bare set, PowerShell Env:). " +
+            "Best-effort redaction cannot fully prevent leakage from those commands.",
+        ),
     },
   },
   async (args) => {
     try {
+      try {
+        assertEnvDumpAllowed(args.command, args.allowDangerousEnvDump === true);
+      } catch (err) {
+        if (err instanceof EnvDumpBlockedError) return errorText(err.message);
+        throw err;
+      }
+
       const options: RunOptions = {
         environment: args.environment,
         folder: args.folder,

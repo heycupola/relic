@@ -6,9 +6,280 @@ const KILL_GRACE_MS = 2_000;
 const STREAM_DRAIN_MS = 1_000;
 const IS_POSIX = process.platform !== "win32";
 
+const SHELL_PROGRAMS = new Set([
+  "sh",
+  "bash",
+  "zsh",
+  "dash",
+  "ksh",
+  "fish",
+  "cmd",
+  "cmd.exe",
+  "powershell",
+  "powershell.exe",
+  "pwsh",
+  "pwsh.exe",
+]);
+
+/** argv[0] helpers that commonly wrap `env` / `printenv` / a shell. */
+const PROCESS_WRAPPERS = new Set([
+  "nice",
+  "nice.exe",
+  "stdbuf",
+  "stdbuf.exe",
+  "busybox",
+  "busybox.exe",
+]);
+
+/**
+ * Optional prefixes before a dump word inside a shell script:
+ * - `exec` / `command` / `builtin` with short flags or `--`
+ * - `nice` / `stdbuf` / `busybox` with short options / numeric args
+ * False-positives like `command -v env` are accepted — opt-in still unlocks them.
+ */
+const DUMP_PREFIX = String.raw`(?:(?:(?:exec|command|builtin)(?:\s+-\w+|\s+--)*|(?:nice|stdbuf|busybox)(?:\s+(?:-\S+|\d+))*)\s+)*`;
+
+/**
+ * Optional path to `env`/`printenv`: absolute (`/usr/local/bin/env`),
+ * relative (`./env`, `../usr/bin/env`), or bare basename.
+ */
+const ENV_PATH_PREFIX = String.raw`(?:(?:(?:\.\.?\/)+|\/)(?:[^\/\s;|&]+\/)*)?`;
+
+/** Absolute, relative, or bare `env`. */
+const ENV_PROG = String.raw`${ENV_PATH_PREFIX}env\b`;
+
+/** Absolute, relative, or bare `printenv`. */
+const PRINTENV_PROG = String.raw`${ENV_PATH_PREFIX}printenv\b`;
+
+/** Statement boundary before a dump command. */
+const STMT_START = String.raw`(?:^|[;&\n|]|&&|\|\|)\s*`;
+
+/** Bare `set` with no options/assignments — dumps the shell environment. */
+const SHELL_BARE_SET_RE = new RegExp(`${STMT_START}${DUMP_PREFIX}set\\s*(?:[;&\\n|]|$)`);
+
+const POWERSHELL_ENV_DUMP_RE =
+  /(?:Get-ChildItem|gci|dir|ls)\s+(?:-Path\s+|Path\s*=\s*)?Env:|\[System\.Environment\]::GetEnvironmentVariables/i;
+
+const POWERSHELL_ENCODED_FLAGS = new Set(["-encodedcommand", "-enc", "-ec"]);
+
 interface RedactionEntry {
   key: string;
   value: string;
+}
+
+export class EnvDumpBlockedError extends Error {
+  readonly pattern: string;
+
+  constructor(pattern: string) {
+    super(
+      `Refusing env-dump command (${pattern}). Common dumps (env, printenv, bare set, PowerShell Env:) ` +
+        "can leak secret values that best-effort redaction cannot fully scrub. " +
+        "Re-run with allowDangerousEnvDump=true only if you understand the risk.",
+    );
+    this.name = "EnvDumpBlockedError";
+    this.pattern = pattern;
+  }
+}
+
+function programBasename(arg: string): string {
+  const base = arg.split(/[/\\]/).pop() ?? arg;
+  return base.toLowerCase();
+}
+
+/** True when `env` argv still has a command after options and NAME=value assignments. */
+function envArgvHasCommand(args: string[]): boolean {
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i]!;
+    if (arg === "--") {
+      i += 1;
+      break;
+    }
+    if (arg.startsWith("-")) {
+      // `env -u NAME` / `env --unset=NAME` consume a following operand when needed.
+      if (
+        (arg === "-u" || arg === "--unset") &&
+        i + 1 < args.length &&
+        !args[i + 1]!.startsWith("-")
+      ) {
+        i += 2;
+        continue;
+      }
+      i += 1;
+      continue;
+    }
+    if (/^[A-Za-z_][\w]*=/.test(arg)) {
+      i += 1;
+      continue;
+    }
+    return true;
+  }
+  return i < args.length;
+}
+
+function extractShellScript(command: string[]): string | null {
+  for (let i = 1; i < command.length; i++) {
+    const flag = command[i]!.toLowerCase();
+    if (
+      flag === "-c" ||
+      flag === "/c" ||
+      flag === "-command" ||
+      flag === "-encodedcommand" ||
+      flag === "--%"
+    ) {
+      return command.slice(i + 1).join(" ");
+    }
+  }
+  return null;
+}
+
+/** True when PowerShell is given an opaque `-EncodedCommand` (or short form). */
+function hasPowerShellEncodedCommand(command: string[]): boolean {
+  const prog = programBasename(command[0]!);
+  if (
+    prog !== "powershell" &&
+    prog !== "powershell.exe" &&
+    prog !== "pwsh" &&
+    prog !== "pwsh.exe"
+  ) {
+    return false;
+  }
+  for (let i = 1; i < command.length; i++) {
+    const flag = command[i]!.toLowerCase();
+    if (POWERSHELL_ENCODED_FLAGS.has(flag)) return true;
+    for (const prefix of POWERSHELL_ENCODED_FLAGS) {
+      if (flag.startsWith(`${prefix}:`)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Strip a single `nice` / `stdbuf` / `busybox` wrapper so the remaining argv can be re-checked.
+ * Returns null when this argv[0] is not a known wrapper or nothing remains after options.
+ */
+function unwrapProcessWrapper(command: string[]): string[] | null {
+  if (command.length < 2) return null;
+  const prog = programBasename(command[0]!);
+  if (!PROCESS_WRAPPERS.has(prog)) return null;
+
+  let i = 1;
+  if (prog === "busybox" || prog === "busybox.exe") {
+    while (i < command.length && command[i]!.startsWith("-")) i += 1;
+    return i < command.length ? command.slice(i) : null;
+  }
+
+  if (prog === "nice" || prog === "nice.exe") {
+    while (i < command.length) {
+      const arg = command[i]!;
+      if (arg === "-n" || arg === "--adjustment") {
+        i += 2;
+        continue;
+      }
+      if (arg.startsWith("-")) {
+        i += 1;
+        continue;
+      }
+      break;
+    }
+    return i < command.length ? command.slice(i) : null;
+  }
+
+  // stdbuf: -i/-o/-e take a following operand unless written as -oL.
+  while (i < command.length) {
+    const arg = command[i]!;
+    if (arg === "-i" || arg === "-o" || arg === "-e") {
+      i += 2;
+      continue;
+    }
+    if (arg.startsWith("--input=") || arg.startsWith("--output=") || arg.startsWith("--error=")) {
+      i += 1;
+      continue;
+    }
+    if (arg === "--input" || arg === "--output" || arg === "--error") {
+      i += 2;
+      continue;
+    }
+    if (/^-[ioe]./.test(arg)) {
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      i += 1;
+      continue;
+    }
+    break;
+  }
+  return i < command.length ? command.slice(i) : null;
+}
+
+function detectShellEnvDump(script: string): string | null {
+  if (POWERSHELL_ENV_DUMP_RE.test(script)) return "PowerShell Env:";
+  if (SHELL_BARE_SET_RE.test(script)) return "set";
+  if (new RegExp(`${STMT_START}${DUMP_PREFIX}${PRINTENV_PROG}`).test(script)) {
+    return "printenv";
+  }
+  if (/\bexport\s+-p\b/.test(script)) return "export -p";
+  if (/\bdeclare\s+-[A-Za-z]*[px][A-Za-z]*\b/.test(script)) return "declare";
+  if (/\btypeset\s+-[A-Za-z]*x[A-Za-z]*\b/.test(script)) return "typeset -x";
+  if (/\bcompgen\s+-e\b/.test(script)) return "compgen -e";
+  if (/\/(?:[^/\s;|&]+\/)+environ\b/.test(script)) return "/proc/*/environ";
+
+  // Prefer a conservative `env` match: bare `env` / `env -0` style, not `env FOO=bar cmd`.
+  const bareEnv = new RegExp(`${STMT_START}${DUMP_PREFIX}${ENV_PROG}\\s*(?:[;&\\n|]|$)`);
+  if (bareEnv.test(script)) return "env";
+
+  const envWithFlags = new RegExp(`${STMT_START}${DUMP_PREFIX}${ENV_PROG}\\s+-[a-zA-Z0-9]*[0u]`);
+  if (envWithFlags.test(script)) {
+    // `env -0` / `env -u` without a following command still dumps or is dump-adjacent; block
+    // when there is no clear trailing command word after options/assignments.
+    const after = script.replace(/^[\s\S]*?\benv\b/, "env");
+    const tokens = after.trim().split(/\s+/);
+    if (!envArgvHasCommand(tokens.slice(1))) return "env";
+  }
+  return null;
+}
+
+/**
+ * Returns a human-readable dump pattern when `command` looks like a common environment dump.
+ * Returns null for normal commands (including `env FOO=bar cmd`).
+ */
+export function detectEnvDumpCommand(command: string[]): string | null {
+  if (command.length === 0) return null;
+
+  const unwrapped = unwrapProcessWrapper(command);
+  if (unwrapped) return detectEnvDumpCommand(unwrapped);
+
+  const prog = programBasename(command[0]!);
+
+  if (prog === "printenv" || prog === "printenv.exe") return "printenv";
+
+  if (prog === "env" || prog === "env.exe") {
+    return envArgvHasCommand(command.slice(1)) ? null : "env";
+  }
+
+  if ((prog === "set" || prog === "set.exe") && command.length === 1) return "set";
+
+  // Opaque encoded scripts bypass plaintext dump heuristics — require opt-in.
+  if (hasPowerShellEncodedCommand(command)) return "PowerShell -EncodedCommand";
+
+  if (SHELL_PROGRAMS.has(prog)) {
+    const script = extractShellScript(command);
+    if (script) {
+      const hit = detectShellEnvDump(script);
+      if (hit) return hit;
+    }
+  }
+
+  return null;
+}
+
+/** Throws {@link EnvDumpBlockedError} unless `allowDangerousEnvDump` is true. */
+export function assertEnvDumpAllowed(command: string[], allowDangerousEnvDump = false): void {
+  const pattern = detectEnvDumpCommand(command);
+  if (pattern && !allowDangerousEnvDump) {
+    throw new EnvDumpBlockedError(pattern);
+  }
 }
 
 /** Longest values first so a secret that contains another is replaced as a whole. */

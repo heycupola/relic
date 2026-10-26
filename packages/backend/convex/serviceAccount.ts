@@ -14,7 +14,7 @@ import {
   permissionError,
 } from "./lib/errors";
 import { createLogger } from "./lib/logger";
-import { validateIssuerUrl, validateSubjectPattern } from "./lib/oidc";
+import { validateAudience, validateIssuerUrl, validateSubjectPattern } from "./lib/oidc";
 import { protectedMutation, protectedQuery } from "./lib/middleware";
 import { checkRateLimit } from "./lib/rateLimit";
 import { ErrorSeverity, type ProtectedMutationCtx, type ProtectedQueryCtx } from "./lib/types";
@@ -24,14 +24,29 @@ const log = createLogger("serviceAccount");
 
 const MAX_EXPIRATION_MS = 365 * 24 * 60 * 60 * 1000;
 
-function assertValidOidcPolicy(issuer?: string, subjectPattern?: string): void {
+function assertValidOidcPolicy(issuer?: string, subjectPattern?: string, audience?: string): void {
   const problem =
     (issuer !== undefined ? validateIssuerUrl(issuer) : null) ??
-    (subjectPattern !== undefined ? validateSubjectPattern(subjectPattern) : null);
+    (subjectPattern !== undefined ? validateSubjectPattern(subjectPattern) : null) ??
+    (audience !== undefined ? validateAudience(audience) : null);
   if (problem) {
     createError({
       code: ErrorCode.INVALID_ARGUMENTS,
       message: problem,
+      severity: ErrorSeverity.Low,
+    });
+  }
+}
+
+function assertOidcAudienceRequired(
+  issuer: string | undefined,
+  audience: string | undefined,
+): void {
+  if (!issuer) return;
+  if (audience === undefined || validateAudience(audience) !== null) {
+    createError({
+      code: ErrorCode.INVALID_ARGUMENTS,
+      message: "OIDC audience is required when an OIDC policy is configured",
       severity: ErrorSeverity.Low,
     });
   }
@@ -113,7 +128,8 @@ export const createServiceAccount = protectedMutation({
       });
     }
 
-    assertValidOidcPolicy(args.oidcIssuer, args.oidcSubjectPattern);
+    assertOidcAudienceRequired(args.oidcIssuer, args.oidcAudience);
+    assertValidOidcPolicy(args.oidcIssuer, args.oidcSubjectPattern, args.oidcAudience);
 
     const now = Date.now();
 
@@ -265,10 +281,15 @@ export const updateOidcPolicy = protectedMutation({
       });
     }
 
-    // Only newly supplied values are checked, so legacy policies stay editable piecemeal.
+    // New and updated OIDC policies must include an audience. Legacy rows without
+    // audience still authenticate (warn-only) until the planned hard-fail lands.
+    assertOidcAudienceRequired(newIssuer, newAudience);
+
+    // Only newly supplied values are checked for format, so legacy patterns stay editable piecemeal.
     assertValidOidcPolicy(
       typeof args.oidcIssuer === "string" ? args.oidcIssuer : undefined,
       typeof args.oidcSubjectPattern === "string" ? args.oidcSubjectPattern : undefined,
+      typeof args.oidcAudience === "string" ? args.oidcAudience : undefined,
     );
 
     await ctx.db.replace(sa._id, {

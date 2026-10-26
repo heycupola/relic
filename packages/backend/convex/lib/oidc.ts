@@ -165,6 +165,33 @@ export function validateIssuerUrl(issuer: string): string | null {
   }
 }
 
+/** Default audience for Relic service-account OIDC policies and CI token requests. */
+export const DEFAULT_OIDC_AUDIENCE = "relic";
+
+/**
+ * Returns a reason when an OIDC audience is missing or invalid for a new policy.
+ * Empty / whitespace-only values are rejected.
+ */
+export function validateAudience(audience: string): string | null {
+  const trimmed = audience.trim();
+  if (!trimmed) return "OIDC audience is required";
+  if (trimmed !== audience) return "OIDC audience cannot have surrounding whitespace";
+  return null;
+}
+
+/**
+ * Whether the token `aud` claim includes the expected audience.
+ * Pure helper so policy/token reject paths can be unit-tested without JWKS.
+ */
+export function matchAudienceClaim(
+  aud: string | string[] | undefined,
+  expectedAudience: string,
+): boolean {
+  if (aud === undefined) return false;
+  const audiences = Array.isArray(aud) ? aud : [aud];
+  return audiences.includes(expectedAudience);
+}
+
 export async function validateOidcToken(
   token: string,
   expectedIssuer: string,
@@ -231,15 +258,17 @@ export async function validateOidcToken(
       });
     }
 
+    // New policies require audience at write time. Legacy policies without audience still
+    // warn-only here; a follow-up hard-fail will reject when expectedAudience is unset.
     if (expectedAudience) {
-      const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-      if (!audiences.includes(expectedAudience)) {
+      if (!matchAudienceClaim(claims.aud, expectedAudience)) {
         return reject("OIDC token audience is not allowed by this service account");
       }
     } else {
-      log.warn("OIDC policy has no audience; accepting token for any audience", {
-        issuer: expectedIssuer,
-      });
+      log.warn(
+        "OIDC policy has no audience (legacy); accepting token for any audience — hard-fail planned",
+        { issuer: expectedIssuer },
+      );
     }
 
     return { valid: true, claims };

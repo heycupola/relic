@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { buildChildEnv } from "../lib/env";
-import { redactSecrets, runCommandCaptured } from "./run-command";
+import {
+  assertEnvDumpAllowed,
+  detectEnvDumpCommand,
+  EnvDumpBlockedError,
+  redactSecrets,
+  runCommandCaptured,
+} from "./run-command";
 
 describe("redactSecrets", () => {
   test("replaces every occurrence of each secret value with its key", () => {
@@ -20,6 +26,10 @@ describe("redactSecrets", () => {
     expect(redactSecrets("PORT=80 DEBUG=1", { PORT: "80", DEBUG: "1" })).toBe("PORT=80 DEBUG=1");
   });
 
+  test("leaves 3-character secrets alone (below MIN_REDACT_LENGTH)", () => {
+    expect(redactSecrets("pin=xyz end", { PIN: "xyz" })).toBe("pin=xyz end");
+  });
+
   test("handles values containing regex metacharacters", () => {
     expect(redactSecrets("x a.b*c(d) y", { WEIRD: "a.b*c(d)" })).toBe("x [REDACTED:WEIRD] y");
   });
@@ -34,6 +44,140 @@ describe("redactSecrets", () => {
       expect(redacted).not.toContain(value);
     }
     expect(redacted).toContain("STRIPE_KEY=[REDACTED:STRIPE_KEY]");
+  });
+
+  test("does not catch base64-encoded secret values (best-effort limitation)", () => {
+    const secret = "super-secret-value";
+    const encoded = Buffer.from(secret, "utf8").toString("base64");
+    const output = redactSecrets(`token=${encoded}`, { API_TOKEN: secret });
+    expect(output).toBe(`token=${encoded}`);
+    expect(output).not.toContain("[REDACTED:");
+  });
+
+  test("does not catch hex-encoded or reversed secret values", () => {
+    const secret = "hunter22token";
+    const hex = Buffer.from(secret, "utf8").toString("hex");
+    const reversed = [...secret].reverse().join("");
+    expect(redactSecrets(`hex=${hex}`, { TOKEN: secret })).toContain(hex);
+    expect(redactSecrets(`rev=${reversed}`, { TOKEN: secret })).toContain(reversed);
+  });
+
+  test("does not catch JSON-escaped variants that differ from the raw value", () => {
+    const secret = 'line1\nline2"quote';
+    // Output that only contains the JSON-string form, not the raw secret bytes.
+    const jsonForm = JSON.stringify(secret).slice(1, -1);
+    expect(jsonForm).not.toBe(secret);
+    expect(redactSecrets(`v=${jsonForm}`, { MULTILINE: secret })).toContain(jsonForm);
+  });
+});
+
+describe("detectEnvDumpCommand", () => {
+  test("blocks bare env and printenv", () => {
+    expect(detectEnvDumpCommand(["env"])).toBe("env");
+    expect(detectEnvDumpCommand(["/usr/bin/env"])).toBe("env");
+    expect(detectEnvDumpCommand(["printenv"])).toBe("printenv");
+    expect(detectEnvDumpCommand(["printenv", "PATH"])).toBe("printenv");
+  });
+
+  test("allows env when launching a command", () => {
+    expect(detectEnvDumpCommand(["env", "FOO=bar", "npm", "test"])).toBeNull();
+    expect(detectEnvDumpCommand(["env", "-i", "PATH=/bin", "sh", "-c", "echo hi"])).toBeNull();
+  });
+
+  test("blocks bare set but allows set with options", () => {
+    expect(detectEnvDumpCommand(["set"])).toBe("set");
+    expect(detectEnvDumpCommand(["sh", "-c", "set"])).toBe("set");
+    expect(detectEnvDumpCommand(["sh", "-c", "set -e; echo ok"])).toBeNull();
+  });
+
+  test("blocks env/printenv inside shell -c scripts", () => {
+    expect(detectEnvDumpCommand(["sh", "-c", "env"])).toBe("env");
+    expect(detectEnvDumpCommand(["bash", "-c", "printenv | head"])).toBe("printenv");
+    expect(detectEnvDumpCommand(["zsh", "-c", "echo hi; env; echo bye"])).toBe("env");
+  });
+
+  test("blocks PowerShell environment listing", () => {
+    expect(detectEnvDumpCommand(["pwsh", "-Command", "Get-ChildItem Env:"])).toBe(
+      "PowerShell Env:",
+    );
+    expect(detectEnvDumpCommand(["powershell", "-c", "gci env:"])).toBe("PowerShell Env:");
+    expect(
+      detectEnvDumpCommand(["pwsh", "-c", "[System.Environment]::GetEnvironmentVariables()"]),
+    ).toBe("PowerShell Env:");
+  });
+
+  test("blocks shell prefixes before env/set/printenv", () => {
+    expect(detectEnvDumpCommand(["sh", "-c", "exec env"])).toBe("env");
+    expect(detectEnvDumpCommand(["bash", "-c", "command env"])).toBe("env");
+    expect(detectEnvDumpCommand(["bash", "-c", "command -p printenv"])).toBe("printenv");
+    expect(detectEnvDumpCommand(["bash", "-c", "command -- env"])).toBe("env");
+    expect(detectEnvDumpCommand(["zsh", "-c", "builtin set"])).toBe("set");
+  });
+
+  test("blocks absolute and relative env paths", () => {
+    expect(detectEnvDumpCommand(["sh", "-c", "/usr/local/bin/env"])).toBe("env");
+    expect(detectEnvDumpCommand(["sh", "-c", "/opt/homebrew/bin/env"])).toBe("env");
+    expect(detectEnvDumpCommand(["sh", "-c", "/usr/local/bin/printenv"])).toBe("printenv");
+    expect(detectEnvDumpCommand(["sh", "-c", "./env"])).toBe("env");
+    expect(detectEnvDumpCommand(["sh", "-c", "../usr/bin/env"])).toBe("env");
+    expect(detectEnvDumpCommand(["sh", "-c", "./bin/printenv"])).toBe("printenv");
+  });
+
+  test("blocks alternate shell env-listing builtins", () => {
+    expect(detectEnvDumpCommand(["bash", "-c", "export -p"])).toBe("export -p");
+    expect(detectEnvDumpCommand(["bash", "-c", "declare -px"])).toBe("declare");
+    expect(detectEnvDumpCommand(["bash", "-c", "declare -x"])).toBe("declare");
+    expect(detectEnvDumpCommand(["zsh", "-c", "typeset -x"])).toBe("typeset -x");
+    expect(detectEnvDumpCommand(["bash", "-c", "compgen -e"])).toBe("compgen -e");
+  });
+
+  test("blocks procfs environ paths", () => {
+    expect(detectEnvDumpCommand(["sh", "-c", "cat /proc/self/environ"])).toBe("/proc/*/environ");
+    expect(detectEnvDumpCommand(["sh", "-c", "tr '\\0' '\\n' < /proc/1/environ"])).toBe(
+      "/proc/*/environ",
+    );
+  });
+
+  test("blocks process wrappers around env/printenv", () => {
+    expect(detectEnvDumpCommand(["nice", "env"])).toBe("env");
+    expect(detectEnvDumpCommand(["nice", "-n", "10", "printenv"])).toBe("printenv");
+    expect(detectEnvDumpCommand(["stdbuf", "-o0", "env"])).toBe("env");
+    expect(detectEnvDumpCommand(["busybox", "env"])).toBe("env");
+    expect(detectEnvDumpCommand(["busybox", "printenv"])).toBe("printenv");
+    expect(detectEnvDumpCommand(["nice", "env", "FOO=bar", "echo", "ok"])).toBeNull();
+    // Inside shell -c (MCP common shape) — not only argv[0]
+    expect(detectEnvDumpCommand(["sh", "-c", "nice env"])).toBe("env");
+    expect(detectEnvDumpCommand(["sh", "-c", "stdbuf -o0 env"])).toBe("env");
+    expect(detectEnvDumpCommand(["sh", "-c", "busybox env"])).toBe("env");
+    expect(detectEnvDumpCommand(["bash", "-c", "nice -n 10 printenv"])).toBe("printenv");
+  });
+
+  test("blocks PowerShell -EncodedCommand without decoding", () => {
+    // Opaque base64 body — refuse entirely unless allowDangerousEnvDump.
+    expect(
+      detectEnvDumpCommand([
+        "pwsh",
+        "-EncodedCommand",
+        "RwBlAHQALQBDAGgAaQBsAGQASQB0AGUAbQAgAEUAbgB2ADoA",
+      ]),
+    ).toBe("PowerShell -EncodedCommand");
+    expect(detectEnvDumpCommand(["powershell", "-enc", "QQA="])).toBe("PowerShell -EncodedCommand");
+    expect(() => assertEnvDumpAllowed(["pwsh", "-EncodedCommand", "QQA="], true)).not.toThrow();
+  });
+
+  test("allows ordinary commands", () => {
+    expect(detectEnvDumpCommand(["npm", "test"])).toBeNull();
+    expect(detectEnvDumpCommand(["bun", "run", "build"])).toBeNull();
+    expect(detectEnvDumpCommand(["sh", "-c", "echo $HOME"])).toBeNull();
+    expect(detectEnvDumpCommand(["sh", "-c", "echo environment"])).toBeNull();
+    expect(detectEnvDumpCommand(["bash", "-c", "declare -i x=1"])).toBeNull();
+  });
+
+  test("assertEnvDumpAllowed opts in with allowDangerousEnvDump", () => {
+    expect(() => assertEnvDumpAllowed(["env"])).toThrow(EnvDumpBlockedError);
+    expect(() => assertEnvDumpAllowed(["env"], true)).not.toThrow();
+    expect(() => assertEnvDumpAllowed(["sh", "-c", "export -p"])).toThrow(EnvDumpBlockedError);
+    expect(() => assertEnvDumpAllowed(["sh", "-c", "export -p"], true)).not.toThrow();
   });
 });
 

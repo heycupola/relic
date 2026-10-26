@@ -8,7 +8,7 @@
 
 <p align="center">
   End-to-end encrypted secrets for developers and AI agents.<br>
-  Manage, share, and inject environment variables, encrypted on your device and never exposed to servers or AI prompts.
+  Manage, share, and inject environment variables, encrypted on your device — servers store ciphertext; AI agents see names, with best-effort output redaction.
 </p>
 
 <p align="center">
@@ -29,25 +29,33 @@ Relic is a CLI-first, end-to-end encrypted secret manager built for developers, 
 
 - **Encrypted on your device:** Secrets are encrypted client-side with AES-256-GCM and Argon2id before leaving your machine. Our servers store only ciphertext.
 - **Familiar `.env` workflow, zero plaintext on disk:** Paste `.env` files directly into the TUI editor or import from Doppler, Infisical, Vercel, and 1Password. At runtime, a memory-safe Rust runner injects variables into your process and wipes memory on exit.
-- **AI-safe MCP server (`relic mcp`):** Let Cursor, Claude Code, Codex, and Zed inspect secret names and run commands with secrets injected while values are automatically redacted from output.
+- **AI-safe MCP server (`relic mcp`):** Let Cursor, Claude Code, Codex, and Zed inspect secret names and run commands with secrets injected while values are best-effort redacted from output (env dumps blocked by default).
 - **Direct platform sync (`relic push`):** Decrypt locally and sync straight to Vercel, Cloudflare Workers, GitHub Actions, Fly.io, and more with diff plans (`+`, `~`, `-`).
 - **Shift-left protection (`relic guard` & `relic check`):** Block accidental `.env` or secret leaks in pre-commit hooks, and validate missing keys in your IDE or CI.
 - **Encrypted team sharing & OIDC CI/CD:** Share projects using per-collaborator public keys, and run pipelines with passwordless OIDC service accounts.
 
-### Install
+### Install — try Relic in ~60 seconds
+
+macOS / Linux:
 
 ```bash
 curl -fsSL https://withrelic.com/install | bash
-brew install heycupola/tap/relic
-npm install -g relic
-bun add -g relic
+relic login
+relic init
+relic          # TUI: create environment "development", add a secret name
+relic run -e development -- echo ok
 ```
 
-Or on Windows (PowerShell):
+Windows (PowerShell):
 
 ```powershell
 irm https://withrelic.com/install.ps1 | iex
+relic login
+relic init
+relic run -e development -- echo ok
 ```
+
+Alternates: `brew install heycupola/tap/relic` · `npm install -g relic` · `bun add -g relic`
 
 Prebuilt binaries are also available on the [releases page](https://github.com/heycupola/relic/releases).
 
@@ -86,4 +94,4 @@ For security issues, email [can@withrelic.com](mailto:can@withrelic.com) directl
 
 ---
 
-[Website](https://withrelic.com) | [Documentation](https://docs.withrelic.com) | [Changelog](https://withrelic.com/changelog) | [X](https://x.com/icanvardar)
+[Website](https://withrelic.com) | [Documentation](https://docs.withrelic.com) | [Changelog](https://withrelic.com/changelog) | [Discord](https://discord.gg/2vNRzRMY6K) | [X](https://x.com/icanvardar)

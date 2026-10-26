@@ -16,7 +16,7 @@ When the `relic` MCP server is connected, prefer its tools over shell commands:
 - `get-current-project`: read `relic.toml` in the current workspace to find the `projectId`.
 - `list-projects`: list accessible projects, environments (`development`, `staging`, `production`), and folders.
 - `list-secrets`: list secret key names and scopes in an environment. Returns names only, never secret values.
-- `run-with-secrets`: run a command (for example `["bun", "test"]` or `["npm", "run", "build"]`) with secrets injected. Decrypted values are automatically redacted from `stdout` and `stderr` as `[REDACTED:KEY]`.
+- `run-with-secrets`: run a command (for example `["bun", "test"]` or `["npm", "run", "build"]`) with secrets injected. Decrypted values are best-effort redacted from `stdout` and `stderr` as `[REDACTED:KEY]` (verbatim matches of values with 4+ characters only). Common env dumps (`env`, `printenv`, bare `set`, PowerShell `Env:`) are refused unless `allowDangerousEnvDump=true`.
 
 ## CLI Commands
 

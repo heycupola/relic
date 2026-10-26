@@ -11,7 +11,9 @@ import type { Id } from "../convex/_generated/dataModel";
 import { hashKey } from "../convex/lib/crypto";
 import { ErrorCode } from "../convex/lib/errors.ts";
 import {
+  matchAudienceClaim,
   matchSubjectPattern,
+  validateAudience,
   validateIssuerUrl,
   validateSubjectPattern,
 } from "../convex/lib/oidc.ts";
@@ -601,6 +603,29 @@ describe("Service Account Management", () => {
       );
     });
 
+    test("should reject OIDC policy without audience", async () => {
+      const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
+        owner.publicKey!,
+        owner.encryptedPrivateKey!,
+        owner.password!,
+        owner.salt!,
+        encryptedProjectKey,
+      );
+
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.serviceAccount.createServiceAccount, {
+            projectId,
+            name: "Missing audience",
+            ...saArgs,
+            oidcIssuer: "https://token.actions.githubusercontent.com",
+            oidcSubjectPattern: "repo:org/repo:*",
+          }),
+        ErrorCode.INVALID_ARGUMENTS,
+        "audience is required",
+      );
+    });
+
     test("should reject overly broad subject patterns and non-https issuers", async () => {
       const { rawToken: _rawToken, ...saArgs } = await buildServiceAccountArgs(
         owner.publicKey!,
@@ -617,6 +642,7 @@ describe("Service Account Management", () => {
           ...saArgs,
           oidcIssuer,
           oidcSubjectPattern,
+          oidcAudience: "relic",
         });
 
       const github = "https://token.actions.githubusercontent.com";
@@ -672,6 +698,17 @@ describe("Service Account Management", () => {
       expect(validateIssuerUrl("https://user:pw@issuer.example.com")).not.toBeNull();
       expect(validateIssuerUrl("not a url")).not.toBeNull();
     });
+
+    test("audience claim must match expected audience (reject path)", () => {
+      expect(validateAudience("relic")).toBeNull();
+      expect(validateAudience("")).not.toBeNull();
+      expect(validateAudience(" relic")).not.toBeNull();
+      expect(matchAudienceClaim("relic", "relic")).toBe(true);
+      expect(matchAudienceClaim(["relic", "other"], "relic")).toBe(true);
+      expect(matchAudienceClaim("other", "relic")).toBe(false);
+      expect(matchAudienceClaim(["other"], "relic")).toBe(false);
+      expect(matchAudienceClaim(undefined, "relic")).toBe(false);
+    });
   });
 
   describe("updateOidcPolicy", () => {
@@ -699,6 +736,7 @@ describe("Service Account Management", () => {
         serviceAccountId: serviceAccountId as Id<"serviceAccount">,
         oidcIssuer: "https://token.actions.githubusercontent.com",
         oidcSubjectPattern: "repo:org/repo:*",
+        oidcAudience: "relic",
       });
 
       const accounts = await owner.asUser.query(api.serviceAccount.listServiceAccounts, {
@@ -707,6 +745,7 @@ describe("Service Account Management", () => {
       const sa = accounts.find((a) => a.name === "OIDC Update Target");
       expect(sa?.oidcIssuer).toBe("https://token.actions.githubusercontent.com");
       expect(sa?.oidcSubjectPattern).toBe("repo:org/repo:*");
+      expect(sa?.oidcAudience).toBe("relic");
     });
 
     test("should clear OIDC policy with null values", async () => {
@@ -714,6 +753,7 @@ describe("Service Account Management", () => {
         serviceAccountId: serviceAccountId as Id<"serviceAccount">,
         oidcIssuer: "https://token.actions.githubusercontent.com",
         oidcSubjectPattern: "repo:org/repo:*",
+        oidcAudience: "relic",
       });
 
       await owner.asUser.mutation(api.serviceAccount.updateOidcPolicy, {
@@ -743,6 +783,19 @@ describe("Service Account Management", () => {
       );
     });
 
+    test("should reject OIDC policy without audience on update", async () => {
+      await expectConvexError(
+        () =>
+          owner.asUser.mutation(api.serviceAccount.updateOidcPolicy, {
+            serviceAccountId: serviceAccountId as Id<"serviceAccount">,
+            oidcIssuer: "https://token.actions.githubusercontent.com",
+            oidcSubjectPattern: "repo:org/repo:*",
+          }),
+        ErrorCode.INVALID_ARGUMENTS,
+        "audience is required",
+      );
+    });
+
     test("should reject an overly broad subject pattern on update", async () => {
       await expectConvexError(
         () =>
@@ -750,6 +803,7 @@ describe("Service Account Management", () => {
             serviceAccountId: serviceAccountId as Id<"serviceAccount">,
             oidcIssuer: "https://token.actions.githubusercontent.com",
             oidcSubjectPattern: "repo:*",
+            oidcAudience: "relic",
           }),
         ErrorCode.INVALID_ARGUMENTS,
         "too broad",
@@ -780,6 +834,7 @@ describe("Service Account Management", () => {
             serviceAccountId: serviceAccountId as Id<"serviceAccount">,
             oidcIssuer: "https://token.actions.githubusercontent.com",
             oidcSubjectPattern: "repo:org/repo:*",
+            oidcAudience: "relic",
           }),
         ErrorCode.INSUFFICIENT_PERMISSION,
       );
@@ -796,6 +851,7 @@ describe("Service Account Management", () => {
             serviceAccountId: serviceAccountId as Id<"serviceAccount">,
             oidcIssuer: "https://token.actions.githubusercontent.com",
             oidcSubjectPattern: "repo:org/repo:*",
+            oidcAudience: "relic",
           }),
         ErrorCode.INVALID_OPERATION,
       );
