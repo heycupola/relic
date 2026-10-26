@@ -6,6 +6,7 @@ import {
   CHANGELOG_PATH,
   ENTERPRISE_URL,
   SITE_DOCS_URL,
+  SITE_DISCORD_URL,
   SITE_GITHUB_URL,
   SITE_STATUS_URL,
   SITE_X_URL,
@@ -26,7 +27,7 @@ const legalLinks = [
 
 const communityLinks = [
   { href: SITE_GITHUB_URL, label: "GitHub", external: true },
-  { href: "https://discord.gg/relic", label: "Discord", external: true },
+  { href: SITE_DISCORD_URL, label: "Discord", external: true },
   { href: SITE_X_URL, label: "𝕏", ariaLabel: "X (Twitter)", external: true },
 ] as const;
 
