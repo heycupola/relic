@@ -34,31 +34,30 @@ Relic is a CLI-first, end-to-end encrypted secret manager built for developers, 
 - **Shift-left protection (`relic guard` & `relic check`):** Block accidental `.env` or secret leaks in pre-commit hooks, and validate missing keys in your IDE or CI.
 - **Encrypted team sharing & OIDC CI/CD:** Share projects using per-collaborator public keys, and run pipelines with passwordless OIDC service accounts.
 
-### Install
+### Install — try Relic in ~60 seconds
 
-```bash
-curl -fsSL https://withrelic.com/install | bash
-brew install heycupola/tap/relic
-npm install -g relic
-bun add -g relic
-```
-
-Or on Windows (PowerShell):
-
-```powershell
-irm https://withrelic.com/install.ps1 | iex
-```
-
-Prebuilt binaries are also available on the [releases page](https://github.com/heycupola/relic/releases).
-
-### 60 seconds
+macOS / Linux:
 
 ```bash
 curl -fsSL https://withrelic.com/install | bash
 relic login
-relic init && relic import -e development
-relic run -e development -- printenv | head
+relic init
+relic          # TUI: create environment "development", add a secret name
+relic run -e development -- echo ok
 ```
+
+Windows (PowerShell):
+
+```powershell
+irm https://withrelic.com/install.ps1 | iex
+relic login
+relic init
+relic run -e development -- echo ok
+```
+
+Alternates: `brew install heycupola/tap/relic` · `npm install -g relic` · `bun add -g relic`
+
+Prebuilt binaries are also available on the [releases page](https://github.com/heycupola/relic/releases).
 
 ### Quick Start
 
@@ -95,4 +94,4 @@ For security issues, email [can@withrelic.com](mailto:can@withrelic.com) directl
 
 ---
 
-[Website](https://withrelic.com) | [Documentation](https://docs.withrelic.com) | [Changelog](https://withrelic.com/changelog) | [X](https://x.com/icanvardar)
+[Website](https://withrelic.com) | [Documentation](https://docs.withrelic.com) | [Changelog](https://withrelic.com/changelog) | [Discord](https://discord.gg/2vNRzRMY6K) | [X](https://x.com/icanvardar)

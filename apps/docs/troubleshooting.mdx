@@ -5,6 +5,22 @@ description: Common issues and how to resolve them.
 
 Solutions for common issues you may encounter while using Relic.
 
+## Discord
+
+<AccordionGroup>
+  <Accordion title="Where is the real Discord?">
+    The Cupola Discord invite is [https://discord.gg/2vNRzRMY6K](https://discord.gg/2vNRzRMY6K).
+
+    Do not use:
+
+    - `discord.gg/relic` — not Cupola (unrelated Roblox community)
+    - `discord.gg/heycupola` — expired invite
+
+    If an old link fails, use the canonical invite above.
+
+  </Accordion>
+</AccordionGroup>
+
 ## Session & Authentication
 
 <AccordionGroup>
@@ -35,6 +51,17 @@ Solutions for common issues you may encounter while using Relic.
 ## Secret Injection
 
 <AccordionGroup>
+  <Accordion title="relic run says Server Error or Environment not found">
+    If `relic run -e <name>` prints `Server Error` or `Environment not found`, the environment name is missing or wrong.
+
+    1. Run `relic` and open your project.
+    2. Create an environment (for example `development`), or copy the exact name you already have.
+    3. Run again: `relic run -e development -- <command>`
+
+    `relic init` alone does not create environments. Create at least one environment before `relic run`.
+
+  </Accordion>
+
   <Accordion title="relic run returns no secrets">
     Check the following:
 
@@ -213,9 +240,36 @@ Relic caches data locally to reduce API calls. If you need to reset it:
   lose access to your secrets.
 </Warning>
 
+## What never to paste (Discord / GitHub / DMs)
+
+Hygiene only — no crypto claims. Secret **names** are OK. Secret **values** are never OK — including in screenshots, screen recordings, and “redacted” snippets that still show part of a token.
+
+**Never paste (or show on camera):**
+
+- Secret values, API tokens, JWTs, cookies, Authorization headers, private keys / PEM blocks, master passwords
+- Full `.env` bodies or any `RELIC_*` / Wrapper credential values
+- Wrapper share codes, attach links, or session URLs (anyone with the link can reach the shared session)
+- Device-auth / OIDC one-time codes, login callback URLs, or magic links
+- PTY dumps, agent transcripts, MCP tool output, or CI logs that contain values
+- Request IDs that embed account data (when in doubt, omit)
+
+**OK to paste:**
+
+- OS + Relic / Wrapper version (`relic --version`)
+- Exact command with environment **name** only (for example `-e development`)
+- Error text / exit code with values removed
+- Secret **names** only (for example `OPENAI_API_KEY` exists / missing)
+
+**If you already pasted a value:** treat it as compromised — rotate that secret, revoke the share/session if applicable, then continue support with names-only evidence.
+
+> Names yes. Values never. No `.env` dumps. No tokens. No share links. No PTY pastes. Screenshots count.
+
 ## Still stuck?
 
-<CardGroup cols={2}>
+<CardGroup cols={3}>
+  <Card title="Discord" icon="discord" href="https://discord.gg/2vNRzRMY6K">
+    Ask in #support with OS + command (names only — no secret values).
+  </Card>
   <Card title="Open an issue" icon="github" href="https://github.com/heycupola/relic/issues/new">
     Report bugs or request features on GitHub.
   </Card>

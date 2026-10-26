@@ -25,6 +25,33 @@ Relic runs in the terminal. For the best experience with the TUI, use a modern t
 
 ## Installation
 
+### Try Relic in ~60 seconds
+
+Primary path (macOS / Linux):
+
+```bash
+curl -fsSL https://withrelic.com/install | bash
+relic login
+relic init
+relic          # TUI: create environment "development", add a secret name
+relic run -e development -- echo ok
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://withrelic.com/install.ps1 | iex
+relic login
+relic init
+relic run -e development -- echo ok
+```
+
+`relic init` alone does not create environments. Open the TUI (`relic`) and create at least one environment before `relic run`.
+
+Alternates: `brew install heycupola/tap/relic` · `npm install -g relic` · `bun add -g relic`
+
+### Other install methods
+
 <Tabs>
   <Tab title="curl">
     ```bash
