@@ -51,6 +51,15 @@ irm https://withrelic.com/install.ps1 | iex
 
 Prebuilt binaries are also available on the [releases page](https://github.com/heycupola/relic/releases).
 
+### 60 seconds
+
+```bash
+curl -fsSL https://withrelic.com/install | bash
+relic login
+relic init && relic import -e development
+relic run -e development -- printenv | head
+```
+
 ### Quick Start
 
 ```bash
