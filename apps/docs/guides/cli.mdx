@@ -128,7 +128,10 @@ Start the [MCP server](/development/mcp) over stdio for AI assistants.
 
 ```bash
 relic mcp
+relic mcp --allow-dangerous-env-dump
 ```
+
+Common env-dump commands inside `run-with-secrets` are refused by default. Operators may opt in with `--allow-dangerous-env-dump`, `RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP=true`, or `[mcp] allow_dangerous_env_dump = true` in `relic.toml`. Models cannot enable dumps via a tool argument.
 
 ### `relic upgrade`
 

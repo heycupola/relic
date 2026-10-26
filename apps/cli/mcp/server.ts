@@ -21,6 +21,7 @@ import { findConfig } from "../lib/config";
 import { buildChildEnv } from "../lib/env";
 import { loadProjectTree } from "../lib/projects";
 import pkg from "../package.json";
+import { resolveAllowDangerousEnvDump } from "./env-dump-policy";
 import {
   assertEnvDumpAllowed,
   DEFAULT_TIMEOUT_SECONDS,
@@ -51,6 +52,9 @@ async function requireAuth(): Promise<string | null> {
   }
   return null;
 }
+
+/** Set once in startMcpServer from operator config; never from tool args. */
+let operatorAllowDangerousEnvDump = false;
 
 const server = new McpServer({
   name: "relic",
@@ -202,7 +206,9 @@ server.registerTool(
       "Run a command with Relic secrets injected as environment variables and return its exit code, stdout and stderr. " +
       "Secret values are redacted from the returned output on a best-effort basis (verbatim matches of values with 4+ characters become [REDACTED:KEY]); " +
       "encoded, split, or transformed values are not caught. " +
-      "Common env-dump commands (env, printenv, bare set, PowerShell Env:) are refused unless allowDangerousEnvDump=true. " +
+      "Common env-dump commands (env, printenv, bare set, PowerShell Env:) are refused by default. " +
+      "Opt-in is operator-controlled only (`relic mcp --allow-dangerous-env-dump`, " +
+      "`RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP=true`, or `[mcp] allow_dangerous_env_dump = true` in relic.toml) — not a tool argument. " +
       "Relic credentials (RELIC_* variables) are not passed to the command. " +
       `The command is killed after timeoutSeconds (default ${DEFAULT_TIMEOUT_SECONDS}s) and partial output is returned.`,
     annotations: { readOnlyHint: false, destructiveHint: true },
@@ -224,19 +230,13 @@ server.registerTool(
         .describe(
           `Kill the command after this many seconds (default ${DEFAULT_TIMEOUT_SECONDS}, max ${MAX_TIMEOUT_SECONDS})`,
         ),
-      allowDangerousEnvDump: z
-        .boolean()
-        .optional()
-        .describe(
-          "Opt in to run common env-dump commands (env, printenv, bare set, PowerShell Env:). " +
-            "Best-effort redaction cannot fully prevent leakage from those commands.",
-        ),
     },
   },
   async (args) => {
     try {
       try {
-        assertEnvDumpAllowed(args.command, args.allowDangerousEnvDump === true);
+        // Ignore any model-supplied allowDangerousEnvDump if a client still sends it.
+        assertEnvDumpAllowed(args.command, operatorAllowDangerousEnvDump);
       } catch (err) {
         if (err instanceof EnvDumpBlockedError) return errorText(err.message);
         throw err;
@@ -301,6 +301,17 @@ server.registerTool(
   },
 );
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
-console.error(`Relic MCP server v${pkg.version} started`);
+export interface StartMcpServerOptions {
+  /** From `relic mcp --allow-dangerous-env-dump`. */
+  allowDangerousEnvDumpFlag?: boolean;
+}
+
+export async function startMcpServer(options: StartMcpServerOptions = {}): Promise<void> {
+  operatorAllowDangerousEnvDump = await resolveAllowDangerousEnvDump({
+    cliFlag: options.allowDangerousEnvDumpFlag === true,
+  });
+
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error(`Relic MCP server v${pkg.version} started`);
+}

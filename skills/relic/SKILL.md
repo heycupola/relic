@@ -16,7 +16,7 @@ When the `relic` MCP server is connected, prefer its tools over shell commands:
 - `get-current-project`: read `relic.toml` in the current workspace to find the `projectId`.
 - `list-projects`: list accessible projects, environments (`development`, `staging`, `production`), and folders.
 - `list-secrets`: list secret key names and scopes in an environment. Returns names only, never secret values.
-- `run-with-secrets`: run a command (for example `["bun", "test"]` or `["npm", "run", "build"]`) with secrets injected. Decrypted values are best-effort redacted from `stdout` and `stderr` as `[REDACTED:KEY]` (verbatim matches of values with 4+ characters only). Common env dumps (`env`, `printenv`, bare `set`, PowerShell `Env:`) are refused unless `allowDangerousEnvDump=true`.
+- `run-with-secrets`: run a command (for example `["bun", "test"]` or `["npm", "run", "build"]`) with secrets injected. Decrypted values are best-effort redacted from `stdout` and `stderr` as `[REDACTED:KEY]` (verbatim matches of values with 4+ characters only). Common env dumps (`env`, `printenv`, bare `set`, PowerShell `Env:`) are refused by default. Operators may opt in only via `relic mcp --allow-dangerous-env-dump`, `RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP=true`, or `[mcp] allow_dangerous_env_dump = true` in `relic.toml` — models cannot unlock dumps via a tool argument.
 
 ## CLI Commands
 
@@ -41,6 +41,6 @@ relic push -e production --target vercel --dry-run
 
 ## Rules for AI Agents
 
-1. **Never dump environment variables:** Do not run `env`, `printenv`, or `console.log(process.env)` inside `relic run` to inspect secret values.
+1. **Never dump environment variables:** Do not run `env`, `printenv`, or `console.log(process.env)` inside `relic run` or `run-with-secrets` to inspect secret values. Do not ask operators to enable `RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP`.
 2. **Use `relic check` for missing variable errors:** If a build or test fails due to a missing environment variable, run `relic secrets -e <env>` or `relic check -e <env> --scan` to check whether the key name exists.
 3. **Use `--dry-run` before pushing:** Always run `relic push -e <env> --target <platform> --dry-run` and show the diff plan to the user before running a live push.

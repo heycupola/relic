@@ -153,7 +153,7 @@ describe("detectEnvDumpCommand", () => {
   });
 
   test("blocks PowerShell -EncodedCommand without decoding", () => {
-    // Opaque base64 body — refuse entirely unless allowDangerousEnvDump.
+    // Opaque base64 body — refuse entirely unless the operator opt-in is set.
     expect(
       detectEnvDumpCommand([
         "pwsh",
@@ -173,7 +173,7 @@ describe("detectEnvDumpCommand", () => {
     expect(detectEnvDumpCommand(["bash", "-c", "declare -i x=1"])).toBeNull();
   });
 
-  test("assertEnvDumpAllowed opts in with allowDangerousEnvDump", () => {
+  test("assertEnvDumpAllowed opts in when operator allow is true", () => {
     expect(() => assertEnvDumpAllowed(["env"])).toThrow(EnvDumpBlockedError);
     expect(() => assertEnvDumpAllowed(["env"], true)).not.toThrow();
     expect(() => assertEnvDumpAllowed(["sh", "-c", "export -p"])).toThrow(EnvDumpBlockedError);

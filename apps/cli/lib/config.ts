@@ -12,12 +12,18 @@ export interface GuardConfig {
   min_length?: number;
 }
 
+export interface McpConfig {
+  /** Operator-only: allow MCP `run-with-secrets` to run common env-dump commands. Default false. */
+  allow_dangerous_env_dump?: boolean;
+}
+
 export interface RelicConfig {
   project_id: string;
   check?: {
     ignore?: string[];
   };
   guard?: GuardConfig;
+  mcp?: McpConfig;
 }
 
 export interface ConfigResult {

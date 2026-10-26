@@ -74,7 +74,11 @@ export class EnvDumpBlockedError extends Error {
     super(
       `Refusing env-dump command (${pattern}). Common dumps (env, printenv, bare set, PowerShell Env:) ` +
         "can leak secret values that best-effort redaction cannot fully scrub. " +
-        "Re-run with allowDangerousEnvDump=true only if you understand the risk.",
+        "An operator must opt in when starting the MCP server " +
+        "(`relic mcp --allow-dangerous-env-dump`, " +
+        "`RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP=true`, or " +
+        "`[mcp] allow_dangerous_env_dump = true` in relic.toml). " +
+        "Tool arguments cannot enable dumps.",
     );
     this.name = "EnvDumpBlockedError";
     this.pattern = pattern;

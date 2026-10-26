@@ -153,10 +153,12 @@ Runs a command with decrypted secrets injected as environment variables. Returns
 | `scope`                  | No       | Scope filter: `client`, `server`, or `shared`                     |
 | `projectId`              | No       | Project ID (defaults to `relic.toml` or `RELIC_PROJECT_ID`)       |
 | `timeoutSeconds`         | No       | Kill the command after this many seconds (default `120`, max `600`) |
-| `allowDangerousEnvDump`  | No       | Opt in to run common env-dump commands (default `false`)          |
 
 - **Redaction**: every decrypted secret value of 4 or more characters is replaced with `[REDACTED:KEY]` in stdout and stderr before the output is returned.
-- **Env-dump gate**: bare `env` / `printenv` / `set`, shell prefixes (`exec` / `command` / `builtin`), process wrappers (`nice` / `stdbuf` / `busybox`), alternate builtins (`export -p`, `declare -x` / `-p`, `typeset -x`, `compgen -e`), `/proc/*/environ`, PowerShell `Env:` listings, and opaque PowerShell `-EncodedCommand` (including inside `sh -c` / `pwsh -c`) are refused unless `allowDangerousEnvDump` is `true`. `env FOO=bar cmd` is still allowed.
+- **Env-dump gate**: bare `env` / `printenv` / `set`, shell prefixes (`exec` / `command` / `builtin`), process wrappers (`nice` / `stdbuf` / `busybox`), alternate builtins (`export -p`, `declare -x` / `-p`, `typeset -x`, `compgen -e`), `/proc/*/environ`, PowerShell `Env:` listings, and opaque PowerShell `-EncodedCommand` (including inside `sh -c` / `pwsh -c`) are refused by default. `env FOO=bar cmd` is still allowed. Opt-in is **operator-controlled only** — not a tool argument:
+  - `relic mcp --allow-dangerous-env-dump`
+  - `RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP=true` on the MCP server process (for example in MCP client `env`)
+  - `[mcp] allow_dangerous_env_dump = true` in `relic.toml`
 - **Credentials**: the command inherits the MCP server's environment minus all `RELIC_*` variables, so `RELIC_PASSWORD`, `RELIC_API_KEY`, and `RELIC_SERVICE_TOKEN` are not visible to it.
 - **Limits**: each stream is capped at 50,000 characters. On timeout the command (and its child processes) is killed and the partial output is returned with `timedOut: true`.
 

@@ -279,8 +279,15 @@ rotationCmd
 program
   .command("mcp")
   .description("Start the Relic MCP server for AI assistants")
-  .action(async () => {
-    await import("./mcp/server");
+  .option(
+    "--allow-dangerous-env-dump",
+    "Operator opt-in: allow run-with-secrets to execute common env-dump commands (default: refused)",
+  )
+  .action(async (options: { allowDangerousEnvDump?: boolean }) => {
+    const { startMcpServer } = await import("./mcp/server");
+    await startMcpServer({
+      allowDangerousEnvDumpFlag: options.allowDangerousEnvDump === true,
+    });
   });
 
 const RUN_HELP = `
