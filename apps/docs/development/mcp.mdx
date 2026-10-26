@@ -153,19 +153,18 @@ Runs a command with decrypted secrets injected as environment variables. Returns
 | `scope`                  | No       | Scope filter: `client`, `server`, or `shared`                     |
 | `projectId`              | No       | Project ID (defaults to `relic.toml` or `RELIC_PROJECT_ID`)       |
 | `timeoutSeconds`         | No       | Kill the command after this many seconds (default `120`, max `600`) |
-| `allowDangerousEnvDump`  | No       | Opt in to run common env-dump commands (default `false`)          |
 
 - **Redaction**: every decrypted secret value of 4 or more characters is replaced with `[REDACTED:KEY]` in stdout and stderr before the output is returned.
-- **Env-dump gate**: bare `env` / `printenv` / `set`, shell prefixes (`exec` / `command` / `builtin`), process wrappers (`nice` / `stdbuf` / `busybox`), alternate builtins (`export -p`, `declare -x` / `-p`, `typeset -x`, `compgen -e`), `/proc/*/environ`, PowerShell `Env:` listings, and opaque PowerShell `-EncodedCommand` (including inside `sh -c` / `pwsh -c`) are refused unless `allowDangerousEnvDump` is `true`. `env FOO=bar cmd` is still allowed.
+- **Env-dump gate**: bare `env` / `printenv` / `set`, shell prefixes (`exec` / `command` / `builtin`), process wrappers (`nice` / `stdbuf` / `busybox`), alternate builtins (`export -p`, `declare -x` / `-p`, `typeset -x`, `compgen -e`), `/proc/*/environ`, PowerShell `Env:` listings, opaque PowerShell `-EncodedCommand` (including inside `sh -c` / `pwsh -c`), and high-signal interpreter environ / `process.env` one-liners are refused by default. `env FOO=bar cmd` is still allowed. Operators may opt in only by setting `RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP=true` on the Relic MCP server process (for example in the MCP client `env`) — not via a tool argument.
 - **Credentials**: the command inherits the MCP server's environment minus all `RELIC_*` variables, so `RELIC_PASSWORD`, `RELIC_API_KEY`, and `RELIC_SERVICE_TOKEN` are not visible to it.
 - **Limits**: each stream is capped at 50,000 characters. On timeout the command (and its child processes) is killed and the partial output is returned with `timedOut: true`.
 
 <Warning>
   Redaction is best effort. It only catches verbatim values: a command that encodes, splits, or
   transforms a secret (for example `base64`, or printing it character by character) can still reveal
-  it to the AI. Common env dumps are blocked by default for that reason, but the gate is not a
-  sandbox — interpreters such as `python -c` / `node -e` that print `os.environ` / `process.env`
-  are still residual. Only let the assistant run commands you would be comfortable sharing the
+  it to the AI. Common env dumps and high-signal interpreter environ / `process.env` one-liners are
+  blocked by default for that reason, but the gate is not a sandbox — custom scripts and encoded
+  dumps can still leak. Only let the assistant run commands you would be comfortable sharing the
   output of — Relic does not claim that AI agents never see secret values.
 </Warning>
 
