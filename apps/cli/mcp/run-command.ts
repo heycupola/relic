@@ -62,6 +62,26 @@ const POWERSHELL_ENV_DUMP_RE =
 
 const POWERSHELL_ENCODED_FLAGS = new Set(["-encodedcommand", "-enc", "-ec"]);
 
+/** Language runtimes that commonly eval one-liners dumping the process environment. */
+const JS_RUNTIME_PROGRAMS = new Set([
+  "node",
+  "nodejs",
+  "node.exe",
+  "nodejs.exe",
+  "bun",
+  "bun.exe",
+  "deno",
+  "deno.exe",
+]);
+
+const PYTHON_PROGRAMS = new Set(["python", "python3", "python.exe", "python3.exe", "py", "py.exe"]);
+
+const RUBY_PROGRAMS = new Set(["ruby", "ruby.exe"]);
+const PERL_PROGRAMS = new Set(["perl", "perl.exe"]);
+
+/** Human/server config opt-in for common env dumps (never a model-settable tool arg). */
+export const RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP = "RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP";
+
 interface RedactionEntry {
   key: string;
   value: string;
@@ -72,13 +92,38 @@ export class EnvDumpBlockedError extends Error {
 
   constructor(pattern: string) {
     super(
-      `Refusing env-dump command (${pattern}). Common dumps (env, printenv, bare set, PowerShell Env:) ` +
-        "can leak secret values that best-effort redaction cannot fully scrub. " +
-        "Re-run with allowDangerousEnvDump=true only if you understand the risk.",
+      `Refusing env-dump command (${pattern}). Common dumps (env, printenv, bare set, PowerShell Env:, ` +
+        "interpreter environ/`process.env` one-liners) can leak secret values that best-effort " +
+        "redaction cannot fully scrub. Operators may opt in only by setting " +
+        `${RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP}=true on the Relic MCP server process.`,
     );
     this.name = "EnvDumpBlockedError";
     this.pattern = pattern;
   }
+}
+
+/** Fail-secure: unset/false/empty refuse; only explicit truthy tokens allow dumps. */
+export function isDangerousEnvDumpAllowed(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): boolean {
+  const raw = env[RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP];
+  if (raw === undefined) return false;
+  const value = raw.trim().toLowerCase();
+  return value === "true" || value === "1" || value === "yes";
+}
+
+function isPhpProgram(prog: string): boolean {
+  return /^php(\d+(\.\d+)*)?(\.exe)?$/.test(prog);
+}
+
+function isInlineEvalInterpreter(prog: string): boolean {
+  return (
+    JS_RUNTIME_PROGRAMS.has(prog) ||
+    PYTHON_PROGRAMS.has(prog) ||
+    RUBY_PROGRAMS.has(prog) ||
+    PERL_PROGRAMS.has(prog) ||
+    isPhpProgram(prog)
+  );
 }
 
 function programBasename(arg: string): string {
@@ -213,6 +258,87 @@ function unwrapProcessWrapper(command: string[]): string[] | null {
   return i < command.length ? command.slice(i) : null;
 }
 
+/**
+ * High-signal language-runtime environ dumps only (Economy of Mechanism).
+ * Does not attempt full coverage of arbitrary code that reads env.
+ */
+function detectInterpreterEnvDumpScript(script: string): string | null {
+  const trimmed = script.trim();
+  // Whole-env object only — keyed reads like process.env.FOO / os.environ.get are allowed.
+  const jsEnvWhole = String.raw`(?:process|Bun)\.env(?![\w.$\[])`;
+
+  if (
+    new RegExp(`^${jsEnvWhole}\\s*;?$`).test(trimmed) ||
+    new RegExp(`^JSON\\.stringify\\(\\s*${jsEnvWhole}\\s*\\)\\s*;?$`).test(trimmed) ||
+    new RegExp(
+      `(?:console\\.(?:log|dir|info|debug|error|table|write)|util\\.inspect|JSON\\.stringify)\\s*\\(\\s*${jsEnvWhole}`,
+    ).test(script) ||
+    new RegExp(`Object\\.(?:entries|values)\\s*\\(\\s*${jsEnvWhole}`).test(script) ||
+    /\bDeno\.env\.toObject\s*\(/.test(script)
+  ) {
+    return "interpreter process.env";
+  }
+
+  if (
+    /\b(?:print|pprint|pp)\s*\(\s*(?:dict\s*\(\s*)?os\.environ(?![\w.$[])/.test(script) ||
+    /\bjson\.dumps\s*\(\s*(?:dict\s*\(\s*)?os\.environ(?![\w.$[])/.test(script) ||
+    /\bos\.environ\.(?:items|values)\s*\(/.test(script)
+  ) {
+    return "interpreter os.environ";
+  }
+
+  if (
+    /\b(?:p|pp|puts|print|warn)\s+ENV\b/.test(script) ||
+    /\bENV\.(?:to_h|to_hash|inspect)\b/.test(script)
+  ) {
+    return "interpreter ENV";
+  }
+
+  if (/\b(?:print|say)\b[^;\n]*%ENV\b/.test(script) || /\bDumper\s*\(\s*\\?%ENV\b/.test(script)) {
+    return "interpreter %ENV";
+  }
+
+  if (/\b(?:print_r|var_dump|var_export|json_encode)\s*\(\s*\$_(?:ENV|SERVER)\b/.test(script)) {
+    return "interpreter $_ENV";
+  }
+
+  return null;
+}
+
+/** Extract `-e` / `-c` / `--eval` / `deno eval` style inline scripts from interpreter argv. */
+function extractInlineEvalScript(command: string[]): string | null {
+  for (let i = 1; i < command.length; i++) {
+    const arg = command[i]!;
+    const lower = arg.toLowerCase();
+
+    for (const prefix of ["--eval=", "--print="]) {
+      if (lower.startsWith(prefix)) return arg.slice(prefix.length);
+    }
+
+    if (
+      lower === "-e" ||
+      lower === "--eval" ||
+      lower === "-p" ||
+      lower === "--print" ||
+      lower === "-c" ||
+      lower === "-r" ||
+      lower === "-E"
+    ) {
+      return command[i + 1] ?? null;
+    }
+
+    // `deno eval "code"` — subcommand form, not a flag.
+    if (i === 1 && lower === "eval") {
+      const body = command
+        .slice(i + 1)
+        .join(" ")
+        .trim();
+      return body.length > 0 ? body : null;
+    }
+  }
+  return null;
+}
+
 function detectShellEnvDump(script: string): string | null {
   if (POWERSHELL_ENV_DUMP_RE.test(script)) return "PowerShell Env:";
   if (SHELL_BARE_SET_RE.test(script)) return "set";
@@ -237,6 +363,10 @@ function detectShellEnvDump(script: string): string | null {
     const tokens = after.trim().split(/\s+/);
     if (!envArgvHasCommand(tokens.slice(1))) return "env";
   }
+
+  const interpreterHit = detectInterpreterEnvDumpScript(script);
+  if (interpreterHit) return interpreterHit;
+
   return null;
 }
 
@@ -271,13 +401,27 @@ export function detectEnvDumpCommand(command: string[]): string | null {
     }
   }
 
+  if (isInlineEvalInterpreter(prog)) {
+    const script = extractInlineEvalScript(command);
+    if (script) {
+      const hit = detectInterpreterEnvDumpScript(script);
+      if (hit) return hit;
+    }
+  }
+
   return null;
 }
 
-/** Throws {@link EnvDumpBlockedError} unless `allowDangerousEnvDump` is true. */
-export function assertEnvDumpAllowed(command: string[], allowDangerousEnvDump = false): void {
+/**
+ * Throws {@link EnvDumpBlockedError} unless the MCP server process opts in via
+ * {@link RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP}. Pass `env` in tests; production uses `process.env`.
+ */
+export function assertEnvDumpAllowed(
+  command: string[],
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): void {
   const pattern = detectEnvDumpCommand(command);
-  if (pattern && !allowDangerousEnvDump) {
+  if (pattern && !isDangerousEnvDumpAllowed(env)) {
     throw new EnvDumpBlockedError(pattern);
   }
 }

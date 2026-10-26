@@ -4,7 +4,9 @@ import {
   assertEnvDumpAllowed,
   detectEnvDumpCommand,
   EnvDumpBlockedError,
+  isDangerousEnvDumpAllowed,
   redactSecrets,
+  RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP,
   runCommandCaptured,
 } from "./run-command";
 
@@ -153,7 +155,7 @@ describe("detectEnvDumpCommand", () => {
   });
 
   test("blocks PowerShell -EncodedCommand without decoding", () => {
-    // Opaque base64 body — refuse entirely unless allowDangerousEnvDump.
+    // Opaque base64 body — refuse entirely unless server config opts in.
     expect(
       detectEnvDumpCommand([
         "pwsh",
@@ -162,7 +164,42 @@ describe("detectEnvDumpCommand", () => {
       ]),
     ).toBe("PowerShell -EncodedCommand");
     expect(detectEnvDumpCommand(["powershell", "-enc", "QQA="])).toBe("PowerShell -EncodedCommand");
-    expect(() => assertEnvDumpAllowed(["pwsh", "-EncodedCommand", "QQA="], true)).not.toThrow();
+    expect(() =>
+      assertEnvDumpAllowed(["pwsh", "-EncodedCommand", "QQA="], {
+        [RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP]: "true",
+      }),
+    ).not.toThrow();
+  });
+
+  test("blocks high-signal interpreter environ dumps", () => {
+    expect(detectEnvDumpCommand(["node", "-e", "console.log(process.env)"])).toBe(
+      "interpreter process.env",
+    );
+    expect(detectEnvDumpCommand(["node", "-p", "process.env"])).toBe("interpreter process.env");
+    expect(detectEnvDumpCommand(["node", "--eval", "JSON.stringify(process.env)"])).toBe(
+      "interpreter process.env",
+    );
+    expect(detectEnvDumpCommand(["bun", "-e", "console.dir(Bun.env)"])).toBe(
+      "interpreter process.env",
+    );
+    expect(detectEnvDumpCommand(["deno", "eval", "console.log(Deno.env.toObject())"])).toBe(
+      "interpreter process.env",
+    );
+    expect(detectEnvDumpCommand(["python3", "-c", "print(os.environ)"])).toBe(
+      "interpreter os.environ",
+    );
+    expect(detectEnvDumpCommand(["python", "-c", "print(dict(os.environ))"])).toBe(
+      "interpreter os.environ",
+    );
+    expect(detectEnvDumpCommand(["ruby", "-e", "p ENV"])).toBe("interpreter ENV");
+    expect(detectEnvDumpCommand(["perl", "-e", "print %ENV"])).toBe("interpreter %ENV");
+    expect(detectEnvDumpCommand(["php", "-r", "print_r($_ENV);"])).toBe("interpreter $_ENV");
+    expect(detectEnvDumpCommand(["sh", "-c", 'node -e "console.log(process.env)"'])).toBe(
+      "interpreter process.env",
+    );
+    expect(detectEnvDumpCommand(["bash", "-c", "python3 -c 'print(os.environ)'"])).toBe(
+      "interpreter os.environ",
+    );
   });
 
   test("allows ordinary commands", () => {
@@ -171,13 +208,47 @@ describe("detectEnvDumpCommand", () => {
     expect(detectEnvDumpCommand(["sh", "-c", "echo $HOME"])).toBeNull();
     expect(detectEnvDumpCommand(["sh", "-c", "echo environment"])).toBeNull();
     expect(detectEnvDumpCommand(["bash", "-c", "declare -i x=1"])).toBeNull();
+    // Single-key reads and normal app entrypoints are not dump idioms.
+    expect(detectEnvDumpCommand(["node", "-e", "console.log(process.env.NODE_ENV)"])).toBeNull();
+    expect(detectEnvDumpCommand(["python3", "-c", "print(os.environ.get('HOME'))"])).toBeNull();
+    expect(detectEnvDumpCommand(["node", "server.js"])).toBeNull();
+    expect(detectEnvDumpCommand(["python3", "app.py"])).toBeNull();
+    expect(detectEnvDumpCommand(["sh", "-c", "echo process.env"])).toBeNull();
   });
 
-  test("assertEnvDumpAllowed opts in with allowDangerousEnvDump", () => {
-    expect(() => assertEnvDumpAllowed(["env"])).toThrow(EnvDumpBlockedError);
-    expect(() => assertEnvDumpAllowed(["env"], true)).not.toThrow();
-    expect(() => assertEnvDumpAllowed(["sh", "-c", "export -p"])).toThrow(EnvDumpBlockedError);
-    expect(() => assertEnvDumpAllowed(["sh", "-c", "export -p"], true)).not.toThrow();
+  test("assertEnvDumpAllowed opts in only via server config env", () => {
+    expect(() => assertEnvDumpAllowed(["env"], {})).toThrow(EnvDumpBlockedError);
+    expect(() =>
+      assertEnvDumpAllowed(["env"], { [RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP]: "false" }),
+    ).toThrow(EnvDumpBlockedError);
+    expect(() =>
+      assertEnvDumpAllowed(["env"], { [RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP]: "" }),
+    ).toThrow(EnvDumpBlockedError);
+    // A leftover tool-arg shaped key must not unlock dumps by itself.
+    expect(() => assertEnvDumpAllowed(["env"], { allowDangerousEnvDump: "true" })).toThrow(
+      EnvDumpBlockedError,
+    );
+    expect(() =>
+      assertEnvDumpAllowed(["env"], { [RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP]: "true" }),
+    ).not.toThrow();
+    expect(() =>
+      assertEnvDumpAllowed(["sh", "-c", "export -p"], {
+        [RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP]: "1",
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertEnvDumpAllowed(["node", "-e", "console.log(process.env)"], {
+        [RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP]: "yes",
+      }),
+    ).not.toThrow();
+  });
+
+  test("isDangerousEnvDumpAllowed is fail-secure", () => {
+    expect(isDangerousEnvDumpAllowed({})).toBe(false);
+    expect(isDangerousEnvDumpAllowed({ [RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP]: "false" })).toBe(
+      false,
+    );
+    expect(isDangerousEnvDumpAllowed({ [RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP]: "true" })).toBe(true);
   });
 });
 

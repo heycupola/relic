@@ -26,6 +26,7 @@ import {
   DEFAULT_TIMEOUT_SECONDS,
   EnvDumpBlockedError,
   MAX_TIMEOUT_SECONDS,
+  RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP,
   runCommandCaptured,
 } from "./run-command";
 
@@ -202,7 +203,11 @@ server.registerTool(
       "Run a command with Relic secrets injected as environment variables and return its exit code, stdout and stderr. " +
       "Secret values are redacted from the returned output on a best-effort basis (verbatim matches of values with 4+ characters become [REDACTED:KEY]); " +
       "encoded, split, or transformed values are not caught. " +
-      "Common env-dump commands (env, printenv, bare set, PowerShell Env:) are refused unless allowDangerousEnvDump=true. " +
+      "Common env-dump commands (env, printenv, bare set, PowerShell Env:, and high-signal interpreter " +
+      "environ/`process.env` one-liners) are refused by default. Operators may opt in only by setting " +
+      `${RELIC_MCP_ALLOW_DANGEROUS_ENV_DUMP}=true on the Relic MCP server process (not via a tool argument). ` +
+      "Redaction remains best-effort; custom scripts and encoded dumps can still leak. Absolute names-not-values " +
+      "under adversarial RCE requires a future architecture change. " +
       "Relic credentials (RELIC_* variables) are not passed to the command. " +
       `The command is killed after timeoutSeconds (default ${DEFAULT_TIMEOUT_SECONDS}s) and partial output is returned.`,
     annotations: { readOnlyHint: false, destructiveHint: true },
@@ -224,19 +229,12 @@ server.registerTool(
         .describe(
           `Kill the command after this many seconds (default ${DEFAULT_TIMEOUT_SECONDS}, max ${MAX_TIMEOUT_SECONDS})`,
         ),
-      allowDangerousEnvDump: z
-        .boolean()
-        .optional()
-        .describe(
-          "Opt in to run common env-dump commands (env, printenv, bare set, PowerShell Env:). " +
-            "Best-effort redaction cannot fully prevent leakage from those commands.",
-        ),
     },
   },
   async (args) => {
     try {
       try {
-        assertEnvDumpAllowed(args.command, args.allowDangerousEnvDump === true);
+        assertEnvDumpAllowed(args.command);
       } catch (err) {
         if (err instanceof EnvDumpBlockedError) return errorText(err.message);
         throw err;
