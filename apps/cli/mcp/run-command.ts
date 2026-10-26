@@ -62,6 +62,37 @@ const POWERSHELL_ENV_DUMP_RE =
 
 const POWERSHELL_ENCODED_FLAGS = new Set(["-encodedcommand", "-enc", "-ec"]);
 
+/** Language runtimes that commonly eval one-liners dumping the process environment. */
+const JS_RUNTIME_PROGRAMS = new Set([
+  "node",
+  "nodejs",
+  "node.exe",
+  "nodejs.exe",
+  "bun",
+  "bun.exe",
+  "deno",
+  "deno.exe",
+]);
+
+const PYTHON_PROGRAMS = new Set(["python", "python3", "python.exe", "python3.exe", "py", "py.exe"]);
+
+const RUBY_PROGRAMS = new Set(["ruby", "ruby.exe"]);
+const PERL_PROGRAMS = new Set(["perl", "perl.exe"]);
+
+function isPhpProgram(prog: string): boolean {
+  return /^php(\d+(\.\d+)*)?(\.exe)?$/.test(prog);
+}
+
+function isInlineEvalInterpreter(prog: string): boolean {
+  return (
+    JS_RUNTIME_PROGRAMS.has(prog) ||
+    PYTHON_PROGRAMS.has(prog) ||
+    RUBY_PROGRAMS.has(prog) ||
+    PERL_PROGRAMS.has(prog) ||
+    isPhpProgram(prog)
+  );
+}
+
 interface RedactionEntry {
   key: string;
   value: string;
@@ -72,8 +103,9 @@ export class EnvDumpBlockedError extends Error {
 
   constructor(pattern: string) {
     super(
-      `Refusing env-dump command (${pattern}). Common dumps (env, printenv, bare set, PowerShell Env:) ` +
-        "can leak secret values that best-effort redaction cannot fully scrub. " +
+      `Refusing env-dump command (${pattern}). Common dumps (env, printenv, bare set, PowerShell Env:, ` +
+        "and high-signal interpreter environ/`process.env` one-liners) can leak secret values that " +
+        "best-effort redaction cannot fully scrub. " +
         "Re-run with allowDangerousEnvDump=true only if you understand the risk.",
     );
     this.name = "EnvDumpBlockedError";
@@ -213,6 +245,97 @@ function unwrapProcessWrapper(command: string[]): string[] | null {
   return i < command.length ? command.slice(i) : null;
 }
 
+/**
+ * High-signal language-runtime environ dumps (pattern classes, not one-off strings).
+ * Does not attempt complete mediation of arbitrary code that reads env — residual risk
+ * remains for novel/obfuscated dumps and intentional app code.
+ */
+function detectInterpreterEnvDumpScript(script: string): string | null {
+  const trimmed = script.trim();
+  // Whole-object form only — `process.env.KEY` / `os.environ["KEY"]` are single reads.
+  const jsEnvWhole = String.raw`(?:process|Bun)\.env(?!\s*[.\[])`;
+  const pyEnvironWhole = String.raw`os\.environ(?!\s*[.\[])`;
+
+  // JS/TS runtimes: whole `process.env` / `Bun.env` / Deno.env.toObject dumps.
+  if (
+    new RegExp(`^${jsEnvWhole}\\s*;?$`).test(trimmed) ||
+    new RegExp(`^JSON\\.stringify\\(\\s*${jsEnvWhole}\\s*\\)\\s*;?$`).test(trimmed) ||
+    new RegExp(
+      `(?:console\\.(?:log|dir|info|debug|error|table|write)|util\\.inspect|JSON\\.stringify)\\s*\\(\\s*${jsEnvWhole}`,
+    ).test(script) ||
+    new RegExp(`Object\\.(?:keys|entries|values)\\s*\\(\\s*${jsEnvWhole}`).test(script) ||
+    /\bDeno\.env\.toObject\s*\(/.test(script)
+  ) {
+    return "interpreter process.env";
+  }
+
+  // Python: print/serialize whole `os.environ` (not a single-key lookup).
+  if (
+    new RegExp(
+      String.raw`\b(?:print|pprint|pp)\s*\(\s*(?:dict\s*\(\s*|list\s*\(\s*)?${pyEnvironWhole}`,
+    ).test(script) ||
+    new RegExp(String.raw`\bjson\.dumps\s*\(\s*(?:dict\s*\(\s*)?${pyEnvironWhole}`).test(script) ||
+    /\bos\.environ\.(?:items|values|keys)\s*\(/.test(script) ||
+    /^os\.environ\s*$/.test(trimmed)
+  ) {
+    return "interpreter os.environ";
+  }
+
+  // Ruby: dump whole ENV.
+  if (
+    /\b(?:p|pp|puts|print|warn)\s+ENV\b/.test(script) ||
+    /\bENV\.(?:to_h|to_hash|inspect)\b/.test(script)
+  ) {
+    return "interpreter ENV";
+  }
+
+  // Perl: dump %ENV.
+  if (/\b(?:print|say)\b[^;\n]*%ENV\b/.test(script) || /\bDumper\s*\(\s*\\?%ENV\b/.test(script)) {
+    return "interpreter %ENV";
+  }
+
+  // PHP: dump $_ENV / $_SERVER.
+  if (/\b(?:print_r|var_dump|var_export|json_encode)\s*\(\s*\$_(?:ENV|SERVER)\b/.test(script)) {
+    return "interpreter $_ENV";
+  }
+
+  return null;
+}
+
+/** Extract `-e` / `-c` / `--eval` / `deno eval` style inline scripts from interpreter argv. */
+function extractInlineEvalScript(command: string[]): string | null {
+  for (let i = 1; i < command.length; i++) {
+    const arg = command[i]!;
+    const lower = arg.toLowerCase();
+
+    for (const prefix of ["--eval=", "--print="]) {
+      if (lower.startsWith(prefix)) return arg.slice(prefix.length);
+    }
+
+    if (
+      lower === "-e" ||
+      lower === "--eval" ||
+      lower === "-p" ||
+      lower === "--print" ||
+      lower === "-c" ||
+      lower === "-r" ||
+      lower === "-E"
+    ) {
+      return command[i + 1] ?? null;
+    }
+
+    // `deno eval "code"` — subcommand form, not a flag.
+    if (i === 1 && lower === "eval") {
+      const body = command
+        .slice(i + 1)
+        .join(" ")
+        .trim();
+      return body.length > 0 ? body : null;
+    }
+  }
+  return null;
+}
+
 function detectShellEnvDump(script: string): string | null {
   if (POWERSHELL_ENV_DUMP_RE.test(script)) return "PowerShell Env:";
   if (SHELL_BARE_SET_RE.test(script)) return "set";
@@ -237,6 +360,10 @@ function detectShellEnvDump(script: string): string | null {
     const tokens = after.trim().split(/\s+/);
     if (!envArgvHasCommand(tokens.slice(1))) return "env";
   }
+
+  const interpreterHit = detectInterpreterEnvDumpScript(script);
+  if (interpreterHit) return interpreterHit;
+
   return null;
 }
 
@@ -267,6 +394,14 @@ export function detectEnvDumpCommand(command: string[]): string | null {
     const script = extractShellScript(command);
     if (script) {
       const hit = detectShellEnvDump(script);
+      if (hit) return hit;
+    }
+  }
+
+  if (isInlineEvalInterpreter(prog)) {
+    const script = extractInlineEvalScript(command);
+    if (script) {
+      const hit = detectInterpreterEnvDumpScript(script);
       if (hit) return hit;
     }
   }

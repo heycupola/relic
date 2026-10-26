@@ -173,11 +173,73 @@ describe("detectEnvDumpCommand", () => {
     expect(detectEnvDumpCommand(["bash", "-c", "declare -i x=1"])).toBeNull();
   });
 
+  test("blocks JS/TS runtime whole-env dumps", () => {
+    expect(detectEnvDumpCommand(["node", "-e", "console.log(process.env)"])).toBe(
+      "interpreter process.env",
+    );
+    expect(detectEnvDumpCommand(["node", "-p", "process.env"])).toBe("interpreter process.env");
+    expect(detectEnvDumpCommand(["node", "--eval=JSON.stringify(process.env)"])).toBe(
+      "interpreter process.env",
+    );
+    expect(detectEnvDumpCommand(["bun", "-e", "console.dir(Bun.env)"])).toBe(
+      "interpreter process.env",
+    );
+    expect(detectEnvDumpCommand(["deno", "eval", "console.log(Deno.env.toObject())"])).toBe(
+      "interpreter process.env",
+    );
+    expect(detectEnvDumpCommand(["node", "-e", "Object.keys(process.env)"])).toBe(
+      "interpreter process.env",
+    );
+    // Single-key reads are not whole-env enumeration.
+    expect(detectEnvDumpCommand(["node", "-e", "console.log(process.env.PATH)"])).toBeNull();
+    expect(detectEnvDumpCommand(["node", "server.js"])).toBeNull();
+  });
+
+  test("blocks Python os.environ dump idioms", () => {
+    expect(detectEnvDumpCommand(["python", "-c", "print(os.environ)"])).toBe(
+      "interpreter os.environ",
+    );
+    expect(detectEnvDumpCommand(["python3", "-c", "print(dict(os.environ))"])).toBe(
+      "interpreter os.environ",
+    );
+    expect(
+      detectEnvDumpCommand(["python", "-c", "import json; print(json.dumps(dict(os.environ)))"]),
+    ).toBe("interpreter os.environ");
+    expect(detectEnvDumpCommand(["python", "-c", "for k,v in os.environ.items(): print(k)"])).toBe(
+      "interpreter os.environ",
+    );
+    expect(detectEnvDumpCommand(["python", "-c", 'print(os.environ["PATH"])'])).toBeNull();
+  });
+
+  test("blocks Ruby ENV, Perl %ENV, and PHP $_ENV dump idioms", () => {
+    expect(detectEnvDumpCommand(["ruby", "-e", "p ENV"])).toBe("interpreter ENV");
+    expect(detectEnvDumpCommand(["ruby", "-e", "puts ENV.to_h"])).toBe("interpreter ENV");
+    expect(detectEnvDumpCommand(["perl", "-e", "print %ENV"])).toBe("interpreter %ENV");
+    expect(detectEnvDumpCommand(["perl", "-e", "print Dumper(\\%ENV)"])).toBe("interpreter %ENV");
+    expect(detectEnvDumpCommand(["php", "-r", "print_r($_ENV);"])).toBe("interpreter $_ENV");
+    expect(detectEnvDumpCommand(["php8.3", "-r", "var_dump($_SERVER);"])).toBe("interpreter $_ENV");
+  });
+
+  test("blocks interpreter dumps inside shell -c scripts", () => {
+    expect(detectEnvDumpCommand(["sh", "-c", 'node -e "console.log(process.env)"'])).toBe(
+      "interpreter process.env",
+    );
+    expect(detectEnvDumpCommand(["bash", "-c", "python3 -c 'print(os.environ)'"])).toBe(
+      "interpreter os.environ",
+    );
+  });
+
   test("assertEnvDumpAllowed opts in with allowDangerousEnvDump", () => {
     expect(() => assertEnvDumpAllowed(["env"])).toThrow(EnvDumpBlockedError);
     expect(() => assertEnvDumpAllowed(["env"], true)).not.toThrow();
     expect(() => assertEnvDumpAllowed(["sh", "-c", "export -p"])).toThrow(EnvDumpBlockedError);
     expect(() => assertEnvDumpAllowed(["sh", "-c", "export -p"], true)).not.toThrow();
+    expect(() => assertEnvDumpAllowed(["node", "-e", "console.log(process.env)"])).toThrow(
+      EnvDumpBlockedError,
+    );
+    expect(() =>
+      assertEnvDumpAllowed(["node", "-e", "console.log(process.env)"], true),
+    ).not.toThrow();
   });
 });
 

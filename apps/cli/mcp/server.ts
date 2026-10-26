@@ -202,7 +202,10 @@ server.registerTool(
       "Run a command with Relic secrets injected as environment variables and return its exit code, stdout and stderr. " +
       "Secret values are redacted from the returned output on a best-effort basis (verbatim matches of values with 4+ characters become [REDACTED:KEY]); " +
       "encoded, split, or transformed values are not caught. " +
-      "Common env-dump commands (env, printenv, bare set, PowerShell Env:) are refused unless allowDangerousEnvDump=true. " +
+      "Common env-dump commands (env, printenv, bare set, PowerShell Env:, and high-signal interpreter " +
+      "environ/`process.env` one-liners) are refused unless allowDangerousEnvDump=true. " +
+      "Residual risk: arbitrary commands with secrets in process env cannot be fully mediated; " +
+      "redaction and dump heuristics are best-effort — novel/obfuscated dumps and app code that prints env can still leak. " +
       "Relic credentials (RELIC_* variables) are not passed to the command. " +
       `The command is killed after timeoutSeconds (default ${DEFAULT_TIMEOUT_SECONDS}s) and partial output is returned.`,
     annotations: { readOnlyHint: false, destructiveHint: true },
@@ -228,8 +231,8 @@ server.registerTool(
         .boolean()
         .optional()
         .describe(
-          "Opt in to run common env-dump commands (env, printenv, bare set, PowerShell Env:). " +
-            "Best-effort redaction cannot fully prevent leakage from those commands.",
+          "Opt in to run common env-dump commands (env, printenv, bare set, PowerShell Env:, " +
+            "interpreter environ dumps). Best-effort redaction cannot fully prevent leakage from those commands.",
         ),
     },
   },
