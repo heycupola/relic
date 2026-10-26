@@ -31,6 +31,21 @@ describe("resolveOidcArgs", () => {
     expect(() => resolveOidcArgs({ github: "org/repo/extra" })).toThrow("--github");
   });
 
+  test("defaults OIDC audience to relic when a policy is set", () => {
+    expect(resolveOidcArgs({ github: "org/repo" }).oidcAudience).toBe("relic");
+    expect(resolveOidcArgs({ gitlab: "group/project" }).oidcAudience).toBe("relic");
+    expect(
+      resolveOidcArgs({
+        oidcIssuer: "https://token.actions.githubusercontent.com",
+        oidcSubject: "repo:org/repo:*",
+      }).oidcAudience,
+    ).toBe("relic");
+    expect(resolveOidcArgs({ github: "org/repo", oidcAudience: "custom" }).oidcAudience).toBe(
+      "custom",
+    );
+    expect(resolveOidcArgs({}).oidcAudience).toBeUndefined();
+  });
+
   test("--branch without a provider is an error", () => {
     expect(() => resolveOidcArgs({ branch: "main" })).toThrow("--branch");
     expect(() => resolveOidcArgs({ branch: "main", oidcIssuer: "https://x" })).toThrow("--branch");

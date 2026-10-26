@@ -65,7 +65,7 @@ Neither credential is sufficient alone: the service token handles decryption, an
     ```
   </Step>
   <Step title="Add id_tokens to your CI config">
-    GitLab doesn't expose an OIDC token by default (the old `CI_JOB_JWT_V2` variable was removed in GitLab 17.0). Declare one named `RELIC_OIDC_TOKEN` with `id_tokens`. The `aud` value must match the service account's `--oidc-audience` if you set one; otherwise any audience works and `relic` is a good choice.
+    GitLab doesn't expose an OIDC token by default (the old `CI_JOB_JWT_V2` variable was removed in GitLab 17.0). Declare one named `RELIC_OIDC_TOKEN` with `id_tokens`. The `aud` value must match the service account audience (defaults to `relic` via `--oidc-audience`).
 
     ```yaml
     deploy:
@@ -112,6 +112,12 @@ OIDC policies can be configured from the web dashboard without re-creating the s
 ### Remove OIDC policy
 
 To remove an OIDC policy and fall back to token-only authentication, click "Remove" in the OIDC dialog on the dashboard.
+
+## Audience
+
+New OIDC policies require an audience. The CLI and dashboard default to `relic`, which matches the audience GitHub Actions tokens request automatically. Override with `--oidc-audience` when your IdP issues a different `aud`.
+
+Legacy policies created without an audience still authenticate (the server logs a warning). A future release will hard-fail those policies — update them to set an audience before then.
 
 ## Subject Patterns
 

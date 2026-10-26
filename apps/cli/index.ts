@@ -204,7 +204,7 @@ saCmd
   .option("--branch <name>", "Branch restriction for OIDC (default: * for all branches)")
   .option("--oidc-issuer <url>", "OIDC issuer URL (advanced, prefer --github or --gitlab)")
   .option("--oidc-subject <pattern>", "OIDC subject pattern (advanced)")
-  .option("--oidc-audience <aud>", "OIDC audience (optional)")
+  .option("--oidc-audience <aud>", "OIDC audience (default: relic)")
   .action((options: ServiceAccountCreateOptions) => serviceAccountCreate(options));
 
 saCmd
