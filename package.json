@@ -50,6 +50,9 @@
     "turbo": "^2.11.7",
     "typescript": "6.0.3"
   },
+  "overrides": {
+    "sharp": "0.35.5"
+  },
   "engines": {
     "node": ">=20"
   },
