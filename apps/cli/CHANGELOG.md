@@ -1,5 +1,13 @@
 # @repo/cli
 
+## 0.11.2
+
+### Patch Changes
+
+- Block common environment-dump commands (`env`, `printenv`, bare `set`, PowerShell `Env:`, and shell `-c` wrappers) in `relic mcp` `run-with-secrets` unless `allowDangerousEnvDump` is explicitly enabled.
+- Require an explicit audience on new service-account OIDC policies.
+- Publish Relic (`io.github.heycupola/relic`) to the Official MCP Registry on each CLI release.
+
 ## 0.11.1
 
 ### Patch Changes
