@@ -310,7 +310,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Sync npm package versions
+      - name: Sync npm and MCP Registry versions
         run: |
           node -e "
             const fs = require('fs');
@@ -334,6 +334,14 @@ jobs:
               }
               fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
             }
+            const mcpServer = JSON.parse(fs.readFileSync('server.json', 'utf8'));
+            mcpServer.version = version;
+            if (Array.isArray(mcpServer.packages)) {
+              for (const pkg of mcpServer.packages) {
+                if (pkg.identifier === 'relic') pkg.version = version;
+              }
+            }
+            fs.writeFileSync('server.json', JSON.stringify(mcpServer, null, 2) + '\n');
           "
 
       - name: Setup Node.js
@@ -353,6 +361,30 @@ jobs:
         run: |
           cd npm/relic
           npm publish --access public --provenance
+
+      - name: Publish server to Official MCP Registry
+        env:
+          MCP_PUBLISHER_VERSION: v1.8.9
+          MCP_PUBLISHER_SHA256: 4d527ca8f1ced0394c962dc925c2a4a4addef441cbefd62501c875e9481823a8
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            if curl -fsSL "https://registry.npmjs.org/relic/${VERSION}" | grep -q '"mcpName"'; then
+              break
+            fi
+            echo "Waiting for npm registry to serve relic@${VERSION} (attempt ${attempt}/20)..."
+            sleep 3
+          done
+
+          archive="mcp-publisher_linux_amd64.tar.gz"
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/${archive}" -o "${archive}"
+          echo "${MCP_PUBLISHER_SHA256}  ${archive}" | sha256sum -c -
+          tar -xzf "${archive}" mcp-publisher
+          rm -f "${archive}"
+
+          ./mcp-publisher validate server.json
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish server.json
 
   sync-changelog:
     name: Sync Changelog and Scoop Manifest
@@ -391,7 +423,7 @@ jobs:
           EXPECTED_RELEASE_TAG: ${{ env.EXPECTED_RELEASE_TAG }}
         run: bun run sync:changelog
 
-      - name: Update Scoop manifest
+      - name: Update Scoop and MCP Registry manifests
         env:
           VERSION: ${{ needs.check-version.outputs.new-version }}
           SHA_WIN32_X64: ${{ needs.release.outputs.sha_win32_x64 }}
@@ -410,20 +442,30 @@ jobs:
               'https://github.com/heycupola/relic/releases/download/v' + VERSION + '/relic-win32-x64.zip';
             manifest.architecture['64bit'].hash = SHA_WIN32_X64;
             fs.writeFileSync(path, JSON.stringify(manifest, null, 2) + '\n');
+
+            const mcpPath = 'server.json';
+            const mcpServer = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
+            mcpServer.version = VERSION;
+            if (Array.isArray(mcpServer.packages)) {
+              for (const pkg of mcpServer.packages) {
+                if (pkg.identifier === 'relic') pkg.version = VERSION;
+              }
+            }
+            fs.writeFileSync(mcpPath, JSON.stringify(mcpServer, null, 2) + '\n');
           "
 
       - name: Open release sync pull request
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if git diff --quiet -- apps/web/content/changelog/generated scoop/relic.json; then
-            echo "No changelog or Scoop manifest updates to commit."
+          if git diff --quiet -- apps/web/content/changelog/generated scoop/relic.json server.json; then
+            echo "No changelog, Scoop, or MCP Registry manifest updates to commit."
             exit 0
           fi
 
           branch="chore/sync-changelog-${EXPECTED_RELEASE_TAG}-${GITHUB_RUN_ID}"
           git checkout -b "$branch"
-          git add apps/web/content/changelog/generated scoop/relic.json
+          git add apps/web/content/changelog/generated scoop/relic.json server.json
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -m "chore: sync changelog and Scoop manifest from ${EXPECTED_RELEASE_TAG}"
           git push -u origin "$branch"
